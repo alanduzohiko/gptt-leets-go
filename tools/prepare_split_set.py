@@ -179,7 +179,8 @@ def main() -> int:
         if path.exists():
             vector_changes += recolor_vector(path)
     rebuilt_base = rebuilt_dir / "base.apk"
-    run(apktool + ["b", "--use-aapt2", "--no-crunch", str(decoded), "-o", str(rebuilt_base)])
+    # Apktool 3.x bundles AAPT2 and removed the legacy --use-aapt2 / --no-crunch flags.
+    run(apktool + ["b", str(decoded), "-o", str(rebuilt_base)])
     redecoded = work / "redecoded-base"
     run(apktool + ["d", "--no-src", "--force", str(rebuilt_base), "-o", str(redecoded)])
     if find_label_key(redecoded / "AndroidManifest.xml") != label["string_resource"]:
