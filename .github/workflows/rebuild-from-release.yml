@@ -1,6 +1,10 @@
 name: Rebuild safe Mashxall split set
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/rebuild-from-release.yml"
   workflow_dispatch:
     inputs:
       source_release_tag:
@@ -15,7 +19,7 @@ permissions:
 
 jobs:
   rebuild:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'source-3.1.3')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'source-3.1.3') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -32,6 +36,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default includes the obsolete SDK package "tools", which now fails to install.
+          # Install only the required modern build-tools and platform in the following step.
+          packages: ""
 
       - name: Install official Android build tools
         run: sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
@@ -39,7 +47,7 @@ jobs:
       - name: Download exact original split bundle from this repository's Release
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_TAG: ${{ inputs.source_release_tag || github.event.release.tag_name }}
+          SOURCE_TAG: ${{ inputs.source_release_tag || github.event.release.tag_name || 'source-3.1.3' }}
         shell: bash
         run: |
           set -euo pipefail
