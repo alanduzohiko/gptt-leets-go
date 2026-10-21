@@ -45,6 +45,29 @@ def find_label_key(manifest_path: Path) -> str:
         raise ValueError("Expected @string label but got " + repr(label))
     return match.group(1)
 
+
+def manifest_semantics(manifest_path: Path):
+    """Return manifest semantics while ignoring Apktool/aapt build-environment metadata."""
+    root = ET.parse(manifest_path).getroot()
+    ignored_attrs = {
+        "platformBuildVersionCode",
+        "platformBuildVersionName",
+        "{" + ANDROID_NS + "}compileSdkVersion",
+        "{" + ANDROID_NS + "}compileSdkVersionCodename",
+    }
+
+    def normalize(node):
+        attrs = tuple(sorted(
+            (key, value)
+            for key, value in node.attrib.items()
+            if key not in ignored_attrs
+        ))
+        text = (node.text or "").strip() or None
+        children = tuple(normalize(child) for child in list(node))
+        return (node.tag, attrs, text, children)
+
+    return normalize(root)
+
 def update_app_label(decoded_dir: Path) -> dict:
     key = find_label_key(decoded_dir / "AndroidManifest.xml")
     changed_files = []
@@ -143,7 +166,7 @@ def main() -> int:
     apktool = ["java", "-jar", str(args.apktool_jar.resolve())]
     original_base = source_parts / "base.apk"
     run(apktool + ["d", "--no-src", "--force", str(original_base), "-o", str(decoded)])
-    manifest_before = (decoded / "AndroidManifest.xml").read_text(encoding="utf-8")
+    manifest_before = manifest_semantics(decoded / "AndroidManifest.xml")
     label = update_app_label(decoded)
     icons = sorted((decoded / "res").glob("mipmap-*/ic_launcher.png"))
     if not icons:
@@ -161,9 +184,9 @@ def main() -> int:
     run(apktool + ["d", "--no-src", "--force", str(rebuilt_base), "-o", str(redecoded)])
     if find_label_key(redecoded / "AndroidManifest.xml") != label["string_resource"]:
         raise ValueError("Rebuilt application label resource changed")
-    manifest_after = (redecoded / "AndroidManifest.xml").read_text(encoding="utf-8")
-    if ET.canonicalize(manifest_before) != ET.canonicalize(manifest_after):
-        raise ValueError("Apktool changed decoded manifest semantics; refusing to continue")
+    manifest_after = manifest_semantics(redecoded / "AndroidManifest.xml")
+    if manifest_before != manifest_after:
+        raise ValueError("Apktool changed Android manifest semantics beyond ignored build metadata; refusing to continue")
     source_entries = zip_entries(original_base)
     rebuilt_entries = zip_entries(rebuilt_base)
     source_dex = {n: sha(b) for n, b in source_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
