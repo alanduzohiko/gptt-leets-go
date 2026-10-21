@@ -277,7 +277,7 @@ jobs:
 
   emulator-test:
     needs: rebuild
-    runs-on: macos-14-arm64
+    runs-on: macos-14
     timeout-minutes: 20
     permissions:
       contents: read
@@ -295,7 +295,7 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis_playstore
+          target: google_apis
           arch: arm64-v8a
           profile: pixel_4
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
