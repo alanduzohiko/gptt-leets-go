@@ -6,7 +6,10 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools.prepare_split_set import APP_NAME, ORIGINAL_PACKAGE, find_label_key, manifest_semantics, update_app_label
+from tools.prepare_split_set import (
+    APP_NAME, ORIGINAL_PACKAGE, TARGET_PACKAGE, find_label_key,
+    manifest_semantics, rewrite_package_identity, update_app_label
+)
 
 class PrepareSplitSetTests(unittest.TestCase):
     def test_label_key_rejects_wrong_package(self):
@@ -53,6 +56,36 @@ class PrepareSplitSetTests(unittest.TestCase):
             self.assertEqual(ar.find("string[@name='app_name']").text, APP_NAME)
             self.assertEqual(en.find("string[@name='other']").text, "My Prayers for Android")
 
+
+    def test_package_identity_changes_for_side_by_side_install_without_renaming_classes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "AndroidManifest.xml"
+            manifest.write_text(
+                '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
+                f'package="{ORIGINAL_PACKAGE}">'
+                f'<uses-permission android:name="{ORIGINAL_PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />'
+                '<application>'
+                f'<provider android:name="com.google.firebase.provider.FirebaseInitProvider" '
+                f'android:authorities="{ORIGINAL_PACKAGE}.firebaseinitprovider" />'
+                f'<activity android:name="{ORIGINAL_PACKAGE}.screens.MainActivity" />'
+                '</application></manifest>',
+                encoding="utf-8",
+            )
+            before = manifest_semantics(manifest)
+            report = rewrite_package_identity(root)
+            after_root = ET.parse(manifest).getroot()
+            self.assertEqual(after_root.attrib["package"], TARGET_PACKAGE)
+            provider = after_root.find("application/provider")
+            activity = after_root.find("application/activity")
+            permission = after_root.find("uses-permission")
+            ns = "{" + "http://schemas.android.com/apk/res/android" + "}"
+            self.assertEqual(provider.attrib[ns + "authorities"], TARGET_PACKAGE + ".firebaseinitprovider")
+            self.assertEqual(activity.attrib[ns + "name"], ORIGINAL_PACKAGE + ".screens.MainActivity")
+            self.assertEqual(permission.attrib[ns + "name"], TARGET_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+            self.assertEqual(manifest_semantics(manifest), before)
+            self.assertEqual(report["target_package_id"], TARGET_PACKAGE)
+            self.assertTrue(report["component_class_names_preserved"])
 
     def test_manifest_semantics_ignores_only_tool_build_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
