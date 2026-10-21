@@ -15,6 +15,7 @@ from PIL import Image
 
 APP_NAME = "مەشخەڵ"
 ORIGINAL_PACKAGE = "com.kosratdahmad.myprayers"
+TARGET_PACKAGE = "com.kosratdahmad.mashxall"
 EXPECTED_FILES = {"base.apk", "split_config.arm64_v8a.apk", "split_config.xxhdpi.apk"}
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", ANDROID_NS)
@@ -32,9 +33,9 @@ def run(command: list[str]) -> str:
         raise RuntimeError("Command failed: " + " ".join(command) + "\n" + result.stdout[-5000:])
     return result.stdout
 
-def find_label_key(manifest_path: Path) -> str:
+def find_label_key(manifest_path: Path, expected_package: str = ORIGINAL_PACKAGE) -> str:
     root = ET.parse(manifest_path).getroot()
-    if root.attrib.get("package") != ORIGINAL_PACKAGE:
+    if root.attrib.get("package") != expected_package:
         raise ValueError("Unexpected package ID: " + str(root.attrib.get("package")))
     application = root.find("application")
     if application is None:
@@ -56,23 +57,36 @@ def manifest_semantics(manifest_path: Path, ignore_tool_added_split_flag: bool =
         "{" + ANDROID_NS + "}compileSdkVersionCodename",
     }
 
-    def normalize(node):
-        attrs = tuple(sorted(
-            (key, value)
-            for key, value in node.attrib.items()
-            if key not in ignored_attrs
-            and not (
+    def normalize(node, is_root: bool = False):
+        normalized_attrs = []
+        for key, value in node.attrib.items():
+            if key in ignored_attrs:
+                continue
+            if (
                 ignore_tool_added_split_flag
                 and key == "{" + ANDROID_NS + "}isSplitRequired"
                 and value == "true"
-            )
-        ))
+            ):
+                continue
+            # The standalone build intentionally gets its own installable application ID.
+            # Normalize only these explicit identity-related manifest changes for comparison.
+            if is_root and key == "package" and value == TARGET_PACKAGE:
+                value = ORIGINAL_PACKAGE
+            if key == "{" + ANDROID_NS + "}authorities" and value.startswith(TARGET_PACKAGE + "."):
+                value = ORIGINAL_PACKAGE + value[len(TARGET_PACKAGE):]
+            if (
+                key == "{" + ANDROID_NS + "}name"
+                and value == TARGET_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+            ):
+                value = ORIGINAL_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+            normalized_attrs.append((key, value))
+        attrs = tuple(sorted(normalized_attrs))
         text = (node.text or "").strip() or None
         # XML declaration order does not change Android manifest semantics; normalize it away.
         children = tuple(sorted((normalize(child) for child in list(node)), key=repr))
         return (node.tag, attrs, text, children)
 
-    return normalize(root)
+    return normalize(root, is_root=True)
 
 
 
@@ -112,6 +126,42 @@ def manifest_diff_summary(before, after, path: str = "/manifest", limit: int = 8
 
     visit(before, after, path)
     return differences
+
+def rewrite_package_identity(decoded_dir: Path) -> dict:
+    """Give the rebranded app its own ID so it can coexist with the official app."""
+    manifest_path = decoded_dir / "AndroidManifest.xml"
+    tree = ET.parse(manifest_path)
+    root = tree.getroot()
+    if root.attrib.get("package") != ORIGINAL_PACKAGE:
+        raise ValueError("Unexpected source package ID: " + str(root.attrib.get("package")))
+    root.set("package", TARGET_PACKAGE)
+    changed_authorities = []
+    changed_permission_names = []
+    authorities_attr = "{" + ANDROID_NS + "}authorities"
+    name_attr = "{" + ANDROID_NS + "}name"
+    old_permission = ORIGINAL_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    new_permission = TARGET_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    for node in root.iter():
+        authority = node.attrib.get(authorities_attr)
+        if authority and authority.startswith(ORIGINAL_PACKAGE + "."):
+            replacement = TARGET_PACKAGE + authority[len(ORIGINAL_PACKAGE):]
+            node.set(authorities_attr, replacement)
+            changed_authorities.append({"from": authority, "to": replacement})
+        name = node.attrib.get(name_attr)
+        if name == old_permission:
+            node.set(name_attr, new_permission)
+            changed_permission_names.append({"from": name, "to": new_permission})
+    tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+    if len(changed_authorities) < 1:
+        raise ValueError("Expected application-scoped provider authorities were not found")
+    return {
+        "source_package_id": ORIGINAL_PACKAGE,
+        "target_package_id": TARGET_PACKAGE,
+        "changed_authorities": changed_authorities,
+        "changed_custom_permission_names": changed_permission_names,
+        "component_class_names_preserved": True,
+    }
+
 
 def update_app_label(decoded_dir: Path) -> dict:
     key = find_label_key(decoded_dir / "AndroidManifest.xml")
@@ -213,6 +263,7 @@ def main() -> int:
     run(apktool + ["d", "--no-src", "--force", str(original_base), "-o", str(decoded)])
     manifest_before = manifest_semantics(decoded / "AndroidManifest.xml")
     label = update_app_label(decoded)
+    package_identity = rewrite_package_identity(decoded)
     icons = sorted((decoded / "res").glob("mipmap-*/ic_launcher.png"))
     if not icons:
         raise ValueError("No launcher icon PNG found")
@@ -229,8 +280,8 @@ def main() -> int:
     run(apktool + ["b", "--use-aapt2", "--no-crunch", str(decoded), "-o", str(rebuilt_base)])
     redecoded = work / "redecoded-base"
     run(apktool + ["d", "--no-src", "--force", str(rebuilt_base), "-o", str(redecoded)])
-    if find_label_key(redecoded / "AndroidManifest.xml") != label["string_resource"]:
-        raise ValueError("Rebuilt application label resource changed")
+    if find_label_key(redecoded / "AndroidManifest.xml", TARGET_PACKAGE) != label["string_resource"]:
+        raise ValueError("Rebuilt application label resource or package identity changed")
     manifest_after = manifest_semantics(redecoded / "AndroidManifest.xml", ignore_tool_added_split_flag=True)
     if manifest_before != manifest_after:
         differences = manifest_diff_summary(manifest_before, manifest_after)
@@ -265,8 +316,10 @@ def main() -> int:
     report = {
         "status": "PREPARED_UNSIGNED_SPLITS",
         "source_sha256": sha(args.input.read_bytes()),
-        "package_id_preserved": ORIGINAL_PACKAGE,
-        "manifest_semantics_preserved": True,
+        "source_package_id": ORIGINAL_PACKAGE,
+        "package_id_target": TARGET_PACKAGE,
+        "package_identity": package_identity,
+        "manifest_semantics_preserved_except_explicit_identity_remap": True,
         "manifest_normalization_note": "Only Apktool-added android:isSplitRequired=true is ignored in the post-build comparison; the output is verified as the complete three-split set. All other manifest attributes and components remain strict.",
         "dex_files_byte_identical": True,
         "offline_database_byte_identical": True,
@@ -277,7 +330,7 @@ def main() -> int:
         "vector_color_literals_changed": vector_changes,
         "prepared_files": [{"file": n, "bytes": (unsigned_dir/n).stat().st_size, "sha256": sha((unsigned_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
         "runtime_launch_test": "NOT PERFORMED: must be tested on an Android 11 phone",
-        "install_warning": "Package ID stays com.kosratdahmad.myprayers. Since this output uses a new certificate, an official installed copy cannot be updated in place; back up data before uninstalling the original copy if you choose to test this rebrand."
+        "install_note": "The app ID is com.kosratdahmad.mashxall, separate from the official com.kosratdahmad.myprayers app, so the official app can remain installed. This test build still uses a temporary signing certificate unless a stable signing key is configured; replacing a previously installed test build signed with a different certificate can require removing only that test build."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
