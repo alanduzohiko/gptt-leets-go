@@ -83,8 +83,8 @@ def main() -> int:
         raise ValueError("Preparation report does not identify the expected source package ID")
     if prepare.get("package_id_target") != "com.kosratdahmad.mashxall":
         raise ValueError("Preparation report does not identify the distinct Mashxall package ID")
-    if prepare.get("manifest_semantics_preserved") is not True:
-        raise ValueError("Preparation report does not confirm manifest semantic preservation")
+    if prepare.get("manifest_semantics_preserved_except_explicit_identity_remap") is not True:
+        raise ValueError("Preparation report does not confirm manifest semantics outside the explicit package-identity remap")
     report = {
         "status": "STATIC_VALIDATION_PASSED",
         "source_sha256": sha(args.source.read_bytes()),
