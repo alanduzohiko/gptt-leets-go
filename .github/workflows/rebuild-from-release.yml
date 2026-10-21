@@ -218,28 +218,6 @@ jobs:
           grep -q "^package: name='com.kosratdahmad.mashxall'" dist/aapt-badging.txt
           grep -q "^sdkVersion:" dist/aapt-badging.txt
 
-      - name: Install and launch standalone APK on Android 11 emulator
-        uses: ReactiveCircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: google_apis_playstore
-          arch: x86_64
-          profile: pixel_4
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          disable-animations: true
-          script: bash tools/test-emulator.sh
-
-      - name: Upload Android 11 emulator diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-11-emulator-diagnostics-${{ github.run_number }}
-          path: |
-            dist/emulator-test.txt
-            dist/emulator-logcat.txt
-          if-no-files-found: ignore
-          retention-days: 14
-
       - name: Package set and verify preservation
         run: |
           set -euo pipefail
@@ -266,27 +244,19 @@ jobs:
           3. حدّد الملفات الثلاثة معًا: base.apk و split_config.arm64_v8a.apk و split_config.xxhdpi.apk.
           4. وافق على التثبيت.
 
-          تحذير مهم: حافظنا على معرّف الحزمة الأصلي com.kosratdahmad.myprayers لتجنّب تغيير مراجع الخدمات والكود. لأن التوقيع الجديد يختلف عن توقيع التطبيق الرسمي، لا يمكن تثبيته كتحديث فوق النسخة الرسمية؛ قد يلزم حذف النسخة الرسمية أولًا. انسخ بياناتها احتياطيًا قبل حذفها، ولا تحذفها إذا لم تكن مستعدًا لذلك.
+          معرّف هذه النسخة هو com.kosratdahmad.mashxall، وهو منفصل عن النسخة الرسمية com.kosratdahmad.myprayers؛ لذلك لا حاجة لحذف التطبيق الأصلي لاختبارها.
 
-          التحقق البنيوي لا يساوي اختبار تشغيل فعلي. لا يُعد التطبيق ناجحًا حتى يثبت ويفتح ويبقى مفتوحًا على هاتف Android 11.
+          هذا الملف مخصّص للاختبار. لا تعتبر البناء ناجحًا حتى يجتاز اختبار التثبيت والإقلاع على محاكي Android 11 بمعمارية ARM64.
           EOF
 
-      - name: Publish direct single-APK download to this isolated repository
-        uses: softprops/action-gh-release@v2
+      - name: Upload standalone APK for ARM64 emulator verification
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: mashxall-single-apk-android11-3.1.3-test1
-          name: Mashxall 3.1.3 — Single APK for Android 11
-          prerelease: true
-          draft: false
-          generate_release_notes: false
-          fail_on_unmatched_files: true
-          files: dist/Mashxall-3.1.3.apk
-          body: |
-            Standalone single-file APK built from the exact source bundle uploaded by the repository owner.
-            DEX files and offline database were verified byte-identical to the original base APK; four ARM64 native libraries were preserved.
-            Build/signature/static validation passed in GitHub Actions. Real-device installation and startup on Android 11 still require owner testing.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          name: mashxall-apk-for-emulator-${{ github.run_number }}
+          path: dist/Mashxall-3.1.3.apk
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Upload build and verification reports
         uses: actions/upload-artifact@v4
         with:
@@ -304,3 +274,71 @@ jobs:
             dist/INSTALL-AR.txt
           if-no-files-found: error
           retention-days: 14
+
+  emulator-test:
+    needs: rebuild
+    runs-on: macos-14-arm64
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout test script
+        uses: actions/checkout@v4
+
+      - name: Download the exact APK built by this workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-apk-for-emulator-${{ github.run_number }}
+          path: dist
+
+      - name: Install and launch on Android 11 ARM64 emulator
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis_playstore
+          arch: arm64-v8a
+          profile: pixel_4
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          disable-animations: true
+          script: bash tools/test-emulator.sh
+
+      - name: Upload ARM64 emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-11-arm64-diagnostics-${{ github.run_number }}
+          path: |
+            dist/emulator-test.txt
+            dist/emulator-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    needs: [rebuild, emulator-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-apk-for-emulator-${{ github.run_number }}
+          path: dist
+
+      - name: Publish only after the Android 11 ARM64 test passes
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mashxall-single-apk-android11-3.1.3-test1
+          name: Mashxall 3.1.3 — Single APK for Android 11 ARM64 test
+          prerelease: true
+          draft: false
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          files: dist/Mashxall-3.1.3.apk
+          body: |
+            Standalone single-file APK built from the exact source bundle uploaded by the repository owner.
+            Original DEX files and offline database were verified byte-identical; four ARM64 native libraries were preserved.
+            APK was installed and launched on an Android 11 ARM64 emulator as part of this workflow.
+            The signer is a temporary test key unless a stable repository signing secret is configured.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
