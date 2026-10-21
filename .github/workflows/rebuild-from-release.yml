@@ -105,7 +105,7 @@ jobs:
             echo "APKEditor checksum mismatch; refusing to continue."
             exit 1
           fi
-          java -jar "$RUNNER_TEMP/apkeditor/APKEditor.jar" -h | head -n 8
+          java -jar "$RUNNER_TEMP/apkeditor/APKEditor.jar" -v
           echo "APKEDITOR_JAR=$RUNNER_TEMP/apkeditor/APKEditor.jar" >> "$GITHUB_ENV"
       - name: Prepare rebrand without changing package ID or DEX code
         run: |
