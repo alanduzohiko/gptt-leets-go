@@ -1,36 +1,49 @@
 # Mashxall repair workspace
 
-This repository is a **separate workspace** for diagnosing and repairing the startup crash in the rebranded Android app based on the user-provided `صلواتي_3.1.3.apks` set.
+This is a separate workspace created specifically to diagnose and repair the startup crash in the rebranded Android app based on the original user-provided file صلواتي_3.1.3.apks.
 
-## Safety boundary
+## Strict repository boundary
 
-- All work for this task belongs in this repository only.
-- Do not push to, open pull requests against, or merge into any other repository.
-- Do not claim the app is fixed until an Android runtime test confirms that it opens.
-- Keep the original package ID, original DEX payloads, original resources, and original split structure unless evidence shows a specific change is needed.
-- Prefer official Android SDK tooling (`zipalign`, `apksigner`) over manually editing APK signing blocks.
-- A failed launch must be diagnosed from a captured exception/log, not by guessing which service to remove.
+- All work for this task stays in alanduzohiko/gptt-leets-go.
+- No code, branch, workflow, or pull request is being sent to alanduzohiko/masheqal or any other repository.
+- Do not declare the app fixed unless it has been installed and launched on a real Android 11 device.
+- The safe build path preserves the original package ID, manifest semantics, all DEX bytes, the offline database, and the three-split structure. It changes only the visible app-label resource and launcher-icon palette.
+- APK alignment and signing use the official Android SDK tools. The workflow does not manually construct APK signing blocks.
 
-## Current state
+## Why this is a different repair attempt
 
-This repository was created empty. A separate repair branch will contain the analysis and build automation. The original input is a split APK set containing:
+Earlier experiments changed the package ID and edited DEX strings as part of rebranding. That may break package-scoped providers or external-service configuration, and editing DEX caused a checksum problem in one build. This workspace avoids those changes completely. It rebuilds only the resource layer via Apktool, confirms that DEX bytes and the offline database are unchanged, and uses zipalign plus apksigner for signing.
 
-- `base.apk`
-- `split_config.arm64_v8a.apk`
-- `split_config.xxhdpi.apk`
+This is a conservative test build, not a guarantee that the runtime crash is fixed. Only a real-device launch test can prove that.
 
-Original archive SHA-256:
-`bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3`
+## Source bundle required by the build workflow
 
-The binary input is not committed to Git because large binary inputs should be provided as a GitHub Release asset or another controlled input source.
+The original file is 62 MB and contains exactly these APK parts:
 
-## Required validation before calling a build successful
+- base.apk
+- split_config.arm64_v8a.apk
+- split_config.xxhdpi.apk
 
-1. Validate the exact input checksum and split names.
-2. Confirm package names and split metadata are consistent.
-3. Make the smallest possible change; do not rewrite DEX code as a routine branding step.
-4. Align and sign each APK with the official Android SDK tools.
-5. Verify APK signatures, ZIP integrity, DEX checksums, and bundled database integrity.
-6. Install all required split APKs together on Android 11 and confirm the app remains open. Static validation alone is not proof of a successful launch.
+SHA-256 of the exact original upload:
 
-See the repair branch for the current scripts and workflow.
+bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3
+
+The binary is not committed into Git because it is large. To make it available to GitHub Actions:
+
+1. Open the Create a release page for this repository: https://github.com/alanduzohiko/gptt-leets-go/releases/new
+2. Create a release with tag source-3.1.3 and title Original source bundle 3.1.3.
+3. Attach the original file صلواتي_3.1.3.apks as the only .apks asset in that release, then publish the release.
+4. Open the repository's Actions tab, select Rebuild safe Mashxall split set, tap Run workflow, and leave the source release tag as source-3.1.3.
+5. When the run completes, open its artifact mashxall-android11-repair-... and download it. The artifact contains the signed split set, the three individual APK parts, Arabic install instructions, and verification reports.
+
+The workflow checks the SHA-256 against the exact file previously supplied. If it does not match, the build stops instead of processing an uncertain APK.
+
+## Important install caveat
+
+This safe test keeps the original package ID com.kosratdahmad.myprayers. That is intentional: it avoids breaking app code and service authorities by renaming the package. But a custom signature cannot update the official signed app in place. If the official app with that package ID is installed, you may need to uninstall it before trying the rebranded build. Back up its data first. Do not uninstall the original app unless you are willing and able to restore it. This rebranded build will not coexist with the official app under the same package ID.
+
+If this run opens and stays open, the crash is resolved for this build. If it still closes, the next step is a real crash log; do not guess by removing more services or editing DEX code.
+
+## Public-repository privacy note
+
+This repository is currently public. A release asset and GitHub Actions artifacts in a public repository may be accessible to others. If you do not want the original app bundle or output build to be public, change this repository to Private before uploading the source asset.
