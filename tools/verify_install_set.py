@@ -79,21 +79,24 @@ def main() -> int:
             if not before or not after or sha(src[before]) != sha(out[after]):
                 raise ValueError("Offline database changed during build")
             db = database_info(out)
-    if prepare.get("package_id_preserved") != "com.kosratdahmad.myprayers":
-        raise ValueError("Preparation report does not confirm original package ID")
+    if prepare.get("source_package_id") != "com.kosratdahmad.myprayers":
+        raise ValueError("Preparation report does not identify the expected source package ID")
+    if prepare.get("package_id_target") != "com.kosratdahmad.mashxall":
+        raise ValueError("Preparation report does not identify the distinct Mashxall package ID")
     if prepare.get("manifest_semantics_preserved") is not True:
         raise ValueError("Preparation report does not confirm manifest semantic preservation")
     report = {
         "status": "STATIC_VALIDATION_PASSED",
         "source_sha256": sha(args.source.read_bytes()),
         "output_sha256": sha(args.output.read_bytes()),
-        "package_id": "com.kosratdahmad.myprayers",
-        "manifest_semantics_preserved": True,
+        "source_package_id": "com.kosratdahmad.myprayers",
+        "package_id": "com.kosratdahmad.mashxall",
+        "manifest_semantics_preserved_except_explicit_identity_remap": True,
         "all_dex_bytes_unchanged": True,
         "offline_database": db,
         "parts": rows,
         "runtime_test": "NOT PERFORMED: successful installation and launch must be confirmed on an Android 11 phone",
-        "install_warning": "Package ID is unchanged, but the signing certificate is new. The official copy cannot be updated in place; back up app data before uninstalling the original copy if you choose to test this build."
+        "install_note": "The distinct app ID allows side-by-side installation without removing the official app. Since no stable signing key is configured, a later test build may not update an already-installed Mashxall test APK signed with a different certificate."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
