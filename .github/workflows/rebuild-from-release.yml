@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/rebuild-from-release.yml"
+      - "tools/prepare_split_set.py"
+      - "tools/verify_install_set.py"
   workflow_dispatch:
     inputs:
       source_release_tag:
