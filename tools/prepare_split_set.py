@@ -46,7 +46,7 @@ def find_label_key(manifest_path: Path) -> str:
     return match.group(1)
 
 
-def manifest_semantics(manifest_path: Path):
+def manifest_semantics(manifest_path: Path, ignore_tool_added_split_flag: bool = False):
     """Return manifest semantics while ignoring Apktool/aapt build-environment metadata."""
     root = ET.parse(manifest_path).getroot()
     ignored_attrs = {
@@ -61,6 +61,11 @@ def manifest_semantics(manifest_path: Path):
             (key, value)
             for key, value in node.attrib.items()
             if key not in ignored_attrs
+            and not (
+                ignore_tool_added_split_flag
+                and key == "{" + ANDROID_NS + "}isSplitRequired"
+                and value == "true"
+            )
         ))
         text = (node.text or "").strip() or None
         # XML declaration order does not change Android manifest semantics; normalize it away.
@@ -226,7 +231,7 @@ def main() -> int:
     run(apktool + ["d", "--no-src", "--force", str(rebuilt_base), "-o", str(redecoded)])
     if find_label_key(redecoded / "AndroidManifest.xml") != label["string_resource"]:
         raise ValueError("Rebuilt application label resource changed")
-    manifest_after = manifest_semantics(redecoded / "AndroidManifest.xml")
+    manifest_after = manifest_semantics(redecoded / "AndroidManifest.xml", ignore_tool_added_split_flag=True)
     if manifest_before != manifest_after:
         differences = manifest_diff_summary(manifest_before, manifest_after)
         raise ValueError(
@@ -262,6 +267,7 @@ def main() -> int:
         "source_sha256": sha(args.input.read_bytes()),
         "package_id_preserved": ORIGINAL_PACKAGE,
         "manifest_semantics_preserved": True,
+        "manifest_normalization_note": "Only Apktool-added android:isSplitRequired=true is ignored in the post-build comparison; the output is verified as the complete three-split set. All other manifest attributes and components remain strict.",
         "dex_files_byte_identical": True,
         "offline_database_byte_identical": True,
         "apktool_version": run(apktool + ["--version"]).strip(),
