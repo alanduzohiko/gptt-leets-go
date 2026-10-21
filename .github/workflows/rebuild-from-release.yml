@@ -35,8 +35,8 @@ jobs:
 
       - name: Download exact original split bundle from this repository's Release
         env:
-          GH_TOKEN: ${ github.token }}
-          SOURCE_TAG: ${ inputs.source_release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: ${{ inputs.source_release_tag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -84,10 +84,10 @@ jobs:
 
       - name: Align and sign all APK parts with official Android SDK tools
         env:
-          SIGNING_KEY_BASE64: ${ secrets.SIGNING_KEY_BASE64 }}
-          SIGNING_KEY_ALIAS: ${ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_STORE_PASSWORD: ${ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_PASSWORD: ${ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
@@ -132,7 +132,6 @@ jobs:
             "$BT/zipalign" -c -P 16 -v 4 "$output"
           done
 
-          # All split APKs must be signed by the same certificate.
           cert=""
           for apk in "$SIGNED"/*.apk; do
             fingerprint="$("$BT/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: *//p' | head -n 1 | tr -d '[:space:]')"
@@ -182,7 +181,7 @@ jobs:
       - name: Upload build and verification reports
         uses: actions/upload-artifact@v4
         with:
-          name: mashxall-android11-repair-${ github.run_number }}
+          name: mashxall-android11-repair-${{ github.run_number }}
           path: |
             dist/Mashxall-3.1.3-rebranded.apks
             dist/Mashxall-3.1.3-signed-parts.zip
