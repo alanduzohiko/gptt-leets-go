@@ -33,7 +33,7 @@ The binary is not committed into Git because it is large. To make it available t
 1. Open the Create a release page for this repository: https://github.com/alanduzohiko/gptt-leets-go/releases/new
 2. Create a release with tag source-3.1.3 and title Original source bundle 3.1.3.
 3. Attach the original file صلواتي_3.1.3.apks as the only .apks asset in that release, then publish the release.
-4. Open the repository's Actions tab, select Rebuild safe Mashxall split set, tap Run workflow, and leave the source release tag as source-3.1.3.
+4. Publish the release. The Rebuild safe Mashxall split set workflow should start automatically for the exact tag source-3.1.3. If it does not start, open Actions, select that workflow, tap Run workflow, and leave the source release tag as source-3.1.3.
 5. When the run completes, open its artifact mashxall-android11-repair-... and download it. The artifact contains the signed split set, the three individual APK parts, Arabic install instructions, and verification reports.
 
 The workflow checks the SHA-256 against the exact file previously supplied. If it does not match, the build stops instead of processing an uncertain APK.
