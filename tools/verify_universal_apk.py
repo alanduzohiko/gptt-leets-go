@@ -102,14 +102,15 @@ def main() -> int:
         "output_bytes": args.output.stat().st_size,
         "standalone_apk": True,
         "required_entries_present": True,
-        "original_package_id_target": "com.kosratdahmad.myprayers",
+        "source_package_id": "com.kosratdahmad.myprayers",
+        "output_package_id_target": "com.kosratdahmad.mashxall",
         "dex_files_byte_identical_to_original_base": True,
         "dex_sha256": before_dex,
         "offline_database_byte_identical": True,
         "offline_database": database,
         "arm64_native_libraries_preserved": len(libs),
         "runtime_install_and_launch_test": "NOT PERFORMED: must be tested on the user's Android 11 phone",
-        "signing_note": "The APK must pass apksigner verification in the build step. It is signed with a new test certificate, so it cannot update the official copy signed by a different certificate."
+        "signing_note": "The APK uses a separate app ID and a test signing certificate. It does not update or replace the official app."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
