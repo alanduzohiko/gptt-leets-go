@@ -63,10 +63,50 @@ def manifest_semantics(manifest_path: Path):
             if key not in ignored_attrs
         ))
         text = (node.text or "").strip() or None
-        children = tuple(normalize(child) for child in list(node))
+        # XML declaration order does not change Android manifest semantics; normalize it away.
+        children = tuple(sorted((normalize(child) for child in list(node)), key=repr))
         return (node.tag, attrs, text, children)
 
     return normalize(root)
+
+
+
+def manifest_diff_summary(before, after, path: str = "/manifest", limit: int = 80) -> list[dict]:
+    """Summarize normalized manifest differences so failures are diagnosable from CI logs."""
+    differences: list[dict] = []
+
+    def visit(left, right, current_path: str) -> None:
+        if len(differences) >= limit:
+            return
+        if left[0] != right[0]:
+            differences.append({"path": current_path, "kind": "tag", "before": left[0], "after": right[0]})
+            return
+        left_attrs, right_attrs = dict(left[1]), dict(right[1])
+        for key in sorted(set(left_attrs) | set(right_attrs)):
+            if left_attrs.get(key) != right_attrs.get(key):
+                differences.append({
+                    "path": current_path, "kind": "attribute", "name": key,
+                    "before": left_attrs.get(key), "after": right_attrs.get(key)
+                })
+                if len(differences) >= limit:
+                    return
+        if left[2] != right[2]:
+            differences.append({"path": current_path, "kind": "text", "before": left[2], "after": right[2]})
+            if len(differences) >= limit:
+                return
+        lchildren, rchildren = left[3], right[3]
+        for index in range(min(len(lchildren), len(rchildren))):
+            visit(lchildren[index], rchildren[index], f"{current_path}/{lchildren[index][0]}[{index}]")
+            if len(differences) >= limit:
+                return
+        if len(lchildren) != len(rchildren):
+            differences.append({
+                "path": current_path, "kind": "child-count",
+                "before": len(lchildren), "after": len(rchildren)
+            })
+
+    visit(before, after, path)
+    return differences
 
 def update_app_label(decoded_dir: Path) -> dict:
     key = find_label_key(decoded_dir / "AndroidManifest.xml")
@@ -188,7 +228,11 @@ def main() -> int:
         raise ValueError("Rebuilt application label resource changed")
     manifest_after = manifest_semantics(redecoded / "AndroidManifest.xml")
     if manifest_before != manifest_after:
-        raise ValueError("Apktool changed Android manifest semantics beyond ignored build metadata; refusing to continue")
+        differences = manifest_diff_summary(manifest_before, manifest_after)
+        raise ValueError(
+            "Apktool changed Android manifest semantics beyond ignored build metadata; refusing to continue. "
+            + "Normalized differences: " + json.dumps(differences, ensure_ascii=False)
+        )
     source_entries = zip_entries(original_base)
     rebuilt_entries = zip_entries(rebuilt_base)
     source_dex = {n: sha(b) for n, b in source_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
