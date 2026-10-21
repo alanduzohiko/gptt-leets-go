@@ -75,8 +75,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          meta="$(curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/latest)"
-          url="$(printf '%s' "$meta" | jq -r '.assets[] | select(.name | test("^apktool_[0-9.]+\\.jar$")) | .browser_download_url' | head -n 1)"
+          meta="$(curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/tags/v2.11.1)"
+          url="$(printf '%s' "$meta" | jq -r '.assets[] | select(.name == "apktool_2.11.1.jar") | .browser_download_url' | head -n 1)"
           if [[ -z "$url" || "$url" == "null" ]]; then
             echo "Could not locate the official Apktool JAR in the latest release."
             exit 1
@@ -84,7 +84,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/apktool"
           curl -fL --retry 3 "$url" -o "$RUNNER_TEMP/apktool/apktool.jar"
           echo "APKTOOL_JAR=$RUNNER_TEMP/apktool/apktool.jar" >> "$GITHUB_ENV"
-          java -jar "$RUNNER_TEMP/apktool/apktool.jar" --version
+          version="$(java -jar "$RUNNER_TEMP/apktool/apktool.jar" --version)"
+          echo "Pinned Apktool version: $version"
+          if [[ "$version" != "2.11.1" ]]; then
+            echo "Expected Apktool 2.11.1; refusing a tool-version drift."
+            exit 1
+          fi
 
       - name: Prepare rebrand without changing package ID or DEX code
         run: |

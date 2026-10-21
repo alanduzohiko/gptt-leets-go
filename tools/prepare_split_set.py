@@ -180,7 +180,8 @@ def main() -> int:
             vector_changes += recolor_vector(path)
     rebuilt_base = rebuilt_dir / "base.apk"
     # Apktool 3.x bundles AAPT2 and removed the legacy --use-aapt2 / --no-crunch flags.
-    run(apktool + ["b", str(decoded), "-o", str(rebuilt_base)])
+    # Pinning Apktool 2.11.1 preserves the manifest behavior this safe rebuild validates.
+    run(apktool + ["b", "--use-aapt2", "--no-crunch", str(decoded), "-o", str(rebuilt_base)])
     redecoded = work / "redecoded-base"
     run(apktool + ["d", "--no-src", "--force", str(rebuilt_base), "-o", str(redecoded)])
     if find_label_key(redecoded / "AndroidManifest.xml") != label["string_resource"]:
