@@ -23,7 +23,7 @@ data class BookItem(val id: Int, val title: String, val writer: String, val desc
 data class LexiconItem(val title: String, val content: String, val reference: String, val root: String)
 data class WordItem(val position: Int, val root: String, val grammar: String, val arabicShape: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
-data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
+data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)\ndata class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)\ndata class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
 
 object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
@@ -93,8 +93,9 @@ object ContentRepository {
     }
 
     suspend fun loadAyahs(context: Context, surah: Int, language: String, query: String = ""): List<Ayah> = withContext(Dispatchers.IO) {
-        val english = if (language == "en") {
-            queryDb(context, tafsirBooks.first { it.id == "sahih" }.assetPath, emptyMap<Int, String>()) { db ->
+        val translationBook = when (language) { "en" -> "sahih"; "ar" -> "mukhtasar"; else -> "" }
+        val extraTranslations = if (translationBook.isNotEmpty()) {
+            queryDb(context, tafsirBooks.first { it.id == translationBook }.assetPath, emptyMap<Int, String>()) { db ->
                 db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
                     buildMap { while (c.moveToNext()) put(c.int("verse_id"), c.string("text")) }
                 }
@@ -108,8 +109,7 @@ object ContentRepository {
                         val num = c.int("verse_id")
                         val arabic = c.string("quran_arabic")
                         val translation = when (language) {
-                            "en" -> english[num].orEmpty()
-                            "ar" -> ""
+                            "en", "ar" -> extraTranslations[num].orEmpty()
                             else -> c.string("translation_puxta")
                         }
                         if (query.isBlank() || arabic.contains(query, true) || translation.contains(query, true) || num.toString() == query) {
@@ -157,10 +157,9 @@ object ContentRepository {
             val sql = """
                 SELECT it._id AS item_id, ch.ckb AS title_ckb, ch.ar AS title_ar, ch.en AS title_en,
                        it.ar AS arabic, it.ckb AS ckb_text, it.en AS en_text, it.counter AS item_count,
-                       refs.ckb AS ref_ckb
+                       (SELECT refs.ckb FROM azkar_references refs WHERE refs.chapter_id=it.chapter_id ORDER BY refs._id LIMIT 1) AS ref_ckb
                 FROM azkar_items it
                 LEFT JOIN azkar_chapters ch ON ch._id=it.chapter_id
-                LEFT JOIN azkar_references refs ON refs.chapter_id=it.chapter_id
                 WHERE it.ckb LIKE ? OR it.ar LIKE ? OR it.en LIKE ? OR ch.ckb LIKE ? OR ch.ar LIKE ? OR ch.en LIKE ?
                 ORDER BY it._id LIMIT 350
             """.trimIndent()
@@ -218,6 +217,38 @@ object ContentRepository {
         queryDb(context, WORD_DB, emptyList()) { db ->
             db.rawQuery("SELECT position,root,irab,arabic1 FROM quran_corpus WHERE surah_id=? AND verse_id=? ORDER BY position", arrayOf(surah.toString(), ayah.toString())).use { c ->
                 buildList { while (c.moveToNext()) add(WordItem(c.int("position"), c.string("root"), c.string("irab"), c.string("arabic1"))) }
+            }
+        }
+    }
+
+
+    suspend fun loadReciters(context: Context): List<Reciter> = withContext(Dispatchers.IO) {
+        queryDb(context, QURAN_DB, emptyList()) { db ->
+            db.rawQuery("SELECT id,name,name_english,audiotype,url,q_order FROM audio ORDER BY q_order,name", null).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(Reciter(c.int("id"), c.string("name"), c.string("name_english"), c.int("audiotype"), c.string("url"), c.int("q_order")))
+                }
+            }
+        }
+    }
+
+    fun reciterSampleUrl(reciter: Reciter, surah: Int, ayah: Int): String {
+        val base = reciter.baseUrl.trimEnd('/') + "/"
+        val fileName = if (reciter.audioType == 0) "%03d%03d.mp3".format(Locale.US, surah.coerceIn(1, 114), ayah.coerceAtLeast(1))
+            else "%03d.mp3".format(Locale.US, surah.coerceIn(1, 114))
+        return base + fileName
+    }
+
+    suspend fun loadFarmuda(context: Context, query: String = ""): List<FarmudaItem> = withContext(Dispatchers.IO) {
+        queryDb(context, "content/noor_tafsir_1.2.2/base/assets/farmuda.db", emptyList()) { db ->
+            val term = if (query.isBlank()) "%" else "%" + query.trim() + "%"
+            db.rawQuery(
+                "SELECT _id,title,ar_desc,ku_desc,badini_title,badini,fav_time FROM farmuda WHERE title LIKE ? OR ar_desc LIKE ? OR ku_desc LIKE ? OR badini_title LIKE ? OR badini LIKE ? ORDER BY _id LIMIT 300",
+                arrayOf(term, term, term, term, term)
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(FarmudaItem(c.int("_id"), c.string("title"), c.string("ar_desc"), c.string("ku_desc"), c.string("badini_title"), c.string("badini"), c.int("fav_time")))
+                }
             }
         }
     }

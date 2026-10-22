@@ -584,3 +584,115 @@ private fun qiblaBearing(latitude: Double, longitude: Double): Double {
     val deg = Math.toDegrees(atan2(sin(dLon), cos(lat) * tan(kaabaLat) - sin(lat) * cos(dLon)))
     return (deg + 360.0) % 360.0
 }
+
+
+@Composable
+fun WordAnalysisScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    initialSurah: Int,
+    initialAyah: Int,
+    onLoad: (Int, Int) -> Unit
+) {
+    val context = LocalContext.current
+    var surahText by rememberSaveable { mutableStateOf(initialSurah.toString()) }
+    var ayahText by rememberSaveable { mutableStateOf(initialAyah.toString()) }
+    var items by remember { mutableStateOf<List<WordItem>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(false) }
+    LaunchedEffect(initialSurah, initialAyah) {
+        if (selected) {
+            loading = true
+            items = ContentRepository.loadWordAnalysis(context, initialSurah, initialAyah)
+            loading = false
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(tr(language, "word_by_word"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(tr(language, "word_by_word_sub"), color = foreground.copy(alpha = 0.6f), fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(surahText, { surahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "surah")) }, singleLine = true)
+                OutlinedTextField(ayahText, { ayahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "ayah")) }, singleLine = true)
+                Button(onClick = {
+                    val s = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
+                    val a = ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    surahText = s.toString()
+                    ayahText = a.toString()
+                    selected = true
+                    onLoad(s, a)
+                }) { Text("→") }
+            }
+        }
+        if (!selected || items.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selected) tr(language, "not_found") else tr(language, "choose_surah"))
+        else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Text(tr(language, "surah") + " " + surahText + " • " + tr(language, "ayah") + " " + ayahText, color = Gold, fontWeight = FontWeight.Bold)
+            }
+            items(items, key = { it.position }) { word ->
+                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(13.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(28.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                Text(word.position.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(word.arabicShape, color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                        }
+                        if (word.root.isNotBlank()) {
+                            Spacer(Modifier.height(7.dp))
+                            Text((if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + word.root, color = Gold, fontSize = 12.sp)
+                        }
+                        if (word.grammar.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(word.grammar, color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, lineHeight = 18.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
+    val context = LocalContext.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(query) {
+        loading = true
+        records = ContentRepository.loadFarmuda(context, query.trim())
+        loading = false
+    }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(tr(language, "farmuda"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            SearchBox(query, { query = it }, tr(language, "search"))
+        }
+        if (records.isEmpty()) LoadingOrEmpty(loading, language, foreground)
+        else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            items(records, key = { it.id }) { item ->
+                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(15.dp)) {
+                        Text(item.title.ifBlank { item.badiniTitle }, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(7.dp))
+                        val translation = when (language) {
+                            AppLanguage.CKB -> item.sorani.ifBlank { item.badini }
+                            AppLanguage.AR -> item.arabic
+                            AppLanguage.EN -> item.arabic
+                        }
+                        if (item.arabic.isNotBlank()) {
+                            Text(item.arabic, color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(7.dp))
+                        }
+                        if (translation.isNotBlank()) Text(translation, color = foreground.copy(alpha = 0.82f), fontSize = 13.sp, lineHeight = 21.sp)
+                    }
+                }
+            }
+        }
+    }
+}
