@@ -235,7 +235,7 @@ jobs:
             exit 1
           fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee dist/aapt-badging.txt
-          grep -q "^package: name='com.kosratdahmad.mashxall'" dist/aapt-badging.txt
+          grep -q "^package: name='com.kosratdahmad.mashxall.repair2'" dist/aapt-badging.txt
           grep -q "^sdkVersion:" dist/aapt-badging.txt
 
       - name: Package set and verify preservation
@@ -264,7 +264,7 @@ jobs:
           3. حدّد الملفات الثلاثة معًا: base.apk و split_config.arm64_v8a.apk و split_config.xxhdpi.apk.
           4. وافق على التثبيت.
 
-          معرّف هذه النسخة هو com.kosratdahmad.mashxall، وهو منفصل عن النسخة الرسمية com.kosratdahmad.myprayers؛ لذلك لا حاجة لحذف التطبيق الأصلي لاختبارها.
+          معرّف هذه النسخة هو com.kosratdahmad.mashxall.repair2، وهو منفصل عن النسخة الرسمية com.kosratdahmad.myprayers؛ لذلك لا حاجة لحذف التطبيق الأصلي لاختبارها.
 
           هذا الملف مخصّص للاختبار. لا تعتبر البناء ناجحًا حتى يجتاز اختبار التثبيت والإقلاع على محاكي Android 11 بمعمارية ARM64.
           EOF
