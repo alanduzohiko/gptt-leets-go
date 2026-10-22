@@ -421,10 +421,18 @@ def _axml_encode_pool_string(value: str, utf8: bool) -> bytes:
     return _axml_write_len16(len(encoded) // 2) + encoded + b"\0\0"
 
 
-def patch_binary_xml_package_id(
-    data: bytes, old_package: str, new_package: str
+def patch_binary_xml_manifest(
+    data: bytes,
+    old_package: str,
+    new_package: str,
+    app_label: str | None = None,
+    standalone: bool = False,
 ) -> tuple[bytes, dict]:
-    """Patch only the root manifest package string in Android binary XML."""
+    """Patch app identity fields in binary AndroidManifest.xml without rebuilding resources.
+
+    Only the manifest string pool and explicitly selected attribute records change.
+    Component class names, resource IDs, and unrelated manifest attributes remain intact.
+    """
     if (
         len(data) < 8
         or _axml_u16(data, 0) != _ANDROID_XML_TYPE
@@ -433,13 +441,11 @@ def patch_binary_xml_package_id(
     ):
         raise ValueError("Invalid Android binary XML header")
 
-    chunks = []
+    chunks: list[tuple[int, bytes, int]] = []
     position = 8
     string_pool_index = None
     string_values = None
     string_pool_meta = None
-    root_values = None
-    root_package_index = None
     while position < len(data):
         if position + 8 > len(data):
             raise ValueError("Truncated Android XML chunk header")
@@ -484,70 +490,190 @@ def patch_binary_xml_package_id(
     if position != len(data) or string_pool_meta is None or string_values is None:
         raise ValueError("Android XML chunk structure is incomplete")
 
-    for chunk_type, chunk, _absolute in chunks:
-        if chunk_type != _ANDROID_START_ELEMENT_TYPE:
-            continue
-        if len(chunk) < 36:
-            raise ValueError("Android XML start-element chunk is too short")
-        element_name_index = _axml_u32(chunk, 20)
-        if element_name_index >= len(string_values) or string_values[element_name_index] != "manifest":
-            continue
-        attribute_start = _axml_u16(chunk, 24)
-        attribute_size = _axml_u16(chunk, 26)
-        attribute_count = _axml_u16(chunk, 28)
-        if attribute_size < 20:
-            raise ValueError("Invalid Android XML attribute record size")
-        attributes_base = 16 + attribute_start
-        root_values = {}
-        for idx in range(attribute_count):
-            attr_offset = attributes_base + idx * attribute_size
-            if attr_offset + 20 > len(chunk):
-                raise ValueError("Android XML attribute extends past its element")
-            namespace_index = _axml_u32(chunk, attr_offset)
-            name_index = _axml_u32(chunk, attr_offset + 4)
-            raw_value_index = _axml_u32(chunk, attr_offset + 8)
-            value_type = chunk[attr_offset + 15]
-            typed_value_index = _axml_u32(chunk, attr_offset + 16)
-            if name_index >= len(string_values) or namespace_index != _ANDROID_NO_INDEX:
-                continue
-            attribute_name = string_values[name_index]
-            value_index = raw_value_index
-            if value_index == _ANDROID_NO_INDEX and value_type == 3:
-                value_index = typed_value_index
-            if value_index != _ANDROID_NO_INDEX and value_type == 3 and value_index < len(string_values):
-                root_values[attribute_name] = string_values[value_index]
-            if attribute_name == "package":
-                if value_index == _ANDROID_NO_INDEX or value_index >= len(string_values):
-                    raise ValueError("Root manifest package is not a string")
-                if value_type != 3:
-                    raise ValueError("Root manifest package does not use a string typed value")
-                if raw_value_index != value_index or typed_value_index != value_index:
-                    raise ValueError("Root manifest package value indexes disagree")
-                root_package_index = value_index
-        break
+    pool_strings = list(string_values)
+    existing_string_indices: dict[str, int] = {}
+    for index, value in enumerate(pool_strings):
+        existing_string_indices.setdefault(value, index)
+    appended_strings: list[str] = []
+    changed_authorities: list[dict] = []
+    changed_permissions: list[dict] = []
+    label_changed = False
+    package_changed = False
+    removed_split_attrs: list[dict] = []
+    root_split_name = None
+    patched_chunks: list[tuple[int, bytes, int]] = []
+    element_stack: list[str] = []
+    split_only_attrs = {
+        "split", "splitTypes", "requiredSplitTypes", "isSplitRequired",
+        "isFeatureSplit", "configForSplit",
+    }
 
-    if root_values is None or root_package_index is None:
-        raise ValueError("Root manifest package attribute not found in Android binary XML")
-    if string_values[root_package_index] != old_package:
-        raise ValueError(
-            f"Expected config package {old_package!r}, found {string_values[root_package_index]!r}"
-        )
+    def get_string(index: int) -> str | None:
+        if index == _ANDROID_NO_INDEX or index < 0 or index >= len(pool_strings):
+            return None
+        return pool_strings[index]
 
-    pool_header_size, string_count, _flags, utf8 = string_pool_meta
-    pool_chunk = chunks[string_pool_index][1]
-    pool_header = bytearray(pool_chunk[:pool_header_size])
+    def string_index(value: str) -> int:
+        found = existing_string_indices.get(value)
+        if found is not None:
+            return found
+        idx = len(pool_strings) + len(appended_strings)
+        appended_strings.append(value)
+        existing_string_indices[value] = idx
+        return idx
+
+    for chunk_type, chunk, absolute in chunks:
+        mutable = bytearray(chunk)
+        if chunk_type == _ANDROID_START_ELEMENT_TYPE:
+            if len(chunk) < 36:
+                raise ValueError("Android XML start-element chunk is too short")
+            element_name_index = _axml_u32(chunk, 20)
+            if element_name_index >= len(pool_strings):
+                raise ValueError("Element name index exceeds string pool")
+            tag = pool_strings[element_name_index]
+            attribute_start = _axml_u16(chunk, 24)
+            attribute_size = _axml_u16(chunk, 26)
+            attribute_count = _axml_u16(chunk, 28)
+            if attribute_size < 20:
+                raise ValueError("Invalid Android XML attribute record size")
+            attributes_base = 16 + attribute_start
+            if attributes_base + attribute_count * attribute_size > len(chunk):
+                raise ValueError("Android XML attributes exceed their element chunk")
+
+            keep_attr_indices: list[int] = []
+            root_values: dict[str, str] = {}
+            for idx in range(attribute_count):
+                attr_offset = attributes_base + idx * attribute_size
+                namespace_index = _axml_u32(chunk, attr_offset)
+                name_index = _axml_u32(chunk, attr_offset + 4)
+                raw_value_index = _axml_u32(chunk, attr_offset + 8)
+                value_type = chunk[attr_offset + 15]
+                typed_value_index = _axml_u32(chunk, attr_offset + 16)
+                if name_index >= len(pool_strings):
+                    raise ValueError("Attribute name index exceeds string pool")
+                namespace = (
+                    None if namespace_index == _ANDROID_NO_INDEX
+                    else get_string(namespace_index)
+                )
+                attribute_name = pool_strings[name_index]
+                value_index = raw_value_index
+                if value_index == _ANDROID_NO_INDEX and value_type == 3:
+                    value_index = typed_value_index
+                attribute_value = get_string(value_index) if value_type == 3 else None
+                if tag == "manifest" and namespace is None and attribute_name == "split":
+                    root_split_name = attribute_value
+                if tag == "manifest" and attribute_name in ("split", "splitTypes", "requiredSplitTypes"):
+                    if attribute_value is not None:
+                        root_values[attribute_name] = attribute_value
+
+                remove_this = (
+                    standalone
+                    and tag == "manifest"
+                    and attribute_name in split_only_attrs
+                    and namespace in (None, ANDROID_NS)
+                )
+                if remove_this:
+                    removed_split_attrs.append({"attribute": attribute_name, "value": attribute_value})
+                    continue
+
+                replacement_value: str | None = None
+                if tag == "manifest" and namespace is None and attribute_name == "package":
+                    if attribute_value != old_package:
+                        raise ValueError(
+                            f"Expected manifest package {old_package!r}, found {attribute_value!r}"
+                        )
+                    replacement_value = new_package
+                    package_changed = True
+                elif (
+                    tag == "application" and namespace == ANDROID_NS
+                    and attribute_name == "label" and app_label is not None
+                ):
+                    replacement_value = app_label
+                    label_changed = True
+                elif namespace == ANDROID_NS and attribute_name == "authorities" and attribute_value:
+                    parts = attribute_value.split(";")
+                    rewritten_parts = [
+                        new_package + item[len(old_package):]
+                        if item == old_package or item.startswith(old_package + ".")
+                        else item
+                        for item in parts
+                    ]
+                    rewritten = ";".join(rewritten_parts)
+                    if rewritten != attribute_value:
+                        replacement_value = rewritten
+                        changed_authorities.append({"from": attribute_value, "to": rewritten})
+                elif namespace == ANDROID_NS and attribute_name == "permission" and attribute_value:
+                    if attribute_value == old_package or attribute_value.startswith(old_package + "."):
+                        replacement_value = new_package + attribute_value[len(old_package):]
+                        changed_permissions.append({"from": attribute_value, "to": replacement_value})
+                elif (
+                    namespace == ANDROID_NS and attribute_name == "name"
+                    and tag in {"permission", "uses-permission", "uses-permission-sdk-23", "permission-group", "permission-tree"}
+                    and attribute_value
+                    and (attribute_value == old_package or attribute_value.startswith(old_package + "."))
+                ):
+                    replacement_value = new_package + attribute_value[len(old_package):]
+                    changed_permissions.append({"from": attribute_value, "to": replacement_value})
+
+                if replacement_value is not None:
+                    replacement_index = string_index(replacement_value)
+                    struct.pack_into("<I", mutable, attr_offset + 8, replacement_index)
+                    mutable[attr_offset + 15] = 3  # TYPE_STRING; also converts application label from a resource reference.
+                    struct.pack_into("<I", mutable, attr_offset + 16, replacement_index)
+                keep_attr_indices.append(idx)
+
+            if tag == "application" and app_label is not None and not label_changed:
+                raise ValueError("Application label attribute was not found in original manifest")
+            if tag == "manifest" and not package_changed:
+                # The package attribute should be processed on the root element only.
+                pass
+
+            if standalone and tag == "manifest" and len(keep_attr_indices) != attribute_count:
+                original_after_attrs = attributes_base + attribute_count * attribute_size
+                kept_attr_bytes = b"".join(
+                    bytes(mutable[attributes_base + idx * attribute_size: attributes_base + (idx + 1) * attribute_size])
+                    for idx in keep_attr_indices
+                )
+                mutable = bytearray(
+                    bytes(mutable[:attributes_base])
+                    + kept_attr_bytes
+                    + bytes(mutable[original_after_attrs:])
+                )
+                struct.pack_into("<I", mutable, 4, len(mutable))
+                struct.pack_into("<H", mutable, 28, len(keep_attr_indices))
+            element_stack.append(tag)
+
+        elif chunk_type == 0x0103:  # RES_XML_END_ELEMENT_TYPE
+            if len(chunk) >= 24:
+                end_name_index = _axml_u32(chunk, 20)
+                end_tag = get_string(end_name_index)
+                if element_stack:
+                    last = element_stack.pop()
+                    if end_tag is not None and last != end_tag:
+                        raise ValueError(f"Malformed Android manifest nesting: {last!r} ended as {end_tag!r}")
+
+        patched_chunks.append((chunk_type, bytes(mutable), absolute))
+
+    if not package_changed:
+        raise ValueError("Root manifest package attribute not found or not rewritten")
+
+    pool_header_size, original_string_count, flags, utf8 = string_pool_meta
+    all_strings = pool_strings + appended_strings
+    pool_header = bytearray(chunks[string_pool_index][1][:pool_header_size])
     encoded_strings = bytearray()
     new_offsets = []
-    for idx, value in enumerate(string_values):
+    for value in all_strings:
         new_offsets.append(len(encoded_strings))
-        new_value = new_package if idx == root_package_index else value
-        encoded_strings.extend(_axml_encode_pool_string(new_value, utf8))
+        encoded_strings.extend(_axml_encode_pool_string(value, utf8))
     while len(encoded_strings) % 4:
         encoded_strings.append(0)
 
-    new_strings_start = pool_header_size + string_count * 4
+    new_strings_start = pool_header_size + len(all_strings) * 4
     new_pool_size = new_strings_start + len(encoded_strings)
     struct.pack_into("<I", pool_header, 4, new_pool_size)
+    struct.pack_into("<I", pool_header, 8, len(all_strings))
+    # Appended replacements may no longer be sorted, so clear the sorted-string-pool flag.
+    struct.pack_into("<I", pool_header, 16, flags & ~0x1)
     struct.pack_into("<I", pool_header, 20, new_strings_start)
     struct.pack_into("<I", pool_header, 24, 0)
     new_pool = (
@@ -559,17 +685,28 @@ def patch_binary_xml_package_id(
         raise ValueError("Internal Android XML string-pool size mismatch")
 
     rebuilt_xml = bytearray(data[:8])
-    for idx, (_chunk_type, chunk, _absolute) in enumerate(chunks):
-        rebuilt_xml.extend(new_pool if idx == string_pool_index else chunk)
+    for index, (_chunk_type, chunk, _absolute) in enumerate(patched_chunks):
+        rebuilt_xml.extend(new_pool if index == string_pool_index else chunk)
     struct.pack_into("<I", rebuilt_xml, 4, len(rebuilt_xml))
     return bytes(rebuilt_xml), {
         "source_package_id": old_package,
         "target_package_id": new_package,
-        "split_name": root_values.get("split"),
+        "split_name": root_split_name,
         "manifest_package_id_rewritten": True,
         "split_identity_preserved": True,
-        "binary_manifest_only_changed": True,
+        "binary_manifest_patched_only": True,
+        "application_label_literal": app_label if label_changed else None,
+        "changed_authorities": changed_authorities,
+        "changed_custom_permissions": changed_permissions,
+        "removed_split_only_attributes": removed_split_attrs,
     }
+
+
+def patch_binary_xml_package_id(
+    data: bytes, old_package: str, new_package: str
+) -> tuple[bytes, dict]:
+    """Backward-compatible wrapper used by config-split manifest processing and tests."""
+    return patch_binary_xml_manifest(data, old_package, new_package)
 
 
 def _is_apk_signature_entry(filename: str) -> bool:
