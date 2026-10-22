@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Verify the signed split APK set against the original and prepared unsigned files."""
 from __future__ import annotations
-import argparse, hashlib, json, re, sqlite3, tempfile, zipfile
+import argparse, hashlib, json, os, re, sqlite3, tempfile, zipfile
 from pathlib import Path
 
 EXPECTED = {"base.apk", "split_config.arm64_v8a.apk", "split_config.xxhdpi.apk"}
 DB_SUFFIX = "muslim_db_v2.5.1.db"
+TARGET_PACKAGE = os.environ.get("MASHXALL_TARGET_PACKAGE", "com.kosratdahmad.mashxall.full")
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -85,8 +86,8 @@ def main() -> int:
             db = database_info(out)
     if prepare.get("source_package_id") != "com.kosratdahmad.myprayers":
         raise ValueError("Preparation report does not identify the expected source package ID")
-    if prepare.get("package_id_target") != "com.kosratdahmad.mashxall.full":
-        raise ValueError("Preparation report does not identify the distinct Mashxall package ID")
+    if prepare.get("package_id_target") != TARGET_PACKAGE:
+        raise ValueError("Preparation report does not identify the configured per-build Mashxall package ID")
     if prepare.get("manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal") is not True:
         raise ValueError("Preparation report does not confirm manifest semantics outside the explicit identity remap and split-metadata removal")
     report = {
@@ -94,7 +95,7 @@ def main() -> int:
         "source_sha256": sha(args.source.read_bytes()),
         "output_sha256": sha(args.output.read_bytes()),
         "source_package_id": "com.kosratdahmad.myprayers",
-        "package_id": "com.kosratdahmad.mashxall.full",
+        "package_id": TARGET_PACKAGE,
         "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
         "dex_files_reassembled_from_original_smali": True,
         "offline_database": db,

@@ -128,6 +128,8 @@ jobs:
           echo "APKEditor artifact SHA-256 verified."
           echo "APKEDITOR_JAR=$RUNNER_TEMP/apkeditor/APKEditor.jar" >> "$GITHUB_ENV"
       - name: Prepare Mashxall identity while preserving original DEX code
+        env:
+          MASHXALL_TARGET_PACKAGE: com.kosratdahmad.mashxall.full${{ github.run_number }}a${{ github.run_attempt }}
         run: |
           set -euo pipefail
           python tools/prepare_split_set.py \
@@ -138,6 +140,7 @@ jobs:
 
       - name: Align and sign all APK parts with official Android SDK tools
         env:
+          MASHXALL_TARGET_PACKAGE: com.kosratdahmad.mashxall.full${{ github.run_number }}a${{ github.run_attempt }}
           SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
@@ -227,6 +230,7 @@ jobs:
         run: |
           set -euo pipefail
           APK="$GITHUB_WORKSPACE/dist/Mashxall-3.1.3.apk"
+          TARGET_PACKAGE="com.kosratdahmad.mashxall.full${GITHUB_RUN_NUMBER}a${GITHUB_RUN_ATTEMPT}"
           ANALYZER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name apkanalyzer | head -n 1)"
           test -x "$ANALYZER"
           "$ANALYZER" manifest print "$APK" | tee dist/standalone-manifest.xml
@@ -235,11 +239,13 @@ jobs:
             exit 1
           fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee dist/aapt-badging.txt
-          grep -q "^package: name='com.kosratdahmad.mashxall.full'" dist/aapt-badging.txt
+          grep -q "^package: name='${TARGET_PACKAGE}'" dist/aapt-badging.txt
           grep -q "^application: label='مەشخەڵ' icon='res/mipmap-anydpi-v26/ic_launcher.xml'" dist/aapt-badging.txt
           grep -q "^sdkVersion:" dist/aapt-badging.txt
 
       - name: Package set and verify preservation
+        env:
+          MASHXALL_TARGET_PACKAGE: com.kosratdahmad.mashxall.full${{ github.run_number }}a${{ github.run_attempt }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -265,7 +271,7 @@ jobs:
           3. حدّد الملفات الثلاثة معًا: base.apk و split_config.arm64_v8a.apk و split_config.xxhdpi.apk.
           4. وافق على التثبيت.
 
-          معرّف هذه النسخة هو com.kosratdahmad.mashxall.full، وهو منفصل عن النسخة الرسمية com.kosratdahmad.myprayers؛ لذلك لا حاجة لحذف التطبيق الأصلي لاختبارها.
+          معرّف الحزمة يتضمن رقم تشغيل البناء، لتجنب تعارض التوقيع مع نسخ الاختبار السابقة. لا حاجة لحذف التطبيق الأصلي لاختبار هذه النسخة.
 
           هذا الملف مخصّص للاختبار. لا تعتبر البناء ناجحًا حتى يجتاز اختبار التثبيت والإقلاع على محاكي Android 11 بمعمارية ARM64.
           EOF
@@ -313,6 +319,8 @@ jobs:
           path: dist
 
       - name: Install and launch on Android 11 ARM64 emulator
+        env:
+          MASHXALL_TARGET_PACKAGE: com.kosratdahmad.mashxall.full${{ github.run_number }}a${{ github.run_attempt }}
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -352,8 +360,8 @@ jobs:
       - name: Publish with an honest runtime-test status
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: mashxall-full-fidelity-20261022
-          name: Mashxall 3.1.3 — Original-app full-fidelity build
+          tag_name: mashxall-full-fidelity-20261022-${{ github.run_number }}a${{ github.run_attempt }}
+          name: Mashxall 3.1.3 — Original-app full-fidelity build ${{ github.run_number }}a${{ github.run_attempt }}
           prerelease: true
           draft: false
           generate_release_notes: false
@@ -364,7 +372,7 @@ jobs:
             The original smali is reassembled after changing only the compiled application-ID literal and package-specific notification-audio resource URIs needed by the separate package ID.
             Static validation checks APK signature/alignment, all DEX files and class descriptors, manifest identity, original database checksum, launcher resources, and four original ARM64 native libraries.
             The Android 11 ARM64 emulator job installed and launched the rebuilt APK and confirmed the process remained alive. See workflow logs and diagnostics artifact for the exact runtime result.
-            Package ID: com.kosratdahmad.mashxall.full. Some Firebase/Maps/remote services may enforce the publisher's original package/signing identity.
+            Package ID: com.kosratdahmad.mashxall.full${{ github.run_number }}a${{ github.run_attempt }}. Each test build has a distinct ID because a stable signing secret is not configured. Some Firebase/Maps/remote services may enforce the publisher's original package/signing identity.
             The signer is a temporary test key unless a stable repository signing secret is configured.
         env:
           GITHUB_TOKEN: ${{ github.token }}

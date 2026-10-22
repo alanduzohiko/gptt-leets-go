@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -15,7 +16,7 @@ from PIL import Image
 
 APP_NAME = "مەشخەڵ"
 ORIGINAL_PACKAGE = "com.kosratdahmad.myprayers"
-TARGET_PACKAGE = "com.kosratdahmad.mashxall.full"
+TARGET_PACKAGE = os.environ.get("MASHXALL_TARGET_PACKAGE", "com.kosratdahmad.mashxall.full")
 EXPECTED_FILES = {"base.apk", "split_config.arm64_v8a.apk", "split_config.xxhdpi.apk"}
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", ANDROID_NS)
@@ -384,9 +385,10 @@ def main() -> int:
     rebuilt_dex = {n: b for n, b in rebuilt_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
     if not source_dex or set(source_dex) != set(rebuilt_dex):
         raise ValueError("APKTool changed the DEX file set; refusing to continue")
-    if not any(b"com.kosratdahmad.mashxall.full" in data for data in rebuilt_dex.values()):
-        raise ValueError("Rebuilt DEX lacks the new application ID string literal")
-    if not any(b"android.resource://com.kosratdahmad.mashxall.full/raw/mecca" in data for data in rebuilt_dex.values()):
+    if not any(TARGET_PACKAGE.encode("utf-8") in data for data in rebuilt_dex.values()):
+        raise ValueError("Rebuilt DEX lacks the configured application ID string literal")
+    expected_audio_uri = f"android.resource://{TARGET_PACKAGE}/raw/mecca".encode("utf-8")
+    if not any(expected_audio_uri in data for data in rebuilt_dex.values()):
         raise ValueError("Rebuilt DEX lacks the updated notification-audio URI")
     if not any(b"Lcom/kosratdahmad/myprayers/screens/MainActivity;" in data for data in rebuilt_dex.values()):
         raise ValueError("Original application class descriptors were not preserved")
@@ -429,7 +431,7 @@ def main() -> int:
         "vector_color_literals_changed": vector_changes,
         "prepared_files": [{"file": n, "bytes": (unsigned_dir/n).stat().st_size, "sha256": sha((unsigned_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
         "runtime_launch_test": "NOT PERFORMED: must be tested on an Android 11 phone",
-        "install_note": "The app ID is com.kosratdahmad.mashxall.full, separate from the official app and prior test builds. DEX code was assembled from the original smali with only BuildConfig application-ID and audio resource URI string literals changed; original class descriptors, resources, database and native libraries are preserved. External cloud services may still enforce the original package/signing identity."
+        "install_note": f"The app ID is {TARGET_PACKAGE}, unique for this workflow build to avoid signing-certificate conflicts with earlier test attempts. DEX code was assembled from original smali with only the application-ID and audio resource URI string literals changed; original class descriptors, resources, database and native libraries are preserved. External cloud services may still enforce the publisher original package/signing identity.",
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

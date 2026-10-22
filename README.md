@@ -9,7 +9,7 @@ The supplied source is the compiled, three-part Android APK bundle in Release `s
 `Rebuild safe Mashxall split set` now decodes the original DEX into smali, updates only the application-ID literal and hardcoded `android.resource://` audio URIs that must follow a separate app ID, reassembles the DEX, preserves the original component class names, label resources, original offline database, app assets, and ARM64 native libraries, then merges the three split APKs into one standalone APK. Static checks verify the DEX file set, original class descriptors, package ID, launcher icon resources, original database bytes/integrity, and four native libraries. The Android 11 emulator job attempts an actual install and launch; a static build alone is not a runtime guarantee.
 
 - Original app ID: `com.kosratdahmad.myprayers`
-- Full rebuild test app ID: `com.kosratdahmad.mashxall.full`
+- Full rebuild test app ID: `com.kosratdahmad.mashxall.full<RUN_ID>`
 - Exact source bundle SHA-256: `bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3`
 
 ## Separate Native prototype

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import tempfile
@@ -12,6 +13,7 @@ from pathlib import Path
 
 EXPECTED_PARTS = {"base.apk", "split_config.arm64_v8a.apk", "split_config.xxhdpi.apk"}
 DB_SUFFIX = "muslim_db_v2.5.1.db"
+TARGET_PACKAGE = os.environ.get("MASHXALL_TARGET_PACKAGE", "com.kosratdahmad.mashxall.full")
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -92,9 +94,10 @@ def main() -> int:
     before_dex, after_dex = dex_hashes(source_base), dex_hashes(output)
     if not before_dex or set(before_dex) != set(after_dex):
         raise ValueError("DEX files are missing or the multidex file set differs from the original")
-    if not any(b"com.kosratdahmad.mashxall.full" in output[n] for n in after_dex):
-        raise ValueError("Rebuilt APK does not contain its new app ID in DEX string data")
-    if not any(b"android.resource://com.kosratdahmad.mashxall.full/raw/mecca" in output[n] for n in after_dex):
+    if not any(TARGET_PACKAGE.encode("utf-8") in output[n] for n in after_dex):
+        raise ValueError("Rebuilt APK does not contain its configured app ID in DEX string data")
+    expected_audio_uri = f"android.resource://{TARGET_PACKAGE}/raw/mecca".encode("utf-8")
+    if not any(expected_audio_uri in output[n] for n in after_dex):
         raise ValueError("Rebuilt APK does not contain updated notification audio URIs")
     if not any(b"Lcom/kosratdahmad/myprayers/screens/MainActivity;" in output[n] for n in after_dex):
         raise ValueError("Rebuilt APK is missing original application class descriptors")
@@ -126,7 +129,7 @@ def main() -> int:
         "launcher_icon_resources_present": True,
         "launcher_icon_entries": sorted(required_launcher),
         "source_package_id": "com.kosratdahmad.myprayers",
-        "output_package_id_target": "com.kosratdahmad.mashxall.full",
+        "output_package_id_target": TARGET_PACKAGE,
         "dex_files_reassembled_from_original_smali": True,
         "original_class_descriptors_preserved": True,
         "runtime_package_literals_updated": True,
