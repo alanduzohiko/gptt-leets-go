@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/package-parser-diagnostic.yml"
+      - "tools/probe-package-manager.sh"
   workflow_dispatch:
 
 permissions:
@@ -43,24 +44,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           emulator-boot-timeout: 600
           disable-animations: true
-          script: |
-            set +e
-            mkdir -p dist
-            adb shell getprop ro.build.version.release > dist/package-probe-platform.txt 2>&1
-            adb shell getprop ro.build.version.sdk >> dist/package-probe-platform.txt 2>&1
-            adb install --no-streaming dist/Mashxall-3.1.3.apk > dist/package-manager-install.txt 2>&1
-            rc=$?
-            cat dist/package-manager-install.txt
-            echo "$rc" > dist/package-manager-exit-code.txt
-            if [[ "$rc" -eq 0 ]]; then
-              echo "PACKAGE_MANAGER_INSTALL_SUCCEEDED" | tee dist/package-manager-result.txt
-            elif grep -Eqi 'INSTALL_FAILED_NO_MATCHING_ABIS|NO_MATCHING_ABIS' dist/package-manager-install.txt; then
-              echo "PACKAGE_PARSED; INSTALL_STOPPED_ONLY_BY_X86_VS_ARM64_NATIVE_ABI" | tee dist/package-manager-result.txt
-            else
-              echo "PACKAGE_MANAGER_REJECTED_APK; RAW_INSTALL_ERROR_FOLLOWS" | tee dist/package-manager-result.txt
-            fi
-            adb logcat -d -v brief -t 2500 > dist/package-probe-logcat.txt 2>&1 || true
-            exit 0
+          script: bash tools/probe-package-manager.sh
 
       - name: Upload exact PackageManager diagnostic
         if: always()
