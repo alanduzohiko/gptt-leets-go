@@ -2327,11 +2327,65 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     var azimuth by remember { mutableFloatStateOf(0f) }
     var sensorAvailable by remember { mutableStateOf(false) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
-    val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
-    val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
+    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var locating by remember { mutableStateOf(false) }
+    var locationMessage by remember { mutableStateOf("") }
+    val onFix: (Location) -> Unit = { fix ->
+        gpsLatitude = fix.latitude
+        gpsLongitude = fix.longitude
+        prefs.edit()
+            .putString("gps_latitude", fix.latitude.toString())
+            .putString("gps_longitude", fix.longitude.toString())
+            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .apply()
+        locating = false
+        locationMessage = if (fix.hasAccuracy()) {
+            when (language) {
+                AppLanguage.EN -> "Location accuracy reported by Android: about ±${fix.accuracy.toInt()} m"
+                AppLanguage.AR -> "دقة الموقع التي يذكرها الهاتف: نحو ±${fix.accuracy.toInt()} متر"
+                AppLanguage.CKB -> "وردبینی شوێن بەپێی مۆبایل: نزیکەی ±${fix.accuracy.toInt()} مەتر"
+            }
+        } else {
+            when (language) {
+                AppLanguage.EN -> "Coordinates received; Android did not report accuracy."
+                AppLanguage.AR -> "تم تحديد الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
+                AppLanguage.CKB -> "کۆئۆردینات وەرگیرا، بەڵام وردبینی نەدراوە."
+            }
+        }
+    }
+    val onLocationError: (String) -> Unit = { error -> locating = false; locationMessage = error }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (allowed) {
+            locating = true
+            locationMessage = ""
+            requestCurrentLocation(context, onFix, onLocationError)
+        } else {
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Location permission was not granted; Qibla is using the selected city."
+                AppLanguage.AR -> "لم تمنح إذن الموقع؛ ستُستخدم المدينة المختارة."
+                AppLanguage.CKB -> "مۆڵەتی شوێن نەدرا؛ شاری هەڵبژێردراو بەکاردێت."
+            }
+        }
+    }
+    val locateNow = {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            locating = true
+            locationMessage = ""
+            requestCurrentLocation(context, onFix, onLocationError)
+        } else {
+            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude) {
         city = if (gpsLatitude != null && gpsLongitude != null) {
-            City("GPS", gpsLatitude, gpsLongitude)
+            City("GPS", gpsLatitude!!, gpsLongitude!!)
         } else {
             ContentRepository.loadCities(context).firstOrNull { it.name.equals(selectedCity, true) }
         }
@@ -2409,7 +2463,28 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, textAlign = TextAlign.Center
         )
         Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = locateNow, enabled = !locating) {
+            if (locating) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            } else {
+                Icon(Icons.Outlined.GpsFixed, null, tint = Gold, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> if (locating) "Finding your location…" else "Use my current location"
+                    AppLanguage.AR -> if (locating) "جارٍ تحديد موقعك…" else "استخدم موقعي الحالي"
+                    AppLanguage.CKB -> if (locating) "شوێن دیاری دەکرێت…" else "شوێنی ئێستام بەکاربهێنە"
+                }
+            )
+        }
+        if (locationMessage.isNotBlank()) {
+            Spacer(Modifier.height(5.dp))
+            Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 16.sp)
+        }
+        Spacer(Modifier.height(12.dp))
         Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.52f), fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
     }
 }
