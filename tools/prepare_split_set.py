@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import struct
 import sys
 import zipfile
 from pathlib import Path
@@ -342,6 +343,298 @@ def rewrite_split_config_manifest(manifest_path: Path) -> dict:
     }
 
 
+
+
+_ANDROID_XML_TYPE = 0x0003
+_ANDROID_STRING_POOL_TYPE = 0x0001
+_ANDROID_START_ELEMENT_TYPE = 0x0102
+_ANDROID_UTF8_FLAG = 0x100
+_ANDROID_NO_INDEX = 0xFFFFFFFF
+
+
+def _axml_u16(data: bytes, offset: int) -> int:
+    return struct.unpack_from("<H", data, offset)[0]
+
+
+def _axml_u32(data: bytes, offset: int) -> int:
+    return struct.unpack_from("<I", data, offset)[0]
+
+
+def _axml_read_len8(data: bytes, offset: int) -> tuple[int, int]:
+    if offset >= len(data):
+        raise ValueError("Truncated Android XML string length")
+    first = data[offset]
+    offset += 1
+    if first & 0x80:
+        if offset >= len(data):
+            raise ValueError("Truncated two-byte Android XML string length")
+        return ((first & 0x7F) << 8) | data[offset], offset + 1
+    return first, offset
+
+
+def _axml_write_len8(value: int) -> bytes:
+    if value <= 0x7F:
+        return bytes([value])
+    if value <= 0x7FFF:
+        return bytes([(value >> 8) | 0x80, value & 0xFF])
+    raise ValueError("Android XML UTF-8 string is too long")
+
+
+def _axml_write_len16(value: int) -> bytes:
+    if value <= 0x7FFF:
+        return struct.pack("<H", value)
+    if value <= 0x7FFFFFFF:
+        return struct.pack("<HH", (value >> 16) | 0x8000, value & 0xFFFF)
+    raise ValueError("Android XML UTF-16 string is too long")
+
+
+def _axml_decode_pool_string(data: bytes, offset: int, utf8: bool) -> str:
+    if utf8:
+        utf16_length, offset = _axml_read_len8(data, offset)
+        byte_length, offset = _axml_read_len8(data, offset)
+        end = offset + byte_length
+        if end >= len(data) or data[end] != 0:
+            raise ValueError("Malformed Android XML UTF-8 string-pool entry")
+        value = data[offset:end].decode("utf-8")
+        if len(value.encode("utf-16le")) // 2 != utf16_length:
+            raise ValueError("Android XML string-pool length mismatch")
+        return value
+    length = _axml_u16(data, offset)
+    offset += 2
+    if length & 0x8000:
+        length = ((length & 0x7FFF) << 16) | _axml_u16(data, offset)
+        offset += 2
+    end = offset + length * 2
+    if end + 2 > len(data) or data[end:end + 2] != b"\0\0":
+        raise ValueError("Malformed Android XML UTF-16 string-pool entry")
+    return data[offset:end].decode("utf-16le")
+
+
+def _axml_encode_pool_string(value: str, utf8: bool) -> bytes:
+    if "\0" in value:
+        raise ValueError("Embedded NUL is not supported in Android manifest package names")
+    if utf8:
+        encoded = value.encode("utf-8")
+        utf16_length = len(value.encode("utf-16le")) // 2
+        return _axml_write_len8(utf16_length) + _axml_write_len8(len(encoded)) + encoded + b"\0"
+    encoded = value.encode("utf-16le")
+    return _axml_write_len16(len(encoded) // 2) + encoded + b"\0\0"
+
+
+def patch_binary_xml_package_id(
+    data: bytes, old_package: str, new_package: str
+) -> tuple[bytes, dict]:
+    """Patch only the root manifest package string in Android binary XML."""
+    if (
+        len(data) < 8
+        or _axml_u16(data, 0) != _ANDROID_XML_TYPE
+        or _axml_u16(data, 2) != 8
+        or _axml_u32(data, 4) != len(data)
+    ):
+        raise ValueError("Invalid Android binary XML header")
+
+    chunks = []
+    position = 8
+    string_pool_index = None
+    string_values = None
+    string_pool_meta = None
+    root_values = None
+    root_package_index = None
+    while position < len(data):
+        if position + 8 > len(data):
+            raise ValueError("Truncated Android XML chunk header")
+        chunk_type = _axml_u16(data, position)
+        header_size = _axml_u16(data, position + 2)
+        chunk_size = _axml_u32(data, position + 4)
+        if header_size < 8 or chunk_size < header_size or position + chunk_size > len(data):
+            raise ValueError(f"Invalid Android XML chunk at offset {position}")
+        chunk = data[position:position + chunk_size]
+        if chunk_type == _ANDROID_STRING_POOL_TYPE:
+            if string_pool_index is not None:
+                raise ValueError("Multiple string pools in Android manifest are unsupported")
+            if header_size < 28:
+                raise ValueError("Android XML string-pool header is too short")
+            string_count = _axml_u32(data, position + 8)
+            style_count = _axml_u32(data, position + 12)
+            flags = _axml_u32(data, position + 16)
+            strings_start = _axml_u32(data, position + 20)
+            styles_start = _axml_u32(data, position + 24)
+            if style_count != 0 or styles_start != 0:
+                raise ValueError("Unexpected styled strings in Android manifest; refusing unsafe patch")
+            if position + header_size + string_count * 4 > position + chunk_size:
+                raise ValueError("Android XML string offsets exceed string-pool chunk")
+            if strings_start < header_size + string_count * 4 or strings_start > chunk_size:
+                raise ValueError("Invalid Android XML string-data offset")
+            utf8 = bool(flags & _ANDROID_UTF8_FLAG)
+            offsets_start = position + header_size
+            strings_absolute = position + strings_start
+            offsets = [
+                _axml_u32(data, offsets_start + idx * 4)
+                for idx in range(string_count)
+            ]
+            string_values = [
+                _axml_decode_pool_string(data, strings_absolute + item_offset, utf8)
+                for item_offset in offsets
+            ]
+            string_pool_meta = (header_size, string_count, flags, utf8)
+            string_pool_index = len(chunks)
+        chunks.append((chunk_type, chunk, position))
+        position += chunk_size
+
+    if position != len(data) or string_pool_meta is None or string_values is None:
+        raise ValueError("Android XML chunk structure is incomplete")
+
+    for chunk_type, chunk, _absolute in chunks:
+        if chunk_type != _ANDROID_START_ELEMENT_TYPE:
+            continue
+        if len(chunk) < 36:
+            raise ValueError("Android XML start-element chunk is too short")
+        element_name_index = _axml_u32(chunk, 20)
+        if element_name_index >= len(string_values) or string_values[element_name_index] != "manifest":
+            continue
+        attribute_start = _axml_u16(chunk, 24)
+        attribute_size = _axml_u16(chunk, 26)
+        attribute_count = _axml_u16(chunk, 28)
+        if attribute_size < 20:
+            raise ValueError("Invalid Android XML attribute record size")
+        attributes_base = 16 + attribute_start
+        root_values = {}
+        for idx in range(attribute_count):
+            attr_offset = attributes_base + idx * attribute_size
+            if attr_offset + 20 > len(chunk):
+                raise ValueError("Android XML attribute extends past its element")
+            namespace_index = _axml_u32(chunk, attr_offset)
+            name_index = _axml_u32(chunk, attr_offset + 4)
+            raw_value_index = _axml_u32(chunk, attr_offset + 8)
+            value_type = chunk[attr_offset + 15]
+            typed_value_index = _axml_u32(chunk, attr_offset + 16)
+            if name_index >= len(string_values) or namespace_index != _ANDROID_NO_INDEX:
+                continue
+            attribute_name = string_values[name_index]
+            value_index = raw_value_index
+            if value_index == _ANDROID_NO_INDEX and value_type == 3:
+                value_index = typed_value_index
+            if value_index != _ANDROID_NO_INDEX and value_type == 3 and value_index < len(string_values):
+                root_values[attribute_name] = string_values[value_index]
+            if attribute_name == "package":
+                if value_index == _ANDROID_NO_INDEX or value_index >= len(string_values):
+                    raise ValueError("Root manifest package is not a string")
+                if value_type != 3:
+                    raise ValueError("Root manifest package does not use a string typed value")
+                if raw_value_index != value_index or typed_value_index != value_index:
+                    raise ValueError("Root manifest package value indexes disagree")
+                root_package_index = value_index
+        break
+
+    if root_values is None or root_package_index is None:
+        raise ValueError("Root manifest package attribute not found in Android binary XML")
+    if string_values[root_package_index] != old_package:
+        raise ValueError(
+            f"Expected config package {old_package!r}, found {string_values[root_package_index]!r}"
+        )
+
+    pool_header_size, string_count, _flags, utf8 = string_pool_meta
+    pool_chunk = chunks[string_pool_index][1]
+    pool_header = bytearray(pool_chunk[:pool_header_size])
+    encoded_strings = bytearray()
+    new_offsets = []
+    for idx, value in enumerate(string_values):
+        new_offsets.append(len(encoded_strings))
+        new_value = new_package if idx == root_package_index else value
+        encoded_strings.extend(_axml_encode_pool_string(new_value, utf8))
+    while len(encoded_strings) % 4:
+        encoded_strings.append(0)
+
+    new_strings_start = pool_header_size + string_count * 4
+    new_pool_size = new_strings_start + len(encoded_strings)
+    struct.pack_into("<I", pool_header, 4, new_pool_size)
+    struct.pack_into("<I", pool_header, 20, new_strings_start)
+    struct.pack_into("<I", pool_header, 24, 0)
+    new_pool = (
+        bytes(pool_header)
+        + b"".join(struct.pack("<I", string_offset) for string_offset in new_offsets)
+        + bytes(encoded_strings)
+    )
+    if len(new_pool) != new_pool_size:
+        raise ValueError("Internal Android XML string-pool size mismatch")
+
+    rebuilt_xml = bytearray(data[:8])
+    for idx, (_chunk_type, chunk, _absolute) in enumerate(chunks):
+        rebuilt_xml.extend(new_pool if idx == string_pool_index else chunk)
+    struct.pack_into("<I", rebuilt_xml, 4, len(rebuilt_xml))
+    return bytes(rebuilt_xml), {
+        "source_package_id": old_package,
+        "target_package_id": new_package,
+        "split_name": root_values.get("split"),
+        "manifest_package_id_rewritten": True,
+        "split_identity_preserved": True,
+        "binary_manifest_only_changed": True,
+    }
+
+
+def _is_apk_signature_entry(filename: str) -> bool:
+    upper = filename.upper()
+    return (
+        upper.startswith("META-INF/")
+        and upper.endswith((".SF", ".RSA", ".DSA", ".EC", ".MF"))
+    ) or filename == "stamp-cert-sha256"
+
+
+def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
+    """Rebrand a config split manifest while keeping every other payload byte-identical."""
+    source_entries = zip_entries(source_apk)
+    if "AndroidManifest.xml" not in source_entries:
+        raise ValueError("Configuration APK has no AndroidManifest.xml: " + str(source_apk))
+    patched_manifest, report = patch_binary_xml_package_id(
+        source_entries["AndroidManifest.xml"], ORIGINAL_PACKAGE, TARGET_PACKAGE
+    )
+    if not report.get("split_name", "").startswith("config."):
+        raise ValueError("Expected a config.* split manifest in " + str(source_apk))
+    destination_apk.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(source_apk) as source_zip, zipfile.ZipFile(
+        destination_apk, "w", allowZip64=True
+    ) as destination_zip:
+        for info in source_zip.infolist():
+            if _is_apk_signature_entry(info.filename):
+                continue
+            payload = patched_manifest if info.filename == "AndroidManifest.xml" else source_zip.read(info.filename)
+            copied = zipfile.ZipInfo(info.filename, info.date_time)
+            copied.compress_type = info.compress_type
+            copied.comment = info.comment
+            copied.create_system = info.create_system
+            copied.external_attr = info.external_attr
+            copied.internal_attr = info.internal_attr
+            copied.extra = b""
+            destination_zip.writestr(copied, payload, compress_type=info.compress_type, compresslevel=6)
+
+    output_entries = zip_entries(destination_apk)
+    expected_entries = {
+        name for name in source_entries if not _is_apk_signature_entry(name)
+    }
+    if set(output_entries) != expected_entries:
+        raise ValueError("Config split payload inventory changed while patching manifest")
+    for name, payload in source_entries.items():
+        if name == "AndroidManifest.xml" or _is_apk_signature_entry(name):
+            continue
+        if output_entries[name] != payload:
+            raise ValueError("Config split entry changed unexpectedly: " + name)
+    report.update({
+        "file": source_apk.name,
+        "source_bytes": source_apk.stat().st_size,
+        "rebuilt_bytes": destination_apk.stat().st_size,
+        "resources_arsc_byte_identical": (
+            "resources.arsc" not in source_entries
+            or source_entries["resources.arsc"] == output_entries.get("resources.arsc")
+        ),
+        "native_libraries_preserved": sum(
+            name.startswith("lib/") and name.endswith(".so") for name in output_entries
+        ),
+        "non_manifest_payloads_byte_identical": True,
+    })
+    return report
+
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, type=Path)
@@ -462,46 +755,30 @@ def main() -> int:
     if not split_base_db or sha(split_base_entries[split_base_db]) != sha(source_entries[dbname]):
         raise ValueError("Split-install base APK changed or lost the original offline database")
 
-    # Rebuild both config APK manifests to use the same package ID as base.apk.
-    # Reusing the original config manifests with a renamed base is not installable.
+    # Patch only each config split's binary manifest. Apktool rebuilding a config
+    # APK independently can rewrite resources.arsc and break package-resource linkage.
     config_split_reports = {}
     rebuilt_config_splits = {}
     for name in sorted(EXPECTED_FILES - {"base.apk"}):
         source_config = source_parts / name
-        config_decoded = work / ("decoded-" + name.removesuffix(".apk"))
-        run(apktool + ["d", "--force", str(source_config), "-o", str(config_decoded)])
-        config_manifest = config_decoded / "AndroidManifest.xml"
-        config_manifest_before = manifest_semantics(config_manifest)
-        identity_report = rewrite_split_config_manifest(config_manifest)
         rebuilt_config = rebuilt_dir / name
-        run(apktool + ["b", "--use-aapt2", "--no-crunch", str(config_decoded), "-o", str(rebuilt_config)])
-        config_redecoded = work / ("redecoded-" + name.removesuffix(".apk"))
-        run(apktool + ["d", "--force", str(rebuilt_config), "-o", str(config_redecoded)])
-        config_root = ET.parse(config_redecoded / "AndroidManifest.xml").getroot()
-        config_split_name = config_root.attrib.get("split") or config_root.attrib.get("{" + ANDROID_NS + "}split")
-        if config_root.attrib.get("package") != TARGET_PACKAGE:
-            raise ValueError("Rebuilt config split has the wrong package ID: " + name)
-        if config_split_name != identity_report["split_name"]:
-            raise ValueError("Rebuilt config split lost its split identity: " + name)
-        if manifest_semantics(config_redecoded / "AndroidManifest.xml") != config_manifest_before:
-            raise ValueError("Rebuilt config split changed manifest semantics beyond package ID: " + name)
-        source_config_entries = zip_entries(source_config)
+        identity_report = rewrite_split_config_apk(source_config, rebuilt_config)
         rebuilt_config_entries = zip_entries(rebuilt_config)
-        source_config_dex = {n: b for n, b in source_config_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
-        rebuilt_config_dex = {n: b for n, b in rebuilt_config_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
-        if {n: sha(b) for n, b in source_config_dex.items()} != {n: sha(b) for n, b in rebuilt_config_dex.items()}:
-            raise ValueError("Config split DEX unexpectedly changed: " + name)
-        source_config_libs = {n: sha(b) for n, b in source_config_entries.items() if n.startswith("lib/") and n.endswith(".so")}
-        rebuilt_config_libs = {n: sha(b) for n, b in rebuilt_config_entries.items() if n.startswith("lib/") and n.endswith(".so")}
+        source_config_entries = zip_entries(source_config)
+        if "resources.arsc" in source_config_entries:
+            if rebuilt_config_entries.get("resources.arsc") != source_config_entries["resources.arsc"]:
+                raise ValueError("Config split resources.arsc is not byte-identical to source: " + name)
+        source_config_libs = {
+            entry: sha(payload) for entry, payload in source_config_entries.items()
+            if entry.startswith("lib/") and entry.endswith(".so")
+        }
+        rebuilt_config_libs = {
+            entry: sha(payload) for entry, payload in rebuilt_config_entries.items()
+            if entry.startswith("lib/") and entry.endswith(".so")
+        }
         if source_config_libs != rebuilt_config_libs:
             raise ValueError("Config split native libraries changed: " + name)
-        config_split_reports[name] = {
-            **identity_report,
-            "source_bytes": source_config.stat().st_size,
-            "rebuilt_bytes": rebuilt_config.stat().st_size,
-            "dex_file_set_preserved": set(source_config_dex) == set(rebuilt_config_dex),
-            "native_libraries_preserved": len(source_config_libs),
-        }
+        config_split_reports[name] = identity_report
         rebuilt_config_splits[name] = rebuilt_config
 
     # The SAI archive uses the split-aware base; APKEditor gets a separate base
@@ -521,7 +798,7 @@ def main() -> int:
         "package_id_target": TARGET_PACKAGE,
         "package_identity": package_identity,
         "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
-        "manifest_normalization_note": "Only the standalone merge input removes split-only root metadata. The SAI-ready base retains the original split requirements, while both config split manifests are rebuilt to share the target package ID.",
+        "manifest_normalization_note": "Only the standalone merge input removes split-only root metadata. The SAI-ready base retains original split requirements. Config split package IDs are changed in binary AndroidManifest.xml only; resources.arsc and all native-library payloads remain byte-identical.",
         "split_install_set_identity_consistent": True,
         "config_split_manifest_rebranding": config_split_reports,
         "standalone_merge_input_dir": str(standalone_input_dir),
