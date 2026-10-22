@@ -1,0 +1,89 @@
+name: Publish ARM64 candidate after PackageManager probe
+
+on:
+  workflow_run:
+    workflows: ["Diagnose Android 11 package parsing"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-arm64-candidate:
+    if: >-
+      \${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_sha == '3d18f822697160328afa568ace8cbc417b5866be' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download PackageManager diagnostics from the completed probe
+        uses: actions/download-artifact@v4
+        with:
+          name: android11-package-manager-diagnostic
+          path: diagnostics
+          repository: alanduzohiko/gptt-leets-go
+          run-id: \${{ github.event.workflow_run.id }}
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require an Android 11 PackageManager result consistent with ARM64-only libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s diagnostics/package-manager-result.txt
+          test -s diagnostics/package-manager-install.txt
+          result="$(tr -d '\r' < diagnostics/package-manager-result.txt)"
+          cat diagnostics/package-manager-result.txt
+          cat diagnostics/package-manager-install.txt
+          if [[ "$result" != "PACKAGE_PARSED; STOPPED_ONLY_BY_X86_VS_ARM64_NATIVE_ABI" ]]; then
+            echo "Refusing to publish candidate: the Android 11 probe did not reach the expected ABI-only outcome."
+            exit 1
+          fi
+          grep -q "INSTALL_FAILED_NO_MATCHING_ABIS" diagnostics/package-manager-install.txt
+
+      - name: Download resource-preserving build 50
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-apk-for-emulator-50
+          path: dist
+          repository: alanduzohiko/gptt-leets-go
+          run-id: 39743141594
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify exact APK hash and archive integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/Mashxall-3.1.3.apk
+          actual="$(sha256sum dist/Mashxall-3.1.3.apk | awk '{print $1}')"
+          expected="e74c8eb392a478546e12dc66271734a07bcf92711fc596aff750cd66699b1b0b"
+          echo "APK SHA-256: $actual"
+          test "$actual" = "$expected"
+          bytes="$(stat -c %s dist/Mashxall-3.1.3.apk)"
+          echo "APK bytes: $bytes"
+          test "$bytes" = "108704462"
+          unzip -t dist/Mashxall-3.1.3.apk | tail -n 2
+          test -s dist/Mashxall-3.1.3-signed-parts.zip
+          unzip -t dist/Mashxall-3.1.3-signed-parts.zip | tail -n 2
+
+      - name: Publish clearly labeled prerelease candidate
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mashxall-3.1.3-arm64-candidate-50-20261022
+          name: Mashxall 3.1.3 — ARM64 package candidate 50
+          prerelease: true
+          draft: false
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/Mashxall-3.1.3.apk
+            dist/Mashxall-3.1.3-signed-parts.zip
+          body: |
+            Rebuilt from the exact original 3.1.3 split bundle, using a resource-preserving base APK and the original app database, DEX class inventory, and ARM64 native libraries.
+
+            Package ID: com.kosratdahmad.mashxall.full50a1
+
+            Android 11 PackageManager probe on x86_64 returned INSTALL_FAILED_NO_MATCHING_ABIS because the app's native libraries target ARM64. This is the expected ABI restriction for that x86 test environment, and shows the installer got past the package parser; it is not a successful install/launch test on an ARM64 device.
+
+            The APK is signed with a temporary test key and uses a unique package ID. A physical ARM64 install/launch has not been verified yet; do not treat this candidate as a final production release.
