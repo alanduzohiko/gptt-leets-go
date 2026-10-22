@@ -560,40 +560,104 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
+    val favoritePrefs = remember { context.getSharedPreferences("mashxall_azkar_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
-    var items by remember { mutableStateOf(emptyList<AzkarItem>()) }
+    var allItems by remember { mutableStateOf(emptyList<AzkarItem>()) }
+    var categories by remember { mutableStateOf(emptyList<AzkarCategory>()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(query, selectedTab) {
+    var selectedCategory by rememberSaveable { mutableIntStateOf(0) }
+    var favoriteIds by remember {
+        mutableStateOf(favoritePrefs.getStringSet("favorite_ids", emptySet()).orEmpty().toSet())
+    }
+
+    LaunchedEffect(Unit) { categories = ContentRepository.loadAzkarCategories(context) }
+    LaunchedEffect(query) {
         loading = true
-        items = ContentRepository.loadAzkar(context, language.key, query.trim()).filter {
-            selectedTab == 0 || (selectedTab == 1 && it.titleCkb.contains("بەیانی", true)) || (selectedTab == 2 && it.titleCkb.contains("ئێوار", true))
-        }
+        allItems = ContentRepository.loadAzkar(context, language.key, query.trim())
         loading = false
+    }
+    val visibleItems = allItems.filter { item ->
+        val tabMatch = when (selectedTab) {
+            1 -> item.titleCkb.contains("بەیانی", true) || item.titleAr.contains("الصباح", true) || item.titleEn.contains("morning", true)
+            2 -> item.titleCkb.contains("ئێوار", true) || item.titleAr.contains("المساء", true) || item.titleEn.contains("evening", true)
+            3 -> favoriteIds.contains(item.id.toString())
+            else -> true
+        }
+        tabMatch && (selectedCategory == 0 || item.categoryId == selectedCategory)
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(tr(language, "azkar"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp)); SearchBox(query, { query = it }, tr(language, "search_azkar"))
+            Spacer(Modifier.height(10.dp))
+            SearchBox(query, { query = it }, tr(language, "search_azkar"))
             Spacer(Modifier.height(7.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                items(listOf(0, 1, 2)) { index ->
-                    FilterChip(selected = selectedTab == index, onClick = { selectedTab = index }, label = {
-                        Text(when (language) {
-                            AppLanguage.CKB -> listOf("هەموو", "بەیانی", "ئێواران")[index]
-                            AppLanguage.AR -> listOf("الكل", "الصباح", "المساء")[index]
-                            AppLanguage.EN -> listOf("All", "Morning", "Evening")[index]
-                        })
-                    })
+                items(listOf(0, 1, 2, 3)) { index ->
+                    FilterChip(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        label = {
+                            Text(when (language) {
+                                AppLanguage.CKB -> listOf("هەموو", "بەیانی", "ئێواران", "دڵخوازەکان")[index]
+                                AppLanguage.AR -> listOf("الكل", "الصباح", "المساء", "المفضلة")[index]
+                                AppLanguage.EN -> listOf("All", "Morning", "Evening", "Favourites")[index]
+                            }, fontSize = 11.sp)
+                        }
+                    )
+                }
+            }
+            Spacer(Modifier.height(7.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                item {
+                    FilterChip(
+                        selected = selectedCategory == 0,
+                        onClick = { selectedCategory = 0 },
+                        label = { Text(if (language == AppLanguage.EN) "All categories" else if (language == AppLanguage.AR) "كل الأقسام" else "هەموو بەشەکان", fontSize = 10.sp) }
+                    )
+                }
+                items(categories, key = { it.id }) { category ->
+                    val label = when (language) {
+                        AppLanguage.CKB -> category.ckb
+                        AppLanguage.AR -> category.arabic
+                        AppLanguage.EN -> category.english
+                    }
+                    FilterChip(
+                        selected = selectedCategory == category.id,
+                        onClick = { selectedCategory = category.id },
+                        label = { Text(label, fontSize = 10.sp, maxLines = 1) }
+                    )
                 }
             }
         }
-        if (items.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(items, key = { it.id }) { item ->
+        if (visibleItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
+            contentPadding = PaddingValues(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(visibleItems, key = { it.id }) { item ->
                 var count by rememberSaveable(item.id) { mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0)) }
+                val isFavorite = favoriteIds.contains(item.id.toString())
+                val categoryLabel = when (language) {
+                    AppLanguage.CKB -> item.categoryCkb
+                    AppLanguage.AR -> item.categoryArabic
+                    AppLanguage.EN -> item.categoryEnglish
+                }
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
                     Column(Modifier.padding(15.dp)) {
-                        Text(when (language) { AppLanguage.CKB -> item.titleCkb; AppLanguage.AR -> item.titleAr; AppLanguage.EN -> item.titleEn }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                if (categoryLabel.isNotBlank()) Text(categoryLabel, color = foreground.copy(alpha = 0.45f), fontSize = 10.sp)
+                                Text(
+                                    when (language) { AppLanguage.CKB -> item.titleCkb; AppLanguage.AR -> item.titleAr; AppLanguage.EN -> item.titleEn },
+                                    color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                                )
+                            }
+                            TextButton(onClick = {
+                                val id = item.id.toString()
+                                favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
+                                favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
+                            }) { Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 21.sp) }
+                        }
                         Spacer(Modifier.height(8.dp))
                         Text(item.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                         val translation = when (language) { AppLanguage.CKB -> item.ckb; AppLanguage.AR -> ""; AppLanguage.EN -> item.english }
@@ -603,9 +667,15 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         }
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (language == AppLanguage.EN) "Repeat: $count / " + item.count else if (language == AppLanguage.AR) "التكرار: $count / " + item.count else "ژمارە: $count / " + item.count, color = foreground.copy(alpha = 0.64f), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                            Text(
+                                if (language == AppLanguage.EN) "Repeat: $count / " + item.count.coerceAtLeast(1)
+                                else if (language == AppLanguage.AR) "التكرار: $count / " + item.count.coerceAtLeast(1)
+                                else "ژمارە: $count / " + item.count.coerceAtLeast(1),
+                                color = foreground.copy(alpha = 0.64f), fontSize = 11.sp, modifier = Modifier.weight(1f)
+                            )
                             Button(onClick = {
-                                count = if (count + 1 >= item.count.coerceAtLeast(1)) 0 else count + 1
+                                val target = item.count.coerceAtLeast(1)
+                                count = if (count + 1 >= target) 0 else count + 1
                                 progressPrefs.edit().putInt(item.id.toString(), count).apply()
                             }) {
                                 Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
@@ -652,25 +722,66 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
-    var count by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_count", 0)) }
+    var presets by remember { mutableStateOf(emptyList<TasbihPreset>()) }
+    var selectedId by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_preset_id", 3)) }
+    var count by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_count_3", 0)) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    val selected = presets.firstOrNull { it.id == selectedId }
+
+    LaunchedEffect(Unit) {
+        presets = ContentRepository.loadTasbihPresets(context)
+        if (presets.none { it.id == selectedId } && presets.isNotEmpty()) selectedId = presets.first().id
+    }
+    LaunchedEffect(selectedId, presets) {
+        count = prefs.getInt("tasbih_count_$selectedId", 0)
+        prefs.edit().putInt("tasbih_preset_id", selectedId).apply()
+    }
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(tr(language, "tasbih"), color = foreground, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
-        Text(if (language == AppLanguage.EN) "SubhanAllah • Alhamdulillah • Allahu Akbar" else if (language == AppLanguage.AR) "سبحان الله • الحمد لله • الله أكبر" else "سوبحان الله • الحمد لله • الله أكبر", color = Gold, textAlign = TextAlign.Center, fontSize = 14.sp)
-        Spacer(Modifier.height(28.dp))
-        Box(Modifier.size(238.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF1E7259), DeepGreen, CardDark))).clickable {
-            count += 1
-            prefs.edit().putInt("tasbih_count", count).apply()
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        }, contentAlignment = Alignment.Center) {
+        Spacer(Modifier.height(10.dp))
+        if (presets.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                items(presets, key = { it.id }) { preset ->
+                    FilterChip(
+                        selected = selectedId == preset.id,
+                        onClick = { selectedId = preset.id; count = prefs.getInt("tasbih_count_${preset.id}", 0) },
+                        label = { Text(preset.zikr.replace("\n", " ").take(18), fontSize = 11.sp, maxLines = 1) }
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            selected?.zikr ?: "سُبْحَانَ اللّٰهِ • اَلْحَمْدُلِلّٰهِ • اَللّٰهُ أَكْبَرُ",
+            color = Gold, textAlign = TextAlign.Center, fontSize = 18.sp, lineHeight = 29.sp
+        )
+        if (language == AppLanguage.CKB && !selected?.meaningCkb.isNullOrBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(selected?.meaningCkb.orEmpty(), color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
+        }
+        Spacer(Modifier.height(24.dp))
+        Box(
+            Modifier.size(238.dp).clip(CircleShape).background(
+                androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF1E7259), DeepGreen, CardDark))
+            ).clickable {
+                count += 1
+                prefs.edit().putInt("tasbih_count_$selectedId", count).putInt("tasbih_count", count).apply()
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            },
+            contentAlignment = Alignment.Center
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(count.toString(), color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.ExtraBold)
                 Text(if (language == AppLanguage.EN) "TAP TO COUNT" else if (language == AppLanguage.AR) "اضغط للعدّ" else "بۆ ژماردن لێی بدە", color = Gold, fontSize = 10.sp, letterSpacing = 1.4.sp)
             }
         }
         Spacer(Modifier.height(23.dp))
-        OutlinedButton(onClick = { count = 0; prefs.edit().putInt("tasbih_count", 0).apply() }) { Text(tr(language, "reset")) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { count = 0; prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply() }) { Text(tr(language, "reset")) }
+            OutlinedButton(onClick = { count = 0; prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply() }) {
+                Text(if (language == AppLanguage.EN) "New round" else if (language == AppLanguage.AR) "دورة جديدة" else "خولێکی نوێ")
+            }
+        }
     }
 }
 

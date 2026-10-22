@@ -27,7 +27,13 @@ data class HadithItem(
     val bookName: String = "", val bookNameAr: String = "", val bookNameEn: String = "",
     val chapterName: String = "", val chapterNameAr: String = "", val chapterNameEn: String = ""
 )
-data class AzkarItem(val id: Int, val titleCkb: String, val titleAr: String, val titleEn: String, val arabic: String, val ckb: String, val english: String, val count: Int, val referenceCkb: String)
+data class AzkarItem(
+    val id: Int, val titleCkb: String, val titleAr: String, val titleEn: String,
+    val arabic: String, val ckb: String, val english: String, val count: Int, val referenceCkb: String,
+    val categoryId: Int = 0, val categoryCkb: String = "", val categoryArabic: String = "", val categoryEnglish: String = ""
+)
+data class AzkarCategory(val id: Int, val ckb: String, val arabic: String, val english: String)
+data class TasbihPreset(val id: Int, val zikr: String, val targetCount: Int, val timeOfDay: Int, val meaningCkb: String)
 data class AllahName(val number: Int, val arabic: String, val ckb: String, val badini: String, val english: String)
 data class City(val name: String, val latitude: Double, val longitude: Double)
 data class PrayerRow(
@@ -498,23 +504,55 @@ object ContentRepository {
         }
     }
 
+    suspend fun loadAzkarCategories(context: Context): List<AzkarCategory> = withContext(Dispatchers.IO) {
+        val noor = queryDb(context, PRAYER_DB, emptyList<AzkarCategory>()) { db ->
+            db.rawQuery("SELECT _id,ckb,ar,en FROM azkar_categories ORDER BY _id", null).use { c ->
+                buildList { while (c.moveToNext()) add(AzkarCategory(c.int("_id"), c.string("ckb"), c.string("ar"), c.string("en"))) }
+            }
+        }
+        if (noor.isNotEmpty()) noor else queryDb(context, AZKAR_DB, emptyList<AzkarCategory>()) { db ->
+            db.rawQuery(
+                """
+                SELECT category._id AS id,
+                       COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=category._id AND t.language='ckb' LIMIT 1),'') AS ckb,
+                       COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=category._id AND t.language='ar' LIMIT 1),'') AS ar,
+                       COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=category._id AND t.language='en' LIMIT 1),'') AS en
+                FROM azkar_category category ORDER BY category._id
+                """.trimIndent(), null
+            ).use { c ->
+                buildList { while (c.moveToNext()) add(AzkarCategory(c.int("id"), c.string("ckb"), c.string("ar"), c.string("en"))) }
+            }
+        }
+    }
+
     suspend fun loadAzkar(context: Context, language: String, query: String = ""): List<AzkarItem> = withContext(Dispatchers.IO) {
-        // Noor supplies repetition counts and the useful morning/evening grouping.
-        // Enrich those records with Salawati's fuller Kurdish/English wording and
-        // references where the same Arabic source text is present.
         val primary = queryDb(context, PRAYER_DB, emptyList<AzkarItem>()) { db ->
             val sql = """
                 SELECT it._id AS item_id, ch.ckb AS title_ckb, ch.ar AS title_ar, ch.en AS title_en,
                        it.ar AS arabic, it.ckb AS ckb_text, it.en AS en_text, it.counter AS item_count,
-                       (SELECT refs.ckb FROM azkar_references refs WHERE refs.chapter_id=it.chapter_id ORDER BY refs._id LIMIT 1) AS ref_ckb
+                       (SELECT refs.ckb FROM azkar_references refs WHERE refs.chapter_id=it.chapter_id ORDER BY refs._id LIMIT 1) AS ref_ckb,
+                       COALESCE(cat._id,0) AS category_id,
+                       COALESCE(cat.ckb,'') AS category_ckb,
+                       COALESCE(cat.ar,'') AS category_ar,
+                       COALESCE(cat.en,'') AS category_en
                 FROM azkar_items it
                 LEFT JOIN azkar_chapters ch ON ch._id=it.chapter_id
+                LEFT JOIN azkar_categories cat ON cat._id=ch.category_id
                 WHERE it.ckb LIKE ? OR it.ar LIKE ? OR it.en LIKE ? OR ch.ckb LIKE ? OR ch.ar LIKE ? OR ch.en LIKE ?
-                ORDER BY it._id LIMIT 350
+                   OR cat.ckb LIKE ? OR cat.ar LIKE ? OR cat.en LIKE ?
+                ORDER BY cat._id,ch._id,it._id LIMIT 350
             """.trimIndent()
             val term = if (query.isBlank()) "%" else "%$query%"
-            db.rawQuery(sql, arrayOf(term, term, term, term, term, term)).use { c ->
-                buildList { while (c.moveToNext()) add(AzkarItem(c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"), c.string("arabic"), c.string("ckb_text"), c.string("en_text"), c.int("item_count"), c.string("ref_ckb"))) }
+            db.rawQuery(sql, arrayOf(term, term, term, term, term, term, term, term, term)).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        AzkarItem(
+                            c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"),
+                            c.string("arabic"), c.string("ckb_text"), c.string("en_text"), c.int("item_count"), c.string("ref_ckb"),
+                            c.int("category_id"), c.string("category_ckb"), c.string("category_ar"), c.string("category_en")
+                        )
+                    )
+                }
             }
         }
         val translations = queryDb(context, AZKAR_DB, emptyMap<String, SalawatiAzkarText>()) { db ->
@@ -544,25 +582,49 @@ object ContentRepository {
                 )
             }
         } else {
-            // Graceful fallback if Noor's prayer-time DB is absent: use the
-            // complete Salawati collection instead of an empty screen.
             queryDb(context, AZKAR_DB, emptyList<AzkarItem>()) { db ->
                 val term = if (query.isBlank()) "%" else "%$query%"
                 val sql = """
                     SELECT it._id AS item_id,
-                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=it.chapter_id AND t.language='ckb' LIMIT 1),'') AS title_ckb,
-                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=it.chapter_id AND t.language='ar' LIMIT 1),'') AS title_ar,
-                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=it.chapter_id AND t.language='en' LIMIT 1),'') AS title_en,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='ckb' LIMIT 1),'') AS title_ckb,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='ar' LIMIT 1),'') AS title_ar,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='en' LIMIT 1),'') AS title_en,
                            it.item AS arabic,
                            COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='ckb' LIMIT 1),'') AS ckb_text,
                            COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='en' LIMIT 1),'') AS en_text,
-                           COALESCE((SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1),'') AS ref_ckb
+                           COALESCE((SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1),'') AS ref_ckb,
+                           cat._id AS category_id,
+                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='ckb' LIMIT 1),'') AS category_ckb,
+                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='ar' LIMIT 1),'') AS category_ar,
+                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='en' LIMIT 1),'') AS category_en
                     FROM azkar_item it
+                    LEFT JOIN azkar_chapter ch ON ch._id=it.chapter_id
+                    LEFT JOIN azkar_category cat ON cat._id=ch.category_id
                     WHERE it.item LIKE ? OR EXISTS(SELECT 1 FROM azkar_item_translation t WHERE t.item_id=it._id AND t.item_translation LIKE ?)
-                    ORDER BY it._id LIMIT 350
+                    ORDER BY cat._id,ch._id,it._id LIMIT 350
                 """.trimIndent()
                 db.rawQuery(sql, arrayOf(term, term)).use { c ->
-                    buildList { while (c.moveToNext()) add(AzkarItem(c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"), c.string("arabic"), c.string("ckb_text"), c.string("en_text"), 1, c.string("ref_ckb"))) }
+                    buildList {
+                        while (c.moveToNext()) add(
+                            AzkarItem(
+                                c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"),
+                                c.string("arabic"), c.string("ckb_text"), c.string("en_text"), 1, c.string("ref_ckb"),
+                                c.int("category_id"), c.string("category_ckb"), c.string("category_ar"), c.string("category_en")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun loadTasbihPresets(context: Context): List<TasbihPreset> = withContext(Dispatchers.IO) {
+        queryDb(context, PRAYER_DB, emptyList()) { db ->
+            db.rawQuery("SELECT id,zikr,count,time,meaning FROM tasbih ORDER BY id", null).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        TasbihPreset(c.int("id"), c.string("zikr"), c.int("count"), c.int("time"), c.string("meaning"))
+                    )
                 }
             }
         }
