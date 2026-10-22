@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
@@ -72,6 +73,7 @@ import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -108,15 +110,24 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var verses by remember { mutableStateOf<List<Ayah>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var query by rememberSaveable { mutableStateOf("") }
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var translationKey by rememberSaveable {
+        mutableStateOf(prefs.getString("quran_translation", null) ?: when (language) {
+            AppLanguage.EN -> "sahih"
+            AppLanguage.AR -> "none"
+            AppLanguage.CKB -> "puxta"
+        })
+    }
+    var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
     var mushafPage by rememberSaveable { mutableIntStateOf(1) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
-    LaunchedEffect(selected, language, query, initialAyah) {
+    LaunchedEffect(selected, language, query, initialAyah, translationKey) {
         loading = true
-        val loaded = ContentRepository.loadAyahs(context, selected, language.key, query.trim())
+        val loaded = ContentRepository.loadAyahs(context, selected, language.key, query.trim(), translationKey)
         verses = loaded
         if (query.isBlank()) {
             (loaded.firstOrNull { it.number >= initialAyah } ?: loaded.firstOrNull())?.page
@@ -142,6 +153,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
             Spacer(Modifier.height(8.dp))
             SearchBox(query, { query = it }, tr(language, "search"))
+            Spacer(Modifier.height(7.dp))
+            val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
+                ?: ContentRepository.quranTranslations.first()
+            val currentTranslationLabel = when (language) {
+                AppLanguage.CKB -> currentTranslation.ckb
+                AppLanguage.AR -> currentTranslation.arabic
+                AppLanguage.EN -> currentTranslation.english
+            }
+            OutlinedButton(onClick = { chooseTranslation = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Language, null, tint = Gold, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(tr(language, "translation") + ": " + currentTranslationLabel, fontSize = 11.sp, maxLines = 1)
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChip(
@@ -218,6 +242,39 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         },
         confirmButton = { TextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
     )
+    if (chooseTranslation) AlertDialog(
+        onDismissRequest = { chooseTranslation = false },
+        title = { Text(tr(language, "translation")) },
+        text = {
+            LazyColumn(Modifier.height(380.dp)) {
+                items(ContentRepository.quranTranslations, key = { it.id }) { choice ->
+                    val label = when (language) {
+                        AppLanguage.CKB -> choice.ckb
+                        AppLanguage.AR -> choice.arabic
+                        AppLanguage.EN -> choice.english
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            translationKey = choice.id
+                            prefs.edit().putString("quran_translation", choice.id).apply()
+                            chooseTranslation = false
+                        }.padding(vertical = 11.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = translationKey == choice.id, onClick = {
+                            translationKey = choice.id
+                            prefs.edit().putString("quran_translation", choice.id).apply()
+                            chooseTranslation = false
+                        })
+                        Spacer(Modifier.width(6.dp))
+                        Text(label, color = foreground, fontSize = 13.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { chooseTranslation = false }) { Text(tr(language, "back")) } }
+    )
+
 }
 
 @Composable
@@ -353,7 +410,7 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
             Text(tr(language, "tafsir"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                items(ContentRepository.tafsirBooks.filter { it.id != "noor" }) { book ->
+                items(ContentRepository.tafsirBooks) { book ->
                     FilterChip(selected = selectedBook == book.id, onClick = { selectedBook = book.id }, label = { Text(tafsirLabel(book, language), fontSize = 11.sp, maxLines = 1) })
                 }
             }
@@ -390,27 +447,104 @@ private fun tafsirLabel(book: TafsirBook, language: AppLanguage): String = when 
 @Composable
 fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
-    var items by remember { mutableStateOf<List<HadithItem>>(emptyList()) }
+    var hadithItems by remember { mutableStateOf<List<HadithItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    LaunchedEffect(query) { loading = true; items = ContentRepository.loadHadiths(context, query.trim()); loading = false }
+    var loadingMore by remember { mutableStateOf(false) }
+    var offset by remember { mutableIntStateOf(0) }
+    var hasMore by remember { mutableStateOf(true) }
+
+    LaunchedEffect(query) {
+        loading = true
+        loadingMore = false
+        offset = 0
+        hasMore = true
+        hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100)
+        offset = hadithItems.size
+        hasMore = hadithItems.size == 100
+        loading = false
+        listState.scrollToItem(0)
+    }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(tr(language, "hadith"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp)); SearchBox(query, { query = it }, tr(language, "search_hadith"))
+            Spacer(Modifier.height(3.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "8,202 narrations in the source database"
+                    AppLanguage.AR -> "٨٬٢٠٢ رواية في قاعدة البيانات الأصلية"
+                    AppLanguage.CKB -> "٨٬٢٠٢ فەرموودە لە بنکەدراوەی سەرچاوەدا"
+                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            SearchBox(query, { query = it }, tr(language, "search_hadith"))
         }
-        if (items.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(items, key = { it.id }) { item ->
+        if (hadithItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(hadithItems, key = { it.id }) { hadith ->
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(15.dp)) {
-                        Text("#" + item.id, color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        val collection = when (language) {
+                            AppLanguage.EN -> hadith.bookNameEn.ifBlank { hadith.bookName }
+                            AppLanguage.AR -> hadith.bookNameAr.ifBlank { hadith.bookName }
+                            AppLanguage.CKB -> hadith.bookName
+                        }
+                        val chapter = when (language) {
+                            AppLanguage.EN -> hadith.chapterNameEn.ifBlank { hadith.chapterName }
+                            AppLanguage.AR -> hadith.chapterNameAr.ifBlank { hadith.chapterName }
+                            AppLanguage.CKB -> hadith.chapterName
+                        }
+                        Text(collection.ifBlank { "Hadith #${hadith.id}" }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        if (chapter.isNotBlank()) Text(chapter, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp)
                         Spacer(Modifier.height(7.dp))
-                        Text(item.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                        val body = when (language) { AppLanguage.CKB -> item.sorani; AppLanguage.AR -> item.arabic; AppLanguage.EN -> item.english }
-                        if (body.isNotBlank() && body != item.arabic) {
+                        Text(hadith.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        val body = when (language) {
+                            AppLanguage.CKB -> hadith.sorani
+                            AppLanguage.AR -> hadith.arabic
+                            AppLanguage.EN -> hadith.english
+                        }
+                        if (body.isNotBlank() && body != hadith.arabic) {
                             Spacer(Modifier.height(8.dp))
                             Text(body.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.8f), fontSize = 13.sp, lineHeight = 21.sp)
                         }
+                        Text(
+                            if (language == AppLanguage.EN) "Reference ID: ${hadith.id}"
+                            else if (language == AppLanguage.AR) "رقم الرواية: ${hadith.id}"
+                            else "ژمارەی فەرموودە: ${hadith.id}",
+                            color = foreground.copy(alpha = 0.42f), fontSize = 9.sp
+                        )
+                    }
+                }
+            }
+            if (hasMore) {
+                item(key = "load-more-hadith") {
+                    OutlinedButton(
+                        enabled = !loadingMore,
+                        onClick = {
+                            if (!loadingMore) scope.launch {
+                                loadingMore = true
+                                val nextPage = ContentRepository.loadHadiths(context, query.trim(), offset, 100)
+                                hadithItems = hadithItems + nextPage
+                                offset += nextPage.size
+                                hasMore = nextPage.size == 100
+                                loadingMore = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (loadingMore) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text(
+                            when (language) {
+                                AppLanguage.EN -> "Load more narrations"
+                                AppLanguage.AR -> "تحميل المزيد من الروايات"
+                                AppLanguage.CKB -> "فەرموودەی زیاتر باربکە"
+                            }
+                        )
                     }
                 }
             }
