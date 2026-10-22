@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -1641,7 +1642,7 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 contentPadding = PaddingValues(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$offset:$index" }) { _, item ->
+                itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$index" }) { _, item ->
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(14.dp)) {
                             Text(item.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 14.sp)
