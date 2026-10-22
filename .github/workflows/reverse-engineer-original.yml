@@ -1,0 +1,161 @@
+name: Reverse-engineer original APK source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/reverse-engineer-original.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-original:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout this repair repository only
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download and verify exact original split bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/original" analysis
+          gh release download source-3.1.3 --repo "$GITHUB_REPOSITORY" --pattern '*.apks' --dir "$RUNNER_TEMP/original"
+          mapfile -t files < <(find "$RUNNER_TEMP/original" -maxdepth 1 -type f -name '*.apks' -print)
+          [[ "${#files[@]}" -eq 1 ]] || { echo "Expected exactly one original .apks file"; exit 1; }
+          actual="$(sha256sum "${files[0]}" | awk '{print $1}')"
+          expected='bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3'
+          echo "Original bundle SHA-256: $actual"
+          [[ "$actual" == "$expected" ]] || { echo "Source checksum mismatch; aborting reverse engineering"; exit 1; }
+          unzip -q "${files[0]}" -d analysis/original-splits
+          test -s analysis/original-splits/base.apk
+          test -s analysis/original-splits/split_config.arm64_v8a.apk
+          test -s analysis/original-splits/split_config.xxhdpi.apk
+
+      - name: Install pinned Apktool and JADX
+        shell: bash
+        run: |
+          set -euo pipefail
+          meta="$(curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/tags/v2.11.1)"
+          apktool_url="$(printf '%s' "$meta" | jq -r '.assets[] | select(.name == "apktool_2.11.1.jar") | .browser_download_url' | head -n1)"
+          test -n "$apktool_url" && test "$apktool_url" != "null"
+          mkdir -p "$RUNNER_TEMP/re-tools/jadx"
+          curl -fL --retry 3 "$apktool_url" -o "$RUNNER_TEMP/re-tools/apktool.jar"
+          test "$(java -jar "$RUNNER_TEMP/re-tools/apktool.jar" --version)" = "2.11.1"
+          curl -fL --retry 3 https://github.com/skylot/jadx/releases/download/v1.5.1/jadx-1.5.1.zip -o "$RUNNER_TEMP/re-tools/jadx.zip"
+          unzip -q "$RUNNER_TEMP/re-tools/jadx.zip" -d "$RUNNER_TEMP/re-tools/jadx"
+          chmod +x "$RUNNER_TEMP/re-tools/jadx/bin/jadx"
+          "$RUNNER_TEMP/re-tools/jadx/bin/jadx" --version
+          echo "APKTOOL_JAR=$RUNNER_TEMP/re-tools/apktool.jar" >> "$GITHUB_ENV"
+          echo "JADX_BIN=$RUNNER_TEMP/re-tools/jadx/bin/jadx" >> "$GITHUB_ENV"
+
+      - name: Decompile original DEX to readable Java
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis/jadx-source
+          "$JADX_BIN" --show-bad-code --threads-count 2 -d analysis/jadx-source analysis/original-splits/base.apk 2>&1 | tee analysis/jadx.log
+          test -d analysis/jadx-source/sources
+          find analysis/jadx-source/sources -type f -name '*.java' | wc -l | tee analysis/java-class-count.txt
+
+      - name: Decode original manifest and all base resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -jar "$APKTOOL_JAR" d -f -s analysis/original-splits/base.apk -o analysis/apktool-resources 2>&1 | tee analysis/apktool.log
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print analysis/original-splits/base.apk > analysis/original-manifest.xml
+          find analysis/apktool-resources/res -type f | sort > analysis/resource-file-inventory.txt
+          find analysis/apktool-resources/assets -type f | sort > analysis/asset-file-inventory.txt
+          find analysis/jadx-source/sources -type f -name '*.java' | sort > analysis/java-file-inventory.txt
+          unzip -l analysis/original-splits/split_config.arm64_v8a.apk > analysis/native-library-inventory.txt
+
+      - name: Audit manifest, screens, assets, and offline database
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, sqlite3, tempfile, xml.etree.ElementTree as ET
+          from pathlib import Path
+          root=Path('analysis')
+          ns={'a':'http://schemas.android.com/apk/res/android'}
+          manifest=ET.parse(root/'apktool-resources/AndroidManifest.xml').getroot()
+          app=manifest.find('application')
+          def attr(node,name): return node.get('{'+ns['a']+'}'+name) if node is not None else None
+          entries={}
+          for kind in ['activity','activity-alias','service','receiver','provider']:
+              entries[kind]=[{'name':attr(n,'name'),'exported':attr(n,'exported'),'permission':attr(n,'permission'),
+                              'authorities':attr(n,'authorities')} for n in app.findall(kind)]
+          permissions=[n.get('{'+ns['a']+'}name') for n in manifest.findall('uses-permission')]
+          java_files=list((root/'jadx-source/sources').rglob('*.java'))
+          layouts=list((root/'apktool-resources/res').glob('layout*/*'))
+          strings=[]
+          for p in (root/'apktool-resources/res').glob('values*/strings.xml'):
+              try:
+                  for node in ET.parse(p).getroot().findall('string'):
+                      strings.append({'file':str(p.relative_to(root)),'name':node.get('name'),'text':''.join(node.itertext())[:500]})
+              except Exception: pass
+          db_path=root/'apktool-resources/assets/database/muslim_db_v2.5.1.db'
+          db_report={'present':db_path.exists()}
+          if db_path.exists():
+              with tempfile.NamedTemporaryFile(suffix='.db') as tmp:
+                  tmp.write(db_path.read_bytes()); tmp.flush()
+                  con=sqlite3.connect(tmp.name)
+                  try:
+                      db_report['integrity']=con.execute('PRAGMA integrity_check').fetchone()[0]
+                      tables=con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()
+                      db_report['tables']=[]
+                      for (t,) in tables:
+                          cols=[row[1] for row in con.execute('PRAGMA table_info("'+t.replace('"','""')+'")')]
+                          count=con.execute('SELECT COUNT(*) FROM "'+t.replace('"','""')+'"').fetchone()[0]
+                          db_report['tables'].append({'name':t,'rows':count,'columns':cols})
+                  finally:con.close()
+          report={
+            'source_bundle_sha256':'bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3',
+            'package':manifest.get('package'),'versionCode':attr(manifest,'versionCode'),'versionName':attr(manifest,'versionName'),
+            'minSdkVersion':attr(manifest.find('uses-sdk'),'minSdkVersion'),'targetSdkVersion':attr(manifest.find('uses-sdk'),'targetSdkVersion'),
+            'application':{'label':attr(app,'label'),'icon':attr(app,'icon'),'theme':attr(app,'theme')},
+            'permissions':permissions,'components':entries,
+            'decompiled_java_files':len(java_files),'layout_resources':len(layouts),'string_resources_across_locales':len(strings),
+            'resource_files':sum(1 for _ in (root/'apktool-resources/res').rglob('*') if _.is_file()),
+            'asset_files':sum(1 for _ in (root/'apktool-resources/assets').rglob('*') if _.is_file()),
+            'database':db_report,
+            'note':'This report describes the original prebuilt app. Decompiled Java is approximate source produced by JADX; resources and the manifest are decoded from the original APK. This is not proof that rebuilding a modified clone can preserve every private backend/service.'
+          }
+          (root/'original-app-audit.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+          (root/'string-resources.json').write_text(json.dumps(strings,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps({k:v for k,v in report.items() if k!='components' and k!='permissions' and k!='database'},ensure_ascii=False,indent=2))
+          print('Manifest components:',json.dumps({k:len(v) for k,v in entries.items()}))
+          print('Database tables:',len(db_report.get('tables',[])))
+          PY
+
+      - name: Upload complete reverse-engineering audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-app-reverse-engineering
+          path: |
+            analysis/jadx-source/
+            analysis/apktool-resources/
+            analysis/original-manifest.xml
+            analysis/original-app-audit.json
+            analysis/string-resources.json
+            analysis/jadx.log
+            analysis/apktool.log
+            analysis/java-file-inventory.txt
+            analysis/resource-file-inventory.txt
+            analysis/asset-file-inventory.txt
+            analysis/native-library-inventory.txt
+            analysis/java-class-count.txt
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 14
