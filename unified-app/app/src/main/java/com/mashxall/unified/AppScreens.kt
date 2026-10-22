@@ -1,6 +1,13 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
@@ -14,6 +21,8 @@ import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -32,6 +41,7 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.PauseCircle
@@ -50,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -865,31 +876,246 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+private fun requestCurrentLocation(
+    context: Context,
+    onLocation: (Location) -> Unit,
+    onError: (String) -> Unit
+) {
+    val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+    if (manager == null) {
+        onError("Location service is unavailable")
+        return
+    }
+    val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        .filter { provider -> try { manager.isProviderEnabled(provider) } catch (_: Exception) { false } }
+    if (providers.isEmpty()) {
+        onError("Turn on Location/GPS on your phone, then try again")
+        return
+    }
+    var bestAccuracy = Float.MAX_VALUE
+    var delivered = 0
+    var gotFix = false
+    val listeners = mutableListOf<LocationListener>()
+    val mainHandler = Handler(Looper.getMainLooper())
+    val timeout = Runnable {
+        if (!gotFix) {
+            listeners.forEach { item -> try { manager.removeUpdates(item) } catch (_: Exception) {} }
+            onError("No fresh location fix. Turn on GPS and try again outdoors.")
+        }
+    }
+    mainHandler.postDelayed(timeout, 20_000L)
+    providers.forEach { provider ->
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                delivered++
+                gotFix = true
+                mainHandler.removeCallbacks(timeout)
+                if ((location.hasAccuracy() && location.accuracy < bestAccuracy) || bestAccuracy == Float.MAX_VALUE) {
+                    bestAccuracy = if (location.hasAccuracy()) location.accuracy else Float.MAX_VALUE - 1f
+                    onLocation(location)
+                }
+                if (delivered >= providers.size) {
+                    listeners.forEach { item -> try { manager.removeUpdates(item) } catch (_: Exception) {} }
+                }
+            }
+            @Deprecated("Deprecated by Android; retained for API 24 compatibility")
+            override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) = Unit
+            override fun onProviderEnabled(provider: String) = Unit
+            override fun onProviderDisabled(provider: String) = Unit
+        }
+        listeners += listener
+        try {
+            manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+        } catch (_: SecurityException) {
+            mainHandler.removeCallbacks(timeout)
+            onError("Location permission is required")
+        } catch (_: IllegalArgumentException) {
+            delivered++
+        }
+    }
+}
+
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (String) -> Unit, onQibla: () -> Unit) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
     var chooseCity by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var locating by remember { mutableStateOf(false) }
+    var locationMessage by remember { mutableStateOf("") }
+    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
+    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
+    var calculationMethod by rememberSaveable { mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl") }
+    var asrSchool by rememberSaveable { mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi") }
+
+    val onFix: (Location) -> Unit = { fix ->
+        locating = false
+        if (gpsLatitude == null || !fix.hasAccuracy() || gpsAccuracy == null || fix.accuracy <= gpsAccuracy!!) {
+            gpsLatitude = fix.latitude
+            gpsLongitude = fix.longitude
+            gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
+            prefs.edit()
+                .putString("gps_latitude", fix.latitude.toString())
+                .putString("gps_longitude", fix.longitude.toString())
+                .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+                .apply()
+            cities.minByOrNull { city ->
+                PrayerTimeCalculator.distanceKm(fix.latitude, fix.longitude, city.latitude, city.longitude)
+            }?.let { onCity(it.name) }
+            locationMessage = if (fix.hasAccuracy()) {
+                val acc = fix.accuracy.toInt().toString()
+                when (language) {
+                    AppLanguage.EN -> "Location accuracy reported by Android: about ±$acc m"
+                    AppLanguage.AR -> "دقة الموقع التي يذكرها الهاتف: نحو ±$acc متر"
+                    AppLanguage.CKB -> "وردبینی شوێن بەپێی مۆبایل: نزیکەی ±$acc مەتر"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "Coordinates received; Android did not report accuracy."
+                    AppLanguage.AR -> "تم تحديد الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
+                    AppLanguage.CKB -> "کۆئۆردینات وەرگیرا، بەڵام وردبینی نەدراوە."
+                }
+            }
+        }
+    }
+    val onLocationError: (String) -> Unit = { error ->
+        locating = false
+        locationMessage = error
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (allowed) {
+            locating = true
+            locationMessage = ""
+            requestCurrentLocation(context, onFix, onLocationError)
+        } else {
+            locating = false
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Location permission was not granted. Choose a city instead."
+                AppLanguage.AR -> "لم تمنح إذن الموقع. يمكنك اختيار مدينة يدويًا."
+                AppLanguage.CKB -> "مۆڵەتی شوێن نەدرا؛ دەتوانیت شارێک هەڵبژێریت."
+            }
+        }
+    }
+    val locateNow = {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            locating = true
+            locationMessage = ""
+            requestCurrentLocation(context, onFix, onLocationError)
+        } else {
+            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+
     LaunchedEffect(Unit) { cities = ContentRepository.loadCities(context) }
-    LaunchedEffect(selectedCity) { loading = true; times = ContentRepository.loadPrayerTimes(context, selectedCity); loading = false }
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, calculationMethod, asrSchool) {
+        loading = true
+        times = if (gpsLatitude != null && gpsLongitude != null) {
+            ContentRepository.loadPrayerTimesAtLocation(
+                context, gpsLatitude!!, gpsLongitude!!, Date(),
+                PrayerCalculationMethod.fromId(calculationMethod),
+                AsrCalculationSchool.fromId(asrSchool)
+            )
+        } else {
+            ContentRepository.loadPrayerTimes(context, selectedCity)
+        }
+        loading = false
+    }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = DeepGreen), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().clickable { chooseCity = true }) {
-            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.width(13.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
-                    Text(selectedCity, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                    Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
+        Card(colors = CardDefaults.cardColors(containerColor = DeepGreen), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
+                        Text(
+                            if (gpsLatitude != null) {
+                                when (language) {
+                                    AppLanguage.EN -> "Current GPS location"
+                                    AppLanguage.AR -> "موقع GPS الحالي"
+                                    AppLanguage.CKB -> "شوێنی GPSی ئێستا"
+                                }
+                            } else selectedCity,
+                            color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                        )
+                        if (gpsLatitude != null && gpsLongitude != null) {
+                            Text(String.format(Locale.US, "%.5f, %.5f", gpsLatitude, gpsLongitude), color = Color(0xFFB9CDC5), fontSize = 11.sp)
+                        } else Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
+                    }
+                    IconButton(onClick = locateNow) { Icon(Icons.Outlined.GpsFixed, null, tint = Gold) }
+                    IconButton(onClick = { chooseCity = true }) { Icon(Icons.Outlined.Search, null, tint = Gold) }
                 }
-                Icon(Icons.Outlined.Search, null, tint = Gold)
+                Spacer(Modifier.height(7.dp))
+                Text(
+                    if (gpsLatitude != null) {
+                        when (language) {
+                            AppLanguage.EN -> "Nearby original city timetables are used when available; otherwise times are calculated from GPS coordinates."
+                            AppLanguage.AR -> "يُستخدم جدول المدينة الأصلية القريبة عند توفره، وإلا تُحسب المواقيت من إحداثيات GPS."
+                            AppLanguage.CKB -> "خشتەی شاری نزیک بەکاردێت ئەگەر هەبێت؛ ئەگەرنا کاتەکان بە کۆئۆردیناتی GPS حساب دەکرێن."
+                        }
+                    } else {
+                        when (language) {
+                            AppLanguage.EN -> "Tap the location icon to get a new GPS/network fix, or choose a city."
+                            AppLanguage.AR -> "اضغط رمز الموقع للحصول على إحداثيات GPS حديثة، أو اختر مدينة."
+                            AppLanguage.CKB -> "نیشانەی شوێن دابگرە بۆ وەرگرتنی کۆئۆردیناتی نوێ، یان شارێک هەڵبژێرە."
+                        }
+                    }, color = Color(0xFFB9CDC5), fontSize = 11.sp, lineHeight = 17.sp
+                )
             }
         }
-        Spacer(Modifier.height(15.dp))
+        if (locating) {
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(color = Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(if (language == AppLanguage.EN) "Finding your location…" else if (language == AppLanguage.AR) "جارٍ تحديد موقعك…" else "شوێنت دیاری دەکرێت…", color = foreground, fontSize = 12.sp)
+            }
+        }
+        if (locationMessage.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(if (language == AppLanguage.EN) "Calculation method" else if (language == AppLanguage.AR) "طريقة الحساب" else "شێوازی حسابکردن", color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            items(listOf("mwl", "umm_al_qura", "egypt", "karachi", "isna")) { rule ->
+                val label = when (rule) {
+                    "umm_al_qura" -> "Umm al-Qura"
+                    "egypt" -> if (language == AppLanguage.EN) "Egypt" else if (language == AppLanguage.AR) "مصر" else "مەسر"
+                    "karachi" -> "Karachi"
+                    "isna" -> "ISNA"
+                    else -> if (language == AppLanguage.EN) "MWL" else if (language == AppLanguage.AR) "رابطة العالم الإسلامي" else "یەکێتی جیهانی"
+                }
+                FilterChip(selected = calculationMethod == rule, onClick = {
+                    calculationMethod = rule
+                    prefs.edit().putString("prayer_method", rule).apply()
+                }, label = { Text(label, fontSize = 10.sp, maxLines = 1) })
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (language == AppLanguage.EN) "Asr method" else if (language == AppLanguage.AR) "طريقة العصر" else "شێوازی عەسر", color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.weight(1f))
+            FilterChip(selected = asrSchool == "shafi", onClick = {
+                asrSchool = "shafi"; prefs.edit().putString("asr_school", "shafi").apply()
+            }, label = { Text(if (language == AppLanguage.EN) "Standard" else if (language == AppLanguage.AR) "الشافعي" else "ستاندارد", fontSize = 10.sp) })
+            Spacer(Modifier.width(6.dp))
+            FilterChip(selected = asrSchool == "hanafi", onClick = {
+                asrSchool = "hanafi"; prefs.edit().putString("asr_school", "hanafi").apply()
+            }, label = { Text(if (language == AppLanguage.EN) "Hanafi" else if (language == AppLanguage.AR) "الحنفي" else "حەنەفی", fontSize = 10.sp) })
+        }
+        Spacer(Modifier.height(10.dp))
         if (times == null) LoadingOrEmpty(loading, language, foreground) else {
             val timeItems = listOf(
                 tr(language, "fajr") to times!!.fajr, tr(language, "sunrise") to times!!.sunrise,
@@ -909,6 +1135,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     }
                 }
             }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Source: ${times!!.source}. Times shown in local phone time."
+                    AppLanguage.AR -> "المصدر: ${times!!.source}. الأوقات بتوقيت الهاتف المحلي."
+                    AppLanguage.CKB -> "سەرچاوە: ${times!!.source}. کاتەکان بە کاتی مۆبایلەکەتن."
+                }, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
+            )
         }
         Spacer(Modifier.height(10.dp))
         Card(Modifier.fillMaxWidth().clickable { onQibla() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
@@ -923,14 +1156,20 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.45f), fontSize = 10.sp, lineHeight = 15.sp)
     }
     if (chooseCity) AlertDialog(
         onDismissRequest = { chooseCity = false }, title = { Text(tr(language, "select_city")) },
         text = {
             LazyColumn(Modifier.height(420.dp)) {
                 items(cities, key = { it.name }) { city ->
-                    Text(city.name, Modifier.fillMaxWidth().clickable { onCity(city.name); chooseCity = false }.padding(vertical = 10.dp), color = foreground)
+                    Text(city.name, Modifier.fillMaxWidth().clickable {
+                        onCity(city.name)
+                        gpsLatitude = null
+                        gpsLongitude = null
+                        gpsAccuracy = null
+                        prefs.edit().remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy").apply()
+                        chooseCity = false
+                    }.padding(vertical = 10.dp), color = foreground)
                 }
             }
         },
@@ -938,179 +1177,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     )
 }
 
-@Composable
-fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
-    val context = LocalContext.current
-    var city by remember { mutableStateOf<City?>(null) }
-    var azimuth by remember { mutableFloatStateOf(0f) }
-    var sensorAvailable by remember { mutableStateOf(false) }
-    LaunchedEffect(selectedCity) {
-        city = ContentRepository.loadCities(context).firstOrNull { it.name.equals(selectedCity, true) }
-    }
-    DisposableEffect(context) {
-        val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val magnetometer = manager?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-        val gravity = FloatArray(3)
-        val magnetic = FloatArray(3)
-        var hasGravity = false
-        var hasMagnetic = false
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent) {
-                when (event.sensor.type) {
-                    Sensor.TYPE_ACCELEROMETER -> {
-                        System.arraycopy(event.values, 0, gravity, 0, 3)
-                        hasGravity = true
-                    }
-                    Sensor.TYPE_MAGNETIC_FIELD -> {
-                        System.arraycopy(event.values, 0, magnetic, 0, 3)
-                        hasMagnetic = true
-                    }
-                }
-                if (hasGravity && hasMagnetic) {
-                    val matrix = FloatArray(9)
-                    val orientation = FloatArray(3)
-                    if (SensorManager.getRotationMatrix(matrix, null, gravity, magnetic)) {
-                        SensorManager.getOrientation(matrix, orientation)
-                        azimuth = ((Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f)
-                        sensorAvailable = true
-                    }
-                }
-            }
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-        }
-        if (manager != null && accelerometer != null && magnetometer != null) {
-            manager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
-            manager.registerListener(listener, magnetometer, SensorManager.SENSOR_DELAY_UI)
-        }
-        onDispose { manager?.unregisterListener(listener) }
-    }
-    val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) } ?: 0.0
-    val relativeHeading = ((bearing.toFloat() - azimuth + 540f) % 360f) - 180f
-    val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = relativeHeading,
-        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
-        label = "qiblaHeading"
-    )
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(tr(language, "qibla"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(28.dp))
-        Box(Modifier.size(260.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(DeepGreen, Color(0xFF071E1A)))), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(160.dp).rotate(animatedHeading))
-            Text("N", color = MainText, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp))
-            Text("🕋", fontSize = 26.sp)
-        }
-        Spacer(Modifier.height(24.dp))
-        Text(city?.name ?: selectedCity, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            if (sensorAvailable) {
-                when (language) {
-                    AppLanguage.CKB -> "ڕووگێڕانی کۆمپاوی مۆبایل چالاکە"
-                    AppLanguage.AR -> "تم تصحيح الاتجاه ببوصلة الهاتف"
-                    AppLanguage.EN -> "Direction calibrated by phone compass"
-                }
-            } else {
-                when (language) {
-                    AppLanguage.CKB -> "ئاڕاستەی گشتی بەپێی شار"
-                    AppLanguage.AR -> "الاتجاه المحسوب حسب إحداثيات المدينة"
-                    AppLanguage.EN -> "Estimated direction from city coordinates"
-                }
-            },
-            color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, textAlign = TextAlign.Center
-        )
-        Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
-        Spacer(Modifier.height(18.dp))
-        Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.52f), fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
-    }
-}
-
-private fun qiblaBearing(latitude: Double, longitude: Double): Double {
-    val kaabaLat = Math.toRadians(21.4225)
-    val kaabaLon = Math.toRadians(39.8262)
-    val lat = Math.toRadians(latitude)
-    val lon = Math.toRadians(longitude)
-    val dLon = kaabaLon - lon
-    val deg = Math.toDegrees(atan2(sin(dLon), cos(lat) * tan(kaabaLat) - sin(lat) * cos(dLon)))
-    return (deg + 360.0) % 360.0
-}
-
-
-@Composable
-fun WordAnalysisScreen(
-    language: AppLanguage,
-    foreground: Color,
-    cardColor: Color,
-    initialSurah: Int,
-    initialAyah: Int,
-    onLoad: (Int, Int) -> Unit
-) {
-    val context = LocalContext.current
-    var surahText by rememberSaveable { mutableStateOf(initialSurah.toString()) }
-    var ayahText by rememberSaveable { mutableStateOf(initialAyah.toString()) }
-    var items by remember { mutableStateOf<List<WordItem>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf(false) }
-    LaunchedEffect(initialSurah, initialAyah) {
-        if (selected) {
-            loading = true
-            items = ContentRepository.loadWordAnalysis(context, initialSurah, initialAyah)
-            loading = false
-        }
-    }
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "word_by_word"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text(tr(language, "word_by_word_sub"), color = foreground.copy(alpha = 0.6f), fontSize = 12.sp)
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(surahText, { surahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "surah")) }, singleLine = true)
-                OutlinedTextField(ayahText, { ayahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "ayah")) }, singleLine = true)
-                Button(onClick = {
-                    val s = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
-                    val a = ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                    surahText = s.toString()
-                    ayahText = a.toString()
-                    selected = true
-                    onLoad(s, a)
-                }) { Text("→") }
-            }
-        }
-        if (!selected || items.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selected) tr(language, "not_found") else tr(language, "choose_surah"))
-        else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            item {
-                Text(tr(language, "surah") + " " + surahText + " • " + tr(language, "ayah") + " " + ayahText, color = Gold, fontWeight = FontWeight.Bold)
-            }
-            items(items, key = { it.position }) { word ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(13.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(28.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
-                                Text(word.position.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Text(word.arabicShape, color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
-                        }
-                        if (word.root.isNotBlank()) {
-                            Spacer(Modifier.height(7.dp))
-                            Text((if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + word.root, color = Gold, fontSize = 12.sp)
-                        }
-                        if (word.grammar.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(word.grammar, color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, lineHeight = 18.sp)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
-    val context = LocalContext.current
-    var query by rememberSaveable { mutableStateOf("") }
-    var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
+undefinedist<FarmudaItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     LaunchedEffect(query) {
         loading = true
