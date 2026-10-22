@@ -2075,32 +2075,33 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var adhanMessage by remember { mutableStateOf("") }
 
     val onFix: (Location) -> Unit = { fix ->
+        // A new fix supersedes the previous location even if its reported accuracy
+        // is a little worse: otherwise a user who moved could stay stuck at stale
+        // coordinates until the new sensor accuracy beats an old measurement.
         locating = false
-        if (gpsLatitude == null || !fix.hasAccuracy() || gpsAccuracy == null || fix.accuracy <= gpsAccuracy!!) {
-            gpsLatitude = fix.latitude
-            gpsLongitude = fix.longitude
-            gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
-            prefs.edit()
-                .putString("gps_latitude", fix.latitude.toString())
-                .putString("gps_longitude", fix.longitude.toString())
-                .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
-                .apply()
-            cities.minByOrNull { city ->
-                PrayerTimeCalculator.distanceKm(fix.latitude, fix.longitude, city.latitude, city.longitude)
-            }?.let { onCity(it.name) }
-            locationMessage = if (fix.hasAccuracy()) {
-                val acc = fix.accuracy.toInt().toString()
-                when (language) {
-                    AppLanguage.EN -> "Location accuracy reported by Android: about ±$acc m"
-                    AppLanguage.AR -> "دقة الموقع التي يذكرها الهاتف: نحو ±$acc متر"
-                    AppLanguage.CKB -> "وردبینی شوێن بەپێی مۆبایل: نزیکەی ±$acc مەتر"
-                }
-            } else {
-                when (language) {
-                    AppLanguage.EN -> "Coordinates received; Android did not report accuracy."
-                    AppLanguage.AR -> "تم تحديد الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
-                    AppLanguage.CKB -> "کۆئۆردینات وەرگیرا، بەڵام وردبینی نەدراوە."
-                }
+        gpsLatitude = fix.latitude
+        gpsLongitude = fix.longitude
+        gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
+        prefs.edit()
+            .putString("gps_latitude", fix.latitude.toString())
+            .putString("gps_longitude", fix.longitude.toString())
+            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .apply()
+        cities.minByOrNull { city ->
+            PrayerTimeCalculator.distanceKm(fix.latitude, fix.longitude, city.latitude, city.longitude)
+        }?.let { onCity(it.name) }
+        locationMessage = if (fix.hasAccuracy()) {
+            val acc = fix.accuracy.toInt().toString()
+            when (language) {
+                AppLanguage.EN -> "Fresh GPS/network fix; reported accuracy about ±$acc m"
+                AppLanguage.AR -> "تم تحديث الموقع الحالي؛ الدقة التقريبية ±$acc متر"
+                AppLanguage.CKB -> "شوێنی ئێستا نوێکرایەوە؛ وردبینی نزیکەی ±$acc مەتر"
+            }
+        } else {
+            when (language) {
+                AppLanguage.EN -> "Fresh coordinates received; Android did not report accuracy."
+                AppLanguage.AR -> "تم تحديث الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
+                AppLanguage.CKB -> "کۆئۆردیناتی نوێ وەرگیرا، بەڵام وردبینی نەدراوە."
             }
         }
     }
