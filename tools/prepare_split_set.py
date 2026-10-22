@@ -90,6 +90,8 @@ def manifest_semantics(manifest_path: Path, ignore_tool_added_split_flag: bool =
                 value = ORIGINAL_PACKAGE
             if key == "{" + ANDROID_NS + "}authorities" and value.startswith(TARGET_PACKAGE + "."):
                 value = ORIGINAL_PACKAGE + value[len(TARGET_PACKAGE):]
+            if key == "{" + ANDROID_NS + "}permission" and value.startswith(TARGET_PACKAGE + "."):
+                value = ORIGINAL_PACKAGE + value[len(TARGET_PACKAGE):]
             # The resource-preserving build stores the rebranded launcher label
             # directly in the compiled manifest to avoid rebuilding resources.arsc.
             if node.tag == "application" and key == "{" + ANDROID_NS + "}label" and value == APP_NAME:
@@ -1126,7 +1128,7 @@ def main() -> int:
     for name in sorted(EXPECTED_FILES):
         if name == "base.apk":
             shutil.copy2(rebuilt_split_base, unsigned_dir / name)
-            shutil.copy2(rebuilt_base, standalone_input_dir / name)
+            shutil.copy2(rebuilt_standalone_base, standalone_input_dir / name)
         else:
             strip_signature_entries(rebuilt_config_splits[name], unsigned_dir / name)
             shutil.copy2(rebuilt_config_splits[name], standalone_input_dir / name)
@@ -1138,7 +1140,11 @@ def main() -> int:
         "package_id_target": TARGET_PACKAGE,
         "package_identity": package_identity,
         "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
-        "manifest_normalization_note": "Only the standalone merge input removes split-only root metadata. The SAI-ready base retains original split requirements. Config split package IDs are changed in binary AndroidManifest.xml only; resources.arsc and all native-library payloads remain byte-identical.",
+        "manifest_normalization_note": "Both base variants are built from the original base APK, with only DEX entries replaced, binary manifest identity/label updated, and the fixed package-name field in resources.arsc changed. The standalone variant additionally removes split-only root attributes. Config split resource tables are not rebuilt.",
+        "resource_preserving_base_build": {
+            "split_base": split_base_report,
+            "standalone_base": standalone_base_report,
+        },
         "split_install_set_identity_consistent": True,
         "config_split_manifest_rebranding": config_split_reports,
         "standalone_merge_input_dir": str(standalone_input_dir),
@@ -1151,8 +1157,8 @@ def main() -> int:
         "apktool_version": run(apktool + ["--version"]).strip(),
         "app_label": APP_NAME,
         "label_update": label,
-        "launcher_pngs_recolored": [str(p.relative_to(decoded)) for p in icons],
-        "vector_color_literals_changed": vector_changes,
+        "launcher_icon_resources_preserved_from_original": True,
+        "branding_note": "The application label is set in the compiled manifest to avoid recompiling resource tables; original launcher imagery is retained in this install-stability build.",
         "prepared_files": [{"file": n, "bytes": (unsigned_dir/n).stat().st_size, "sha256": sha((unsigned_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
         "standalone_merge_inputs": [{"file": n, "bytes": (standalone_input_dir/n).stat().st_size, "sha256": sha((standalone_input_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
         "runtime_launch_test": "NOT PERFORMED: must be tested on an Android 11 phone",
