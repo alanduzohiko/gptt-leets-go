@@ -309,6 +309,9 @@ def main() -> int:
     apktool = ["java", "-jar", str(args.apktool_jar.resolve())]
     original_base = source_parts / "base.apk"
     run(apktool + ["d", "--force", str(original_base), "-o", str(decoded)])
+    source_smali = {str(p.relative_to(decoded)) for p in decoded.glob("smali*/**/*.smali")}
+    if not source_smali:
+        raise ValueError("Apktool did not produce any smali files")
     manifest_before = manifest_semantics(decoded / "AndroidManifest.xml")
     label = update_app_label(decoded)
     package_identity = rewrite_package_identity(decoded)
@@ -328,7 +331,12 @@ def main() -> int:
     # Pinning Apktool 2.11.1 preserves the manifest behavior this safe rebuild validates.
     run(apktool + ["b", "--use-aapt2", "--no-crunch", str(decoded), "-o", str(rebuilt_base)])
     redecoded = work / "redecoded-base"
-    run(apktool + ["d", "--no-src", "--force", str(rebuilt_base), "-o", str(redecoded)])
+    run(apktool + ["d", "--force", str(rebuilt_base), "-o", str(redecoded)])
+    rebuilt_smali = {str(p.relative_to(redecoded)) for p in redecoded.glob("smali*/**/*.smali")}
+    if source_smali != rebuilt_smali:
+        missing = sorted(source_smali - rebuilt_smali)[:30]
+        added = sorted(rebuilt_smali - source_smali)[:30]
+        raise ValueError("Rebuilt APK class inventory differs from original. Missing=" + repr(missing) + " added=" + repr(added))
     if find_label_key(redecoded / "AndroidManifest.xml", TARGET_PACKAGE) != label["string_resource"]:
         raise ValueError("Rebuilt application label resource or package identity changed")
     manifest_after = manifest_semantics(redecoded / "AndroidManifest.xml", ignore_tool_added_split_flag=True)
@@ -378,6 +386,8 @@ def main() -> int:
         "manifest_normalization_note": "Only Apktool-added android:isSplitRequired=true is ignored in the post-build comparison; the output is verified as the complete three-split set. All other manifest attributes and components remain strict.",
         "dex_files_reassembled_from_original_smali": True,
         "original_class_descriptors_preserved": True,
+        "smali_class_file_count_preserved": len(source_smali),
+        "smali_class_inventory_identical": True,
         "runtime_package_literals": runtime_literals,
         "offline_database_byte_identical": True,
         "apktool_version": run(apktool + ["--version"]).strip(),
