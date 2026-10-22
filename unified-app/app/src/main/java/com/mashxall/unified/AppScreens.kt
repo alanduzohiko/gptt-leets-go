@@ -1734,16 +1734,27 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
     var books by remember { mutableStateOf<List<BookItem>>(emptyList()) }
     var pdfs by remember { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    LaunchedEffect(query) { loading = true; books = ContentRepository.loadBooks(context, query.trim()); pdfs = if (query.isBlank()) ContentRepository.loadPdfPaths(context) else emptyList(); loading = false }
+    LaunchedEffect(Unit) {
+        pdfs = ContentRepository.loadPdfPaths(context)
+    }
+    LaunchedEffect(query) {
+        loading = true
+        books = ContentRepository.loadBooks(context, query.trim())
+        loading = false
+    }
+    val visiblePdfs = if (query.isBlank()) pdfs else pdfs.filter { path ->
+        path.substringAfterLast('/').contains(query.trim(), ignoreCase = true) ||
+            path.substringBeforeLast('/').contains(query.trim(), ignoreCase = true)
+    }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(tr(language, "books"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp)); SearchBox(query, { query = it }, tr(language, "search"))
         }
-        if (books.isEmpty() && pdfs.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            if (pdfs.isNotEmpty()) {
-                item { Text("PDF • " + pdfs.size, color = Gold, fontWeight = FontWeight.Bold) }
-                items(pdfs, key = { it }) { path ->
+        if (books.isEmpty() && visiblePdfs.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            if (visiblePdfs.isNotEmpty()) {
+                item { Text("PDF • " + visiblePdfs.size, color = Gold, fontWeight = FontWeight.Bold) }
+                items(visiblePdfs, key = { it }) { path ->
                     Card(Modifier.clickable { onOpenPdf(path) }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp)) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.MenuBook, null, tint = Gold)
