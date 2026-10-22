@@ -95,7 +95,7 @@ internal object NoorHadithCipher {
                     token.contains("reference", ignoreCase = true) ->
                         token.replace(Regex("(?i)reference"), collectionLabel).trim()
                     else -> token
-                }.takeIf { it.isNotBlank() }
+                }?.takeIf { it.isNotBlank() }
             }
         val joined = tokens.joinToString("\n")
         return when {
