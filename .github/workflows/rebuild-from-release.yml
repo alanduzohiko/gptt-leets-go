@@ -311,7 +311,9 @@ jobs:
 
   emulator-test:
     needs: rebuild
-    runs-on: macos-latest
+    # Run the ARM64 Android emulator on a native ARM64 Linux runner. The previous
+    # hosted macOS emulator repeatedly lost its virtual device before PackageManager.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     permissions:
       contents: read
@@ -334,8 +336,8 @@ jobs:
           target: google_apis
           arch: arm64-v8a
           profile: pixel_4
-          # Hosted macOS ARM runners may reject HVF nested acceleration; force software emulation.
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -accel off
+          # Native ARM64 Linux runner: keep host acceleration enabled.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           emulator-boot-timeout: 1200
           disable-animations: false
           script: bash tools/test-emulator.sh
