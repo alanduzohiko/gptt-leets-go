@@ -74,6 +74,21 @@ def main() -> int:
     if missing:
         raise ValueError("Standalone APK lacks required entries: " + ", ".join(missing))
 
+    # Require actual launcher artwork and the adaptive-icon definition, not only a manifest icon string.
+    required_launcher = {
+        "res/mipmap-anydpi-v26/ic_launcher.xml",
+        "res/mipmap-mdpi/ic_launcher.png",
+        "res/mipmap-hdpi/ic_launcher.png",
+        "res/mipmap-xhdpi/ic_launcher.png",
+        "res/mipmap-xxhdpi/ic_launcher.png",
+        "res/mipmap-xxxhdpi/ic_launcher.png",
+        "res/drawable/ic_launcher_background.xml",
+        "res/drawable/ic_launcher_foreground.xml",
+    }
+    missing_launcher = sorted(required_launcher - set(output))
+    if missing_launcher:
+        raise ValueError("Launcher icon resources missing from standalone APK: " + ", ".join(missing_launcher))
+
     before_dex, after_dex = dex_hashes(source_base), dex_hashes(output)
     if not before_dex or before_dex != after_dex:
         raise ValueError("DEX files are missing or differ from original base APK")
@@ -102,6 +117,8 @@ def main() -> int:
         "output_bytes": args.output.stat().st_size,
         "standalone_apk": True,
         "required_entries_present": True,
+        "launcher_icon_resources_present": True,
+        "launcher_icon_entries": sorted(required_launcher),
         "source_package_id": "com.kosratdahmad.myprayers",
         "output_package_id_target": "com.kosratdahmad.mashxall.repair2",
         "dex_files_byte_identical_to_original_base": True,
