@@ -21,7 +21,18 @@ import java.util.Locale
 
 data class Surah(val number: Int, val arabicName: String, val englishName: String, val ayahCount: Int, val meaningEnglish: String = "", val place: String = "", val uniqueTitle: String = "")
 data class QuranTranslation(val id: String, val ckb: String, val arabic: String, val english: String)
-data class Ayah(val surah: Int, val number: Int, val arabic: String, val translation: String, val page: Int = 0)
+data class Ayah(
+    val surah: Int,
+    val number: Int,
+    val arabic: String,
+    val translation: String,
+    val page: Int = 0,
+    val arabicWithoutHarakat: String = "",
+    val note: String = "",
+    val hasHadith: Boolean = false,
+    val surahNameArabic: String = "",
+    val surahNameEnglish: String = ""
+)
 data class HadithItem(
     val id: Int,
     val sort: Int,
@@ -288,6 +299,125 @@ object ContentRepository {
         }
     }
 
+    private fun translationKeyFor(language: String, translationKey: String?): String =
+        translationKey ?: when (language) {
+            "en" -> "sahih"
+            "ar" -> "none"
+            else -> "puxta"
+        }
+
+    private fun translationColumnFor(selectedTranslation: String): String = when (selectedTranslation) {
+        "raman" -> "translation_raman"
+        "asan" -> "translation_asan"
+        "sanahi" -> "translation_sanahi"
+        "sahih", "none", "translit" -> ""
+        else -> "translation_puxta"
+    }
+
+    private suspend fun allTranslationRows(context: Context, key: String): Map<Pair<Int, Int>, String> {
+        val path = when (key) {
+            "sahih" -> tafsirBooks.first { it.id == "sahih" }.assetPath
+            "translit" -> TRANSLITERATION_DB
+            else -> return emptyMap()
+        }
+        return queryDb(context, path, emptyMap<Pair<Int, Int>, String>()) { db ->
+            db.rawQuery("SELECT surah_id,verse_id,text FROM quran", null).use { c ->
+                buildMap {
+                    while (c.moveToNext()) {
+                        val rawText = c.string("text")
+                        val text = if (key == "translit") {
+                            Html.fromHtml(rawText, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+                        } else rawText
+                        put(c.int("surah_id") to c.int("verse_id"), text)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun verseTranslation(
+        key: String,
+        verseKey: Pair<Int, Int>,
+        inlineTranslation: String,
+        separateTranslations: Map<Pair<Int, Int>, String>
+    ): String = when (key) {
+        "sahih", "translit" -> separateTranslations[verseKey].orEmpty()
+        "none" -> ""
+        else -> inlineTranslation
+    }
+
+    private fun Cursor.toAyah(
+        key: String,
+        translations: Map<Pair<Int, Int>, String>
+    ): Ayah {
+        val surah = int("surah_id")
+        val number = int("verse_id")
+        val verseKey = surah to number
+        return Ayah(
+            surah = surah,
+            number = number,
+            arabic = string("quran_arabic"),
+            translation = verseTranslation(key, verseKey, string("translation_text"), translations),
+            page = int("page"),
+            arabicWithoutHarakat = string("quran_withoutharkat"),
+            note = string("note"),
+            hasHadith = int("has_hadith") != 0,
+            surahNameArabic = string("surah_name_arabic"),
+            surahNameEnglish = string("surah_name_english")
+        )
+    }
+
+    private suspend fun readQuranRows(
+        context: Context,
+        key: String,
+        query: String?,
+        global: Boolean
+    ): List<Ayah> = withContext(Dispatchers.IO) {
+        val translationColumn = translationColumnFor(key)
+        val translationSelect = if (translationColumn.isBlank()) "'' AS translation_text" else "q.$translationColumn AS translation_text"
+        val from = if (global) {
+            """
+            FROM quran q
+            LEFT JOIN surah_name sn ON sn.surah_no=q.surah_id
+            """.trimIndent()
+        } else {
+            "FROM quran q LEFT JOIN surah_name sn ON sn.surah_no=q.surah_id"
+        }
+        val sql = """
+            SELECT q.surah_id,q.verse_id,q.quran_arabic,q.quran_withoutharkat,
+                   $translationSelect,q.page,q.has_hadith,q.note,
+                   COALESCE(sn.name_arabic,'') AS surah_name_arabic,
+                   COALESCE(sn.name_english,'') AS surah_name_english
+            $from
+            ORDER BY q.surah_id,q.verse_id
+        """.trimIndent()
+        val external = allTranslationRows(context, key)
+        queryDb(context, QURAN_DB, emptyList()) { db ->
+            db.rawQuery(sql, null).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        val item = c.toAyah(key, external)
+                        if (query == null || query.isBlank()) add(item)
+                        else {
+                            val term = query.trim()
+                            val folded = normalizeArabicKey(term)
+                            val arabicFolded = normalizeArabicKey(item.arabicWithoutHarakat.ifBlank { item.arabic })
+                            val idMatch = term == "${item.surah}:${item.number}" ||
+                                term == "${item.surah}:${item.number}".replace(":", " ")
+                            val containsMatch = item.arabic.contains(term, ignoreCase = true) ||
+                                item.arabicWithoutHarakat.contains(term, ignoreCase = true) ||
+                                item.translation.contains(term, ignoreCase = true) ||
+                                item.surahNameArabic.contains(term, ignoreCase = true) ||
+                                item.surahNameEnglish.contains(term, ignoreCase = true) ||
+                                (folded.isNotBlank() && arabicFolded.contains(folded, ignoreCase = true))
+                            if (idMatch || containsMatch) add(item)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun loadAyahs(
         context: Context,
         surah: Int,
@@ -295,60 +425,28 @@ object ContentRepository {
         query: String = "",
         translationKey: String? = null
     ): List<Ayah> = withContext(Dispatchers.IO) {
-        val selectedTranslation = translationKey ?: when (language) {
-            "en" -> "sahih"
-            "ar" -> "none"
-            else -> "puxta"
-        }
-        val translationColumn = when (selectedTranslation) {
-            "raman" -> "translation_raman"
-            "asan" -> "translation_asan"
-            "sanahi" -> "translation_sanahi"
-            "sahih", "none", "translit" -> ""
-            else -> "translation_puxta"
-        }
-        val english = if (selectedTranslation == "sahih") {
-            queryDb(context, tafsirBooks.first { it.id == "sahih" }.assetPath, emptyMap<Int, String>()) { db ->
-                db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
-                    buildMap { while (c.moveToNext()) put(c.int("verse_id"), c.string("text")) }
-                }
-            }
-        } else emptyMap()
-        val transliteration = if (selectedTranslation == "translit") {
-            queryDb(context, TRANSLITERATION_DB, emptyMap<Int, String>()) { db ->
-                db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
-                    buildMap {
-                        while (c.moveToNext()) {
-                            val html = c.string("text")
-                            val plain = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                            put(c.int("verse_id"), plain)
-                        }
-                    }
-                }
-            }
-        } else emptyMap()
-        queryDb(context, QURAN_DB, emptyList()) { db ->
-            val translationSelect = if (translationColumn.isBlank()) "'' AS translation_text" else "$translationColumn AS translation_text"
-            val sql = "SELECT surah_id,verse_id,quran_arabic,$translationSelect,page FROM quran WHERE surah_id=? ORDER BY verse_id"
-            db.rawQuery(sql, arrayOf(surah.toString())).use { c ->
-                buildList {
-                    while (c.moveToNext()) {
-                        val number = c.int("verse_id")
-                        val arabic = c.string("quran_arabic")
-                        val translation = when (selectedTranslation) {
-                            "sahih" -> english[number].orEmpty()
-                            "translit" -> transliteration[number].orEmpty()
-                            "none" -> ""
-                            else -> c.string("translation_text")
-                        }
-                        if (query.isBlank() || arabic.contains(query, true) || translation.contains(query, true) || number.toString() == query) {
-                            add(Ayah(surah, number, arabic, translation, c.int("page")))
-                        }
-                    }
-                }
-            }
+        val key = translationKeyFor(language, translationKey)
+        val rows = readQuranRows(context, key, null, global = false).filter { it.surah == surah }
+        if (query.isBlank()) rows else rows.filter { item ->
+            val term = query.trim()
+            item.arabic.contains(term, true) ||
+                item.arabicWithoutHarakat.contains(term, true) ||
+                item.translation.contains(term, true) ||
+                item.number.toString() == term
         }
     }
+
+    suspend fun searchAyahs(
+        context: Context,
+        query: String,
+        language: String,
+        translationKey: String? = null
+    ): List<Ayah> = readQuranRows(
+        context,
+        translationKeyFor(language, translationKey),
+        query.trim(),
+        global = true
+    )
 
     suspend fun loadTafsir(context: Context, bookId: String, surah: Int, ayah: Int): String = withContext(Dispatchers.IO) {
         val book = tafsirBooks.firstOrNull { it.id == bookId } ?: tafsirBooks.first()
