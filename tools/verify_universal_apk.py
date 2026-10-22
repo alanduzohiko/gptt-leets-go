@@ -94,20 +94,29 @@ def main() -> int:
     if missing:
         raise ValueError("Standalone APK lacks required entries: " + ", ".join(missing))
 
-    # Require actual launcher artwork and the adaptive-icon definition, not only a manifest icon string.
+    # Preserve the real adaptive icon resources; density split filenames can legitimately
+    # retain qualifiers such as "-v4" in a direct split merge. Do not demand one exact
+    # unpacked path for every density, which incorrectly rejects otherwise valid APKs.
     required_launcher = {
         "res/mipmap-anydpi-v26/ic_launcher.xml",
-        "res/mipmap-mdpi/ic_launcher.png",
-        "res/mipmap-hdpi/ic_launcher.png",
-        "res/mipmap-xhdpi/ic_launcher.png",
-        "res/mipmap-xxhdpi/ic_launcher.png",
-        "res/mipmap-xxxhdpi/ic_launcher.png",
         "res/drawable/ic_launcher_background.xml",
         "res/drawable/ic_launcher_foreground.xml",
     }
     missing_launcher = sorted(required_launcher - set(output))
     if missing_launcher:
-        raise ValueError("Launcher icon resources missing from standalone APK: " + ", ".join(missing_launcher))
+        raise ValueError("Required adaptive launcher icon resources are missing: " + ", ".join(missing_launcher))
+    launcher_raster_entries = sorted(
+        name for name in output
+        if re.fullmatch(
+            r"res/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)(?:-v\\d+)?/ic_launcher\\.(?:png|webp)",
+            name,
+        )
+    )
+    if not launcher_raster_entries:
+        raise ValueError(
+            "Standalone APK contains adaptive icon XML but no raster launcher icon in any density; "
+            "inspect the input splits and APKEditor merge result"
+        )
 
     before_dex, after_dex = dex_hashes(source_base), dex_hashes(output)
     if not before_dex or set(before_dex) != set(after_dex):
@@ -153,6 +162,7 @@ def main() -> int:
         "resources_arsc_stored_uncompressed": True,
         "launcher_icon_resources_present": True,
         "launcher_icon_entries": sorted(required_launcher),
+        "launcher_raster_entries": launcher_raster_entries,
         "source_package_id": "com.kosratdahmad.myprayers",
         "output_package_id_target": TARGET_PACKAGE,
         "dex_files_reassembled_from_original_smali": True,
