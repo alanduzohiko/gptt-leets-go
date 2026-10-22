@@ -371,7 +371,8 @@ object ContentRepository {
         context: Context,
         key: String,
         query: String?,
-        global: Boolean
+        global: Boolean,
+        selectedSurah: Int? = null
     ): List<Ayah> = withContext(Dispatchers.IO) {
         val translationColumn = translationColumnFor(key)
         val translationSelect = if (translationColumn.isBlank()) "'' AS translation_text" else "q.$translationColumn AS translation_text"
@@ -383,17 +384,20 @@ object ContentRepository {
         } else {
             "FROM quran q LEFT JOIN surah_name sn ON sn.surah_no=q.surah_id"
         }
+        val where = if (selectedSurah != null && !global) "WHERE q.surah_id=?" else ""
         val sql = """
             SELECT q.surah_id,q.verse_id,q.quran_arabic,q.quran_withoutharkat,
                    $translationSelect,q.page,q.has_hadith,q.note,
                    COALESCE(sn.name_arabic,'') AS surah_name_arabic,
                    COALESCE(sn.name_english,'') AS surah_name_english
             $from
+            $where
             ORDER BY q.surah_id,q.verse_id
         """.trimIndent()
         val external = allTranslationRows(context, key)
+        val queryArgs = if (selectedSurah != null && !global) arrayOf(selectedSurah.toString()) else null
         queryDb(context, QURAN_DB, emptyList()) { db ->
-            db.rawQuery(sql, null).use { c ->
+            db.rawQuery(sql, queryArgs).use { c ->
                 buildList {
                     while (c.moveToNext()) {
                         val item = c.toAyah(key, external)
@@ -426,7 +430,7 @@ object ContentRepository {
         translationKey: String? = null
     ): List<Ayah> = withContext(Dispatchers.IO) {
         val key = translationKeyFor(language, translationKey)
-        val rows = readQuranRows(context, key, null, global = false).filter { it.surah == surah }
+        val rows = readQuranRows(context, key, null, global = false, selectedSurah = surah)
         if (query.isBlank()) rows else rows.filter { item ->
             val term = query.trim()
             item.arabic.contains(term, true) ||
