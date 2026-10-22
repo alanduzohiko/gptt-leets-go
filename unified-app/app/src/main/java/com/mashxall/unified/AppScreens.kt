@@ -114,7 +114,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }) {
     val context = LocalContext.current
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var selected by rememberSaveable { mutableIntStateOf(initialSurah) }
@@ -133,7 +133,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
-    var showVerseNote by rememberSaveable { mutableStateOf(false) }
     var mushafPage by rememberSaveable { mutableIntStateOf(1) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
@@ -240,13 +239,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             LoadingOrEmpty(loading, language, foreground)
         } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
+                var noteExpanded by rememberSaveable(verse.surah, verse.number) { mutableStateOf(false) }
                 Card(
                     modifier = if (query.isNotBlank()) Modifier.clickable {
                         selected = verse.surah
-                        onSurah(verse.surah)
+                        onOpenVerse(verse.surah, verse.number)
                         prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
                         query = ""
-                        showVerseNote = false
                     } else Modifier,
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
@@ -298,16 +297,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             )
                         }
                         if (verse.note.isNotBlank()) {
-                            TextButton(onClick = { showVerseNote = !showVerseNote }) {
+                            TextButton(onClick = { noteExpanded = !noteExpanded }) {
                                 Text(
-                                    if (showVerseNote) {
+                                    if (noteExpanded) {
                                         if (language == AppLanguage.EN) "Hide verse note" else if (language == AppLanguage.AR) "إخفاء ملاحظة الآية" else "تێبینی ئایەت بشارەوە"
                                     } else {
                                         if (language == AppLanguage.EN) "Verse note" else if (language == AppLanguage.AR) "ملاحظة الآية" else "تێبینی ئایەت"
                                     }, fontSize = 10.sp
                                 )
                             }
-                            if (showVerseNote) Text(verse.note.replace("<br>", "\\n").replace("<br/>", "\\n"), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                            if (noteExpanded) Text(verse.note.replace("<br>", "\n").replace("<br/>", "\n"), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
                         }
                         if (verse.translation.isNotBlank()) {
                             Spacer(Modifier.height(8.dp)); Divider(color = Gold.copy(alpha = 0.24f)); Spacer(Modifier.height(8.dp))

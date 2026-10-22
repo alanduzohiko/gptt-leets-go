@@ -217,6 +217,11 @@ fun MashxallApp() {
                                         val saved = prefs.getStringSet("bookmarks", emptySet())?.toMutableSet() ?: mutableSetOf()
                                         saved.add(s.toString() + ":" + a.toString())
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).putStringSet("bookmarks", saved).apply()
+                                    },
+                                    onOpenVerse = { s, a ->
+                                        selectedSurah = s
+                                        selectedAyah = a
+                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                     }
                                 )
                                 "library" -> LibraryScreen(language, foreground, cardColor) { screen = it.key }
