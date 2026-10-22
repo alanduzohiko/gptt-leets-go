@@ -20,13 +20,13 @@ jobs:
       - name: Checkout diagnostic script
         uses: actions/checkout@v4
 
-      - name: Download the exact APK from repair build 43
+      - name: Download the resource-preserving APK from repair build 50
         uses: actions/download-artifact@v4
         with:
-          name: mashxall-apk-for-emulator-43
+          name: mashxall-apk-for-emulator-50
           path: dist
           repository: alanduzohiko/gptt-leets-go
-          run-id: 39732327531
+          run-id: 39743141594
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Confirm the exact APK payload
@@ -39,6 +39,8 @@ jobs:
 
       - name: Probe PackageManager on Android 11
         uses: ReactiveCircus/android-emulator-runner@v2
+        env:
+          MASHXALL_TARGET_PACKAGE: com.kosratdahmad.mashxall.full50a1
         with:
           api-level: 30
           target: default

@@ -2,6 +2,7 @@
 # Run as one shell script so failures are captured rather than terminating
 # the emulator-runner after each individual line.
 set +e
+TARGET_PACKAGE="${MASHXALL_TARGET_PACKAGE:-com.kosratdahmad.mashxall.full50a1}"
 mkdir -p dist
 : > dist/package-manager-install.txt
 : > dist/package-manager-result.txt
@@ -112,7 +113,7 @@ else
 fi
 timeout 8s adb shell service check package > dist/package-service-after-target.txt 2>&1
 timeout 8s adb shell service list > dist/package-probe-services-after.txt 2>&1
-timeout 8s adb shell dumpsys package com.kosratdahmad.mashxall.full43a1 > dist/package-probe-dumpsys.txt 2>&1
+timeout 8s adb shell dumpsys package "$TARGET_PACKAGE" > dist/package-probe-dumpsys.txt 2>&1
 timeout 15s adb logcat -d -b all -v threadtime > dist/package-probe-logcat-final.txt 2>&1
 kill "$LOGCAT_PID" 2>/dev/null
 exit 0
