@@ -60,7 +60,7 @@ mkdir -p dist/probe-manifest
 cat > dist/probe-manifest/AndroidManifest.xml <<'XML'
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.mashxall.pmprobe">
   <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="30"/>
-  <application android:label="@string/app_name"/>
+  <application android:label="@string/app_name" android:hasCode="false"/>
 </manifest>
 XML
 cat > dist/probe-res/values/strings.xml <<'XML'
