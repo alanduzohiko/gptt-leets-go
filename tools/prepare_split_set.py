@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a minimal app rebrand while preserving package identity, manifest semantics, and DEX bytes."""
+"""Rebrand original app resources/identity while reassembling only package-scoped DEX string literals."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -15,7 +15,7 @@ from PIL import Image
 
 APP_NAME = "مەشخەڵ"
 ORIGINAL_PACKAGE = "com.kosratdahmad.myprayers"
-TARGET_PACKAGE = "com.kosratdahmad.mashxall.repair2"
+TARGET_PACKAGE = "com.kosratdahmad.mashxall.full"
 EXPECTED_FILES = {"base.apk", "split_config.arm64_v8a.apk", "split_config.xxhdpi.apk"}
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", ANDROID_NS)
@@ -163,6 +163,54 @@ def rewrite_package_identity(decoded_dir: Path) -> dict:
     }
 
 
+def patch_runtime_package_literals(decoded_dir: Path) -> dict:
+    """Update only package-ID string literals, leaving DEX class/package descriptors untouched.
+
+    The original bytecode stores the package ID in BuildConfig and stores explicit
+    android.resource:// URIs for notification audio. Changing the manifest ID alone
+    would make those package-specific strings resolve to the original package.
+    """
+    smali_files = sorted(decoded_dir.glob("smali*/**/*.smali"))
+    if not smali_files:
+        raise ValueError("Apktool did not decode smali; refusing a package-ID change without patching runtime package literals.")
+    exact_literal = '"' + ORIGINAL_PACKAGE + '"'
+    uri_prefix = "android.resource://" + ORIGINAL_PACKAGE + "/"
+    exact_replacements = 0
+    uri_replacements = 0
+    changed_files = []
+    for path in smali_files:
+        original = path.read_text(encoding="utf-8")
+        output_lines = []
+        changed = False
+        for line in original.splitlines(keepends=True):
+            if not line.lstrip().startswith(("const-string ", "const-string/jumbo ")):
+                output_lines.append(line)
+                continue
+            if exact_literal in line:
+                line = line.replace(exact_literal, '"' + TARGET_PACKAGE + '"')
+                exact_replacements += 1
+                changed = True
+            if uri_prefix in line:
+                hits = line.count(uri_prefix)
+                line = line.replace(uri_prefix, "android.resource://" + TARGET_PACKAGE + "/")
+                uri_replacements += hits
+                changed = True
+            output_lines.append(line)
+        if changed:
+            path.write_text("".join(output_lines), encoding="utf-8")
+            changed_files.append(str(path.relative_to(decoded_dir)))
+    if exact_replacements < 1:
+        raise ValueError("The original BuildConfig package-ID string was not found in smali.")
+    if uri_replacements < 10:
+        raise ValueError("Expected at least ten notification-audio package URIs; found " + str(uri_replacements))
+    return {
+        "exact_application_id_literals_rewritten": exact_replacements,
+        "audio_resource_uri_literals_rewritten": uri_replacements,
+        "smali_files_modified": changed_files,
+        "class_descriptors_preserved": True,
+    }
+
+
 def update_app_label(decoded_dir: Path) -> dict:
     key = find_label_key(decoded_dir / "AndroidManifest.xml")
     changed_files = []
@@ -260,10 +308,11 @@ def main() -> int:
             (source_parts / name).write_bytes(bundle.read(name))
     apktool = ["java", "-jar", str(args.apktool_jar.resolve())]
     original_base = source_parts / "base.apk"
-    run(apktool + ["d", "--no-src", "--force", str(original_base), "-o", str(decoded)])
+    run(apktool + ["d", "--force", str(original_base), "-o", str(decoded)])
     manifest_before = manifest_semantics(decoded / "AndroidManifest.xml")
     label = update_app_label(decoded)
     package_identity = rewrite_package_identity(decoded)
+    runtime_literals = patch_runtime_package_literals(decoded)
     icons = sorted((decoded / "res").glob("mipmap-*/ic_launcher.png"))
     if not icons:
         raise ValueError("No launcher icon PNG found")
@@ -291,10 +340,16 @@ def main() -> int:
         )
     source_entries = zip_entries(original_base)
     rebuilt_entries = zip_entries(rebuilt_base)
-    source_dex = {n: sha(b) for n, b in source_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
-    rebuilt_dex = {n: sha(b) for n, b in rebuilt_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
-    if not source_dex or source_dex != rebuilt_dex:
-        raise ValueError("APKTool changed or lost DEX bytes; refusing to continue")
+    source_dex = {n: b for n, b in source_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
+    rebuilt_dex = {n: b for n, b in rebuilt_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
+    if not source_dex or set(source_dex) != set(rebuilt_dex):
+        raise ValueError("APKTool changed the DEX file set; refusing to continue")
+    if not any(b"com.kosratdahmad.mashxall.full" in data for data in rebuilt_dex.values()):
+        raise ValueError("Rebuilt DEX lacks the new application ID string literal")
+    if not any(b"android.resource://com.kosratdahmad.mashxall.full/raw/mecca" in data for data in rebuilt_dex.values()):
+        raise ValueError("Rebuilt DEX lacks the updated notification-audio URI")
+    if not any(b"Lcom/kosratdahmad/myprayers/screens/MainActivity;" in data for data in rebuilt_dex.values()):
+        raise ValueError("Original application class descriptors were not preserved")
     dbname = next((n for n in source_entries if n.endswith("muslim_db_v2.5.1.db")), None)
     if not dbname or sha(source_entries[dbname]) != sha(rebuilt_entries.get(dbname, b"")):
         raise ValueError("Bundled offline database changed or disappeared")
@@ -321,7 +376,9 @@ def main() -> int:
         "package_identity": package_identity,
         "manifest_semantics_preserved_except_explicit_identity_remap": True,
         "manifest_normalization_note": "Only Apktool-added android:isSplitRequired=true is ignored in the post-build comparison; the output is verified as the complete three-split set. All other manifest attributes and components remain strict.",
-        "dex_files_byte_identical": True,
+        "dex_files_reassembled_from_original_smali": True,
+        "original_class_descriptors_preserved": True,
+        "runtime_package_literals": runtime_literals,
         "offline_database_byte_identical": True,
         "apktool_version": run(apktool + ["--version"]).strip(),
         "app_label": APP_NAME,
@@ -330,7 +387,7 @@ def main() -> int:
         "vector_color_literals_changed": vector_changes,
         "prepared_files": [{"file": n, "bytes": (unsigned_dir/n).stat().st_size, "sha256": sha((unsigned_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
         "runtime_launch_test": "NOT PERFORMED: must be tested on an Android 11 phone",
-        "install_note": "The app ID is com.kosratdahmad.mashxall.repair2, separate from the official com.kosratdahmad.myprayers app, so the official app can remain installed. This test build still uses a temporary signing certificate unless a stable signing key is configured; replacing a previously installed test build signed with a different certificate can require removing only that test build."
+        "install_note": "The app ID is com.kosratdahmad.mashxall.full, separate from the official app and prior test builds. DEX code was assembled from the original smali with only BuildConfig application-ID and audio resource URI string literals changed; original class descriptors, resources, database and native libraries are preserved. External cloud services may still enforce the original package/signing identity."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
