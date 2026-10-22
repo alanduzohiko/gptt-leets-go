@@ -30,12 +30,18 @@ SOURCES = {
     },
 }
 PATTERNS = {
-    "binary_page_store": re.compile(r"pages\.bin|\.bin\b|byte_count|search_segments|sha256|page_id", re.I),
-    "cryptography_and_integrity": re.compile(r"Cipher\.getInstance|SecretKeySpec|IvParameterSpec|MessageDigest|AES|PBKDF2|decrypt|encrypt|CRC32", re.I),
-    "compression": re.compile(r"Inflater|InflaterInputStream|GZIP|Deflater|ZipInputStream|zstd|brotli|LZ4", re.I),
-    "asset_loading": re.compile(r"getAssets\(|openFd\(|AssetManager|assets/tafsir|\.sqlite|quran\.db|pages\.bin", re.I),
-    "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\.quran|\.mp3", re.I),
+    "binary_page_store": re.compile(r"pages\\.bin|\\.bin\\b|byte_count|search_segments|sha256|page_id", re.I),
+    "cryptography_and_integrity": re.compile(r"Cipher\\.getInstance|SecretKeySpec|IvParameterSpec|MessageDigest|AES|PBKDF2|decrypt|encrypt|CRC32|Base64", re.I),
+    "compression": re.compile(r"Inflater|InflaterInputStream|GZIP|Deflater|ZipInputStream|zstd|brotli|LZ4|XZInputStream", re.I),
+    "asset_loading": re.compile(r"getAssets\\(|openFd\\(|AssetManager|assets/tafsir|\\.sqlite|quran\\.db|pages\\.bin|db_hadith_of_ayah", re.I),
+    "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\\.quran|\\.mp3", re.I),
+    "hadith_of_ayah": re.compile(r"hadith_on_ayah|db_hadith_of_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I),
 }
+
+FOCUS_CONTEXT = re.compile(
+    r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|Base64\\.decode|Cipher\\.getInstance|SecretKeySpec|IvParameterSpec|PBKDF2|AES|decrypt|encrypt|sqlcipher",
+    re.I,
+)
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -120,6 +126,8 @@ def main() -> int:
                 "jadx_tail": tool_output,
             }
             caps = {name: 0 for name in PATTERNS}
+            app_report["code_contexts"] = []
+            seen_context_lines: set[tuple[str, int]] = set()
             for java in java_files:
                 try:
                     lines = java.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -130,15 +138,36 @@ def main() -> int:
                     if not stripped:
                         continue
                     for label, pattern in PATTERNS.items():
-                        if caps[label] >= 80 or not pattern.search(stripped):
+                        if caps[label] >= 100 or not pattern.search(stripped):
                             continue
-                        # Keep concise references, not complete files/classes.
                         app_report["findings"].setdefault(label, []).append({
                             "file": str(java.relative_to(decompiled)),
                             "line": line_no,
-                            "snippet": stripped[:220],
+                            "snippet": stripped[:260],
                         })
                         caps[label] += 1
+
+                    # Compact context excerpts help identify real decoder methods,
+                    # DB-opening logic and key construction without shipping the
+                    # original decompiled source tree. Context stays scoped to
+                    # lines explicitly mentioning sensitive data flow indicators.
+                    if FOCUS_CONTEXT.search(stripped) and len(app_report["code_contexts"]) < 45:
+                        context_key = (str(java.relative_to(decompiled)), line_no)
+                        if context_key in seen_context_lines:
+                            continue
+                        seen_context_lines.add(context_key)
+                        start = max(0, line_no - 9)
+                        end = min(len(lines), line_no + 32)
+                        app_report["code_contexts"].append({
+                            "file": str(java.relative_to(decompiled)),
+                            "match_line": line_no,
+                            "match": stripped[:240],
+                            "context_start_line": start + 1,
+                            "context": "\\n".join(
+                                f"{idx + 1}: {line.rstrip()[:260]}"
+                                for idx, line in enumerate(lines[start:end], start)
+                            ),
+                        })
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
             # Manifest/resources and binaries stay temporary; only metadata and snippets are emitted.
             shutil.rmtree(decompiled, ignore_errors=True)
