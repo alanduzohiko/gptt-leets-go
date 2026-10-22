@@ -354,7 +354,7 @@ object ContentRepository {
                 Log.w("MashxallData", "Could not parse Khairah page ${meta.id}", error)
             }
         }
-        out.toString().trim()
+        return out.toString().trim()
     }
 
     private fun sha256Hex(bytes: ByteArray): String =
