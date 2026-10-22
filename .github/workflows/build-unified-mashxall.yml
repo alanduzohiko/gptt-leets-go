@@ -51,6 +51,38 @@ jobs:
           fi
           echo "MASHXALL_SOURCE_BUNDLE=$SOURCE" >> "$GITHUB_ENV"
 
+      - name: Download JADX static analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          meta="$(curl -fsSL https://api.github.com/repos/skylot/jadx/releases/latest)"
+          url="$(printf '%s' "$meta" | jq -r '.assets[] | select(.name | test("^jadx-[0-9.]+[.]zip$")) | .browser_download_url' | head -n 1)"
+          if [[ -z "$url" || "$url" == "null" ]]; then
+            echo "Could not locate the official JADX release ZIP."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/jadx"
+          curl -fL --retry 3 "$url" -o "$RUNNER_TEMP/jadx.zip"
+          unzip -q "$RUNNER_TEMP/jadx.zip" -d "$RUNNER_TEMP/jadx"
+          JADX_BIN="$(find "$RUNNER_TEMP/jadx" -type f -path '*/bin/jadx' | head -n 1)"
+          if [[ -z "$JADX_BIN" ]]; then
+            echo "JADX executable was not found after extraction."
+            exit 1
+          fi
+          chmod +x "$JADX_BIN"
+          echo "JADX_BIN=$JADX_BIN" >> "$GITHUB_ENV"
+          "$JADX_BIN" --version
+
+      - name: Reverse engineer original apps for data-format clues
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python tools/reverse_engineer_sources.py \
+            --bundle "$MASHXALL_SOURCE_BUNDLE" \
+            --jadx "$JADX_BIN" \
+            --out "$GITHUB_WORKSPACE/dist/reverse-engineering-report.json" \
+            --timeout-per-app 1200
+
       - name: Extract all source content and validate every SQLite database
         run: |
           set -euo pipefail
@@ -107,5 +139,6 @@ jobs:
             dist/Mashxall-Unified-debug.apk
             dist/content-catalog.json
             dist/BUILD-STATUS-AR.txt
+            dist/reverse-engineering-report.json
           if-no-files-found: error
           retention-days: 14
