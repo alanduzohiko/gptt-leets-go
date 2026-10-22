@@ -72,7 +72,7 @@ internal object NoorHadithCipher {
                 when {
                     token.equals("USC", ignoreCase = true) -> null
                     token.contains("DarusSalam", ignoreCase = true) -> {
-                        val remainder = Regex("""(?i)DarusSalam\\s*(.*)""")
+                        val remainder = Regex("""(?i)DarusSalam\s*(.*)""")
                             .find(token)?.groupValues?.getOrNull(1).orEmpty().trim()
                         val parts = remainder.split(":").map { it.trim() }.filter { it.isNotBlank() }
                         val readable = when {
@@ -97,11 +97,11 @@ internal object NoorHadithCipher {
                     else -> token
                 }.takeIf { it.isNotBlank() }
             }
-        val joined = tokens.joinToString("\\n")
+        val joined = tokens.joinToString("\n")
         return when {
             joined.isBlank() -> collectionLabel
             collectionLabel.isBlank() || joined.contains(collectionLabel, ignoreCase = true) -> joined
-            else -> "$collectionLabel\\n$joined"
+            else -> "$collectionLabel\n$joined"
         }.trim()
     }
 
