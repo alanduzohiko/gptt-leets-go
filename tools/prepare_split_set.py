@@ -580,6 +580,66 @@ def _is_apk_signature_entry(filename: str) -> bool:
     ) or filename == "stamp-cert-sha256"
 
 
+
+
+
+def patch_resources_table_package_name(
+    data: bytes, old_package: str, new_package: str
+) -> tuple[bytes, dict]:
+    """Patch only the fixed UTF-16 package-name field in resources.arsc package chunks."""
+    if len(data) < 12 or _axml_u16(data, 0) != 0x0002 or _axml_u32(data, 4) != len(data):
+        raise ValueError("Invalid Android resources.arsc header")
+    table_header_size = _axml_u16(data, 2)
+    if table_header_size < 12:
+        raise ValueError("Android resources.arsc header is too short")
+    old_encoded = old_package.encode("utf-16le")
+    new_encoded = new_package.encode("utf-16le")
+    name_field_size = 128 * 2
+    if len(old_encoded) >= name_field_size or len(new_encoded) >= name_field_size:
+        raise ValueError("Package name does not fit the Android resource table package-name field")
+    patched = bytearray(data)
+    position = table_header_size
+    changed = 0
+    package_ids = []
+    while position < len(data):
+        if position + 8 > len(data):
+            raise ValueError("Truncated resources.arsc chunk header")
+        chunk_type = _axml_u16(data, position)
+        chunk_header_size = _axml_u16(data, position + 2)
+        chunk_size = _axml_u32(data, position + 4)
+        if chunk_header_size < 8 or chunk_size < chunk_header_size or position + chunk_size > len(data):
+            raise ValueError(f"Invalid resources.arsc chunk at offset {position}")
+        if chunk_type == 0x0200:  # RES_TABLE_PACKAGE_TYPE
+            if chunk_header_size < 288:
+                raise ValueError("Android resource package header is too short")
+            package_id = _axml_u32(data, position + 8)
+            field_start = position + 12
+            field = data[field_start:field_start + name_field_size]
+            package_name = field.decode("utf-16le").split("\0", 1)[0]
+            if package_name == old_package:
+                replacement = new_encoded + b"\0" * (name_field_size - len(new_encoded))
+                patched[field_start:field_start + name_field_size] = replacement
+                changed += 1
+                package_ids.append(package_id)
+        position += chunk_size
+    if position != len(data):
+        raise ValueError("resources.arsc chunk boundaries do not match the file size")
+    if changed < 1:
+        raise ValueError(f"Resource table package name {old_package!r} was not found")
+    output = bytes(patched)
+    # Prove that the only byte range changed is the fixed package-name field in a package chunk.
+    if len(output) != len(data):
+        raise ValueError("Resource table size changed during package-name patch")
+    return output, {
+        "source_package_name": old_package,
+        "target_package_name": new_package,
+        "package_chunks_updated": changed,
+        "package_ids": package_ids,
+        "resource_table_length_preserved": True,
+        "resource_ids_and_entries_not_rebuilt": True,
+    }
+
+
 def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
     """Rebrand a config split manifest while keeping every other payload byte-identical."""
     source_entries = zip_entries(source_apk)
@@ -590,6 +650,12 @@ def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
     )
     if not report.get("split_name", "").startswith("config."):
         raise ValueError("Expected a config.* split manifest in " + str(source_apk))
+    patched_resources = None
+    resource_report = None
+    if "resources.arsc" in source_entries:
+        patched_resources, resource_report = patch_resources_table_package_name(
+            source_entries["resources.arsc"], ORIGINAL_PACKAGE, TARGET_PACKAGE
+        )
     destination_apk.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(source_apk) as source_zip, zipfile.ZipFile(
         destination_apk, "w", allowZip64=True
@@ -597,7 +663,12 @@ def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
         for info in source_zip.infolist():
             if _is_apk_signature_entry(info.filename):
                 continue
-            payload = patched_manifest if info.filename == "AndroidManifest.xml" else source_zip.read(info.filename)
+            if info.filename == "AndroidManifest.xml":
+                payload = patched_manifest
+            elif info.filename == "resources.arsc" and patched_resources is not None:
+                payload = patched_resources
+            else:
+                payload = source_zip.read(info.filename)
             copied = zipfile.ZipInfo(info.filename, info.date_time)
             copied.compress_type = info.compress_type
             copied.comment = info.comment
@@ -616,6 +687,10 @@ def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
     for name, payload in source_entries.items():
         if name == "AndroidManifest.xml" or _is_apk_signature_entry(name):
             continue
+        if name == "resources.arsc" and patched_resources is not None:
+            if output_entries[name] != patched_resources:
+                raise ValueError("Resource table differs from the package-name-only patch: " + name)
+            continue
         if output_entries[name] != payload:
             raise ValueError("Config split entry changed unexpectedly: " + name)
     report.update({
@@ -626,6 +701,7 @@ def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
             "resources.arsc" not in source_entries
             or source_entries["resources.arsc"] == output_entries.get("resources.arsc")
         ),
+        "resources_arsc_package_name_patch": resource_report,
         "native_libraries_preserved": sum(
             name.startswith("lib/") and name.endswith(".so") for name in output_entries
         ),
