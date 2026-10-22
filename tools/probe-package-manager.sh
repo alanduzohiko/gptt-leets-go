@@ -41,7 +41,7 @@ if [[ "$service_ready" -ne 1 ]]; then
 fi
 
 echo "=== adb install (raw PackageManager response) ===" > dist/package-manager-install.txt
-adb install --no-streaming dist/Mashxall-3.1.3.apk >> dist/package-manager-install.txt 2>&1
+timeout 180s adb install --no-streaming dist/Mashxall-3.1.3.apk >> dist/package-manager-install.txt 2>&1
 rc=$?
 echo "$rc" > dist/package-manager-exit-code.txt
 cat dist/package-manager-install.txt
@@ -52,6 +52,8 @@ elif grep -Eqi 'INSTALL_FAILED_NO_MATCHING_ABIS|NO_MATCHING_ABIS' dist/package-m
   echo "PACKAGE_PARSED; INSTALL_STOPPED_ONLY_BY_X86_VS_ARM64_NATIVE_ABI" > dist/package-manager-result.txt
 elif grep -Eqi 'INSTALL_PARSE_FAILED|INSTALL_FAILED_INVALID_APK|Failed to parse|Parse error|not a valid APK' dist/package-manager-install.txt; then
   echo "PACKAGE_MANAGER_PARSE_FAILURE" > dist/package-manager-result.txt
+elif [[ "$rc" -eq 124 ]]; then
+  echo "EMULATOR_TIMEOUT: adb install did not finish in 180 seconds; inspect service state and logcat." > dist/package-manager-result.txt
 else
   echo "PACKAGE_MANAGER_INSTALL_FAILED; inspect raw result and logcat" > dist/package-manager-result.txt
 fi
