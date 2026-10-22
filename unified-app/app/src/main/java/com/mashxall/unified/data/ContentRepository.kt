@@ -3,6 +3,7 @@ package com.mashxall.unified.data
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -26,6 +27,11 @@ data class AudioItem(val assetPath: String, val title: String, val group: String
 data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
+private data class SalawatiAzkarText(val ckb: String, val english: String, val reference: String)
+
+private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
+    ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
+}
 
 object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
@@ -71,7 +77,10 @@ object ContentRepository {
     }
 
     private fun <T> queryDb(context: Context, assetPath: String, fallback: T, action: (SQLiteDatabase) -> T): T =
-        try { openDb(context, assetPath).use(action) } catch (_: Exception) { fallback }
+        try { openDb(context, assetPath).use(action) } catch (error: Exception) {
+            Log.w("MashxallData", "Content query failed for $assetPath", error)
+            fallback
+        }
 
     private fun Cursor.string(name: String, default: String = ""): String {
         val i = getColumnIndex(name)
@@ -95,7 +104,10 @@ object ContentRepository {
     }
 
     suspend fun loadAyahs(context: Context, surah: Int, language: String, query: String = ""): List<Ayah> = withContext(Dispatchers.IO) {
-        val translationBook = when (language) { "en" -> "sahih"; "ar" -> "mukhtasar"; else -> "" }
+        // English uses the dedicated Sahih International translation DB. Arabic
+        // mode presents the Arabic Qur'an text without mislabelling a tafsir as
+        // a translation. Sorani uses Noor's concise Kurdish translation.
+        val translationBook = if (language == "en") "sahih" else ""
         val extraTranslations = if (translationBook.isNotEmpty()) {
             queryDb(context, tafsirBooks.first { it.id == translationBook }.assetPath, emptyMap<Int, String>()) { db ->
                 db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
@@ -111,7 +123,8 @@ object ContentRepository {
                         val num = c.int("verse_id")
                         val arabic = c.string("quran_arabic")
                         val translation = when (language) {
-                            "en", "ar" -> extraTranslations[num].orEmpty()
+                            "en" -> extraTranslations[num].orEmpty()
+                            "ar" -> ""
                             else -> c.string("translation_puxta")
                         }
                         if (query.isBlank() || arabic.contains(query, true) || translation.contains(query, true) || num.toString() == query) {
@@ -155,7 +168,10 @@ object ContentRepository {
     }
 
     suspend fun loadAzkar(context: Context, language: String, query: String = ""): List<AzkarItem> = withContext(Dispatchers.IO) {
-        queryDb(context, PRAYER_DB, emptyList()) { db ->
+        // Noor supplies repetition counts and the useful morning/evening grouping.
+        // Enrich those records with Salawati's fuller Kurdish/English wording and
+        // references where the same Arabic source text is present.
+        val primary = queryDb(context, PRAYER_DB, emptyList<AzkarItem>()) { db ->
             val sql = """
                 SELECT it._id AS item_id, ch.ckb AS title_ckb, ch.ar AS title_ar, ch.en AS title_en,
                        it.ar AS arabic, it.ckb AS ckb_text, it.en AS en_text, it.counter AS item_count,
@@ -168,6 +184,55 @@ object ContentRepository {
             val term = if (query.isBlank()) "%" else "%$query%"
             db.rawQuery(sql, arrayOf(term, term, term, term, term, term)).use { c ->
                 buildList { while (c.moveToNext()) add(AzkarItem(c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"), c.string("arabic"), c.string("ckb_text"), c.string("en_text"), c.int("item_count"), c.string("ref_ckb"))) }
+            }
+        }
+        val translations = queryDb(context, AZKAR_DB, emptyMap<String, SalawatiAzkarText>()) { db ->
+            val sql = """
+                SELECT it.item AS arabic,
+                       (SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='ckb' LIMIT 1) AS ckb_text,
+                       (SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='en' LIMIT 1) AS en_text,
+                       (SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1) AS ref_ckb
+                FROM azkar_item it
+            """.trimIndent()
+            db.rawQuery(sql, null).use { c ->
+                buildMap {
+                    while (c.moveToNext()) {
+                        val key = normalizeArabicKey(c.string("arabic"))
+                        if (key.isNotBlank()) put(key, SalawatiAzkarText(c.string("ckb_text"), c.string("en_text"), c.string("ref_ckb")))
+                    }
+                }
+            }
+        }
+        if (primary.isNotEmpty()) {
+            primary.map { item ->
+                val extra = translations[normalizeArabicKey(item.arabic)]
+                if (extra == null) item else item.copy(
+                    ckb = extra.ckb.ifBlank { item.ckb },
+                    english = extra.english.ifBlank { item.english },
+                    referenceCkb = extra.reference.ifBlank { item.referenceCkb }
+                )
+            }
+        } else {
+            // Graceful fallback if Noor's prayer-time DB is absent: use the
+            // complete Salawati collection instead of an empty screen.
+            queryDb(context, AZKAR_DB, emptyList<AzkarItem>()) { db ->
+                val term = if (query.isBlank()) "%" else "%$query%"
+                val sql = """
+                    SELECT it._id AS item_id,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=it.chapter_id AND t.language='ckb' LIMIT 1),'') AS title_ckb,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=it.chapter_id AND t.language='ar' LIMIT 1),'') AS title_ar,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=it.chapter_id AND t.language='en' LIMIT 1),'') AS title_en,
+                           it.item AS arabic,
+                           COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='ckb' LIMIT 1),'') AS ckb_text,
+                           COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='en' LIMIT 1),'') AS en_text,
+                           COALESCE((SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1),'') AS ref_ckb
+                    FROM azkar_item it
+                    WHERE it.item LIKE ? OR EXISTS(SELECT 1 FROM azkar_item_translation t WHERE t.item_id=it._id AND t.item_translation LIKE ?)
+                    ORDER BY it._id LIMIT 350
+                """.trimIndent()
+                db.rawQuery(sql, arrayOf(term, term)).use { c ->
+                    buildList { while (c.moveToNext()) add(AzkarItem(c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"), c.string("arabic"), c.string("ckb_text"), c.string("en_text"), 1, c.string("ref_ckb"))) }
+                }
             }
         }
     }
