@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused JADX extraction for Noor's Hadith string-decoding call chain."""
+"""Focused JADX extraction for Noor's Hadith string decoder, key map, and verse-related records."""
 from __future__ import annotations
 
 import argparse
