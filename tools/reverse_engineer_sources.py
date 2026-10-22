@@ -129,8 +129,8 @@ def main() -> int:
             caps = {name: 0 for name in PATTERNS}
             context_rules = {
                 "hadith_of_ayah": (re.compile(r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I), 35),
-                "cryptography": (re.compile(r"Cipher|SecretKeySpec|IvParameterSpec|Base64\\.decode|PBKDF2|AES|decrypt|encrypt|doFinal", re.I), 30),
-                "database_asset_access": (re.compile(r"SQLiteDatabase|SQLiteOpenHelper|openDatabase|db_hadith_of_ayah|\\.sqlite|\\.db|AssetManager|getAssets", re.I), 25),
+                "cryptography": (re.compile(r"Cipher|SecretKeySpec|IvParameterSpec|Base64\.decode|PBKDF2|AES|decrypt|encrypt|doFinal", re.I), 30),
+                "database_asset_access": (re.compile(r"SQLiteDatabase|SQLiteOpenHelper|openDatabase|db_hadith_of_ayah|\.sqlite|\.db|AssetManager|getAssets", re.I), 25),
             }
             app_report["code_contexts"] = {name: [] for name in context_rules}
             seen_context_lines: set[tuple[str, int, str]] = set()
@@ -169,7 +169,7 @@ def main() -> int:
                             "match_line": line_no,
                             "match": stripped[:240],
                             "context_start_line": start + 1,
-                            "context": "\\n".join(
+                            "context": "\n".join(
                                 f"{idx + 1}: {item.rstrip()[:260]}"
                                 for idx, item in enumerate(lines[start:end], start)
                             ),
