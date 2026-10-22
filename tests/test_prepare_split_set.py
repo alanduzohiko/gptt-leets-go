@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.prepare_split_set import (
     APP_NAME, ORIGINAL_PACKAGE, TARGET_PACKAGE, find_label_key,
     manifest_semantics, rewrite_package_identity, patch_binary_xml_package_id,
-    update_app_label, patch_runtime_package_literals
+    patch_resources_table_package_name, update_app_label, patch_runtime_package_literals
 )
 
 class PrepareSplitSetTests(unittest.TestCase):
@@ -141,6 +141,26 @@ class PrepareSplitSetTests(unittest.TestCase):
         restored, restored_report = patch_binary_xml_package_id(patched, TARGET_PACKAGE, ORIGINAL_PACKAGE)
         self.assertEqual(restored_report["split_name"], "config.arm64_v8a")
         self.assertEqual(struct.unpack_from("<I", restored, 4)[0], len(restored))
+
+    def test_resources_table_patch_only_changes_fixed_package_name_field(self):
+        old_name = ORIGINAL_PACKAGE.encode("utf-16le")
+        package_name_field = old_name + b"\0" * (256 - len(old_name))
+        package_chunk = (
+            struct.pack("<HHII", 0x0200, 288, 288, 0x7F)
+            + package_name_field
+            + b"\0" * 20
+        )
+        table_size = 12 + len(package_chunk)
+        table = struct.pack("<HHII", 0x0002, 12, table_size, 1) + package_chunk
+
+        patched, report = patch_resources_table_package_name(table, ORIGINAL_PACKAGE, TARGET_PACKAGE)
+        self.assertEqual(len(patched), len(table))
+        self.assertEqual(patched[:12], table[:12])
+        self.assertEqual(patched[12:24], table[12:24])
+        self.assertEqual(patched[24 + 256:], table[24 + 256:])
+        self.assertEqual(patched[24:24 + 256].decode("utf-16le").split("\0", 1)[0], TARGET_PACKAGE)
+        self.assertEqual(report["package_chunks_updated"], 1)
+        self.assertTrue(report["resource_ids_and_entries_not_rebuilt"])
 
     def test_rewrites_only_runtime_application_id_and_audio_uris(self):
         with tempfile.TemporaryDirectory() as tmp:
