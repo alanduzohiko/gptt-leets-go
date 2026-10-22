@@ -1601,24 +1601,94 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
 @Composable
 fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<LexiconItem>>(emptyList()) }
+    var totalMatches by remember { mutableIntStateOf(0) }
+    var offset by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
-    LaunchedEffect(query) { loading = true; entries = ContentRepository.searchLexicon(context, query.trim()); loading = false }
+    var loadingMore by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(true) }
+
+    LaunchedEffect(query) {
+        loading = true
+        loadingMore = false
+        offset = 0
+        totalMatches = ContentRepository.loadLexiconCount(context, query.trim())
+        entries = ContentRepository.searchLexicon(context, query.trim(), offset = 0, limit = 100)
+        offset = entries.size
+        hasMore = offset < totalMatches && entries.size == 100
+        loading = false
+    }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(tr(language, "lexicon"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp)); SearchBox(query, { query = it }, tr(language, "search_words"))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "$totalMatches entries found • $offset loaded"
+                    AppLanguage.AR -> "عُثر على $totalMatches مدخل • تم تحميل $offset"
+                    AppLanguage.CKB -> "$totalMatches دەروازە دۆزرایەوە • $offset بارکراوە"
+                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            SearchBox(query, { query = it }, tr(language, "search_words"))
         }
-        if (entries.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(entries, key = { it.title + it.root }) { item ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(item.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        if (item.root.isNotBlank()) Text(item.root, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(item.content.take(1000), color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
-                        if (item.reference.isNotBlank()) Text(item.reference, color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
+        if (entries.isEmpty()) {
+            LoadingOrEmpty(loading, language, foreground)
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$offset:$index" }) { _, item ->
+                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(item.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            if (item.root.isNotBlank()) {
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    (if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + item.root,
+                                    color = foreground.copy(alpha = 0.65f), fontSize = 10.sp
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(item.content, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
+                            if (item.reference.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    (if (language == AppLanguage.EN) "Reference: " else if (language == AppLanguage.AR) "المصدر: " else "سەرچاوە: ") + item.reference,
+                                    color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                if (hasMore) {
+                    item(key = "load-more-lexicon") {
+                        OutlinedButton(
+                            enabled = !loadingMore,
+                            onClick = {
+                                if (!loadingMore) scope.launch {
+                                    loadingMore = true
+                                    val next = ContentRepository.searchLexicon(context, query.trim(), offset, 100)
+                                    entries = entries + next
+                                    offset += next.size
+                                    hasMore = next.size == 100 && offset < totalMatches
+                                    loadingMore = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (loadingMore) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            else Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Load more entries"
+                                    AppLanguage.AR -> "تحميل المزيد من النتائج"
+                                    AppLanguage.CKB -> "دەروازەی زیاتر باربکە"
+                                }
+                            )
+                        }
                     }
                 }
             }
