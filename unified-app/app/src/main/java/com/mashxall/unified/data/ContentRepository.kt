@@ -244,17 +244,21 @@ object ContentRepository {
         if (book.id.startsWith("khairah_")) {
             return@withContext loadKhairahTafsirPages(context, book, surah, ayah)
         }
-        queryDb(context, book.assetPath, "") { db ->
+        return@withContext queryDb(context, book.assetPath, "") { db ->
             val tables = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { c ->
                 buildSet { while (c.moveToNext()) add(c.getString(0)) }
             }
-            if ("quran" !in tables) return@queryDb ""
-            val cols = db.rawQuery("PRAGMA table_info(quran)", null).use { c ->
-                buildSet { while (c.moveToNext()) add(c.getString(1)) }
-            }
-            if (!setOf("surah_id", "verse_id", "text").all { it in cols }) return@queryDb ""
-            db.rawQuery("SELECT text FROM quran WHERE surah_id=? AND verse_id=? LIMIT 1", arrayOf(surah.toString(), ayah.toString())).use { c ->
-                if (c.moveToFirst()) c.string("text") else ""
+            val cols = if ("quran" in tables) {
+                db.rawQuery("PRAGMA table_info(quran)", null).use { c ->
+                    buildSet { while (c.moveToNext()) add(c.getString(1)) }
+                }
+            } else emptySet()
+            if (!setOf("surah_id", "verse_id", "text").all { it in cols }) {
+                ""
+            } else {
+                db.rawQuery("SELECT text FROM quran WHERE surah_id=? AND verse_id=? LIMIT 1", arrayOf(surah.toString(), ayah.toString())).use { c ->
+                    if (c.moveToFirst()) c.string("text") else ""
+                }
             }
         }
     }
