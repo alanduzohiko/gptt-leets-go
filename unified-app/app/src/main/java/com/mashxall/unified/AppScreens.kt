@@ -348,27 +348,119 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
+    var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var playing by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { audio = ContentRepository.loadAudioItems(context); loading = false }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var surahText by rememberSaveable { mutableStateOf("1") }
+    var ayahText by rememberSaveable { mutableStateOf("1") }
+    LaunchedEffect(Unit) {
+        audio = ContentRepository.loadAudioItems(context)
+        reciters = ContentRepository.loadReciters(context)
+        loading = false
+    }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(tr(language, "audio"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp)); Text(tr(language, "offline"), color = foreground.copy(alpha = 0.58f), fontSize = 12.sp)
-        Spacer(Modifier.height(8.dp))
-        if (audio.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            items(audio, key = { it.assetPath }) { item ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                    Row(Modifier.fillMaxWidth().clickable {
-                        if (playing == item.assetPath) { AudioController.stop(); playing = "" }
-                        else { playing = item.assetPath; AudioController.play(context, item.assetPath) { state -> if (!state) playing = "" } }
-                    }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (playing == item.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(34.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(item.title, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                            Text(item.group, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp)
+        Spacer(Modifier.height(6.dp))
+        Text(tr(language, "offline"), color = foreground.copy(alpha = 0.58f), fontSize = 12.sp)
+        Spacer(Modifier.height(9.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            items(listOf(0, 1)) { index ->
+                FilterChip(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index; AudioController.stop(); playing = "" },
+                    label = {
+                        Text(
+                            when (index) {
+                                0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
+                                else -> if (language == AppLanguage.EN) "80+ reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
+                            }
+                        )
+                    }
+                )
+            }
+        }
+        if (selectedTab == 0) {
+            if (audio.isEmpty()) LoadingOrEmpty(loading, language, foreground)
+            else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                items(audio, key = { it.assetPath }) { item ->
+                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable {
+                            if (playing == item.assetPath) {
+                                AudioController.stop()
+                                playing = ""
+                            } else {
+                                playing = item.assetPath
+                                AudioController.play(context, item.assetPath) { state -> if (!state) playing = "" }
+                            }
+                        }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (playing == item.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(34.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.title, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(item.group, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp)
+                            }
+                            Icon(Icons.Outlined.VolumeUp, null, tint = foreground.copy(alpha = 0.5f))
                         }
-                        Icon(Icons.Outlined.VolumeUp, null, tint = foreground.copy(alpha = 0.5f))
+                    }
+                }
+            }
+        } else {
+            Text(
+                if (language == AppLanguage.EN) "Streaming requires an internet connection. Pick a verse to audition a reciter."
+                else if (language == AppLanguage.AR) "يحتاج البث إلى اتصال بالإنترنت. اختر آية لتجربة القارئ."
+                else "بۆ گوێگرتن پێویستە ئینتەرنێتت هەبێت؛ ئایەتێک هەڵبژێرە بۆ تاقیکردنەوەی دەنگ.",
+                color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
+            )
+            Spacer(Modifier.height(7.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = surahText,
+                    onValueChange = { surahText = it.filter(Char::isDigit).take(3) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(tr(language, "surah")) },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = ayahText,
+                    onValueChange = { ayahText = it.filter(Char::isDigit).take(3) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(tr(language, "ayah")) },
+                    singleLine = true
+                )
+            }
+            Spacer(Modifier.height(7.dp))
+            if (reciters.isEmpty()) LoadingOrEmpty(loading, language, foreground)
+            else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(reciters, key = { it.id }) { reciter ->
+                    val url = ContentRepository.reciterSampleUrl(
+                        reciter,
+                        surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1,
+                        ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    )
+                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(22.dp))
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
+                                Text(if (reciter.audioType == 0) "Verse-by-verse" else "Surah audio", color = Gold.copy(alpha = 0.85f), fontSize = 9.sp)
+                            }
+                            IconButton(onClick = {
+                                if (playing == url) {
+                                    AudioController.stop()
+                                    playing = ""
+                                } else {
+                                    playing = url
+                                    AudioController.playRemote(context, url) { state -> if (!state) playing = "" }
+                                }
+                            }) {
+                                Icon(if (playing == url) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(29.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -378,11 +470,13 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 
 private object AudioController {
     private var player: MediaPlayer? = null
+
     fun stop() {
         try { player?.stop() } catch (_: Exception) {}
         try { player?.release() } catch (_: Exception) {}
         player = null
     }
+
     fun play(context: Context, assetPath: String, callback: (Boolean) -> Unit) {
         stop()
         try {
@@ -401,6 +495,30 @@ private object AudioController {
             Toast.makeText(context, tr(AppLanguage.CKB, "no_data"), Toast.LENGTH_SHORT).show()
         }
     }
+
+    fun playRemote(context: Context, url: String, callback: (Boolean) -> Unit) {
+        stop()
+        try {
+            player = MediaPlayer().apply {
+                setDataSource(url)
+                setOnPreparedListener { it.start(); callback(true) }
+                setOnCompletionListener { callback(false); stop() }
+                setOnErrorListener { _, _, _ ->
+                    callback(false)
+                    Toast.makeText(context, if (languageHint(context) == "en") "Stream unavailable; try another reciter or connection." else "تعذر تشغيل البث؛ جرّب قارئًا آخر أو تحقق من الاتصال.", Toast.LENGTH_LONG).show()
+                    stop()
+                    true
+                }
+                prepareAsync()
+            }
+        } catch (_: Exception) {
+            callback(false)
+            Toast.makeText(context, "Stream unavailable; check the connection.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun languageHint(context: Context): String =
+        context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE).getString("language", "ckb") ?: "ckb"
 }
 
 @Composable
