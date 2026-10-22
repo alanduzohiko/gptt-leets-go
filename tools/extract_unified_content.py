@@ -56,7 +56,7 @@ def sqlite_summary(data: bytes, ext: str) -> dict:
             # removed. Never modify the extracted payload or claim the FTS index
             # itself has been integrity-verified.
             fts_error = isinstance(integrity, str) and re.search(
-                r"unable to validate the inverted index for FTS[34] table main\\.search: SQL logic error",
+                r"unable to validate the inverted index for FTS[34] table main\.search: SQL logic error",
                 integrity,
                 re.I,
             )
@@ -65,10 +65,17 @@ def sqlite_summary(data: bytes, ext: str) -> dict:
                     "SELECT sql FROM sqlite_master WHERE type='table' AND name='search'"
                 ).fetchone()
                 schema = schema_row[0] if schema_row and schema_row[0] else ""
-                if not re.search(r"CREATE\\s+VIRTUAL\\s+TABLE.*USING\\s+FTS[34]\\b", schema, re.I | re.S):
+                if not re.search(r"CREATE\s+VIRTUAL\s+TABLE.*USING\s+FTS[34]\b", schema, re.I | re.S):
                     raise sqlite3.DatabaseError(
                         "Integrity checker reported an FTS error but search is not an FTS3/4 virtual table"
                     )
+                # Verify FTS MATCH separately before omitting only its virtual table
+                # from the disposable b-tree integrity pass below.
+                try:
+                    con.execute('SELECT rowid FROM "search" WHERE "search" MATCH ? LIMIT 1', ("الرحمن",)).fetchone()
+                    integrity_notes.append("The FTS4 MATCH smoke query executed successfully.")
+                except sqlite3.DatabaseError as fts_exc:
+                    integrity_notes.append("The FTS4 MATCH smoke query failed: " + str(fts_exc))
                 with tempfile.NamedTemporaryFile(suffix=ext) as verify_tmp:
                     verify_tmp.write(data)
                     verify_tmp.flush()
