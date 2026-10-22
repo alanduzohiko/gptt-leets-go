@@ -695,7 +695,7 @@ object ContentRepository {
                 LEFT JOIN azkar_categories cat ON cat._id=ch.category_id
                 WHERE it.ckb LIKE ? OR it.ar LIKE ? OR it.en LIKE ? OR ch.ckb LIKE ? OR ch.ar LIKE ? OR ch.en LIKE ?
                    OR cat.ckb LIKE ? OR cat.ar LIKE ? OR cat.en LIKE ?
-                ORDER BY cat._id,ch._id,it._id LIMIT 350
+                ORDER BY cat._id,ch._id,it._id
             """.trimIndent()
             val term = if (query.isBlank()) "%" else "%$query%"
             db.rawQuery(sql, arrayOf(term, term, term, term, term, term, term, term, term)).use { c ->
@@ -756,7 +756,7 @@ object ContentRepository {
                     LEFT JOIN azkar_chapter ch ON ch._id=it.chapter_id
                     LEFT JOIN azkar_category cat ON cat._id=ch.category_id
                     WHERE it.item LIKE ? OR EXISTS(SELECT 1 FROM azkar_item_translation t WHERE t.item_id=it._id AND t.item_translation LIKE ?)
-                    ORDER BY cat._id,ch._id,it._id LIMIT 350
+                    ORDER BY cat._id,ch._id,it._id
                 """.trimIndent()
                 db.rawQuery(sql, arrayOf(term, term)).use { c ->
                     buildList {
@@ -883,7 +883,7 @@ object ContentRepository {
     suspend fun loadBooks(context: Context, query: String = ""): List<BookItem> = withContext(Dispatchers.IO) {
         queryDb(context, BOOKS_DB, emptyList()) { db ->
             val like = if (query.isBlank()) "%" else "%$query%"
-            db.rawQuery("SELECT id,title,writer,description,page_number,url FROM book_data WHERE title LIKE ? OR writer LIKE ? OR description LIKE ? ORDER BY sorter,title LIMIT 150", arrayOf(like, like, like)).use { c ->
+            db.rawQuery("SELECT id,title,writer,description,page_number,url FROM book_data WHERE title LIKE ? OR writer LIKE ? OR description LIKE ? ORDER BY sorter,title", arrayOf(like, like, like)).use { c ->
                 buildList { while (c.moveToNext()) add(BookItem(c.int("id"), c.string("title"), c.string("writer"), c.string("description"), c.int("page_number"), c.string("url"))) }
             }
         }
@@ -981,7 +981,7 @@ object ContentRepository {
         queryDb(context, "content/noor_tafsir_1.2.2/base/assets/farmuda.db", emptyList()) { db ->
             val term = if (query.isBlank()) "%" else "%" + query.trim() + "%"
             db.rawQuery(
-                "SELECT _id,title,ar_desc,ku_desc,badini_title,badini,fav_time FROM farmuda WHERE title LIKE ? OR ar_desc LIKE ? OR ku_desc LIKE ? OR badini_title LIKE ? OR badini LIKE ? ORDER BY _id LIMIT 300",
+                "SELECT _id,title,ar_desc,ku_desc,badini_title,badini,fav_time FROM farmuda WHERE title LIKE ? OR ar_desc LIKE ? OR ku_desc LIKE ? OR badini_title LIKE ? OR badini LIKE ? ORDER BY _id",
                 arrayOf(term, term, term, term, term)
             ).use { c ->
                 buildList {
