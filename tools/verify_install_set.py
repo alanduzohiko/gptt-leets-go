@@ -94,7 +94,7 @@ def main() -> int:
         "source_sha256": sha(args.source.read_bytes()),
         "output_sha256": sha(args.output.read_bytes()),
         "source_package_id": "com.kosratdahmad.myprayers",
-        "package_id": "com.kosratdahmad.mashxall.repair2",
+        "package_id": "com.kosratdahmad.mashxall.full",
         "manifest_semantics_preserved_except_explicit_identity_remap": True,
         "dex_files_reassembled_from_original_smali": True,
         "offline_database": db,

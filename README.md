@@ -1,19 +1,25 @@
-# مەشخەڵ — Repair and native rebuild workspace
+# مەشخەڵ — original-app reverse engineering and Android rebuild
 
-The previous repair path only modified resources in a compiled APK and repeatedly failed on the user's phone. This repository now also contains a real native Android Java/Views project at [`native-app/`](native-app/README.md); it is not a WebView or website wrapper.
+## What the original source actually is
 
-## Native app project
+The supplied source is the compiled, three-part Android APK bundle in Release `source-3.1.3`; the repository initially did not contain the publisher's original Gradle/Kotlin source project. The original APK has five DEX files, 14 manifest activities (including dependency activities), 16 services, 18 receivers, three providers, about 1,126 resource files, and a large offline database. Its compiled app contains prayer screens and widgets, Azkar and favorites, Names of Allah, Qibla compass/map, language/location onboarding, detailed settings, azan/notification tones, alarms, and scheduled notifications.
 
-- Package ID: `com.kosratdahmad.mashxall.nativeapp`.
-- Sorani Kurdish, Arabic, and English.
-- Offline prayer schedule and city selection, Azkar categories and reader, 99 names of Allah, Tasbih counter, original audio, and compass-based Qibla.
-- No internet or location permission; it uses the locally chosen city.
-- The exact original offline SQLite database and 16 original audio tracks are extracted by CI after verifying the source bundle's SHA-256.
+## Primary workflow: full original-app rebuild
 
-## Build and test
+`Rebuild safe Mashxall split set` now decodes the original DEX into smali, updates only the application-ID literal and hardcoded `android.resource://` audio URIs that must follow a separate app ID, reassembles the DEX, preserves the original component class names, label resources, original offline database, app assets, and ARM64 native libraries, then merges the three split APKs into one standalone APK. Static checks verify the DEX file set, original class descriptors, package ID, launcher icon resources, original database bytes/integrity, and four native libraries. The Android 11 emulator job attempts an actual install and launch; a static build alone is not a runtime guarantee.
 
-Workflow `Build native Mashxall for Android 11` compiles the native project and checks the APK signature, alignment, package ID, API levels, bundled database checksum, and audio assets. A separate job attempts installation and launch on an Android 11 emulator. A successful static build is not by itself proof that runtime launch passes.
+- Original app ID: `com.kosratdahmad.myprayers`
+- Full rebuild test app ID: `com.kosratdahmad.mashxall.full`
+- Exact source bundle SHA-256: `bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3`
+
+## Separate Native prototype
+
+`native-app/` is a separate clean Java/Android Views implementation. It was created when the original APK builds repeatedly failed, but it is **not** feature-equivalent to the original compiled app. It uses selected original offline data/audio and demonstrates a native alternative. The original-app rebuild workflow is the correct route when preserving the existing app's full screen/component set is the priority.
+
+## Known limits
+
+The original APK contains Firebase/Maps/Huawei integrations. A re-signed clone with a different application ID can be restricted by the original service owner's package ID, signing certificate, or API-key settings; private backend behavior cannot be guaranteed from APK code alone. No claim of complete runtime parity should be made unless the Android 11 installation/startup test passes and the affected service flows are checked.
 
 ## Repository boundary
 
-All changes stay in `alanduzohiko/gptt-leets-go`. Do not modify `alanduzohiko/masheqal` or any other repository.
+All work stays in `alanduzohiko/gptt-leets-go`. No other repository is modified.

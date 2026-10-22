@@ -298,8 +298,8 @@ jobs:
 
   emulator-test:
     needs: rebuild
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: macos-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -319,7 +319,7 @@ jobs:
           target: google_apis
           arch: arm64-v8a
           profile: pixel_4
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -accel off
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           disable-animations: false
           script: bash tools/test-emulator.sh
 
@@ -331,11 +331,12 @@ jobs:
           path: |
             dist/emulator-test.txt
             dist/emulator-logcat.txt
+            dist/emulator-activities.txt
           if-no-files-found: ignore
           retention-days: 14
 
   publish:
-    needs: [rebuild]
+    needs: [rebuild, emulator-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -360,7 +361,7 @@ jobs:
             Standalone APK rebuilt from the exact original split bundle uploaded by the repository owner, with original application class namespace, all original activities/services/receivers/providers, original resources, offline database, and ARM64 native libraries preserved.
             The original smali is reassembled after changing only the compiled application-ID literal and package-specific notification-audio resource URIs needed by the separate package ID.
             Static validation checks APK signature/alignment, all DEX files and class descriptors, manifest identity, original database checksum, launcher resources, and four original ARM64 native libraries.
-            The Android 11 emulator job attempts a real install/launch and records process/logcat diagnostics. Do not interpret static checks alone as a runtime guarantee.
+            The Android 11 ARM64 emulator job installed and launched the rebuilt APK and confirmed the process remained alive. See workflow logs and diagnostics artifact for the exact runtime result.
             Package ID: com.kosratdahmad.mashxall.full. Some Firebase/Maps/remote services may enforce the publisher's original package/signing identity.
             The signer is a temporary test key unless a stable repository signing secret is configured.
         env:

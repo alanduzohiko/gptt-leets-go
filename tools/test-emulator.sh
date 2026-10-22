@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APK="dist/Mashxall-3.1.3.apk"
-APP_ID="com.kosratdahmad.mashxall.repair2"
+APP_ID="com.kosratdahmad.mashxall.full"
 mkdir -p dist
 : > dist/emulator-test.txt
 : > dist/emulator-logcat.txt

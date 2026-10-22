@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.prepare_split_set import (
     APP_NAME, ORIGINAL_PACKAGE, TARGET_PACKAGE, find_label_key,
-    manifest_semantics, rewrite_package_identity, update_app_label
+    manifest_semantics, rewrite_package_identity, update_app_label, patch_runtime_package_literals
 )
 
 class PrepareSplitSetTests(unittest.TestCase):
