@@ -1314,7 +1314,7 @@ fun AudioScreen(
     LaunchedEffect(initialSurah, initialAyah, focusReciters) {
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
-        if (focusReciters) selectedTab = 1
+        selectedTab = if (focusReciters) 1 else 0
     }
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
