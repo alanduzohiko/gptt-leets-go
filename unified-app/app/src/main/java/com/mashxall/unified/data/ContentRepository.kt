@@ -4,9 +4,14 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
+import android.text.Html
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.zip.Inflater
+import java.util.zip.InflaterInputStream
+import org.json.JSONArray
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,6 +33,10 @@ data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String,
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
 private data class SalawatiAzkarText(val ckb: String, val english: String, val reference: String)
+private data class KhairahPageMeta(
+    val id: Int, val volume: String, val page: String, val offset: Int,
+    val length: Int, val byteCount: Int, val sha256: String
+)
 
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
@@ -52,7 +61,11 @@ object ContentRepository {
         TafsirBook("runahi", "ڕووناهی بادینی", "التفسير الباديني", "Runahi Badini Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_runahi_badini.db", "bad"),
         TafsirBook("zhian", "ژیان بادینی", "تفسير ژيان", "Zhian Badini Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_zhian_badini.db", "bad"),
         TafsirBook("saadi", "تفسير السعدي", "تفسير السعدي", "Saadi Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_saadi.db", "ckb"),
-        TafsirBook("mukhtasar", "مختصر", "المختصر", "Mukhtasar Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_mukhtasar.db", "ar")
+        TafsirBook("mukhtasar", "مختصر", "المختصر", "Mukhtasar Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_mukhtasar.db", "ar"),
+        TafsirBook("khairah_ibn_kathir", "ابن کەثیر", "تفسير ابن كثير", "Ibn Kathir (Khairah)", "content/khairah_1.2/base/assets/tafsir/ibn-kathir.sqlite", "ar"),
+        TafsirBook("khairah_muyassar", "التفسير الميسّر", "التفسير الميسر", "Al-Muyassar (Khairah)", "content/khairah_1.2/base/assets/tafsir/muyassar.sqlite", "ar"),
+        TafsirBook("khairah_saadi", "تفسير السعدي", "تفسير السعدي", "Al-Saadi (Khairah)", "content/khairah_1.2/base/assets/tafsir/saadi.sqlite", "ar"),
+        TafsirBook("khairah_tabari", "تفسير الطبري", "تفسير الطبري", "Al-Tabari (Khairah)", "content/khairah_1.2/base/assets/tafsir/tabari.sqlite", "ar")
     )
 
     private fun digest(text: String): String = MessageDigest.getInstance("SHA-256")
@@ -138,6 +151,9 @@ object ContentRepository {
 
     suspend fun loadTafsir(context: Context, bookId: String, surah: Int, ayah: Int): String = withContext(Dispatchers.IO) {
         val book = tafsirBooks.firstOrNull { it.id == bookId } ?: tafsirBooks.first()
+        if (book.id.startsWith("khairah_")) {
+            return@withContext loadKhairahTafsirPages(context, book, surah, ayah)
+        }
         queryDb(context, book.assetPath, "") { db ->
             val tables = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { c ->
                 buildSet { while (c.moveToNext()) add(c.getString(0)) }
@@ -152,6 +168,103 @@ object ContentRepository {
             }
         }
     }
+
+    /**
+     * Khairah stores its tafsir pages as independent raw-DEFLATE streams.
+     * The SQLite index gives the byte offsets, sizes and SHA-256 for each page,
+     * and maps each Quran verse to a range of page IDs. Verify every decoded
+     * page before showing it; on any mismatch, return a clear empty result.
+     */
+    private fun loadKhairahTafsirPages(context: Context, book: TafsirBook, surah: Int, ayah: Int): String {
+        val metas = queryDb(context, book.assetPath, emptyList<KhairahPageMeta>()) { db ->
+            db.rawQuery(
+                """
+                SELECT p.id,p.volume,p.page,p.offset,p.length,p.byte_count,p.sha256
+                FROM ayahs a JOIN pages p ON p.id BETWEEN a.start_id AND a.end_id
+                WHERE a.surah=? AND ? BETWEEN a.first_ayah AND a.last_ayah
+                ORDER BY p.id
+                """.trimIndent(),
+                arrayOf(surah.toString(), ayah.toString())
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        KhairahPageMeta(
+                            c.int("id"), c.string("volume"), c.string("page"),
+                            c.int("offset"), c.int("length"), c.int("byte_count"),
+                            c.string("sha256")
+                        )
+                    )
+                }
+            }
+        }
+        if (metas.isEmpty()) return ""
+        val binaryPath = book.assetPath.substringBeforeLast('.') + ".bin"
+        val bytes = try {
+            context.assets.open(binaryPath).use { it.readBytes() }
+        } catch (error: Exception) {
+            Log.w("MashxallData", "Khairah page file unavailable: $binaryPath", error)
+            return ""
+        }
+        val out = StringBuilder()
+        for (meta in metas) {
+            if (meta.offset < 0 || meta.length <= 0 ||
+                meta.offset > bytes.size || meta.length > bytes.size - meta.offset) {
+                Log.w("MashxallData", "Invalid page boundary for ${book.id}, page ${meta.id}")
+                continue
+            }
+            val raw = try {
+                val inflater = Inflater(true)
+                try {
+                    InflaterInputStream(
+                        ByteArrayInputStream(bytes, meta.offset, meta.length),
+                        inflater,
+                        16 * 1024
+                    ).use { input -> input.readBytes() }
+                } finally {
+                    inflater.end()
+                }
+            } catch (error: Exception) {
+                Log.w("MashxallData", "Could not inflate ${book.id} page ${meta.id}", error)
+                continue
+            }
+            if (raw.size != meta.byteCount || sha256Hex(raw) != meta.sha256) {
+                Log.w("MashxallData", "Page integrity check failed for ${book.id}, page ${meta.id}")
+                continue
+            }
+            try {
+                val array = JSONArray(String(raw, Charsets.UTF_8))
+                val pageText = StringBuilder()
+                for (i in 0 until array.length()) {
+                    val paragraph = array.optJSONObject(i) ?: continue
+                    val sourceText = paragraph.optString("text", "")
+                    if (sourceText.isBlank()) continue
+                    val plain = Html.fromHtml(sourceText, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+                    if (plain.isNotBlank()) {
+                        if (pageText.isNotEmpty()) pageText.append("\n\n")
+                        pageText.append(plain)
+                    }
+                }
+                if (pageText.isNotEmpty()) {
+                    if (out.isNotEmpty()) out.append("\n\n────────────────────\n\n")
+                    val volumePage = buildString {
+                        if (meta.volume.isNotBlank()) append("المجلد ").append(meta.volume)
+                        if (meta.page.isNotBlank()) {
+                            if (isNotEmpty()) append(" • ")
+                            append("الصفحة ").append(meta.page)
+                        }
+                    }
+                    if (volumePage.isNotBlank()) out.append("📖 ").append(volumePage).append("\n\n")
+                    out.append(pageText)
+                }
+            } catch (error: Exception) {
+                Log.w("MashxallData", "Could not parse Khairah page ${meta.id}", error)
+            }
+        }
+        out.toString().trim()
+    }
+
+    private fun sha256Hex(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     suspend fun loadHadiths(context: Context, query: String = ""): List<HadithItem> = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, emptyList()) { db ->
