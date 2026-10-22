@@ -134,7 +134,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
-    var mushafPage by rememberSaveable { mutableIntStateOf(1) }
+    var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
@@ -235,6 +235,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         if (mushafMode) {
             MushafPageViewer(language, foreground, mushafPage) { requested ->
                 mushafPage = requested.coerceIn(1, 604)
+                prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
             }
         } else if (verses.isEmpty()) {
             LoadingOrEmpty(loading, language, foreground)
@@ -379,6 +380,8 @@ private fun MushafPageViewer(
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
+    var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    LaunchedEffect(page) { pageInput = page.toString() }
     LaunchedEffect(page) {
         loading = true
         failed = false
@@ -416,7 +419,27 @@ private fun MushafPageViewer(
                 Text(tr(language, "next"), fontSize = 11.sp)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(7.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = pageInput,
+                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
+                modifier = Modifier.width(112.dp),
+                label = { Text(if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە") },
+                singleLine = true
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = {
+                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
+            }) {
+                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            }
+        }
+        Spacer(Modifier.height(7.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = Color.White),
