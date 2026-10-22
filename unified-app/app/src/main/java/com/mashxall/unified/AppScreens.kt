@@ -86,6 +86,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -1929,17 +1930,25 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, calculationMethod, asrSchool) {
-        loading = true
-        times = if (gpsLatitude != null && gpsLongitude != null) {
-            ContentRepository.loadPrayerTimesAtLocation(
-                context, gpsLatitude!!, gpsLongitude!!, Date(),
-                PrayerCalculationMethod.fromId(calculationMethod),
-                AsrCalculationSchool.fromId(asrSchool)
-            )
-        } else {
-            ContentRepository.loadPrayerTimes(context, selectedCity)
+        var loadedDate = ""
+        while (true) {
+            val today = SimpleDateFormat("MM-dd", Locale.US).format(Date())
+            if (today != loadedDate) {
+                loading = true
+                times = if (gpsLatitude != null && gpsLongitude != null) {
+                    ContentRepository.loadPrayerTimesAtLocation(
+                        context, gpsLatitude!!, gpsLongitude!!, Date(),
+                        PrayerCalculationMethod.fromId(calculationMethod),
+                        AsrCalculationSchool.fromId(asrSchool)
+                    )
+                } else {
+                    ContentRepository.loadPrayerTimes(context, selectedCity)
+                }
+                loadedDate = today
+                loading = false
+            }
+            delay(60_000L)
         }
-        loading = false
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
