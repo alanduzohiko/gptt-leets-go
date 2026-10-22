@@ -61,6 +61,50 @@ internal object NoorHadithCipher {
     fun collectionArabic(code: String): String = collectionArabic[code.trim()].orEmpty()
     fun collectionEnglish(code: String): String = collectionEnglish[code.trim()].orEmpty()
 
+    /**
+     * Reproduce Noor's reference cleanup for the verse-linked Hadith screen.
+     * Turn internal collection and book tokens into readable Sorani references.
+     */
+    fun formatReference(rawReference: String?, collectionLabel: String): String {
+        if (rawReference.isNullOrBlank()) return collectionLabel
+        val tokens = rawReference.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            .mapNotNull { token ->
+                when {
+                    token.equals("USC", ignoreCase = true) -> null
+                    token.contains("DarusSalam", ignoreCase = true) -> {
+                        val remainder = Regex("""(?i)DarusSalam\\s*(.*)""")
+                            .find(token)?.groupValues?.getOrNull(1).orEmpty().trim()
+                        val parts = remainder.split(":").map { it.trim() }.filter { it.isNotBlank() }
+                        val readable = when {
+                            parts.size >= 3 -> "بەرگی ${parts[0]} پەرتووکى ${parts[1]} حدیثی ژمارە ${parts[2]}"
+                            parts.size == 2 -> "پەرتووکى ${parts[0]} حدیثی ژمارە ${parts[1]}"
+                            else -> remainder
+                        }
+                        listOf("دار السلام", readable).filter { it.isNotBlank() }.joinToString(" ")
+                    }
+                    token.contains("in-book", ignoreCase = true) -> {
+                        val remainder = token.substringAfter("in-book", "").trim()
+                        val parts = remainder.split(":").map { it.trim() }.filter { it.isNotBlank() }
+                        val numberText = when {
+                            parts.size >= 2 -> "${parts[0]} حدیثی ژمارە ${parts[1]}"
+                            parts.size == 1 -> parts[0]
+                            else -> ""
+                        }
+                        listOf("لە پەرتووکى ژمارە", numberText).filter { it.isNotBlank() }.joinToString(" ")
+                    }
+                    token.contains("reference", ignoreCase = true) ->
+                        token.replace(Regex("(?i)reference"), collectionLabel).trim()
+                    else -> token
+                }.takeIf { it.isNotBlank() }
+            }
+        val joined = tokens.joinToString("\\n")
+        return when {
+            joined.isBlank() -> collectionLabel
+            collectionLabel.isBlank() || joined.contains(collectionLabel, ignoreCase = true) -> joined
+            else -> "$collectionLabel\\n$joined"
+        }.trim()
+    }
+
     fun parseVerseReferences(encodedReferences: String?): List<Pair<Int, Int>> {
         if (encodedReferences.isNullOrBlank()) return emptyList()
         val pattern = Regex("""\[?\s*(\d{1,3})\s*:\s*(\d{1,3})\s*\]?""")

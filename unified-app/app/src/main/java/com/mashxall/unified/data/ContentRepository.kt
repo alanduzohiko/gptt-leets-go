@@ -649,15 +649,7 @@ object ContentRepository {
                         val collectionArabic = NoorHadithCipher.collectionArabic(collectionCode)
                         val collectionEnglish = NoorHadithCipher.collectionEnglish(collectionCode)
                         val rawReference = NoorHadithCipher.decrypt(c.string("reference"))
-                        val reference = buildString {
-                            if (collectionArabic.isNotBlank() && !rawReference.contains(collectionArabic)) {
-                                append(collectionArabic)
-                                if (rawReference.isNotBlank()) append("\n")
-                            }
-                            append(rawReference.split(",").map { it.trim() }.filter { token ->
-                                token.isNotBlank() && !token.equals("USC", true)
-                            }.joinToString("\n"))
-                        }.trim()
+                        val reference = NoorHadithCipher.formatReference(rawReference, collectionArabic)
                         add(
                             AyahHadith(
                                 id = c.int("id"),
