@@ -317,6 +317,31 @@ def zip_entries(path: Path) -> dict[str, bytes]:
             raise ValueError("ZIP CRC failed: " + bad)
         return {name: z.read(name) for name in z.namelist()}
 
+
+def rewrite_split_config_manifest(manifest_path: Path) -> dict:
+    """Change a config split package ID while preserving its split identity."""
+    tree = ET.parse(manifest_path)
+    root = tree.getroot()
+    package = root.attrib.get("package")
+    if package != ORIGINAL_PACKAGE:
+        raise ValueError(f"Unexpected config-split package ID in {manifest_path}: {package!r}")
+    split_name = root.attrib.get("split") or root.attrib.get("{" + ANDROID_NS + "}split")
+    if not split_name:
+        raise ValueError(f"Expected a split name in config-split manifest: {manifest_path}")
+    before = manifest_semantics(manifest_path)
+    root.set("package", TARGET_PACKAGE)
+    tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+    if manifest_semantics(manifest_path) != before:
+        raise ValueError("Config-split manifest changed beyond package-ID remap: " + str(manifest_path))
+    return {
+        "source_package_id": ORIGINAL_PACKAGE,
+        "target_package_id": TARGET_PACKAGE,
+        "split_name": split_name,
+        "manifest_package_id_rewritten": True,
+        "split_identity_preserved": True,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, type=Path)
@@ -328,8 +353,12 @@ def main() -> int:
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)
-    source_parts, decoded, rebuilt_dir, unsigned_dir = (work / "source-parts", work / "decoded-base", work / "rebuilt", work / "unsigned-splits")
-    for path in (source_parts, rebuilt_dir, unsigned_dir):
+    source_parts = work / "source-parts"
+    decoded = work / "decoded-base"
+    rebuilt_dir = work / "rebuilt"
+    unsigned_dir = work / "unsigned-splits"
+    standalone_input_dir = work / "standalone-input"
+    for path in (source_parts, rebuilt_dir, unsigned_dir, standalone_input_dir):
         path.mkdir()
     with zipfile.ZipFile(args.input) as bundle:
         names = set(bundle.namelist())
@@ -404,12 +433,87 @@ def main() -> int:
         title_found |= any((node.text or "") == APP_NAME and node.attrib.get("name") == label["string_resource"] for node in xml.findall("string"))
     if not title_found:
         raise ValueError("Rebuilt app label is not present after decoding")
+
+    # Build a second base for split installation. The standalone merge input
+    # must not retain split requirements; the real split base must retain them.
+    split_manifest_path = decoded / "AndroidManifest.xml"
+    split_tree = ET.parse(split_manifest_path)
+    split_root = split_tree.getroot()
+    for item in package_identity["removed_split_only_manifest_attributes"]:
+        split_root.set(item["attribute"], item["value"])
+    split_tree.write(split_manifest_path, encoding="utf-8", xml_declaration=True)
+    rebuilt_split_base = rebuilt_dir / "base-split.apk"
+    run(apktool + ["b", "--use-aapt2", "--no-crunch", str(decoded), "-o", str(rebuilt_split_base)])
+    redecoded_split_base = work / "redecoded-split-base"
+    run(apktool + ["d", "--force", str(rebuilt_split_base), "-o", str(redecoded_split_base)])
+    split_base_root = ET.parse(redecoded_split_base / "AndroidManifest.xml").getroot()
+    if split_base_root.attrib.get("package") != TARGET_PACKAGE:
+        raise ValueError("Split-install base APK has the wrong package ID")
+    for item in package_identity["removed_split_only_manifest_attributes"]:
+        if split_base_root.attrib.get(item["attribute"]) != item["value"]:
+            raise ValueError("Split-install base APK did not preserve " + item["attribute"])
+    if manifest_semantics(redecoded_split_base / "AndroidManifest.xml") != manifest_before:
+        raise ValueError("Split-install base APK changed manifest semantics beyond package identity")
+    split_base_entries = zip_entries(rebuilt_split_base)
+    split_base_dex = {n: b for n, b in split_base_entries.items() if re.fullmatch(r"classes\\d*\\.dex", n)}
+    if set(split_base_dex) != set(source_dex):
+        raise ValueError("Split-install base APK changed the original multidex file set")
+    split_base_db = next((n for n in split_base_entries if n.endswith("muslim_db_v2.5.1.db")), None)
+    if not split_base_db or sha(split_base_entries[split_base_db]) != sha(source_entries[dbname]):
+        raise ValueError("Split-install base APK changed or lost the original offline database")
+
+    # Rebuild both config APK manifests to use the same package ID as base.apk.
+    # Reusing the original config manifests with a renamed base is not installable.
+    config_split_reports = {}
+    rebuilt_config_splits = {}
+    for name in sorted(EXPECTED_FILES - {"base.apk"}):
+        source_config = source_parts / name
+        config_decoded = work / ("decoded-" + name.removesuffix(".apk"))
+        run(apktool + ["d", "--force", str(source_config), "-o", str(config_decoded)])
+        config_manifest = config_decoded / "AndroidManifest.xml"
+        config_manifest_before = manifest_semantics(config_manifest)
+        identity_report = rewrite_split_config_manifest(config_manifest)
+        rebuilt_config = rebuilt_dir / name
+        run(apktool + ["b", "--use-aapt2", "--no-crunch", str(config_decoded), "-o", str(rebuilt_config)])
+        config_redecoded = work / ("redecoded-" + name.removesuffix(".apk"))
+        run(apktool + ["d", "--force", str(rebuilt_config), "-o", str(config_redecoded)])
+        config_root = ET.parse(config_redecoded / "AndroidManifest.xml").getroot()
+        config_split_name = config_root.attrib.get("split") or config_root.attrib.get("{" + ANDROID_NS + "}split")
+        if config_root.attrib.get("package") != TARGET_PACKAGE:
+            raise ValueError("Rebuilt config split has the wrong package ID: " + name)
+        if config_split_name != identity_report["split_name"]:
+            raise ValueError("Rebuilt config split lost its split identity: " + name)
+        if manifest_semantics(config_redecoded / "AndroidManifest.xml") != config_manifest_before:
+            raise ValueError("Rebuilt config split changed manifest semantics beyond package ID: " + name)
+        source_config_entries = zip_entries(source_config)
+        rebuilt_config_entries = zip_entries(rebuilt_config)
+        source_config_dex = {n: b for n, b in source_config_entries.items() if re.fullmatch(r"classes\\d*\\.dex", n)}
+        rebuilt_config_dex = {n: b for n, b in rebuilt_config_entries.items() if re.fullmatch(r"classes\\d*\\.dex", n)}
+        if {n: sha(b) for n, b in source_config_dex.items()} != {n: sha(b) for n, b in rebuilt_config_dex.items()}:
+            raise ValueError("Config split DEX unexpectedly changed: " + name)
+        source_config_libs = {n: sha(b) for n, b in source_config_entries.items() if n.startswith("lib/") and n.endswith(".so")}
+        rebuilt_config_libs = {n: sha(b) for n, b in rebuilt_config_entries.items() if n.startswith("lib/") and n.endswith(".so")}
+        if source_config_libs != rebuilt_config_libs:
+            raise ValueError("Config split native libraries changed: " + name)
+        config_split_reports[name] = {
+            **identity_report,
+            "source_bytes": source_config.stat().st_size,
+            "rebuilt_bytes": rebuilt_config.stat().st_size,
+            "dex_file_set_preserved": set(source_config_dex) == set(rebuilt_config_dex),
+            "native_libraries_preserved": len(source_config_libs),
+        }
+        rebuilt_config_splits[name] = rebuilt_config
+
+    # The SAI archive uses the split-aware base; APKEditor gets a separate base
+    # whose split metadata was stripped for standalone installation.
     for name in sorted(EXPECTED_FILES):
-        target = unsigned_dir / name
         if name == "base.apk":
-            shutil.copy2(rebuilt_base, target)
+            shutil.copy2(rebuilt_split_base, unsigned_dir / name)
+            shutil.copy2(rebuilt_base, standalone_input_dir / name)
         else:
-            strip_signature_entries(source_parts / name, target)
+            strip_signature_entries(rebuilt_config_splits[name], unsigned_dir / name)
+            shutil.copy2(rebuilt_config_splits[name], standalone_input_dir / name)
+
     report = {
         "status": "PREPARED_UNSIGNED_SPLITS",
         "source_sha256": sha(args.input.read_bytes()),
@@ -417,7 +521,10 @@ def main() -> int:
         "package_id_target": TARGET_PACKAGE,
         "package_identity": package_identity,
         "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
-        "manifest_normalization_note": "The standalone rebuild removes Android App Bundle split-only root metadata (split, splitTypes, requiredSplitTypes, isSplitRequired, isFeatureSplit, configForSplit); all other manifest semantics and components remain strict.",
+        "manifest_normalization_note": "Only the standalone merge input removes split-only root metadata. The SAI-ready base retains the original split requirements, while both config split manifests are rebuilt to share the target package ID.",
+        "split_install_set_identity_consistent": True,
+        "config_split_manifest_rebranding": config_split_reports,
+        "standalone_merge_input_dir": str(standalone_input_dir),
         "dex_files_reassembled_from_original_smali": True,
         "original_class_descriptors_preserved": True,
         "smali_class_file_count_preserved": len(source_smali),
@@ -430,6 +537,7 @@ def main() -> int:
         "launcher_pngs_recolored": [str(p.relative_to(decoded)) for p in icons],
         "vector_color_literals_changed": vector_changes,
         "prepared_files": [{"file": n, "bytes": (unsigned_dir/n).stat().st_size, "sha256": sha((unsigned_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
+        "standalone_merge_inputs": [{"file": n, "bytes": (standalone_input_dir/n).stat().st_size, "sha256": sha((standalone_input_dir/n).read_bytes())} for n in sorted(EXPECTED_FILES)],
         "runtime_launch_test": "NOT PERFORMED: must be tested on an Android 11 phone",
         "install_note": f"The app ID is {TARGET_PACKAGE}, unique for this workflow build to avoid signing-certificate conflicts with earlier test attempts. DEX code was assembled from original smali with only the application-ID and audio resource URI string literals changed; original class descriptors, resources, database and native libraries are preserved. External cloud services may still enforce the publisher original package/signing identity.",
     }

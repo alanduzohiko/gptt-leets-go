@@ -74,8 +74,16 @@ def main() -> int:
             raise ValueError("Unexpected DEX modification in configuration split " + name)
         if sha(out["AndroidManifest.xml"]) != sha(unsigned["AndroidManifest.xml"]):
             raise ValueError("Signing step changed AndroidManifest.xml in " + name)
-        if name != "base.apk" and sha(src["AndroidManifest.xml"]) != sha(out["AndroidManifest.xml"]):
-            raise ValueError("Configuration split manifest was modified: " + name)
+        if name != "base.apk":
+            if sha(src["AndroidManifest.xml"]) == sha(out["AndroidManifest.xml"]):
+                raise ValueError("Configuration split manifest still carries the original package identity: " + name)
+            config_report = prepare.get("config_split_manifest_rebranding", {}).get(name)
+            if not config_report or config_report.get("target_package_id") != TARGET_PACKAGE or config_report.get("manifest_package_id_rewritten") is not True:
+                raise ValueError("Preparation report does not confirm config split package-ID rewrite: " + name)
+            source_libs = {n: sha(b) for n, b in src.items() if n.startswith("lib/") and n.endswith(".so")}
+            output_libs = {n: sha(b) for n, b in out.items() if n.startswith("lib/") and n.endswith(".so")}
+            if source_libs != output_libs:
+                raise ValueError("Config split native library contents changed: " + name)
         rows.append({"file": name, "source_bytes": len(source[name]), "output_bytes": len(final[name]),
                      "dex_file_set_matches_original": True, "package_scoped_dex_literals_reassembled": name == "base.apk", "signed_manifest_matches_prepared": True})
         if name == "base.apk":
@@ -90,6 +98,8 @@ def main() -> int:
         raise ValueError("Preparation report does not identify the configured per-build Mashxall package ID")
     if prepare.get("manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal") is not True:
         raise ValueError("Preparation report does not confirm manifest semantics outside the explicit identity remap and split-metadata removal")
+    if prepare.get("split_install_set_identity_consistent") is not True:
+        raise ValueError("Preparation report does not confirm that all split APKs use one package ID")
     report = {
         "status": "STATIC_VALIDATION_PASSED",
         "source_sha256": sha(args.source.read_bytes()),
@@ -97,11 +107,13 @@ def main() -> int:
         "source_package_id": "com.kosratdahmad.myprayers",
         "package_id": TARGET_PACKAGE,
         "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
+        "split_install_set_identity_consistent": True,
+        "config_split_manifest_rebranding": prepare.get("config_split_manifest_rebranding", {}),
         "dex_files_reassembled_from_original_smali": True,
         "offline_database": db,
         "parts": rows,
         "runtime_test": "Not covered by static split-set verification; use the standalone APK and Android 11 emulator result.",
-        "install_note": "The split set carries a distinct app ID. The standalone APK is the recommended test artifact because it combines the three original splits."
+        "install_note": "All three signed split APKs share the same per-build package ID and signing certificate. Install base.apk and both config split APKs together using SAI; the standalone APK is included as a fallback."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

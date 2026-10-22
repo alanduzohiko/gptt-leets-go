@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.prepare_split_set import (
     APP_NAME, ORIGINAL_PACKAGE, TARGET_PACKAGE, find_label_key,
-    manifest_semantics, rewrite_package_identity, update_app_label, patch_runtime_package_literals
+    manifest_semantics, rewrite_package_identity, rewrite_split_config_manifest,
+    update_app_label, patch_runtime_package_literals
 )
 
 class PrepareSplitSetTests(unittest.TestCase):
@@ -90,6 +91,26 @@ class PrepareSplitSetTests(unittest.TestCase):
             self.assertEqual(manifest_semantics(manifest), before)
             self.assertEqual(report["target_package_id"], TARGET_PACKAGE)
             self.assertTrue(report["component_class_names_preserved"])
+
+    def test_rewrite_split_config_manifest_changes_package_but_keeps_split_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "AndroidManifest.xml"
+            manifest.write_text(
+                '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
+                f'package="{ORIGINAL_PACKAGE}" split="config.arm64_v8a">'
+                '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/>'
+                '<application android:label="@string/app_name"/>'
+                '</manifest>',
+                encoding="utf-8",
+            )
+            before = manifest_semantics(manifest)
+            report = rewrite_split_config_manifest(manifest)
+            root = ET.parse(manifest).getroot()
+            self.assertEqual(root.attrib["package"], TARGET_PACKAGE)
+            self.assertEqual(root.attrib["split"], "config.arm64_v8a")
+            self.assertEqual(manifest_semantics(manifest), before)
+            self.assertTrue(report["manifest_package_id_rewritten"])
+            self.assertTrue(report["split_identity_preserved"])
 
     def test_rewrites_only_runtime_application_id_and_audio_uris(self):
         with tempfile.TemporaryDirectory() as tmp:
