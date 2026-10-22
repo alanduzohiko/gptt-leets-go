@@ -2310,6 +2310,8 @@ fun WordAnalysisScreen(
     var items by remember { mutableStateOf<List<WordItem>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(false) }
+    var selectedPart by remember { mutableStateOf<WordPart?>(null) }
+    var selectedWord by remember { mutableStateOf<WordItem?>(null) }
     LaunchedEffect(initialSurah, initialAyah) {
         if (selected) {
             loading = true
@@ -2367,7 +2369,13 @@ fun WordAnalysisScreen(
                                     val partColor = remember(part.colorHex) {
                                         runCatching { Color(android.graphics.Color.parseColor(part.colorHex)) }.getOrDefault(foreground)
                                     }
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+                                            selectedPart = part
+                                            selectedWord = word
+                                        }.padding(horizontal = 3.dp, vertical = 2.dp)
+                                    ) {
                                         Text(
                                             part.glyphText,
                                             color = partColor,
@@ -2401,6 +2409,64 @@ fun WordAnalysisScreen(
             }
         }
     }
+
+    if (selectedPart != null && selectedWord != null) {
+        val part = selectedPart!!
+        val word = selectedWord!!
+        val typeLabel = when (language) {
+            AppLanguage.CKB -> part.labelCkb.ifBlank { part.tag }
+            AppLanguage.AR -> part.labelArabic.ifBlank { part.tag }
+            AppLanguage.EN -> part.labelEnglish.ifBlank { part.tag }
+        }
+        AlertDialog(
+            onDismissRequest = { selectedPart = null; selectedWord = null },
+            title = {
+                Column {
+                    Text(part.glyphText, color = Gold, fontSize = 25.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                    Text(
+                        if (language == AppLanguage.EN) "Quranic word segment"
+                        else if (language == AppLanguage.AR) "جزء من كلمة قرآنية"
+                        else "بەشی وشەی قورئانی",
+                        color = foreground, fontSize = 14.sp
+                    )
+                }
+            },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        (if (language == AppLanguage.EN) "Word position: " else if (language == AppLanguage.AR) "ترتيب الكلمة: " else "ڕیزبەندی وشە: ") + word.position,
+                        color = foreground, fontSize = 12.sp
+                    )
+                    if (typeLabel.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (language == AppLanguage.EN) "Word type" else if (language == AppLanguage.AR) "نوع الكلمة" else "جۆری وشە", color = Gold, fontWeight = FontWeight.Bold)
+                        Text(typeLabel + if (part.tag.isNotBlank() && typeLabel != part.tag) " (${part.tag})" else "", color = foreground, fontSize = 13.sp)
+                    }
+                    if (part.glyphText.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (language == AppLanguage.EN) "Arabic segment" else if (language == AppLanguage.AR) "المقطع العربي" else "بەشی عەرەبی", color = Gold, fontWeight = FontWeight.Bold)
+                        Text(part.glyphText, color = foreground, fontSize = 20.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                    }
+                    if (word.root.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (language == AppLanguage.EN) "Root" else if (language == AppLanguage.AR) "الجذر" else "ڕەگ", color = Gold, fontWeight = FontWeight.Bold)
+                        Text(word.root, color = foreground, fontSize = 13.sp)
+                    }
+                    if (word.grammar.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (language == AppLanguage.EN) "Grammar / I'rab" else if (language == AppLanguage.AR) "الإعراب والقواعد" else "ڕێزمان و ئیعراب", color = Gold, fontWeight = FontWeight.Bold)
+                        Text(word.grammar, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedPart = null; selectedWord = null }) {
+                    Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+                }
+            }
+        )
+    }
+
 }
 
 @Composable
