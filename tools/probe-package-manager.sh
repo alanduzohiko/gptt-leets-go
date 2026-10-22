@@ -11,22 +11,22 @@ mkdir -p dist
 
 {
   echo "=== Android release ==="
-  adb shell getprop ro.build.version.release
+  timeout 8s adb shell getprop ro.build.version.release
   echo "=== Android SDK ==="
-  adb shell getprop ro.build.version.sdk
+  timeout 8s adb shell getprop ro.build.version.sdk
   echo "=== Build fingerprint ==="
-  adb shell getprop ro.build.fingerprint
+  timeout 8s adb shell getprop ro.build.fingerprint
   echo "=== Package service status before installation ==="
-  adb shell service check package
+  timeout 8s adb shell service check package
   echo "=== System boot completed ==="
-  adb shell getprop sys.boot_completed
+  timeout 8s adb shell getprop sys.boot_completed
 } > dist/package-probe-platform.txt 2>&1
 
 # The emulator occasionally loses system_server while booting; wait for PackageManager
 # and record the state. A missing service is an emulator failure, not an APK parse result.
 service_ready=0
-for attempt in $(seq 1 30); do
-  adb shell service check package > dist/package-service-check.txt 2>&1
+for attempt in $(seq 1 8); do
+  timeout 6s adb shell service check package > dist/package-service-check.txt 2>&1
   if grep -qi 'found' dist/package-service-check.txt; then
     service_ready=1
     break
@@ -36,7 +36,7 @@ done
 
 if [[ "$service_ready" -ne 1 ]]; then
   echo "EMULATOR_INVALID: Android PackageManager service never became available." | tee dist/package-manager-result.txt
-  adb logcat -d -b all -v threadtime > dist/package-probe-logcat.txt 2>&1
+  timeout 20s adb logcat -d -b all -v threadtime > dist/package-probe-logcat.txt 2>&1
   exit 0
 fi
 
@@ -58,6 +58,6 @@ else
   echo "PACKAGE_MANAGER_INSTALL_FAILED; inspect raw result and logcat" > dist/package-manager-result.txt
 fi
 
-adb logcat -d -b all -v threadtime > dist/package-probe-logcat.txt 2>&1
-adb shell dumpsys package com.kosratdahmad.mashxall.full43a1 > dist/package-probe-dumpsys.txt 2>&1
+timeout 30s adb logcat -d -b all -v threadtime > dist/package-probe-logcat.txt 2>&1
+timeout 10s adb shell dumpsys package com.kosratdahmad.mashxall.full43a1 > dist/package-probe-dumpsys.txt 2>&1
 exit 0
