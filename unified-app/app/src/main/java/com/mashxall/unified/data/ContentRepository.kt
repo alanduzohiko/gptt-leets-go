@@ -526,7 +526,7 @@ object ContentRepository {
                     if (c.moveToFirst()) {
                         Html.fromHtml(c.string("text"), Html.FROM_HTML_MODE_LEGACY)
                             .toString()
-                            .replace("\\u00a0", " ")
+                            .replace('\u00a0', ' ')
                             .trim()
                     } else ""
                 }
