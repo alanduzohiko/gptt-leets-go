@@ -562,10 +562,6 @@ def patch_binary_xml_manifest(
                 attribute_value = get_string(value_index) if value_type == 3 else None
                 if tag == "manifest" and namespace is None and attribute_name == "split":
                     root_split_name = attribute_value
-                if tag == "manifest" and attribute_name in ("split", "splitTypes", "requiredSplitTypes"):
-                    if attribute_value is not None:
-                        root_values[attribute_name] = attribute_value
-
                 remove_this = (
                     standalone
                     and tag == "manifest"
