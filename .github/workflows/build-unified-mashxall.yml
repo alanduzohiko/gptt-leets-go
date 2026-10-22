@@ -1,0 +1,112 @@
+name: Build the new unified Mashxall Android app
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      source_asset_name:
+        description: "Source bundle asset in the release"
+        required: true
+        default: "Mashxall-Unified-Source-Bundle.zip"
+
+permissions:
+  contents: read
+
+jobs:
+  build-unified-app:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'unified-source-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout only this isolated workspace
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify the original input bundle was uploaded to the correct release
+        env:
+          GH_TOKEN: \${{ github.token }}
+          RELEASE_TAG: \${{ github.event.release.tag_name || 'unified-source-v1' }}
+          ASSET_NAME: \${{ inputs.source_asset_name || 'Mashxall-Unified-Source-Bundle.zip' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mashxall-input"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_NAME" --dir "$RUNNER_TEMP/mashxall-input"
+          SOURCE="$RUNNER_TEMP/mashxall-input/$ASSET_NAME"
+          if [[ ! -f "$SOURCE" ]]; then
+            echo "Missing required source asset: $ASSET_NAME"
+            exit 1
+          fi
+          ACTUAL="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          EXPECTED="0dfae458d9cc1dd32294b545ff9234c2567ece4ba7e18914c73a1c81eddccd05"
+          echo "Uploaded source bundle SHA-256: $ACTUAL"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "Source bundle fingerprint differs from the package prepared from the supplied files. Build stopped."
+            exit 1
+          fi
+          echo "MASHXALL_SOURCE_BUNDLE=$SOURCE" >> "$GITHUB_ENV"
+
+      - name: Extract all source content and validate every SQLite database
+        run: |
+          set -euo pipefail
+          python tools/extract_unified_content.py \
+            --bundle "$MASHXALL_SOURCE_BUNDLE" \
+            --out unified-app/app/src/main/assets \
+            --catalog unified-app/app/src/main/assets/content_catalog.json
+
+      - name: Prepare Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK build tools
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build, test and lint the new app
+        env:
+          GRADLE_OPTS: "-Xmx5g -Dfile.encoding=UTF-8"
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --project-dir unified-app clean testDebugUnitTest lintDebug assembleDebug
+
+      - name: Verify APK integrity and signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="unified-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          unzip -t "$APK" | tail -n 2
+          sha256sum "$APK"
+          mkdir -p dist
+          cp "$APK" dist/Mashxall-Unified-debug.apk
+          cp unified-app/app/src/main/assets/content_catalog.json dist/content-catalog.json
+          cat > dist/BUILD-STATUS-AR.txt <<'EOF'
+          مەشخەڵ — تطبيق أندرويد جديد بثلاث لغات
+          ===========================================
+
+          هذا APK تجريبي مبني من مشروع Android Native مستقل (Kotlin + Jetpack Compose).
+          تم فحص الأرشيف والتوقيع واختبارات البناء، لكن هذا لا يثبت نجاح التشغيل على هاتف فعلي.
+          يجب تثبيت التطبيق وفتحه على Android 11، وتجربة المصحف والتفسير والأذكار والصوتيات ومواقيت الصلاة.
+          إذا أغلق التطبيق، أرفق سجل الانهيار قبل تغيير بيانات المصدر.
+          بعض ملفات تفسير خيرة تستخدم صفحات ثنائية مشفرة/مضغوطة مرتبطة بفهرس خاص؛ تم الاحتفاظ بها في الحزمة الأصلية وتحتاج إلى فك تنسيقها قبل عرض النص داخل الواجهة الجديدة.
+          EOF
+
+      - name: Upload APK, extracted content catalog and verification report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-unified-android11-build-\${{ github.run_number }}
+          path: |
+            dist/Mashxall-Unified-debug.apk
+            dist/content-catalog.json
+            dist/BUILD-STATUS-AR.txt
+          if-no-files-found: error
+          retention-days: 14
