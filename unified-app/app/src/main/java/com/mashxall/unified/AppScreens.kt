@@ -1280,6 +1280,194 @@ private object AudioController {
         context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE).getString("language", "ckb") ?: "ckb"
 }
 
+private val MASHXALL_BACKUP_PREFS = listOf(
+    "mashxall_preferences",
+    "mashxall_azkar_progress",
+    "mashxall_azkar_favorites"
+)
+
+private fun createMashxallBackup(context: Context): org.json.JSONObject {
+    val prefRoot = org.json.JSONObject()
+    MASHXALL_BACKUP_PREFS.forEach { name ->
+        val values = context.getSharedPreferences(name, Context.MODE_PRIVATE).all
+        val json = org.json.JSONObject()
+        values.forEach { (key, value) ->
+            val entry = org.json.JSONObject()
+            when (value) {
+                is String -> entry.put("type", "string").put("value", value)
+                is Boolean -> entry.put("type", "boolean").put("value", value)
+                is Int -> entry.put("type", "int").put("value", value)
+                is Long -> entry.put("type", "long").put("value", value)
+                is Float -> entry.put("type", "float").put("value", value.toDouble())
+                is Set<*> -> {
+                    val array = org.json.JSONArray()
+                    value.filterIsInstance<String>().forEach { array.put(it) }
+                    entry.put("type", "string_set").put("value", array)
+                }
+            }
+            if (entry.has("type")) json.put(key, entry)
+        }
+        prefRoot.put(name, json)
+    }
+    return org.json.JSONObject()
+        .put("format", "mashxall-backup")
+        .put("version", 1)
+        .put("created_at", System.currentTimeMillis())
+        .put("preferences", prefRoot)
+}
+
+private fun restoreMashxallBackup(context: Context, root: org.json.JSONObject) {
+    require(root.optString("format") == "mashxall-backup") { "Not a Mashxall backup file" }
+    require(root.optInt("version") == 1) { "Unsupported backup version" }
+    val prefRoot = root.optJSONObject("preferences") ?: error("Backup file has no preference data")
+    MASHXALL_BACKUP_PREFS.forEach { name ->
+        val values = prefRoot.optJSONObject(name) ?: return@forEach
+        val editor = context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear()
+        val keys = values.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val entry = values.optJSONObject(key) ?: continue
+            when (entry.optString("type")) {
+                "string" -> editor.putString(key, entry.optString("value"))
+                "boolean" -> editor.putBoolean(key, entry.optBoolean("value"))
+                "int" -> editor.putInt(key, entry.optInt("value"))
+                "long" -> editor.putLong(key, entry.optLong("value"))
+                "float" -> editor.putFloat(key, entry.optDouble("value").toFloat())
+                "string_set" -> {
+                    val array = entry.optJSONArray("value") ?: org.json.JSONArray()
+                    val set = buildSet {
+                        for (index in 0 until array.length()) add(array.optString(index))
+                    }
+                    editor.putStringSet(key, set)
+                }
+            }
+        }
+        editor.apply()
+    }
+}
+
+@Composable
+fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
+    val context = LocalContext.current
+    var status by rememberSaveable { mutableStateOf("") }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) {
+            status = if (language == AppLanguage.EN) "Backup cancelled." else if (language == AppLanguage.AR) "تم إلغاء النسخ الاحتياطي." else "پاشەکەوتکردن هەڵوەشایەوە."
+        } else {
+            try {
+                val json = createMashxallBackup(context)
+                val stream = context.contentResolver.openOutputStream(uri) ?: error("Could not open the selected destination")
+                stream.bufferedWriter(Charsets.UTF_8).use { it.write(json.toString(2)) }
+                status = when (language) {
+                    AppLanguage.EN -> "Backup saved successfully."
+                    AppLanguage.AR -> "تم حفظ النسخة الاحتياطية بنجاح."
+                    AppLanguage.CKB -> "پاشەکەوت بە سەرکەوتوویی هەڵگیرا."
+                }
+                Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {
+                status = when (language) {
+                    AppLanguage.EN -> "Could not save the backup. Choose another folder."
+                    AppLanguage.AR -> "تعذر حفظ النسخة الاحتياطية. اختر مجلدًا آخر."
+                    AppLanguage.CKB -> "نەتوانرا پاشەکەوت بگیرێت؛ فۆڵدەرێکی تر هەڵبژێرە."
+                }
+                Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
+                    org.json.JSONObject(it.readText())
+                } ?: error("Could not read the selected file")
+                restoreMashxallBackup(context, json)
+                status = when (language) {
+                    AppLanguage.EN -> "Backup restored. Reopening saved data…"
+                    AppLanguage.AR -> "تمت الاستعادة. جارٍ إعادة فتح البيانات…"
+                    AppLanguage.CKB -> "پاشەکەوت گەڕێندرایەوە؛ داتاکان نوێ دەکرێنەوە…"
+                }
+                Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+                (context as? android.app.Activity)?.recreate()
+            } catch (_: Exception) {
+                status = when (language) {
+                    AppLanguage.EN -> "Restore failed. Select a valid Mashxall backup file."
+                    AppLanguage.AR -> "فشلت الاستعادة. اختر ملف نسخة احتياطية صالحًا من مەشخەڵ."
+                    AppLanguage.CKB -> "گەڕاندنەوە سەرکەوتوو نەبوو؛ فایلی پاشەکەوتی دروستی مەشخەڵ هەڵبژێرە."
+                }
+                Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Backup & restore"
+                AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"
+                AppLanguage.CKB -> "پاشەکەوتکردن و گەڕاندنەوە"
+            }, color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Export your personal settings to a JSON file, or restore them later on this or another Android phone."
+                AppLanguage.AR -> "صدّر إعداداتك الشخصية إلى ملف JSON، أو استعدها لاحقًا على هذا الهاتف أو هاتف Android آخر."
+                AppLanguage.CKB -> "ڕێکخستن و زانیارییە تایبەتییەکانت وەک فایلی JSON هەڵگرە و دواتر لە مۆبایلێکی تر بیگەڕێنەوە."
+            }, color = foreground.copy(alpha = 0.72f), fontSize = 13.sp, lineHeight = 21.sp
+        )
+        Spacer(Modifier.height(16.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Included in the backup"
+                        AppLanguage.AR -> "محتويات النسخة الاحتياطية"
+                        AppLanguage.CKB -> "ئەو داتایانەی پاشەکەوت دەکرێن"
+                    }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 15.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                listOf(
+                    when (language) { AppLanguage.EN -> "Saved Quran verses and personal notes"; AppLanguage.AR -> "الآيات المحفوظة وملاحظاتها الشخصية"; AppLanguage.CKB -> "ئایەتە پاشەکەوتکراوەکان و تێبینییەکانیان" },
+                    when (language) { AppLanguage.EN -> "Language, theme, last reading location and prayer settings"; AppLanguage.AR -> "اللغة والمظهر وآخر موضع قراءة وإعدادات الصلاة"; AppLanguage.CKB -> "زمان، ڕووکار، شوێنی خوێندنەوە و ڕێکخستنەکانی نوێژ" },
+                    when (language) { AppLanguage.EN -> "Adhkar favourites and repetition counters"; AppLanguage.AR -> "مفضّلات الأذكار وعدّادات التكرار"; AppLanguage.CKB -> "دڵخوازەکانی زیکر و ژمارەکانی دووبارەکردنەوە" },
+                    when (language) { AppLanguage.EN -> "Tasbih counts and adhan preferences"; AppLanguage.AR -> "عدادات التسبيح وتفضيلات الأذان"; AppLanguage.CKB -> "ژمارەی تەسبیح و هەڵبژاردەکانی بانگ" }
+                ).forEach { item ->
+                    Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(item, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = { exportLauncher.launch("Mashxall-Backup.json") }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (language == AppLanguage.EN) "Save backup file" else if (language == AppLanguage.AR) "حفظ ملف النسخة الاحتياطية" else "فایلی پاشەکەوت هەڵبگرە")
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { importLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream")) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (language == AppLanguage.EN) "Restore from a backup file" else if (language == AppLanguage.AR) "استعادة من ملف نسخة احتياطية" else "لە فایلی پاشەکەوتەوە بیگەڕێنەوە")
+        }
+        Spacer(Modifier.height(12.dp))
+        if (status.isNotBlank()) Text(status, color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 18.sp)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Only personal settings and progress are backed up; the bundled Quran, tafsir, audio and books remain in the installed app."
+                AppLanguage.AR -> "تحتوي النسخة على الإعدادات والتقدم الشخصي فقط؛ أما المصحف والتفسير والصوتيات والكتب فتبقى ضمن التطبيق."
+                AppLanguage.CKB -> "پاشەکەوت تەنها ڕێکخستن و پێشکەوتنی تایبەتی دەگرێتەوە؛ قورئان، تەفسیر و کتێبەکان لە ناو ئەپەکەدا دەمێننەوە."
+            }, color = foreground.copy(alpha = 0.5f), fontSize = 11.sp, lineHeight = 17.sp
+        )
+    }
+}
+
 @Composable
 fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPdf: (String) -> Unit) {
     val context = LocalContext.current
