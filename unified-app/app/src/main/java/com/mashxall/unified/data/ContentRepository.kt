@@ -1016,6 +1016,44 @@ object ContentRepository {
         }
     }
 
+    private suspend fun loadSalawatiPrayerTimesForCity(
+        context: Context,
+        city: City,
+        date: Date
+    ): PrayerRow? = withContext(Dispatchers.IO) {
+        if (city.country.isBlank()) return@withContext null
+        val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
+        queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
+            db.rawQuery(
+                """
+                SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                       l.latitude AS lat,l.longitude AS lon,country.name AS country
+                FROM location l
+                JOIN country ON country._id=l.country_id
+                JOIN prayer_time pt ON pt.location_id=l._id
+                WHERE lower(l.name)=lower(?) AND lower(country.name)=lower(?) AND pt.date=?
+                ORDER BY ABS(l.latitude-?) + ABS(l.longitude-?)
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(city.name, city.country, md, city.latitude.toString(), city.longitude.toString())
+            ).use { c ->
+                if (c.moveToFirst()) PrayerRow(
+                    city = c.string("city"),
+                    date = c.string("date"),
+                    fajr = c.string("fajr"),
+                    sunrise = c.string("sunrise"),
+                    dhuhr = c.string("dhuhr"),
+                    asr = c.string("asr"),
+                    maghrib = c.string("maghrib"),
+                    isha = c.string("isha"),
+                    source = "salawati:${c.string("city")}, ${c.string("country")}",
+                    latitude = c.double("lat"),
+                    longitude = c.double("lon")
+                ) else null
+            }
+        }
+    }
+
     suspend fun loadPrayerTimesAtLocation(
         context: Context,
         latitude: Double,
@@ -1030,10 +1068,14 @@ object ContentRepository {
             .filter { it.second <= staticRadiusKm }
             .sortedBy { it.second }
         for ((city, distance) in nearest) {
-            val row = loadPrayerTimes(context, city.name, date)
+            val row = if (city.country.isNotBlank()) {
+                loadSalawatiPrayerTimesForCity(context, city, date)
+            } else {
+                loadPrayerTimes(context, city.name, date)
+            }
             if (row != null) {
                 return@withContext row.copy(
-                    source = "timetable:${city.name}:${"%.1f".format(Locale.US, distance)}km",
+                    source = "${row.source} • ${"%.1f".format(Locale.US, distance)}km",
                     latitude = latitude,
                     longitude = longitude
                 )

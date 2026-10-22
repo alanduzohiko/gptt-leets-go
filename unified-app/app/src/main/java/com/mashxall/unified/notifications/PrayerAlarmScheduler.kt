@@ -65,10 +65,15 @@ object PrayerAlarmScheduler {
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
         val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
         val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
-        val latitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
-        val longitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
-        if (latitude != null && longitude != null) {
-            return ContentRepository.loadPrayerTimesAtLocation(context, latitude, longitude, date, method, school)
+        val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        if (gpsLatitude != null && gpsLongitude != null) {
+            return ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude, gpsLongitude, date, method, school)
+        }
+        val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
+        val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
+        if (manualLatitude != null && manualLongitude != null) {
+            return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude, manualLongitude, date, method, school)
         }
         val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
         ContentRepository.loadPrayerTimes(context, cityName, date)?.let { return it }
