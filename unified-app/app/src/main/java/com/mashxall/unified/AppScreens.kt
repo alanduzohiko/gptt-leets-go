@@ -1311,7 +1311,186 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     )
 }
 
-undefinedist<FarmudaItem>>(emptyList()) }
+@Composable
+fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
+    val context = LocalContext.current
+    var city by remember { mutableStateOf<City?>(null) }
+    var azimuth by remember { mutableFloatStateOf(0f) }
+    var sensorAvailable by remember { mutableStateOf(false) }
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+    val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude) {
+        city = if (gpsLatitude != null && gpsLongitude != null) {
+            City("GPS", gpsLatitude, gpsLongitude)
+        } else {
+            ContentRepository.loadCities(context).firstOrNull { it.name.equals(selectedCity, true) }
+        }
+    }
+    DisposableEffect(context) {
+        val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val magnetometer = manager?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        val gravity = FloatArray(3)
+        val magnetic = FloatArray(3)
+        var hasGravity = false
+        var hasMagnetic = false
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                when (event.sensor.type) {
+                    Sensor.TYPE_ACCELEROMETER -> {
+                        System.arraycopy(event.values, 0, gravity, 0, 3)
+                        hasGravity = true
+                    }
+                    Sensor.TYPE_MAGNETIC_FIELD -> {
+                        System.arraycopy(event.values, 0, magnetic, 0, 3)
+                        hasMagnetic = true
+                    }
+                }
+                if (hasGravity && hasMagnetic) {
+                    val matrix = FloatArray(9)
+                    val orientation = FloatArray(3)
+                    if (SensorManager.getRotationMatrix(matrix, null, gravity, magnetic)) {
+                        SensorManager.getOrientation(matrix, orientation)
+                        azimuth = ((Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f)
+                        sensorAvailable = true
+                    }
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        if (manager != null && accelerometer != null && magnetometer != null) {
+            manager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+            manager.registerListener(listener, magnetometer, SensorManager.SENSOR_DELAY_UI)
+        }
+        onDispose { manager?.unregisterListener(listener) }
+    }
+    val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) } ?: 0.0
+    val relativeHeading = ((bearing.toFloat() - azimuth + 540f) % 360f) - 180f
+    val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = relativeHeading,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
+        label = "qiblaHeading"
+    )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(tr(language, "qibla"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(28.dp))
+        Box(Modifier.size(260.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(DeepGreen, Color(0xFF071E1A)))), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(160.dp).rotate(animatedHeading))
+            Text("N", color = MainText, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp))
+            Text("🕋", fontSize = 26.sp)
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(city?.name ?: selectedCity, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (sensorAvailable) {
+                when (language) {
+                    AppLanguage.CKB -> "ڕووگێڕانی کۆمپاوی مۆبایل چالاکە"
+                    AppLanguage.AR -> "تم تصحيح الاتجاه ببوصلة الهاتف"
+                    AppLanguage.EN -> "Direction calibrated by phone compass"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.CKB -> "ئاڕاستەی گشتی بەپێی شار"
+                    AppLanguage.AR -> "الاتجاه المحسوب حسب إحداثيات المدينة"
+                    AppLanguage.EN -> "Estimated direction from city coordinates"
+                }
+            },
+            color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, textAlign = TextAlign.Center
+        )
+        Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
+        Spacer(Modifier.height(18.dp))
+        Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.52f), fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
+    }
+}
+
+private fun qiblaBearing(latitude: Double, longitude: Double): Double {
+    val kaabaLat = Math.toRadians(21.4225)
+    val kaabaLon = Math.toRadians(39.8262)
+    val lat = Math.toRadians(latitude)
+    val lon = Math.toRadians(longitude)
+    val dLon = kaabaLon - lon
+    val deg = Math.toDegrees(atan2(sin(dLon), cos(lat) * tan(kaabaLat) - sin(lat) * cos(dLon)))
+    return (deg + 360.0) % 360.0
+}
+
+
+@Composable
+fun WordAnalysisScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    initialSurah: Int,
+    initialAyah: Int,
+    onLoad: (Int, Int) -> Unit
+) {
+    val context = LocalContext.current
+    var surahText by rememberSaveable { mutableStateOf(initialSurah.toString()) }
+    var ayahText by rememberSaveable { mutableStateOf(initialAyah.toString()) }
+    var items by remember { mutableStateOf<List<WordItem>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(false) }
+    LaunchedEffect(initialSurah, initialAyah) {
+        if (selected) {
+            loading = true
+            items = ContentRepository.loadWordAnalysis(context, initialSurah, initialAyah)
+            loading = false
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(tr(language, "word_by_word"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(tr(language, "word_by_word_sub"), color = foreground.copy(alpha = 0.6f), fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(surahText, { surahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "surah")) }, singleLine = true)
+                OutlinedTextField(ayahText, { ayahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "ayah")) }, singleLine = true)
+                Button(onClick = {
+                    val s = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
+                    val a = ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    surahText = s.toString()
+                    ayahText = a.toString()
+                    selected = true
+                    onLoad(s, a)
+                }) { Text("→") }
+            }
+        }
+        if (!selected || items.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selected) tr(language, "not_found") else tr(language, "choose_surah"))
+        else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Text(tr(language, "surah") + " " + surahText + " • " + tr(language, "ayah") + " " + ayahText, color = Gold, fontWeight = FontWeight.Bold)
+            }
+            items(items, key = { it.position }) { word ->
+                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(13.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(28.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                Text(word.position.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(word.arabicShape, color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                        }
+                        if (word.root.isNotBlank()) {
+                            Spacer(Modifier.height(7.dp))
+                            Text((if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + word.root, color = Gold, fontSize = 12.sp)
+                        }
+                        if (word.grammar.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(word.grammar, color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, lineHeight = 18.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
+    val context = LocalContext.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     LaunchedEffect(query) {
         loading = true
