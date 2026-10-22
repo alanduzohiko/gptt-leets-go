@@ -328,7 +328,7 @@ object ContentRepository {
                 for (child in children) {
                     val full = if (path.isBlank()) child else "$path/$child"
                     val lower = child.lowercase(Locale.ROOT)
-                    if (listOf(".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".opus").any { lower.endsWith(it) }) {
+                    if (lower != "click.wav" && listOf(".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".opus").any { lower.endsWith(it) }) {
                         result += AudioItem(full, child.substringBeforeLast('.').replace('_', ' ').replace('-', ' '), full.substringBeforeLast('/').substringAfterLast('/'))
                     } else if (children.isNotEmpty()) {
                         walk(full)

@@ -16,6 +16,11 @@ on:
         description: "Source bundle asset in the release"
         required: true
         default: "Mashxall-Unified-Source-Bundle.zip"
+      run_static_reverse_engineering:
+        description: "Run the slow JADX source-analysis pass"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -81,6 +86,7 @@ jobs:
           "$JADX_BIN" --version
 
       - name: Reverse engineer original apps for data-format clues
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_static_reverse_engineering)
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -147,5 +153,5 @@ jobs:
             dist/content-catalog.json
             dist/BUILD-STATUS-AR.txt
             dist/reverse-engineering-report.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

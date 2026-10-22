@@ -3,7 +3,10 @@ package com.mashxall.unified
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -352,22 +355,33 @@ private fun HomeScreen(language: AppLanguage, foreground: Color, cardColor: Colo
         Spacer(Modifier.height(22.dp))
         Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(12.dp))
-        homeModules.chunked(2).forEach { pair ->
+        homeModules.chunked(2).forEachIndexed { rowIndex, pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(11.dp), modifier = Modifier.fillMaxWidth()) {
-                pair.forEach { module ->
-                    Card(
-                        modifier = Modifier.weight(1f).padding(bottom = 10.dp).clickable { onOpen(module.screen) }.animateContentSize(),
-                        shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = cardColor),
-                        border = BorderStroke(0.6.dp, module.color.copy(alpha = 0.35f))
+                pair.forEachIndexed { columnIndex, module ->
+                    val delayMillis = ((rowIndex * 2 + columnIndex) * 36).coerceAtMost(480)
+                    AnimatedVisibility(
+                        visible = true,
+                        modifier = Modifier.weight(1f).padding(bottom = 10.dp),
+                        enter = fadeIn(animationSpec = tween(durationMillis = 520, delayMillis = delayMillis)) +
+                            slideInVertically(initialOffsetY = { height -> height / 7 }, animationSpec = tween(durationMillis = 520, delayMillis = delayMillis))
                     ) {
-                        Column(Modifier.padding(14.dp).height(104.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                            Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(module.color.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                                Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(23.dp))
-                            }
-                            Column {
-                                Text(tr(language, module.titleKey), color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Spacer(Modifier.height(2.dp))
-                                Text(tr(language, module.subtitleKey), color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, maxLines = 1)
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable { onOpen(module.screen) }.animateContentSize(),
+                            shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = cardColor),
+                            border = BorderStroke(0.8.dp, module.color.copy(alpha = 0.42f))
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.10f), cardColor, cardColor))).padding(14.dp).height(104.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(module.color.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                                    Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(23.dp))
+                                }
+                                Column {
+                                    Text(tr(language, module.titleKey), color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(tr(language, module.subtitleKey), color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, maxLines = 1)
+                                }
                             }
                         }
                     }

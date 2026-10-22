@@ -4,7 +4,7 @@ A new native Android Islamic-library app, designed independently in Kotlin + Jet
 
 ## UI and languages
 
-- New emerald-and-gold visual identity, custom launcher mark, animated home surface and responsive module cards.
+- New emerald-and-gold visual identity, custom launcher mark, pulsing hero panel, staggered fade/slide-in module cards, and softly tinted icon tiles.
 - Sorani Kurdish (کوردی), Arabic (العربية), and English (English); Sorani/Arabic use RTL layout, English uses LTR.
 - Native Android UI; minimum Android 7.0 (API 24), designed to be tested on Android 11.
 
@@ -12,17 +12,17 @@ A new native Android Islamic-library app, designed independently in Kotlin + Jet
 
 The new app source currently includes a UI and repository layer for:
 
-- Quran browsing, searching, surah selection, and verse bookmarks.
+- Quran browsing/search, persistent return-to-last-read position, and a removable saved-verse bookmark list.
 - Sorani translation from Noor's Quran database and separate English/Arabic translation sources.
 - Tafsir selector for the accessible verse-indexed SQLite tafsir sources.
 - Hadith search from the Noor database.
-- Adhkar/dua browsing, repetition counter, and Names of Allah.
-- Static city-based prayer times and Qibla bearing calculation.
-- Local bundled audio playback plus an online reciter list sourced from the Noor audio index.
-- Book catalogue, lexicon lookup, word-by-word Quran grammar/root data, Farmuda records, and a persistent tasbih counter.
+- Adhkar/dua browsing with persistent repetition counters, Salawati Kurdish/English text enrichment and references, and Names of Allah.
+- City-based annual prayer times and a Qibla arrow corrected using the device compass sensors when available.
+- Local bundled audio playback, a dedicated filter for included adhan/mosque audio, and 80 reciter entries from Noor's audio index.
+- Book catalogue with an in-app PDF page reader, lexicon lookup, word-by-word Quran grammar/root data, Farmuda records, and a persistent haptic tasbih counter.
 - A validated extraction script that catalogs SQLite databases, audio, fonts, PDFs and source assets.
 
-**Important limitations:** this source project has not yet produced a confirmed, data-enabled release APK, and it has not been tested on a physical phone. Some Khairah tafsir pages use a separate binary page store referenced by offsets/hashes; those raw files are preserved, but their custom page decoder still needs reverse-engineering before those pages can be shown in the unified UI. Some book/PDF assets are currently catalogued but do not yet have a full built-in reader. Do not treat the current UI skeleton as containing every feature of all source apps yet.
+**Important limitations:** the full data-enabled APK still needs to complete its GitHub Actions build and then be installed/tested on a physical Android 11 device. Khairah's `pages.bin` / tafsir binary page format remains an open item: source files are preserved and JADX discovery has been run, but those legacy pages are not yet decoded/rendered in the unified UI. The source apps' complete internal behavior has not been independently verified screen-by-screen, so do not treat this as a certified 1:1 replacement yet.
 
 ## Input bundle and safe build
 
@@ -34,13 +34,15 @@ The three original user-supplied APK sets are kept as inputs, not treated as ori
 
 The unified build workflow expects a GitHub Release tagged `unified-source-v1` with one asset named `Mashxall-Unified-Source-Bundle.zip`. It extracts verified assets into the new project's Android assets, checks every SQLite database, then runs Gradle tests/lint/build and official APK signing checks.
 
-### Publish the source bundle (phone-only)
+### Source bundle and phone-only build
 
-1. **Make this repository Private first**: https://github.com/alanduzohiko/gptt-leets-go/settings/general . Under “Danger Zone” / repository visibility, choose Private. The supplied source APK sets may contain copyrighted data and app assets; do not upload them to a public repository.
-2. Download the source bundle supplied in the ChatGPT conversation. Its SHA-256 is `9430a52d73bfff7d897320e36173ce9d6f72f7c8d24b24dcc45b3dd4e70aba96`.
-3. Open https://github.com/alanduzohiko/gptt-leets-go/releases/new .
-4. Set tag `unified-source-v1`, title `Mashxall Unified Source Bundle`, attach exactly `Mashxall-Unified-Source-Bundle.zip`, and publish.
-5. Open the Actions tab. Watch `Build the new unified Mashxall Android app`. If the build succeeds, download its artifact `mashxall-unified-android11-build-…`.
+The source bundle is already uploaded to the `unified-source-v1` release and the automated workflow has verified its SHA-256 as `9430a52d73bfff7d897320e36173ce9d6f72f7c8d24b24dcc45b3dd4e70aba96`. Do not upload the bundle a second time.
+
+- Release: https://github.com/alanduzohiko/gptt-leets-go/releases/tag/unified-source-v1
+- Build runs: https://github.com/alanduzohiko/gptt-leets-go/actions
+- When the most recent `Build the new unified Mashxall Android app` run succeeds, open that run's **Artifacts** and download `mashxall-unified-android11-build-…` to the Android phone.
+
+This repository remains public at the user's direction. The supplied apps' audio, translations and bundled assets may have redistribution restrictions; verify the rights before public distribution of a production build.
 
 The build artifact is a debug APK. Static checks do not prove launch success. The app must still be installed and tested on Android 11; if it closes, capture a crash log before changing code again.
 
