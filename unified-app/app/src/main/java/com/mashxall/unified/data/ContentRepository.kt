@@ -5,6 +5,7 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import android.text.Html
+import android.text.Html
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -19,7 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class Surah(val number: Int, val arabicName: String, val englishName: String, val ayahCount: Int)
+data class Surah(val number: Int, val arabicName: String, val englishName: String, val ayahCount: Int, val meaningEnglish: String = "", val place: String = "", val uniqueTitle: String = "")
 data class QuranTranslation(val id: String, val ckb: String, val arabic: String, val english: String)
 data class Ayah(val surah: Int, val number: Int, val arabic: String, val translation: String, val page: Int = 0)
 data class HadithItem(
@@ -38,7 +39,20 @@ data class PrayerRow(
 data class TafsirBook(val id: String, val labelCkb: String, val labelAr: String, val labelEn: String, val assetPath: String, val language: String)
 data class BookItem(val id: Int, val title: String, val writer: String, val description: String, val pages: Int, val url: String)
 data class LexiconItem(val title: String, val content: String, val reference: String, val root: String)
-data class WordItem(val position: Int, val root: String, val grammar: String, val arabicShape: String)
+data class WordPart(
+    val glyphText: String,
+    val typeId: Int,
+    val tag: String,
+    val labelCkb: String,
+    val labelArabic: String,
+    val labelEnglish: String,
+    val colorHex: String
+)
+data class WordItem(
+    val position: Int, val root: String, val grammar: String, val arabicShape: String,
+    val parts: List<WordPart> = emptyList()
+)
+private data class WordTypeInfo(val tag: String, val english: String, val arabic: String, val ckb: String, val color: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
 data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
@@ -62,6 +76,7 @@ object ContentRepository {
     const val PRAYER_DB = "content/noor_tafsir_1.2.2/base/assets/prayertimes.db"
     const val HADITH_DB = "content/noor_tafsir_1.2.2/base/assets/db_hadith.db"
     const val WORD_DB = "content/noor_tafsir_1.2.2/base/assets/db_word_by_word.db"
+    const val TRANSLITERATION_DB = "content/noor_tafsir_1.2.2/base/assets/kurdish_transliteration.db"
     const val LEXICON_DB = "content/noor_tafsir_1.2.2/base/assets/db_words_lexicon.db"
     const val AZKAR_DB = "content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db"
     const val SALAWATI_DB = AZKAR_DB
@@ -76,6 +91,7 @@ object ContentRepository {
         QuranTranslation("asan", "ئاسان", "كردي (ئاسان)", "Sorani — Asan"),
         QuranTranslation("sanahi", "ساناهی (بادینی)", "كردي باديني", "Badini — Sanahi"),
         QuranTranslation("sahih", "Sahih International", "Sahih International", "English — Sahih International"),
+        QuranTranslation("translit", "خوێندنەوەی بە پیتی لاتینی", "النطق الكردي بالحروف اللاتينية", "Kurdish transliteration"),
         QuranTranslation("none", "بێ وەرگێڕان", "النص العربي فقط", "Arabic text only")
     )
 
@@ -221,8 +237,23 @@ object ContentRepository {
 
     suspend fun loadSurahs(context: Context): List<Surah> = withContext(Dispatchers.IO) {
         queryDb(context, QURAN_DB, emptyList()) { db ->
-            db.rawQuery("SELECT surah_no,name_arabic,name_english,ayah_number FROM surah_name ORDER BY surah_no", null).use { c ->
-                buildList { while (c.moveToNext()) add(Surah(c.int("surah_no"), c.string("name_arabic"), c.string("name_english"), c.int("ayah_number"))) }
+            db.rawQuery(
+                "SELECT surah_no,name_arabic,name_english,ayah_number,surah_mean_english,place,unique_title FROM surah_name ORDER BY surah_no",
+                null
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        Surah(
+                            c.int("surah_no"),
+                            c.string("name_arabic"),
+                            c.string("name_english"),
+                            c.int("ayah_number"),
+                            c.string("surah_mean_english"),
+                            c.string("place"),
+                            c.string("unique_title")
+                        )
+                    )
+                }
             }
         }
     }
@@ -243,13 +274,26 @@ object ContentRepository {
             "raman" -> "translation_raman"
             "asan" -> "translation_asan"
             "sanahi" -> "translation_sanahi"
-            "sahih", "none" -> ""
+            "sahih", "none", "translit" -> ""
             else -> "translation_puxta"
         }
         val english = if (selectedTranslation == "sahih") {
             queryDb(context, tafsirBooks.first { it.id == "sahih" }.assetPath, emptyMap<Int, String>()) { db ->
                 db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
                     buildMap { while (c.moveToNext()) put(c.int("verse_id"), c.string("text")) }
+                }
+            }
+        } else emptyMap()
+        val transliteration = if (selectedTranslation == "translit") {
+            queryDb(context, TRANSLITERATION_DB, emptyMap<Int, String>()) { db ->
+                db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
+                    buildMap {
+                        while (c.moveToNext()) {
+                            val html = c.string("text")
+                            val plain = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+                            put(c.int("verse_id"), plain)
+                        }
+                    }
                 }
             }
         } else emptyMap()
@@ -263,6 +307,7 @@ object ContentRepository {
                         val arabic = c.string("quran_arabic")
                         val translation = when (selectedTranslation) {
                             "sahih" -> english[number].orEmpty()
+                            "translit" -> transliteration[number].orEmpty()
                             "none" -> ""
                             else -> c.string("translation_text")
                         }
@@ -620,14 +665,67 @@ object ContentRepository {
         }
     }
 
+    private fun decodeQuranGlyphs(encoded: String): String {
+        val value = encoded.trim()
+        if (value.isBlank()) return ""
+        if (value.length % 4 != 0 || value.any { it.digitToIntOrNull(16) == null }) return value
+        return value.chunked(4).mapNotNull { token ->
+            token.toIntOrNull(16)?.takeIf { it in 0..0xFFFF }?.toChar()
+        }.joinToString("")
+    }
+
     suspend fun loadWordAnalysis(context: Context, surah: Int, ayah: Int): List<WordItem> = withContext(Dispatchers.IO) {
         queryDb(context, WORD_DB, emptyList()) { db ->
-            db.rawQuery("SELECT position,root,irab,arabic1 FROM quran_corpus WHERE surah_id=? AND verse_id=? ORDER BY position", arrayOf(surah.toString(), ayah.toString())).use { c ->
-                buildList { while (c.moveToNext()) add(WordItem(c.int("position"), c.string("root"), c.string("irab"), c.string("arabic1"))) }
+            val types = db.rawQuery("SELECT id,tag,english,arabic,kurdish,color FROM word_type", null).use { c ->
+                buildMap<Int, WordTypeInfo> {
+                    while (c.moveToNext()) put(
+                        c.int("id"),
+                        WordTypeInfo(c.string("tag"), c.string("english"), c.string("arabic"), c.string("kurdish"), c.string("color"))
+                    )
+                }
+            }
+            val sql = """
+                SELECT position,root,irab,word_count,
+                       arabic1,arabic2,arabic3,arabic4,arabic5,
+                       word_type_id1,word_type_id2,word_type_id3,word_type_id4,word_type_id5
+                FROM quran_corpus
+                WHERE surah_id=? AND verse_id=?
+                ORDER BY position
+            """.trimIndent()
+            db.rawQuery(sql, arrayOf(surah.toString(), ayah.toString())).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        val count = c.int("word_count").coerceIn(1, 5)
+                        val parts = (1..count).mapNotNull { slot ->
+                            val encoded = c.string("arabic$slot")
+                            if (encoded.isBlank()) null else {
+                                val typeId = c.int("word_type_id$slot")
+                                val type = types[typeId]
+                                WordPart(
+                                    glyphText = decodeQuranGlyphs(encoded),
+                                    typeId = typeId,
+                                    tag = type?.tag.orEmpty(),
+                                    labelCkb = type?.ckb.orEmpty(),
+                                    labelArabic = type?.arabic.orEmpty(),
+                                    labelEnglish = type?.english.orEmpty(),
+                                    colorHex = type?.color.orEmpty()
+                                )
+                            }
+                        }
+                        add(
+                            WordItem(
+                                position = c.int("position"),
+                                root = c.string("root"),
+                                grammar = c.string("irab"),
+                                arabicShape = parts.joinToString(" ") { it.glyphText },
+                                parts = parts
+                            )
+                        )
+                    }
+                }
             }
         }
     }
-
 
     suspend fun loadReciters(context: Context): List<Reciter> = withContext(Dispatchers.IO) {
         queryDb(context, QURAN_DB, emptyList()) { db ->

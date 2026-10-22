@@ -9,6 +9,7 @@ import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
 import android.graphics.Bitmap
+import android.graphics.Typeface
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
@@ -63,6 +64,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1428,6 +1430,12 @@ fun WordAnalysisScreen(
     onLoad: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
+    val quranGlyphFamily = remember {
+        runCatching {
+            FontFamily(Typeface.createFromAsset(context.assets, "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_modded.ttf"))
+        }.getOrNull()
+    }
+    var verseContext by remember { mutableStateOf<Ayah?>(null) }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.toString()) }
     var items by remember { mutableStateOf<List<WordItem>>(emptyList()) }
@@ -1437,6 +1445,7 @@ fun WordAnalysisScreen(
         if (selected) {
             loading = true
             items = ContentRepository.loadWordAnalysis(context, initialSurah, initialAyah)
+            verseContext = ContentRepository.loadAyahs(context, initialSurah, language.key, translationKey = "none").firstOrNull { it.number == initialAyah }
             loading = false
         }
     }
@@ -1462,16 +1471,53 @@ fun WordAnalysisScreen(
         else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Text(tr(language, "surah") + " " + surahText + " • " + tr(language, "ayah") + " " + ayahText, color = Gold, fontWeight = FontWeight.Bold)
+                verseContext?.let { verse ->
+                    Spacer(Modifier.height(10.dp))
+                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
+                        Text(verse.arabic, modifier = Modifier.fillMaxWidth().padding(14.dp), color = foreground, textAlign = TextAlign.End, fontSize = 20.sp, lineHeight = 34.sp)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Tap a segment below to study its word type, root and grammar."
+                        AppLanguage.AR -> "كل مقطع يعرض نوع الكلمة وجذرها وإعرابها."
+                        AppLanguage.CKB -> "هەر بەشێک جۆری وشە، ڕەگ و ڕێزمانەکەی پیشان دەدات."
+                    }, color = foreground.copy(alpha = 0.57f), fontSize = 11.sp
+                )
             }
             items(items, key = { it.position }) { word ->
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
                     Column(Modifier.fillMaxWidth().padding(13.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Box(Modifier.size(28.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
                                 Text(word.position.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
-                            Spacer(Modifier.width(10.dp))
-                            Text(word.arabicShape, color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                word.parts.forEach { part ->
+                                    val partColor = remember(part.colorHex) {
+                                        runCatching { Color(android.graphics.Color.parseColor(part.colorHex)) }.getOrDefault(foreground)
+                                    }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            part.glyphText,
+                                            color = partColor,
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            fontFamily = quranGlyphFamily ?: FontFamily.Default,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        val typeLabel = when (language) {
+                                            AppLanguage.CKB -> part.labelCkb.ifBlank { part.tag }
+                                            AppLanguage.AR -> part.labelArabic.ifBlank { part.tag }
+                                            AppLanguage.EN -> part.labelEnglish.ifBlank { part.tag }
+                                        }
+                                        if (typeLabel.isNotBlank()) {
+                                            Text(typeLabel, color = partColor, fontSize = 9.sp, maxLines = 2, textAlign = TextAlign.Center)
+                                        }
+                                    }
+                                }
+                            }
                         }
                         if (word.root.isNotBlank()) {
                             Spacer(Modifier.height(7.dp))
