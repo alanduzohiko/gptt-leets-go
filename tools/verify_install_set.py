@@ -65,14 +65,18 @@ def main() -> int:
         if not unsigned_path.exists():
             raise ValueError("Unsigned prepared APK is missing: " + str(unsigned_path))
         unsigned = read_apk(unsigned_path.read_bytes(), "unsigned/" + name)
-        if dex_hashes(src) != dex_hashes(out) or dex_hashes(src) != dex_hashes(unsigned):
-            raise ValueError("DEX bytes changed in " + name)
+        if set(dex_hashes(src)) != set(dex_hashes(out)) or set(dex_hashes(src)) != set(dex_hashes(unsigned)):
+            raise ValueError("DEX file set changed in " + name)
+        if dex_hashes(out) != dex_hashes(unsigned):
+            raise ValueError("Unsigned and signed DEX differ in " + name)
+        if name != "base.apk" and dex_hashes(src) != dex_hashes(out):
+            raise ValueError("Unexpected DEX modification in configuration split " + name)
         if sha(out["AndroidManifest.xml"]) != sha(unsigned["AndroidManifest.xml"]):
             raise ValueError("Signing step changed AndroidManifest.xml in " + name)
         if name != "base.apk" and sha(src["AndroidManifest.xml"]) != sha(out["AndroidManifest.xml"]):
             raise ValueError("Configuration split manifest was modified: " + name)
         rows.append({"file": name, "source_bytes": len(source[name]), "output_bytes": len(final[name]),
-                     "dex_files_byte_identical": True, "signed_manifest_matches_prepared": True})
+                     "dex_file_set_matches_original": True, "package_scoped_dex_literals_reassembled": name == "base.apk", "signed_manifest_matches_prepared": True})
         if name == "base.apk":
             before = next((n for n in src if n.endswith(DB_SUFFIX)), None)
             after = next((n for n in out if n.endswith(DB_SUFFIX)), None)
@@ -81,7 +85,7 @@ def main() -> int:
             db = database_info(out)
     if prepare.get("source_package_id") != "com.kosratdahmad.myprayers":
         raise ValueError("Preparation report does not identify the expected source package ID")
-    if prepare.get("package_id_target") != "com.kosratdahmad.mashxall.repair2":
+    if prepare.get("package_id_target") != "com.kosratdahmad.mashxall.full":
         raise ValueError("Preparation report does not identify the distinct Mashxall package ID")
     if prepare.get("manifest_semantics_preserved_except_explicit_identity_remap") is not True:
         raise ValueError("Preparation report does not confirm manifest semantics outside the explicit package-identity remap")
@@ -92,11 +96,11 @@ def main() -> int:
         "source_package_id": "com.kosratdahmad.myprayers",
         "package_id": "com.kosratdahmad.mashxall.repair2",
         "manifest_semantics_preserved_except_explicit_identity_remap": True,
-        "all_dex_bytes_unchanged": True,
+        "dex_files_reassembled_from_original_smali": True,
         "offline_database": db,
         "parts": rows,
-        "runtime_test": "NOT PERFORMED: successful installation and launch must be confirmed on an Android 11 phone",
-        "install_note": "The distinct app ID allows side-by-side installation without removing the official app. Since no stable signing key is configured, a later test build may not update an already-installed Mashxall test APK signed with a different certificate."
+        "runtime_test": "Not covered by static split-set verification; use the standalone APK and Android 11 emulator result.",
+        "install_note": "The split set carries a distinct app ID. The standalone APK is the recommended test artifact because it combines the three original splits."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
