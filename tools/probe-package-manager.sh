@@ -54,13 +54,19 @@ fi
 # First install a tiny, freshly built, known-good control APK to prove the AVD's
 # PackageManager works before giving it the 108 MB application APK.
 BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+echo "PWD=$PWD ANDROID_HOME=$ANDROID_HOME BUILD_TOOLS=$BT" > dist/probe-build.txt
+mkdir -p dist/probe-res/values
 cat > dist/PackageManagerProbe.xml <<'XML'
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.mashxall.pmprobe">
   <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="30"/>
-  <application android:label="PackageManagerProbe"/>
+  <application android:label="@string/app_name"/>
 </manifest>
 XML
-"$BT/aapt" package -f -M dist/PackageManagerProbe.xml -I "$ANDROID_HOME/platforms/android-30/android.jar" -F dist/PackageManagerProbe-unsigned.apk > dist/probe-build.txt 2>&1
+cat > dist/probe-res/values/strings.xml <<'XML'
+<resources><string name="app_name">PackageManagerProbe</string></resources>
+XML
+ls -l "$GITHUB_WORKSPACE/dist/PackageManagerProbe.xml" "$GITHUB_WORKSPACE/dist/probe-res/values/strings.xml" "$ANDROID_HOME/platforms/android-30/android.jar" >> dist/probe-build.txt 2>&1
+"$BT/aapt" package -f -M "$GITHUB_WORKSPACE/dist/PackageManagerProbe.xml" -S "$GITHUB_WORKSPACE/dist/probe-res" -I "$ANDROID_HOME/platforms/android-30/android.jar" -F "$GITHUB_WORKSPACE/dist/PackageManagerProbe-unsigned.apk" >> dist/probe-build.txt 2>&1
 probe_build_rc=$?
 if [[ "$probe_build_rc" -ne 0 ]]; then
   echo "CONTROL_APK_BUILD_FAILED" | tee dist/package-manager-result.txt
