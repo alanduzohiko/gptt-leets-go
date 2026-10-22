@@ -21,9 +21,9 @@ jobs:
         with:
           name: mashxall-apk-for-emulator-43
           path: dist
-          repository: \${{ github.repository }}
+          repository: alanduzohiko/gptt-leets-go
           run-id: 39732327531
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Confirm the exact APK payload
         shell: bash
