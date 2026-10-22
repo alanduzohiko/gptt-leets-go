@@ -1,12 +1,14 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.app.AlarmManager
 import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Handler
+import android.os.Build
 import android.os.Looper
 import android.graphics.Bitmap
 import android.graphics.Typeface
@@ -21,6 +23,7 @@ import android.os.ParcelFileDescriptor
 import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.mashxall.unified.data.*
+import com.mashxall.unified.notifications.PrayerAlarmScheduler
 import com.caverock.androidsvg.SVG
 import java.io.File
 import java.security.MessageDigest
@@ -1199,6 +1203,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
     var calculationMethod by rememberSaveable { mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl") }
     var asrSchool by rememberSaveable { mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi") }
+    var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
+    var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
+    var selectedAdhanAsset by rememberSaveable {
+        mutableStateOf(prefs.getString("adhan_audio_asset", "content/salawati_3.1.3/base/res/raw/madina.mp3") ?: "content/salawati_3.1.3/base/res/raw/madina.mp3")
+    }
+    var chooseAdhanSound by remember { mutableStateOf(false) }
+    var adhanMessage by remember { mutableStateOf("") }
 
     val onFix: (Location) -> Unit = { fix ->
         locating = false
@@ -1234,6 +1245,24 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         locating = false
         locationMessage = error
     }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            adhanEnabled = true
+            prefs.edit().putBoolean("adhan_enabled", true).putString("adhan_audio_asset", selectedAdhanAsset).apply()
+            adhanMessage = ""
+        } else {
+            adhanEnabled = false
+            prefs.edit().putBoolean("adhan_enabled", false).apply()
+            PrayerAlarmScheduler.cancelAll(context)
+            adhanMessage = when (language) {
+                AppLanguage.EN -> "Notification permission was denied; prayer alerts remain off."
+                AppLanguage.AR -> "رُفض إذن الإشعارات؛ بقيت تنبيهات الصلاة متوقفة."
+                AppLanguage.CKB -> "مۆڵەتی ئاگادارکردنەوە ڕەتکرایەوە؛ ئاگادارکردنەوەکان ناچالاکن."
+            }
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -1264,7 +1293,25 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
-    LaunchedEffect(Unit) { cities = ContentRepository.loadCities(context) }
+    LaunchedEffect(Unit) {
+        cities = ContentRepository.loadCities(context)
+        adhanAssets = ContentRepository.loadAudioItems(context).filter { item ->
+            val name = (item.title + " " + item.assetPath).lowercase(Locale.ROOT)
+            listOf("abdulbasit", "abdulmajid", "hijaz", "madina", "fajr", "majid", "mansur", "mecca", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan", "adhan", "athan", "azan").any { name.contains(it) }
+        }
+        if (adhanAssets.none { it.assetPath == selectedAdhanAsset } && adhanAssets.isNotEmpty()) {
+            selectedAdhanAsset = adhanAssets.first().assetPath
+            prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
+        }
+    }
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, selectedCity, calculationMethod, asrSchool) {
+        if (adhanEnabled) {
+            prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
+            PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
+        } else {
+            PrayerAlarmScheduler.cancelAll(context)
+        }
+    }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, calculationMethod, asrSchool) {
         loading = true
         times = if (gpsLatitude != null && gpsLongitude != null) {
@@ -1392,6 +1439,93 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
             )
         }
+        Spacer(Modifier.height(14.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(15.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Adhan notifications"
+                                AppLanguage.AR -> "تنبيهات الأذان"
+                                AppLanguage.CKB -> "ئاگادارکردنەوەی بانگ"
+                            }, color = foreground, fontWeight = FontWeight.Bold, fontSize = 15.sp
+                        )
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Play a bundled adhan sound at prayer time"
+                                AppLanguage.AR -> "تشغيل صوت الأذان المرفق عند دخول وقت الصلاة"
+                                AppLanguage.CKB -> "لێدانی دەنگی بانگی ناوخۆیی لە کاتی نوێژ"
+                            }, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp, lineHeight = 17.sp
+                        )
+                    }
+                    Switch(checked = adhanEnabled, onCheckedChange = { enable ->
+                        if (!enable) {
+                            adhanEnabled = false
+                            prefs.edit().putBoolean("adhan_enabled", false).apply()
+                            PrayerAlarmScheduler.cancelAll(context)
+                        } else if (Build.VERSION.SDK_INT >= 33 &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            adhanEnabled = true
+                            prefs.edit().putBoolean("adhan_enabled", true).apply()
+                        }
+                    })
+                }
+                if (adhanEnabled) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(onClick = { chooseAdhanSound = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Outlined.VolumeUp, null, tint = Gold, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(8.dp))
+                        val soundLabel = adhanAssets.firstOrNull { it.assetPath == selectedAdhanAsset }?.title
+                            ?: selectedAdhanAsset.substringAfterLast('/')
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Adhan sound: $soundLabel"
+                                AppLanguage.AR -> "صوت الأذان: $soundLabel"
+                                AppLanguage.CKB -> "دەنگی بانگ: $soundLabel"
+                            }, fontSize = 11.sp, maxLines = 1
+                        )
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                        if (!alarmManager.canScheduleExactAlarms()) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Exact alarms are not allowed. Android may delay prayer alerts."
+                                    AppLanguage.AR -> "المنبهات الدقيقة غير مسموحة؛ قد يؤخر Android تنبيهات الصلاة."
+                                    AppLanguage.CKB -> "ئاگادارکردنەوەی ورد ڕێگەپێدراو نییە؛ ئەندرۆید لەوانەیە دوا بخات."
+                                }, color = foreground.copy(alpha = 0.6f), fontSize = 10.sp, lineHeight = 15.sp
+                            )
+                            TextButton(onClick = {
+                                try {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                } catch (_: Exception) {
+                                    adhanMessage = when (language) {
+                                        AppLanguage.EN -> "Open exact-alarm permissions in Android Settings."
+                                        AppLanguage.AR -> "افتح أذونات المنبه الدقيق من إعدادات Android."
+                                        AppLanguage.CKB -> "مۆڵەتی کاتژمێری ورد لە ڕێکخستنەکانی ئەندرۆید بکەرەوە."
+                                    }
+                                }
+                            }) {
+                                Text(if (language == AppLanguage.EN) "Allow exact alarms" else if (language == AppLanguage.AR) "السماح بالمنبهات الدقيقة" else "ڕێگەدان بە ئاگادارکردنەوەی ورد")
+                            }
+                        }
+                    }
+                }
+                if (adhanMessage.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(adhanMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp))
         Card(Modifier.fillMaxWidth().clickable { onQibla() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1424,6 +1558,37 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         },
         confirmButton = { TextButton(onClick = { chooseCity = false }) { Text(tr(language, "back")) } }
     )
+    if (chooseAdhanSound) AlertDialog(
+        onDismissRequest = { chooseAdhanSound = false },
+        title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
+        text = {
+            LazyColumn(Modifier.height(380.dp)) {
+                items(adhanAssets, key = { it.assetPath }) { sound ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            selectedAdhanAsset = sound.assetPath
+                            prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
+                            chooseAdhanSound = false
+                        }.padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedAdhanAsset == sound.assetPath, onClick = {
+                            selectedAdhanAsset = sound.assetPath
+                            prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
+                            chooseAdhanSound = false
+                        })
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(sound.title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(sound.assetPath.substringAfterLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { chooseAdhanSound = false }) { Text(tr(language, "back")) } }
+    )
+
 }
 
 @Composable
