@@ -1158,30 +1158,51 @@ private fun requestCurrentLocation(
         onError("Turn on Location/GPS on your phone, then try again")
         return
     }
-    var bestAccuracy = Float.MAX_VALUE
-    var delivered = 0
-    var gotFix = false
-    val listeners = mutableListOf<LocationListener>()
+
     val mainHandler = Handler(Looper.getMainLooper())
-    val timeout = Runnable {
-        if (!gotFix) {
-            listeners.forEach { item -> try { manager.removeUpdates(item) } catch (_: Exception) {} }
-            onError("No fresh location fix. Turn on GPS and try again outdoors.")
+    val listeners = mutableListOf<LocationListener>()
+    var bestLocation: Location? = null
+    var finished = false
+    var deferredFinish: Runnable? = null
+    var timeout: Runnable? = null
+
+    fun cleanup() {
+        timeout?.let(mainHandler::removeCallbacks)
+        deferredFinish?.let(mainHandler::removeCallbacks)
+        listeners.forEach { listener ->
+            try { manager.removeUpdates(listener) } catch (_: Exception) {}
         }
     }
-    mainHandler.postDelayed(timeout, 20_000L)
+
+    val finishBest = Runnable {
+        if (!finished) {
+            finished = true
+            cleanup()
+            val best = bestLocation
+            if (best != null) onLocation(best)
+            else onError("No fresh location fix. Turn on GPS and try again outdoors.")
+        }
+    }
+    timeout = Runnable { finishBest.run() }
+    mainHandler.postDelayed(timeout!!, 20_000L)
+
     providers.forEach { provider ->
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
-                delivered++
-                gotFix = true
-                mainHandler.removeCallbacks(timeout)
-                if ((location.hasAccuracy() && location.accuracy < bestAccuracy) || bestAccuracy == Float.MAX_VALUE) {
-                    bestAccuracy = if (location.hasAccuracy()) location.accuracy else Float.MAX_VALUE - 1f
-                    onLocation(location)
-                }
-                if (delivered >= providers.size) {
-                    listeners.forEach { item -> try { manager.removeUpdates(item) } catch (_: Exception) {} }
+                if (finished) return
+                val prior = bestLocation
+                val newIsBetter = prior == null ||
+                    (location.hasAccuracy() && (!prior.hasAccuracy() || location.accuracy < prior.accuracy))
+                if (newIsBetter) bestLocation = Location(location)
+
+                // Finish immediately for a good GPS fix; otherwise allow a short
+                // window for the other provider to return a more accurate point.
+                if (bestLocation?.hasAccuracy() == true && bestLocation!!.accuracy <= 15f) {
+                    finishBest.run()
+                } else {
+                    deferredFinish?.let(mainHandler::removeCallbacks)
+                    deferredFinish = Runnable { finishBest.run() }
+                    mainHandler.postDelayed(deferredFinish!!, 3500L)
                 }
             }
             @Deprecated("Deprecated by Android; retained for API 24 compatibility")
@@ -1193,10 +1214,14 @@ private fun requestCurrentLocation(
         try {
             manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
         } catch (_: SecurityException) {
-            mainHandler.removeCallbacks(timeout)
-            onError("Location permission is required")
+            if (!finished) {
+                finished = true
+                cleanup()
+                onError("Location permission is required")
+            }
+            return@forEach
         } catch (_: IllegalArgumentException) {
-            delivered++
+            // Provider was disabled between discovery and request; try the other one.
         }
     }
 }
