@@ -20,8 +20,13 @@ import java.util.Date
 import java.util.Locale
 
 data class Surah(val number: Int, val arabicName: String, val englishName: String, val ayahCount: Int)
+data class QuranTranslation(val id: String, val ckb: String, val arabic: String, val english: String)
 data class Ayah(val surah: Int, val number: Int, val arabic: String, val translation: String, val page: Int = 0)
-data class HadithItem(val id: Int, val arabic: String, val sorani: String, val english: String, val bookId: Int)
+data class HadithItem(
+    val id: Int, val arabic: String, val sorani: String, val english: String, val bookId: Int,
+    val bookName: String = "", val bookNameAr: String = "", val bookNameEn: String = "",
+    val chapterName: String = "", val chapterNameAr: String = "", val chapterNameEn: String = ""
+)
 data class AzkarItem(val id: Int, val titleCkb: String, val titleAr: String, val titleEn: String, val arabic: String, val ckb: String, val english: String, val count: Int, val referenceCkb: String)
 data class AllahName(val number: Int, val arabic: String, val ckb: String, val badini: String, val english: String)
 data class City(val name: String, val latitude: Double, val longitude: Double)
@@ -64,6 +69,15 @@ object ContentRepository {
     private const val MUSHAF_SVG_BIN = "content/khairah_1.2/base/assets/mushaf/pages.bin"
     private const val MUSHAF_SVG_INDEX = "mushaf_svg_index.json"
     @Volatile private var cachedMushafIndex: Map<Int, MushafSvgMeta>? = null
+
+    val quranTranslations = listOf(
+        QuranTranslation("puxta", "پوختە", "كردي (پۇختە)", "Sorani — Puxta"),
+        QuranTranslation("raman", "ڕەمان", "كردي (رەمان)", "Sorani — Raman"),
+        QuranTranslation("asan", "ئاسان", "كردي (ئاسان)", "Sorani — Asan"),
+        QuranTranslation("sanahi", "ساناهی (بادینی)", "كردي باديني", "Badini — Sanahi"),
+        QuranTranslation("sahih", "Sahih International", "Sahih International", "English — Sahih International"),
+        QuranTranslation("none", "بێ وەرگێڕان", "النص العربي فقط", "Arabic text only")
+    )
 
     val tafsirBooks = listOf(
         TafsirBook("roshn", "ڕۆشن", "تفسير ڕۆشن", "Roshn Kurdish Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_roshn.db", "ckb"),
@@ -213,32 +227,47 @@ object ContentRepository {
         }
     }
 
-    suspend fun loadAyahs(context: Context, surah: Int, language: String, query: String = ""): List<Ayah> = withContext(Dispatchers.IO) {
-        // English uses the dedicated Sahih International translation DB. Arabic
-        // mode presents the Arabic Qur'an text without mislabelling a tafsir as
-        // a translation. Sorani uses Noor's concise Kurdish translation.
-        val translationBook = if (language == "en") "sahih" else ""
-        val extraTranslations = if (translationBook.isNotEmpty()) {
-            queryDb(context, tafsirBooks.first { it.id == translationBook }.assetPath, emptyMap<Int, String>()) { db ->
+    suspend fun loadAyahs(
+        context: Context,
+        surah: Int,
+        language: String,
+        query: String = "",
+        translationKey: String? = null
+    ): List<Ayah> = withContext(Dispatchers.IO) {
+        val selectedTranslation = translationKey ?: when (language) {
+            "en" -> "sahih"
+            "ar" -> "none"
+            else -> "puxta"
+        }
+        val translationColumn = when (selectedTranslation) {
+            "raman" -> "translation_raman"
+            "asan" -> "translation_asan"
+            "sanahi" -> "translation_sanahi"
+            "sahih", "none" -> ""
+            else -> "translation_puxta"
+        }
+        val english = if (selectedTranslation == "sahih") {
+            queryDb(context, tafsirBooks.first { it.id == "sahih" }.assetPath, emptyMap<Int, String>()) { db ->
                 db.rawQuery("SELECT verse_id,text FROM quran WHERE surah_id=?", arrayOf(surah.toString())).use { c ->
                     buildMap { while (c.moveToNext()) put(c.int("verse_id"), c.string("text")) }
                 }
             }
         } else emptyMap()
         queryDb(context, QURAN_DB, emptyList()) { db ->
-            val sql = "SELECT surah_id,verse_id,quran_arabic,translation_puxta,page FROM quran WHERE surah_id=? ORDER BY verse_id"
+            val translationSelect = if (translationColumn.isBlank()) "'' AS translation_text" else "$translationColumn AS translation_text"
+            val sql = "SELECT surah_id,verse_id,quran_arabic,$translationSelect,page FROM quran WHERE surah_id=? ORDER BY verse_id"
             db.rawQuery(sql, arrayOf(surah.toString())).use { c ->
                 buildList {
                     while (c.moveToNext()) {
-                        val num = c.int("verse_id")
+                        val number = c.int("verse_id")
                         val arabic = c.string("quran_arabic")
-                        val translation = when (language) {
-                            "en" -> extraTranslations[num].orEmpty()
-                            "ar" -> ""
-                            else -> c.string("translation_puxta")
+                        val translation = when (selectedTranslation) {
+                            "sahih" -> english[number].orEmpty()
+                            "none" -> ""
+                            else -> c.string("translation_text")
                         }
-                        if (query.isBlank() || arabic.contains(query, true) || translation.contains(query, true) || num.toString() == query) {
-                            add(Ayah(surah, num, arabic, translation, c.int("page")))
+                        if (query.isBlank() || arabic.contains(query, true) || translation.contains(query, true) || number.toString() == query) {
+                            add(Ayah(surah, number, arabic, translation, c.int("page")))
                         }
                     }
                 }
@@ -367,16 +396,60 @@ object ContentRepository {
     private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-    suspend fun loadHadiths(context: Context, query: String = ""): List<HadithItem> = withContext(Dispatchers.IO) {
+    suspend fun loadHadiths(
+        context: Context,
+        query: String = "",
+        offset: Int = 0,
+        limit: Int = 100
+    ): List<HadithItem> = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, emptyList()) { db ->
-            val sql = if (query.isBlank()) {
-                "SELECT id,text_ar,text,text_en,book_id FROM hadiths ORDER BY id DESC LIMIT 100"
+            val term = "%${query.trim()}%"
+            val filter = if (query.isBlank()) "" else """
+                WHERE h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
+                   OR b.name LIKE ? OR b.name_ar LIKE ? OR b.name_en LIKE ?
+                   OR k.title LIKE ? OR k.title_ar LIKE ? OR k.title_en LIKE ?
+            """.trimIndent()
+            val sql = """
+                SELECT h.id,h.text_ar,h.text,h.text_en,h.book_id,
+                       COALESCE(b.name,'') AS book_name,
+                       COALESCE(b.name_ar,'') AS book_name_ar,
+                       COALESCE(b.name_en,'') AS book_name_en,
+                       COALESCE(k.title,'') AS chapter_name,
+                       COALESCE(k.title_ar,'') AS chapter_name_ar,
+                       COALESCE(k.title_en,'') AS chapter_name_en
+                FROM hadiths h
+                LEFT JOIN book b ON b.id=h.book_id
+                LEFT JOIN kitab k ON k.id=h.kitab_id
+                $filter
+                ORDER BY h.id
+                LIMIT ? OFFSET ?
+            """.trimIndent()
+            val args = if (query.isBlank()) {
+                arrayOf(limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString())
             } else {
-                "SELECT id,text_ar,text,text_en,book_id FROM hadiths WHERE text LIKE ? OR text_ar LIKE ? OR text_en LIKE ? ORDER BY id DESC LIMIT 100"
+                arrayOf(
+                    term, term, term, term, term, term, term, term, term,
+                    limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString()
+                )
             }
-            val args = if (query.isBlank()) null else arrayOf("%$query%", "%$query%", "%$query%")
             db.rawQuery(sql, args).use { c ->
-                buildList { while (c.moveToNext()) add(HadithItem(c.int("id"), c.string("text_ar"), c.string("text"), c.string("text_en"), c.int("book_id"))) }
+                buildList {
+                    while (c.moveToNext()) add(
+                        HadithItem(
+                            id = c.int("id"),
+                            arabic = c.string("text_ar"),
+                            sorani = c.string("text"),
+                            english = c.string("text_en"),
+                            bookId = c.int("book_id"),
+                            bookName = c.string("book_name"),
+                            bookNameAr = c.string("book_name_ar"),
+                            bookNameEn = c.string("book_name_en"),
+                            chapterName = c.string("chapter_name"),
+                            chapterNameAr = c.string("chapter_name_ar"),
+                            chapterNameEn = c.string("chapter_name_en")
+                        )
+                    )
+                }
             }
         }
     }
