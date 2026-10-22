@@ -449,6 +449,17 @@ fun BookmarksScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    fun readNotes(): Map<String, String> = runCatching {
+        val json = org.json.JSONObject(prefs.getString("bookmark_notes", "{}") ?: "{}")
+        buildMap {
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = json.optString(key, "").trim()
+                if (value.isNotBlank()) put(key, value)
+            }
+        }
+    }.getOrDefault(emptyMap())
     var bookmarks by remember {
         mutableStateOf(
             prefs.getStringSet("bookmarks", emptySet()).orEmpty().mapNotNull { value ->
@@ -459,33 +470,123 @@ fun BookmarksScreen(
             }.distinct().sortedWith(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
         )
     }
+    var notes by remember { mutableStateOf(readNotes()) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var editorKey by remember { mutableStateOf<String?>(null) }
+    var editorText by remember { mutableStateOf("") }
+    val visibleBookmarks = bookmarks.filter { pair ->
+        val key = "${pair.first}:${pair.second}"
+        query.isBlank() ||
+            pair.first.toString().contains(query.trim()) ||
+            pair.second.toString().contains(query.trim()) ||
+            notes[key].orEmpty().contains(query.trim(), ignoreCase = true)
+    }
+
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(tr(language, "bookmarks"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(5.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "${bookmarks.size} saved verses • add personal notes to remember why each verse matters"
+                AppLanguage.AR -> "${bookmarks.size} آية محفوظة • أضف ملاحظاتك الشخصية لكل آية"
+                AppLanguage.CKB -> "${bookmarks.size} ئایەت پاشەکەوت کراوە • تێبینی تایبەتی بۆ هەر ئایەتێک زیاد بکە"
+            }, color = foreground.copy(alpha = 0.56f), fontSize = 11.sp, lineHeight = 17.sp
+        )
         Spacer(Modifier.height(8.dp))
-        if (bookmarks.isEmpty()) {
-            Text(tr(language, "no_bookmarks"), color = foreground.copy(alpha = 0.6f), fontSize = 13.sp)
+        SearchBox(query, { query = it }, if (language == AppLanguage.EN) "Search surah, verse or note…" else if (language == AppLanguage.AR) "ابحث في السورة أو الآية أو الملاحظة…" else "لە سوورەت، ئایەت یان تێبینی بگەڕێ…")
+        Spacer(Modifier.height(8.dp))
+        if (visibleBookmarks.isEmpty()) {
+            Text(
+                if (bookmarks.isEmpty()) tr(language, "no_bookmarks") else tr(language, "not_found"),
+                color = foreground.copy(alpha = 0.6f), fontSize = 13.sp
+            )
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(bookmarks, key = { it.first.toString() + ":" + it.second.toString() }) { saved ->
+                items(visibleBookmarks, key = { it.first.toString() + ":" + it.second.toString() }) { saved ->
+                    val key = "${saved.first}:${saved.second}"
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
-                        Row(Modifier.fillMaxWidth().clickable { onOpen(saved.first, saved.second) }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(tr(language, "surah") + " " + saved.first, color = foreground, fontWeight = FontWeight.SemiBold)
-                                Text(tr(language, "ayah") + " " + saved.second, color = foreground.copy(alpha = 0.55f), fontSize = 12.sp)
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f).clickable { onOpen(saved.first, saved.second) }) {
+                                    Text(tr(language, "surah") + " " + saved.first, color = foreground, fontWeight = FontWeight.SemiBold)
+                                    Text(tr(language, "ayah") + " " + saved.second, color = foreground.copy(alpha = 0.55f), fontSize = 12.sp)
+                                }
+                                TextButton(onClick = {
+                                    editorKey = key
+                                    editorText = notes[key].orEmpty()
+                                }) {
+                                    Text(if (notes[key].isNullOrBlank()) {
+                                        if (language == AppLanguage.EN) "Note +" else if (language == AppLanguage.AR) "ملاحظة +" else "تێبینی +"
+                                    } else {
+                                        if (language == AppLanguage.EN) "Edit note" else if (language == AppLanguage.AR) "تعديل" else "دەستکاری"
+                                    }, color = Gold, fontSize = 10.sp)
+                                }
+                                TextButton(onClick = {
+                                    val remaining = bookmarks.filterNot { it == saved }
+                                    bookmarks = remaining
+                                    val nextNotes = notes - key
+                                    notes = nextNotes
+                                    val json = org.json.JSONObject().apply { nextNotes.forEach { (k, v) -> put(k, v) } }
+                                    prefs.edit()
+                                        .putStringSet("bookmarks", remaining.map { it.first.toString() + ":" + it.second.toString() }.toSet())
+                                        .putString("bookmark_notes", json.toString())
+                                        .apply()
+                                }) { Text("×", color = Gold, fontSize = 20.sp) }
                             }
-                            TextButton(onClick = {
-                                val remaining = bookmarks.filterNot { it == saved }
-                                bookmarks = remaining
-                                prefs.edit().putStringSet("bookmarks", remaining.map { it.first.toString() + ":" + it.second.toString() }.toSet()).apply()
-                            }) { Text("×", color = Gold, fontSize = 20.sp) }
+                            notes[key]?.takeIf { it.isNotBlank() }?.let { note ->
+                                Spacer(Modifier.height(5.dp))
+                                Text(note, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 18.sp, maxLines = 3)
+                            }
+                            TextButton(onClick = { onOpen(saved.first, saved.second) }) {
+                                Text(if (language == AppLanguage.EN) "Open at this verse →" else if (language == AppLanguage.AR) "فتح عند هذه الآية ←" else "لەسەر ئەم ئایەتە بکەرەوە ←", fontSize = 10.sp)
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    if (editorKey != null) AlertDialog(
+        onDismissRequest = { editorKey = null },
+        title = {
+            Text(
+                if (language == AppLanguage.EN) "Personal verse note"
+                else if (language == AppLanguage.AR) "ملاحظة شخصية للآية"
+                else "تێبینی تایبەتی بۆ ئایەت"
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = editorText,
+                onValueChange = { editorText = it },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 4,
+                maxLines = 8,
+                placeholder = {
+                    Text(
+                        if (language == AppLanguage.EN) "Write what you learned, a reflection, or a study reminder…"
+                        else if (language == AppLanguage.AR) "اكتب فائدة أو تدبرًا أو تذكيرًا للمراجعة…"
+                        else "سوود، تدببەر یان تێبینی خوێندنەوە بنووسە…"
+                    )
+                }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val key = editorKey ?: return@TextButton
+                val text = editorText.trim()
+                val nextNotes = if (text.isBlank()) notes - key else notes + (key to text)
+                notes = nextNotes
+                val json = org.json.JSONObject().apply { nextNotes.forEach { (k, v) -> put(k, v) } }
+                prefs.edit().putString("bookmark_notes", json.toString()).apply()
+                editorKey = null
+            }) { Text(if (language == AppLanguage.EN) "Save note" else if (language == AppLanguage.AR) "حفظ الملاحظة" else "تێبینی پاشەکەوت بکە") }
+        },
+        dismissButton = { TextButton(onClick = { editorKey = null }) { Text(tr(language, "back")) } }
+    )
 }
 
 @Composable
