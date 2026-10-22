@@ -276,7 +276,13 @@ def main() -> int:
     print(json.dumps(inventory["counts"], ensure_ascii=False, indent=2))
     print("catalog:", catalog_path)
     if os.environ.get("MASHXALL_PRINT_DB_SCHEMAS") == "1":
-        selected = re.compile(r"tafseer|tafsir|hadith|prayertime|farmuda|book|quran|azkar|word_by_word|lexicon", re.I)
+        # Include the full Salawati database too: its location/prayer tables and
+        # translated adhkar schema are used to merge source-only content into Mashxall.
+        selected = re.compile(
+            r"tafseer|tafsir|hadith|prayertime|farmuda|book|quran|azkar|word_by_word|lexicon|"
+            r"salawati|muslim_db|ayah_info|location|prayer_time",
+            re.I,
+        )
         schema_report = []
         for db in inventory["databases"]:
             path = db.get("asset_path", "")
