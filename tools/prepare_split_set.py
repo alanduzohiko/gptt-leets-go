@@ -455,7 +455,7 @@ def main() -> int:
     if manifest_semantics(redecoded_split_base / "AndroidManifest.xml") != manifest_before:
         raise ValueError("Split-install base APK changed manifest semantics beyond package identity")
     split_base_entries = zip_entries(rebuilt_split_base)
-    split_base_dex = {n: b for n, b in split_base_entries.items() if re.fullmatch(r"classes\\d*\\.dex", n)}
+    split_base_dex = {n: b for n, b in split_base_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
     if set(split_base_dex) != set(source_dex):
         raise ValueError("Split-install base APK changed the original multidex file set")
     split_base_db = next((n for n in split_base_entries if n.endswith("muslim_db_v2.5.1.db")), None)
@@ -487,8 +487,8 @@ def main() -> int:
             raise ValueError("Rebuilt config split changed manifest semantics beyond package ID: " + name)
         source_config_entries = zip_entries(source_config)
         rebuilt_config_entries = zip_entries(rebuilt_config)
-        source_config_dex = {n: b for n, b in source_config_entries.items() if re.fullmatch(r"classes\\d*\\.dex", n)}
-        rebuilt_config_dex = {n: b for n, b in rebuilt_config_entries.items() if re.fullmatch(r"classes\\d*\\.dex", n)}
+        source_config_dex = {n: b for n, b in source_config_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
+        rebuilt_config_dex = {n: b for n, b in rebuilt_config_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
         if {n: sha(b) for n, b in source_config_dex.items()} != {n: sha(b) for n, b in rebuilt_config_dex.items()}:
             raise ValueError("Config split DEX unexpectedly changed: " + name)
         source_config_libs = {n: sha(b) for n, b in source_config_entries.items() if n.startswith("lib/") and n.endswith(".so")}
