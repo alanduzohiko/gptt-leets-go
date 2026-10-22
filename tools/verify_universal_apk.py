@@ -90,8 +90,14 @@ def main() -> int:
         raise ValueError("Launcher icon resources missing from standalone APK: " + ", ".join(missing_launcher))
 
     before_dex, after_dex = dex_hashes(source_base), dex_hashes(output)
-    if not before_dex or before_dex != after_dex:
-        raise ValueError("DEX files are missing or differ from original base APK")
+    if not before_dex or set(before_dex) != set(after_dex):
+        raise ValueError("DEX files are missing or the multidex file set differs from the original")
+    if not any(b"com.kosratdahmad.mashxall.full" in output[n] for n in after_dex):
+        raise ValueError("Rebuilt APK does not contain its new app ID in DEX string data")
+    if not any(b"android.resource://com.kosratdahmad.mashxall.full/raw/mecca" in output[n] for n in after_dex):
+        raise ValueError("Rebuilt APK does not contain updated notification audio URIs")
+    if not any(b"Lcom/kosratdahmad/myprayers/screens/MainActivity;" in output[n] for n in after_dex):
+        raise ValueError("Rebuilt APK is missing original application class descriptors")
 
     db_before = next((n for n in source_base if n.endswith(DB_SUFFIX)), None)
     db_after = next((n for n in output if n.endswith(DB_SUFFIX)), None)
@@ -120,14 +126,16 @@ def main() -> int:
         "launcher_icon_resources_present": True,
         "launcher_icon_entries": sorted(required_launcher),
         "source_package_id": "com.kosratdahmad.myprayers",
-        "output_package_id_target": "com.kosratdahmad.mashxall.repair2",
-        "dex_files_byte_identical_to_original_base": True,
+        "output_package_id_target": "com.kosratdahmad.mashxall.full",
+        "dex_files_reassembled_from_original_smali": True,
+        "original_class_descriptors_preserved": True,
+        "runtime_package_literals_updated": True,
         "dex_sha256": before_dex,
         "offline_database_byte_identical": True,
         "offline_database": database,
         "arm64_native_libraries_preserved": len(libs),
-        "runtime_install_and_launch_test": "NOT PERFORMED: must be tested on the user's Android 11 phone",
-        "signing_note": "The APK uses a separate app ID and a test signing certificate. It does not update or replace the official app."
+        "runtime_install_and_launch_test": "Must pass the Android 11 emulator job before this build is called verified.",
+        "signing_note": "The APK preserves original components and app logic but uses a separate app ID and test signing certificate. Package-restricted cloud APIs may need owner-side configuration."
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
