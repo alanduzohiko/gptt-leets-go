@@ -237,10 +237,23 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
         }
         if (mushafMode) {
-            MushafPageViewer(language, foreground, mushafPage) { requested ->
-                mushafPage = requested.coerceIn(1, 604)
-                prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
-            }
+            MushafPageViewer(
+                language = language,
+                foreground = foreground,
+                page = mushafPage,
+                onPageChange = { requested ->
+                    mushafPage = requested.coerceIn(1, 604)
+                    prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
+                },
+                onVerseClick = { surahNumber, ayahNumber ->
+                    selected = surahNumber
+                    onSurah(surahNumber)
+                    onOpenVerse(surahNumber, ayahNumber)
+                    prefs.edit().putInt("last_surah", surahNumber).putInt("last_ayah_number", ayahNumber).apply()
+                    query = ""
+                    mushafMode = false
+                }
+            )
         } else if (verses.isEmpty()) {
             LoadingOrEmpty(loading, language, foreground)
         } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -488,10 +501,12 @@ private fun MushafPageViewer(
     language: AppLanguage,
     foreground: Color,
     page: Int,
-    onPageChange: (Int) -> Unit
+    onPageChange: (Int) -> Unit,
+    onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
@@ -500,6 +515,7 @@ private fun MushafPageViewer(
         loading = true
         failed = false
         bitmap = null
+        pageVerses = ContentRepository.loadMushafPageVerses(context, page)
         val source = ContentRepository.loadMushafPageSvg(context, page)
         if (source == null) {
             failed = true
@@ -573,7 +589,29 @@ private fun MushafPageViewer(
                 }
             }
         }
-        Spacer(Modifier.height(5.dp))
+        if (pageVerses.isNotEmpty()) {
+            Spacer(Modifier.height(5.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
+                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
+                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
+                },
+                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
+            )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
+                    AssistChip(
+                        onClick = { onVerseClick(verse.surah, verse.ayah) },
+                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
+                    )
+                }
+            }
+        }
         Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }

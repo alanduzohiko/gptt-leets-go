@@ -115,6 +115,8 @@ private data class KhairahPageMeta(
     val id: Int, val volume: String, val page: String, val offset: Int,
     val length: Int, val byteCount: Int, val sha256: String
 )
+data class MushafPageVerse(val surah: Int, val ayah: Int)
+
 private data class MushafSvgMeta(
     val page: Int, val offset: Int, val compressedLength: Int,
     val uncompressedLength: Int, val sha256: String
@@ -135,6 +137,7 @@ object ContentRepository {
     const val AZKAR_DB = "content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db"
     const val SALAWATI_DB = AZKAR_DB
     const val BOOKS_DB = "content/noor_tafsir_1.2.2/base/assets/tn_books.db"
+    private const val TAJWEED_DB = "content/noor_tafsir_1.2.2/base/assets/ayah_info.db"
     private const val MUSHAF_SVG_BIN = "content/khairah_1.2/base/assets/mushaf/pages.bin"
     private const val MUSHAF_SVG_INDEX = "mushaf_svg_index.json"
     @Volatile private var cachedMushafIndex: Map<Int, MushafSvgMeta>? = null
@@ -235,6 +238,33 @@ object ContentRepository {
             }
             cachedMushafIndex = result
             return result
+        }
+    }
+
+    suspend fun loadMushafPageVerses(context: Context, page: Int): List<MushafPageVerse> = withContext(Dispatchers.IO) {
+        val targetPage = page.coerceIn(1, 604)
+        queryDb(context, TAJWEED_DB, emptyList()) { db ->
+            db.rawQuery(
+                """
+                SELECT DISTINCT surah_id,verse_id
+                FROM (
+                    SELECT page_number,surah_id,verse_id
+                    FROM v2_tajweed_page_data_line
+                    WHERE page_number=?
+                    UNION
+                    SELECT page_number,surah_id,verse_id
+                    FROM page_data_line
+                    WHERE page_number=?
+                )
+                WHERE surah_id BETWEEN 1 AND 114 AND verse_id BETWEEN 1 AND 286
+                ORDER BY surah_id,verse_id
+                """.trimIndent(),
+                arrayOf(targetPage.toString(), targetPage.toString())
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(MushafPageVerse(c.int("surah_id"), c.int("verse_id")))
+                }
+            }
         }
     }
 
