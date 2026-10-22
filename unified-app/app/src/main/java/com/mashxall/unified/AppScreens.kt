@@ -119,6 +119,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 @Composable
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var selected by rememberSaveable { mutableIntStateOf(initialSurah) }
     var verses by remember { mutableStateOf<List<Ayah>>(emptyList()) }
@@ -244,6 +245,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
                 var noteExpanded by rememberSaveable(verse.surah, verse.number) { mutableStateOf(false) }
+                var showRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
+                var loadingRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
+                var relatedHadiths by remember(verse.surah, verse.number) { mutableStateOf<List<AyahHadith>>(emptyList()) }
                 Card(
                     modifier = if (query.isNotBlank()) Modifier.clickable {
                         selected = verse.surah
@@ -291,15 +295,114 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         )
                         if (verse.hasHadith) {
                             Spacer(Modifier.height(5.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Hadith references available for this verse"
-                                    AppLanguage.AR -> "توجد روايات مرتبطة بهذه الآية في المصدر"
-                                    AppLanguage.CKB -> "لە سەرچاوەدا ئاماژەی فەرموودە بۆ ئەم ئایەتە هەیە"
+                            TextButton(
+                                onClick = {
+                                    showRelatedHadith = true
+                                    if (relatedHadiths.isEmpty() && !loadingRelatedHadith) {
+                                        loadingRelatedHadith = true
+                                        scope.launch {
+                                            relatedHadiths = ContentRepository.loadHadithsForAyah(context, verse.surah, verse.number)
+                                            loadingRelatedHadith = false
+                                        }
+                                    }
                                 },
-                                color = Gold.copy(alpha = 0.92f), fontSize = 10.sp
-                            )
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Read related hadith"
+                                        AppLanguage.AR -> "عرض الأحاديث المرتبطة بالآية"
+                                        AppLanguage.CKB -> "فەرموودە پەیوەندیدارەکان ببینە"
+                                    },
+                                    color = Gold.copy(alpha = 0.96f), fontSize = 11.sp
+                                )
+                            }
                         }
+                        if (showRelatedHadith) AlertDialog(
+                            onDismissRequest = { showRelatedHadith = false },
+                            title = {
+                                Column {
+                                    Text(
+                                        when (language) {
+                                            AppLanguage.EN -> "Hadith related to this verse"
+                                            AppLanguage.AR -> "الأحاديث المرتبطة بهذه الآية"
+                                            AppLanguage.CKB -> "فەرموودەکانی پەیوەندیدار بە ئەم ئایەتە"
+                                        },
+                                        color = foreground, fontWeight = FontWeight.Bold, fontSize = 17.sp
+                                    )
+                                    Text(
+                                        "${tr(language, "surah")} ${verse.surah} • ${tr(language, "ayah")} ${verse.number}",
+                                        color = Gold, fontSize = 11.sp
+                                    )
+                                }
+                            },
+                            text = {
+                                when {
+                                    loadingRelatedHadith -> Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = Gold)
+                                    }
+                                    relatedHadiths.isEmpty() -> Text(
+                                        when (language) {
+                                            AppLanguage.EN -> "No readable related narration was found for this verse."
+                                            AppLanguage.AR -> "لم يُعثر على رواية قابلة للعرض مرتبطة بهذه الآية."
+                                            AppLanguage.CKB -> "هیچ فەرموودەیەکی خوێندراوە بۆ ئەم ئایەتە نەدۆزرایەوە."
+                                        },
+                                        color = foreground, fontSize = 13.sp, lineHeight = 20.sp
+                                    )
+                                    else -> LazyColumn(
+                                        modifier = Modifier.heightIn(max = 420.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        items(relatedHadiths, key = { it.id }) { related ->
+                                            Column(
+                                                Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                                            ) {
+                                                val collectionLabel = when (language) {
+                                                    AppLanguage.EN -> related.collectionEnglish.ifBlank { related.collectionCode }
+                                                    AppLanguage.AR -> related.collectionArabic.ifBlank { related.collectionCode }
+                                                    AppLanguage.CKB -> related.collectionArabic.ifBlank { related.collectionCode }
+                                                }
+                                                if (collectionLabel.isNotBlank()) {
+                                                    Text(collectionLabel, color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                                Text(related.arabic, color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                                val translation = when (language) {
+                                                    AppLanguage.CKB -> related.kurdish
+                                                    AppLanguage.AR -> related.english
+                                                    AppLanguage.EN -> related.english
+                                                }
+                                                if (translation.isNotBlank()) {
+                                                    Spacer(Modifier.height(7.dp))
+                                                    Text(translation, color = foreground.copy(alpha = 0.84f), fontSize = 12.sp, lineHeight = 20.sp)
+                                                }
+                                                if (language != AppLanguage.EN && related.english.isNotBlank() && related.english != translation) {
+                                                    Spacer(Modifier.height(5.dp))
+                                                    Text("English: " + related.english, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp, lineHeight = 18.sp)
+                                                }
+                                                if (related.reference.isNotBlank()) {
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Text(related.reference, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 16.sp)
+                                                }
+                                                if (related.verseReferences.size > 1) {
+                                                    Spacer(Modifier.height(3.dp))
+                                                    Text(
+                                                        (if (language == AppLanguage.EN) "Also linked to: " else if (language == AppLanguage.AR) "مرتبطة أيضًا بالآيات: " else "پەیوەستە بە ئایەتەکانی: ") +
+                                                            related.verseReferences.filterNot { it == (verse.surah to verse.number) }.joinToString { "${it.first}:${it.second}" },
+                                                        color = foreground.copy(alpha = 0.5f), fontSize = 9.sp
+                                                    )
+                                                }
+                                                Divider(color = Gold.copy(alpha = 0.2f), modifier = Modifier.padding(top = 8.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showRelatedHadith = false }) {
+                                    Text(if (language == AppLanguage.EN) "Close" else if (language == AppLanguage.AR) "إغلاق" else "داخستن")
+                                }
+                            }
+                        )
                         if (verse.note.isNotBlank()) {
                             TextButton(onClick = { noteExpanded = !noteExpanded }) {
                                 Text(
