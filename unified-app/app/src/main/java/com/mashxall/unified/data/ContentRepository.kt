@@ -314,14 +314,24 @@ object ContentRepository {
         else -> "translation_puxta"
     }
 
-    private suspend fun allTranslationRows(context: Context, key: String): Map<Pair<Int, Int>, String> {
+    private suspend fun allTranslationRows(
+        context: Context,
+        key: String,
+        selectedSurah: Int? = null
+    ): Map<Pair<Int, Int>, String> {
         val path = when (key) {
             "sahih" -> tafsirBooks.first { it.id == "sahih" }.assetPath
             "translit" -> TRANSLITERATION_DB
             else -> return emptyMap()
         }
         return queryDb(context, path, emptyMap<Pair<Int, Int>, String>()) { db ->
-            db.rawQuery("SELECT surah_id,verse_id,text FROM quran", null).use { c ->
+            val sql = if (selectedSurah == null) {
+                "SELECT surah_id,verse_id,text FROM quran"
+            } else {
+                "SELECT surah_id,verse_id,text FROM quran WHERE surah_id=?"
+            }
+            val args = selectedSurah?.let { arrayOf(it.toString()) }
+            db.rawQuery(sql, args).use { c ->
                 buildMap {
                     while (c.moveToNext()) {
                         val rawText = c.string("text")
@@ -394,7 +404,7 @@ object ContentRepository {
             $where
             ORDER BY q.surah_id,q.verse_id
         """.trimIndent()
-        val external = allTranslationRows(context, key)
+        val external = allTranslationRows(context, key, selectedSurah.takeIf { !global })
         val queryArgs = if (selectedSurah != null && !global) arrayOf(selectedSurah.toString()) else null
         queryDb(context, QURAN_DB, emptyList()) { db ->
             db.rawQuery(sql, queryArgs).use { c ->
