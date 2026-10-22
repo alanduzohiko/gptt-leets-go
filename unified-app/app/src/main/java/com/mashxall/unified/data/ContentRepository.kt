@@ -33,6 +33,18 @@ data class Ayah(
     val surahNameArabic: String = "",
     val surahNameEnglish: String = ""
 )
+data class AyahHadith(
+    val id: Int,
+    val collectionCode: String,
+    val collectionArabic: String,
+    val collectionEnglish: String,
+    val reference: String,
+    val verseReference: String,
+    val verseReferences: List<Pair<Int, Int>>,
+    val arabic: String,
+    val english: String,
+    val kurdish: String
+)
 data class HadithItem(
     val id: Int,
     val sort: Int,
@@ -116,6 +128,7 @@ object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
     const val PRAYER_DB = "content/noor_tafsir_1.2.2/base/assets/prayertimes.db"
     const val HADITH_DB = "content/noor_tafsir_1.2.2/base/assets/db_hadith.db"
+    const val HADITH_OF_AYAH_DB = "content/noor_tafsir_1.2.2/base/assets/db_hadith_of_ayah.db"
     const val WORD_DB = "content/noor_tafsir_1.2.2/base/assets/db_word_by_word.db"
     const val TRANSLITERATION_DB = "content/noor_tafsir_1.2.2/base/assets/kurdish_transliteration.db"
     const val LEXICON_DB = "content/noor_tafsir_1.2.2/base/assets/db_words_lexicon.db"
@@ -582,6 +595,58 @@ object ContentRepository {
 
     private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    suspend fun loadHadithsForAyah(
+        context: Context,
+        surah: Int,
+        ayah: Int
+    ): List<AyahHadith> = withContext(Dispatchers.IO) {
+        queryDb(context, HADITH_OF_AYAH_DB, emptyList<AyahHadith>()) { db ->
+            db.rawQuery(
+                """
+                SELECT id,reference,english,collection,verse_reference,arabic,kurdish
+                FROM hadith_on_ayah
+                ORDER BY id
+                """.trimIndent(), null
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        val verseReference = c.string("verse_reference")
+                        val verseReferences = NoorHadithCipher.parseVerseReferences(verseReference)
+                        if ((surah to ayah) !in verseReferences) continue
+
+                        val collectionCode = NoorHadithCipher.decrypt(c.string("collection"))
+                        val collectionArabic = NoorHadithCipher.collectionArabic(collectionCode)
+                        val collectionEnglish = NoorHadithCipher.collectionEnglish(collectionCode)
+                        val rawReference = NoorHadithCipher.decrypt(c.string("reference"))
+                        val reference = buildString {
+                            if (collectionArabic.isNotBlank() && !rawReference.contains(collectionArabic)) {
+                                append(collectionArabic)
+                                if (rawReference.isNotBlank()) append("\n")
+                            }
+                            append(rawReference.split(",").map { it.trim() }.filter { token ->
+                                token.isNotBlank() && !token.equals("USC", true)
+                            }.joinToString("\n"))
+                        }.trim()
+                        add(
+                            AyahHadith(
+                                id = c.int("id"),
+                                collectionCode = collectionCode,
+                                collectionArabic = collectionArabic,
+                                collectionEnglish = collectionEnglish,
+                                reference = reference,
+                                verseReference = verseReference,
+                                verseReferences = verseReferences,
+                                arabic = NoorHadithCipher.decrypt(c.string("arabic")),
+                                english = NoorHadithCipher.decrypt(c.string("english")),
+                                kurdish = c.string("kurdish")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     private fun hadithSearchFilter(query: String): String = if (query.isBlank()) "" else """
         WHERE h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
