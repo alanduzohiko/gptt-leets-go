@@ -103,7 +103,7 @@ def main() -> int:
         "standalone_apk": True,
         "required_entries_present": True,
         "source_package_id": "com.kosratdahmad.myprayers",
-        "output_package_id_target": "com.kosratdahmad.mashxall",
+        "output_package_id_target": "com.kosratdahmad.mashxall.repair2",
         "dex_files_byte_identical_to_original_base": True,
         "dex_sha256": before_dex,
         "offline_database_byte_identical": True,
