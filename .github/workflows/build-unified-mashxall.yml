@@ -87,6 +87,8 @@ jobs:
 
       - name: Reverse engineer original apps for data-format clues
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_static_reverse_engineering) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[RE]'))
+        env:
+          MASHXALL_RE_DUMP_FOCUSED: "1"
         run: |
           set -euo pipefail
           mkdir -p dist
