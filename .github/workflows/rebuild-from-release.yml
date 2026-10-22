@@ -235,7 +235,7 @@ jobs:
             exit 1
           fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee dist/aapt-badging.txt
-          grep -q "^package: name='com.kosratdahmad.mashxall.repair2'" dist/aapt-badging.txt
+          grep -q "^package: name='com.kosratdahmad.mashxall.full'" dist/aapt-badging.txt
           grep -q "^application: label='مەشخەڵ' icon='res/mipmap-anydpi-v26/ic_launcher.xml'" dist/aapt-badging.txt
           grep -q "^sdkVersion:" dist/aapt-badging.txt
 
@@ -265,7 +265,7 @@ jobs:
           3. حدّد الملفات الثلاثة معًا: base.apk و split_config.arm64_v8a.apk و split_config.xxhdpi.apk.
           4. وافق على التثبيت.
 
-          معرّف هذه النسخة هو com.kosratdahmad.mashxall.repair2، وهو منفصل عن النسخة الرسمية com.kosratdahmad.myprayers؛ لذلك لا حاجة لحذف التطبيق الأصلي لاختبارها.
+          معرّف هذه النسخة هو com.kosratdahmad.mashxall.full، وهو منفصل عن النسخة الرسمية com.kosratdahmad.myprayers؛ لذلك لا حاجة لحذف التطبيق الأصلي لاختبارها.
 
           هذا الملف مخصّص للاختبار. لا تعتبر البناء ناجحًا حتى يجتاز اختبار التثبيت والإقلاع على محاكي Android 11 بمعمارية ARM64.
           EOF
@@ -298,7 +298,7 @@ jobs:
 
   emulator-test:
     needs: rebuild
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -319,8 +319,8 @@ jobs:
           target: google_apis
           arch: arm64-v8a
           profile: pixel_4
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -accel off
+          disable-animations: false
           script: bash tools/test-emulator.sh
 
       - name: Upload ARM64 emulator diagnostics
@@ -349,19 +349,19 @@ jobs:
       - name: Publish with an honest runtime-test status
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: mashxall-repair2-20261022
-          name: Mashxall 3.1.3 — Repair 2 test APK
+          tag_name: mashxall-full-fidelity-20261022
+          name: Mashxall 3.1.3 — Original-app full-fidelity build
           prerelease: true
           draft: false
           generate_release_notes: false
           fail_on_unmatched_files: true
           files: dist/Mashxall-3.1.3.apk
           body: |
-            Standalone single-file APK built from the exact source bundle uploaded by the repository owner.
-            Original DEX files and offline database were verified byte-identical; four ARM64 native libraries were preserved.
-            Static validation passed: Android-readable manifest, APK alignment/signature, required resources, original DEX bytes, offline database, and ARM64 native libraries.
-            IMPORTANT: Android 11 install/launch was not verified if the separate emulator job remains queued or fails. Treat this as a test build, not a confirmed fix.
-            Test package ID: com.kosratdahmad.mashxall.repair2. This unique ID avoids collisions with prior test packages and the official app.
+            Standalone APK rebuilt from the exact original split bundle uploaded by the repository owner, with original application class namespace, all original activities/services/receivers/providers, original resources, offline database, and ARM64 native libraries preserved.
+            The original smali is reassembled after changing only the compiled application-ID literal and package-specific notification-audio resource URIs needed by the separate package ID.
+            Static validation checks APK signature/alignment, all DEX files and class descriptors, manifest identity, original database checksum, launcher resources, and four original ARM64 native libraries.
+            The Android 11 emulator job attempts a real install/launch and records process/logcat diagnostics. Do not interpret static checks alone as a runtime guarantee.
+            Package ID: com.kosratdahmad.mashxall.full. Some Firebase/Maps/remote services may enforce the publisher's original package/signing identity.
             The signer is a temporary test key unless a stable repository signing secret is configured.
         env:
           GITHUB_TOKEN: ${{ github.token }}
