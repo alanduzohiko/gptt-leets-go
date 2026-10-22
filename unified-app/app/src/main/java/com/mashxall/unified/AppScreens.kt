@@ -724,7 +724,28 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
     var selectedBook by rememberSaveable { mutableStateOf(if (language == AppLanguage.EN) "sahih" else if (language == AppLanguage.AR) "mukhtasar" else "roshn") }
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
-    LaunchedEffect(selectedBook, surah, ayah) { loading = true; text = ContentRepository.loadTafsir(context, selectedBook, surah, ayah); loading = false }
+    var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
+    var chooseSurah by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
+    LaunchedEffect(selectedBook, surah, ayah) {
+        loading = true
+        text = ContentRepository.loadTafsir(context, selectedBook, surah, ayah)
+        loading = false
+    }
+    val currentSurah = surahs.firstOrNull { it.number == surah }
+    val previousVerse: Pair<Int, Int> = when {
+        ayah > 1 -> surah to (ayah - 1)
+        surah > 1 -> {
+            val previous = surahs.firstOrNull { it.number == surah - 1 }
+            previous?.let { it.number to it.ayahCount } ?: (surah to 1)
+        }
+        else -> surah to 1
+    }
+    val nextVerse: Pair<Int, Int> = when {
+        currentSurah != null && ayah < currentSurah.ayahCount -> surah to (ayah + 1)
+        currentSurah != null && surah < 114 -> (surah + 1) to 1
+        else -> surah to ayah
+    }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp)) {
             Text(tr(language, "tafsir"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -736,9 +757,27 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { onChangeVerse(surah, (ayah - 1).coerceAtLeast(1)) }) { Text("‹") }
-                Text(tr(language, "surah") + " " + surah + " • " + tr(language, "ayah") + " " + ayah, color = foreground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                OutlinedButton(onClick = { onChangeVerse(surah, ayah + 1) }) { Text("›") }
+                OutlinedButton(
+                    onClick = { onChangeVerse(previousVerse.first, previousVerse.second) },
+                    enabled = surah > 1 || ayah > 1
+                ) { Text("‹") }
+                Column(
+                    modifier = Modifier.weight(1f).clickable { chooseSurah = true }.padding(horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        currentSurah?.arabicName ?: (tr(language, "surah") + " " + surah),
+                        color = Gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1
+                    )
+                    Text(
+                        tr(language, "ayah") + " " + ayah,
+                        color = foreground, fontSize = 11.sp, textAlign = TextAlign.Center
+                    )
+                }
+                OutlinedButton(
+                    onClick = { onChangeVerse(nextVerse.first, nextVerse.second) },
+                    enabled = nextVerse != (surah to ayah)
+                ) { Text("›") }
             }
         }
         Card(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp)) {
@@ -757,6 +796,38 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
             }
         }
     }
+    if (chooseSurah) AlertDialog(
+        onDismissRequest = { chooseSurah = false },
+        title = { Text(if (language == AppLanguage.EN) "Choose a surah" else if (language == AppLanguage.AR) "اختر السورة" else "سوورەت هەڵبژێرە") },
+        text = {
+            LazyColumn(Modifier.height(420.dp)) {
+                items(surahs, key = { it.number }) { item ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            chooseSurah = false
+                            onChangeVerse(item.number, 1)
+                        }.padding(vertical = 10.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(30.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                            Text(item.number.toString(), color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(9.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(item.arabicName, color = foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                item.englishName + " • " + item.ayahCount + " " + tr(language, "verse"),
+                                color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
+                            )
+                        }
+                        if (item.number == surah) Text("✓", color = Gold, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
+    )
+
 }
 private fun tafsirLabel(book: TafsirBook, language: AppLanguage): String = when (language) {
     AppLanguage.CKB -> book.labelCkb
