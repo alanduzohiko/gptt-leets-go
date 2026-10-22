@@ -1,6 +1,8 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.app.AlarmManager
 import android.Manifest
 import android.content.pm.PackageManager
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
@@ -459,6 +462,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
     var hadithItems by remember { mutableStateOf<List<HadithItem>>(emptyList()) }
+    var totalMatches by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var loadingMore by remember { mutableStateOf(false) }
     var offset by remember { mutableIntStateOf(0) }
@@ -469,9 +473,10 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         loadingMore = false
         offset = 0
         hasMore = true
+        totalMatches = ContentRepository.loadHadithCount(context, query.trim())
         hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100)
         offset = hadithItems.size
-        hasMore = hadithItems.size == 100
+        hasMore = hadithItems.size == 100 && offset < totalMatches
         loading = false
         listState.scrollToItem(0)
     }
@@ -481,9 +486,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Spacer(Modifier.height(3.dp))
             Text(
                 when (language) {
-                    AppLanguage.EN -> "8,202 narrations in the source database"
-                    AppLanguage.AR -> "٨٬٢٠٢ رواية في قاعدة البيانات الأصلية"
-                    AppLanguage.CKB -> "٨٬٢٠٢ فەرموودە لە بنکەدراوەی سەرچاوەدا"
+                    AppLanguage.EN -> "$totalMatches narrations found • $offset loaded"
+                    AppLanguage.AR -> "عُثر على $totalMatches رواية • تم تحميل $offset"
+                    AppLanguage.CKB -> "$totalMatches فەرموودە دۆزرایەوە • $offset بارکراوە"
                 }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
             )
             Spacer(Modifier.height(10.dp))
@@ -495,37 +500,92 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(hadithItems, key = { it.id }) { hadith ->
+                var showEnglish by rememberSaveable(hadith.id) { mutableStateOf(language == AppLanguage.EN) }
+                var showNotes by rememberSaveable(hadith.id) { mutableStateOf(false) }
+                val collection = when (language) {
+                    AppLanguage.EN -> hadith.bookNameEn.ifBlank { hadith.bookName }
+                    AppLanguage.AR -> hadith.bookNameAr.ifBlank { hadith.bookName }
+                    AppLanguage.CKB -> hadith.bookName
+                }
+                val kitab = when (language) {
+                    AppLanguage.EN -> hadith.kitabNameEn.ifBlank { hadith.kitabName }
+                    AppLanguage.AR -> hadith.kitabNameAr.ifBlank { hadith.kitabName }
+                    AppLanguage.CKB -> hadith.kitabName
+                }
+                val chapter = when (language) {
+                    AppLanguage.EN -> hadith.chapterNameEn.ifBlank { hadith.chapterName }
+                    AppLanguage.AR -> hadith.chapterNameAr.ifBlank { hadith.chapterName }
+                    AppLanguage.CKB -> hadith.chapterName
+                }
+                val numberInBook = hadith.sortInBook.ifBlank { hadith.sort.toString() }
+                val translatedText = when (language) {
+                    AppLanguage.CKB -> hadith.sorani
+                    AppLanguage.AR -> hadith.arabic
+                    AppLanguage.EN -> hadith.english
+                }
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(15.dp)) {
-                        val collection = when (language) {
-                            AppLanguage.EN -> hadith.bookNameEn.ifBlank { hadith.bookName }
-                            AppLanguage.AR -> hadith.bookNameAr.ifBlank { hadith.bookName }
-                            AppLanguage.CKB -> hadith.bookName
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(collection.ifBlank { "Hadith #${hadith.id}" }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                if (kitab.isNotBlank()) Text(kitab, color = foreground.copy(alpha = 0.72f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                if (chapter.isNotBlank()) Text(chapter, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp)
+                                Text(
+                                    if (language == AppLanguage.EN) "No. $numberInBook • ID ${hadith.id}"
+                                    else if (language == AppLanguage.AR) "رقم $numberInBook • المعرّف ${hadith.id}"
+                                    else "ژمارە $numberInBook • ناسنامە ${hadith.id}",
+                                    color = foreground.copy(alpha = 0.42f), fontSize = 9.sp
+                                )
+                            }
+                            IconButton(onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val textToCopy = buildString {
+                                    append(collection).append("\n")
+                                    if (kitab.isNotBlank()) append(kitab).append("\n")
+                                    if (chapter.isNotBlank()) append(chapter).append("\n")
+                                    append(hadith.arabic).append("\n\n")
+                                    if (hadith.sorani.isNotBlank()) append(hadith.sorani).append("\n\n")
+                                    if (hadith.english.isNotBlank()) append(hadith.english).append("\n\n")
+                                    append("Reference: ").append(numberInBook)
+                                }
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", textToCopy))
+                                Toast.makeText(context, if (language == AppLanguage.EN) "Hadith copied" else if (language == AppLanguage.AR) "تم نسخ الحديث" else "فەرموودەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Outlined.ContentCopy, null, tint = Gold, modifier = Modifier.size(18.dp))
+                            }
                         }
-                        val chapter = when (language) {
-                            AppLanguage.EN -> hadith.chapterNameEn.ifBlank { hadith.chapterName }
-                            AppLanguage.AR -> hadith.chapterNameAr.ifBlank { hadith.chapterName }
-                            AppLanguage.CKB -> hadith.chapterName
-                        }
-                        Text(collection.ifBlank { "Hadith #${hadith.id}" }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        if (chapter.isNotBlank()) Text(chapter, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp)
                         Spacer(Modifier.height(7.dp))
                         Text(hadith.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                        val body = when (language) {
-                            AppLanguage.CKB -> hadith.sorani
-                            AppLanguage.AR -> hadith.arabic
-                            AppLanguage.EN -> hadith.english
-                        }
-                        if (body.isNotBlank() && body != hadith.arabic) {
+                        if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
                             Spacer(Modifier.height(8.dp))
-                            Text(body.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.8f), fontSize = 13.sp, lineHeight = 21.sp)
+                            Text(translatedText.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.82f), fontSize = 13.sp, lineHeight = 21.sp)
                         }
-                        Text(
-                            if (language == AppLanguage.EN) "Reference ID: ${hadith.id}"
-                            else if (language == AppLanguage.AR) "رقم الرواية: ${hadith.id}"
-                            else "ژمارەی فەرموودە: ${hadith.id}",
-                            color = foreground.copy(alpha = 0.42f), fontSize = 9.sp
-                        )
+                        if (language != AppLanguage.EN && hadith.english.isNotBlank()) {
+                            TextButton(onClick = { showEnglish = !showEnglish }) {
+                                Text(if (showEnglish) {
+                                    if (language == AppLanguage.AR) "إخفاء الإنجليزية" else "English: hide"
+                                } else {
+                                    if (language == AppLanguage.AR) "عرض الإنجليزية" else "English translation"
+                                }, fontSize = 11.sp)
+                            }
+                            if (showEnglish) Text(hadith.english.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                        }
+                        if (hadith.note.isNotBlank() || hadith.footnote.isNotBlank()) {
+                            TextButton(onClick = { showNotes = !showNotes }) {
+                                Text(if (showNotes) {
+                                    if (language == AppLanguage.EN) "Hide notes" else if (language == AppLanguage.AR) "إخفاء الملاحظات" else "تێبینی بشارەوە"
+                                } else {
+                                    if (language == AppLanguage.EN) "Notes and footnotes" else if (language == AppLanguage.AR) "الملاحظات والحواشي" else "تێبینی و پەراوێز"
+                                }, fontSize = 11.sp)
+                            }
+                            if (showNotes) {
+                                if (hadith.note.isNotBlank()) Text(hadith.note.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                                if (hadith.footnote.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(hadith.footnote.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 18.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -539,7 +599,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 val nextPage = ContentRepository.loadHadiths(context, query.trim(), offset, 100)
                                 hadithItems = hadithItems + nextPage
                                 offset += nextPage.size
-                                hasMore = nextPage.size == 100
+                                hasMore = nextPage.size == 100 && offset < totalMatches
                                 loadingMore = false
                             }
                         },
@@ -702,18 +762,74 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     LaunchedEffect(Unit) { names = ContentRepository.loadNames(context) }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(tr(language, "names"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(5.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "${names.size} names with Quranic references and Kurdish descriptions"
+                AppLanguage.AR -> "${names.size} اسمًا مع مراجع قرآنية وشروح"
+                AppLanguage.CKB -> "${names.size} ناو لەگەڵ سەرچاوەی قورئان و ڕوونکردنەوە"
+            }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+        )
         Spacer(Modifier.height(8.dp))
-        if (names.isEmpty()) LoadingOrEmpty(false, language, foreground) else LazyColumn(contentPadding = PaddingValues(vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        if (names.isEmpty()) LoadingOrEmpty(false, language, foreground) else LazyColumn(
+            contentPadding = PaddingValues(vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
             items(names, key = { it.number }) { name ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(42.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
-                            Text(name.number.toString(), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                var expanded by rememberSaveable(name.number) { mutableStateOf(false) }
+                val description = when (language) {
+                    AppLanguage.CKB -> name.ckb
+                    AppLanguage.AR -> name.arabic
+                    AppLanguage.EN -> name.english
+                }
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(42.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                Text(name.number.toString(), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(name.arabic, color = Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                Text(description, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                            }
+                            Text(if (expanded) "−" else "+", color = Gold, fontSize = 22.sp)
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(name.arabic, color = Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                            Text(when (language) { AppLanguage.CKB -> name.ckb; AppLanguage.AR -> name.arabic; AppLanguage.EN -> name.english }, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                        if (expanded) {
+                            Spacer(Modifier.height(10.dp))
+                            if (name.highlightSection.isNotBlank()) {
+                                Text(name.highlightSection, color = foreground, fontSize = 19.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                Spacer(Modifier.height(6.dp))
+                            }
+                            if (language == AppLanguage.CKB && name.badini.isNotBlank()) {
+                                Text("بادینی: " + name.badini, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                                Spacer(Modifier.height(4.dp))
+                            }
+                            if (language == AppLanguage.EN && name.ckb.isNotBlank()) {
+                                Text("Sorani: " + name.ckb, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                                Spacer(Modifier.height(4.dp))
+                            }
+                            if (language == AppLanguage.AR && name.english.isNotBlank()) {
+                                Text("English: " + name.english, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                                Spacer(Modifier.height(4.dp))
+                            }
+                            if (name.surahAyah.isNotBlank()) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Qur'an reference: ${name.surahAyah}"
+                                        AppLanguage.AR -> "موضع قرآني: ${name.surahAyah}"
+                                        AppLanguage.CKB -> "سەرچاوەی قورئان: ${name.surahAyah}"
+                                    }, color = Gold, fontSize = 11.sp
+                                )
+                            }
+                            if (language == AppLanguage.EN && name.farsi.isNotBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text("Persian: " + name.farsi, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 17.sp)
+                            }
                         }
                     }
                 }
