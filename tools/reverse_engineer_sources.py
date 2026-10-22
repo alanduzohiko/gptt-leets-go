@@ -30,11 +30,11 @@ SOURCES = {
     },
 }
 PATTERNS = {
-    "binary_page_store": re.compile(r"pages\\.bin|\\.bin\\b|byte_count|search_segments|sha256|page_id", re.I),
-    "cryptography_and_integrity": re.compile(r"Cipher\\.getInstance|SecretKeySpec|IvParameterSpec|MessageDigest|AES|PBKDF2|decrypt|encrypt|CRC32", re.I),
+    "binary_page_store": re.compile(r"pages\.bin|\.bin\b|byte_count|search_segments|sha256|page_id", re.I),
+    "cryptography_and_integrity": re.compile(r"Cipher\.getInstance|SecretKeySpec|IvParameterSpec|MessageDigest|AES|PBKDF2|decrypt|encrypt|CRC32", re.I),
     "compression": re.compile(r"Inflater|InflaterInputStream|GZIP|Deflater|ZipInputStream|zstd|brotli|LZ4", re.I),
-    "asset_loading": re.compile(r"getAssets\\(|openFd\\(|AssetManager|assets/tafsir|\\.sqlite|quran\\.db|pages\\.bin", re.I),
-    "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\\.quran|\\.mp3", re.I),
+    "asset_loading": re.compile(r"getAssets\(|openFd\(|AssetManager|assets/tafsir|\.sqlite|quran\.db|pages\.bin", re.I),
+    "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\.quran|\.mp3", re.I),
 }
 
 def digest(data: bytes) -> str:
