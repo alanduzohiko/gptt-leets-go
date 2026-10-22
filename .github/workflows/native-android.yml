@@ -1,0 +1,225 @@
+name: Build native Mashxall for Android 11
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'native-app/**'
+      - '.github/workflows/native-android.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: mashxall-native-android
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout this repair repository only
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-35
+            build-tools;35.0.0
+
+      - name: Download and validate the exact original source bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/source"
+          gh release download source-3.1.3 --repo "$GITHUB_REPOSITORY" --pattern '*.apks' --dir "$RUNNER_TEMP/source"
+          mapfile -t files < <(find "$RUNNER_TEMP/source" -maxdepth 1 -type f -name '*.apks' -print)
+          [[ "${#files[@]}" -eq 1 ]] || { echo "Expected one original .apks source file"; exit 1; }
+          actual="$(sha256sum "${files[0]}" | awk '{print $1}')"
+          expected='bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3'
+          echo "Source archive SHA-256: $actual"
+          [[ "$actual" == "$expected" ]] || { echo "Source checksum mismatch"; exit 1; }
+          echo "SOURCE_APKS=${files[0]}" >> "$GITHUB_ENV"
+
+      - name: Extract and verify original database and audio assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, io, os, sqlite3, zipfile, tempfile
+          source = os.environ['SOURCE_APKS']
+          dest = 'native-app/app/src/main/assets/muslim_db_v2.5.1.db'
+          with zipfile.ZipFile(source) as outer:
+              if outer.testzip(): raise SystemExit('Source archive CRC error')
+              with zipfile.ZipFile(io.BytesIO(outer.read('base.apk'))) as base:
+                  db = base.read('assets/database/muslim_db_v2.5.1.db')
+                  audio = [(n.rsplit('/',1)[-1], base.read(n)) for n in base.namelist()
+                           if n.startswith('res/raw/') and n.lower().endswith(('.mp3','.ogg'))]
+          expected_audio = {'abdulbasit.mp3','abdulmajid.mp3','hijaz.mp3','madina.mp3','madina_fajr.mp3','majid.mp3','mansur.mp3','mecca.ogg','mecca_short.ogg','mshari_fajr.mp3','names99.mp3','naqshbandi.mp3','nasr.mp3','peshawa.mp3','rahid.mp3','ramazan.mp3'}
+          actual_audio = {n for n,_ in audio}
+          if actual_audio != expected_audio: raise SystemExit('Audio mismatch; missing='+repr(sorted(expected_audio-actual_audio))+' extra='+repr(sorted(actual_audio-expected_audio)))
+          raw_dir='native-app/app/src/main/res/raw'
+          os.makedirs(raw_dir,exist_ok=True)
+          for n,payload in audio:
+              with open(os.path.join(raw_dir,n),'wb') as f:f.write(payload)
+          expected='527913aaf9813d922f30f33a19cc59cea59d638206e57b2d8e28fb13d519deaa'
+          actual=hashlib.sha256(db).hexdigest()
+          print('Database bytes:',len(db),'SHA-256:',actual)
+          if actual != expected:raise SystemExit('Database checksum mismatch')
+          os.makedirs(os.path.dirname(dest),exist_ok=True)
+          with open(dest,'wb') as f:f.write(db)
+          with tempfile.NamedTemporaryFile(suffix='.db') as f:
+              f.write(db);f.flush()
+              con=sqlite3.connect(f.name)
+              try:
+                  integrity=con.execute('PRAGMA integrity_check').fetchone()[0]
+                  names={r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                  required={'name','name_translation','azkar_category','azkar_category_translation','azkar_chapter','azkar_chapter_translation','azkar_item','azkar_item_translation','azkar_reference','azkar_reference_translation','country','location','prayer_time'}
+                  if integrity!='ok':raise SystemExit('SQLite integrity failed: '+integrity)
+                  if not required.issubset(names):raise SystemExit('Required tables missing: '+repr(sorted(required-names)))
+                  counts={t:con.execute('SELECT COUNT(*) FROM "'+t+'"').fetchone()[0] for t in required}
+                  if counts['name']!=99 or counts['azkar_category']!=11 or counts['azkar_item']!=287:raise SystemExit('Unexpected content counts: '+repr(counts))
+                  print('SQLite ok; 99 names, 11 Azkar categories, 287 Azkar items; audio tracks:',len(audio))
+              finally:con.close()
+          PY
+
+      - name: Build native Android APK
+        working-directory: native-app
+        run: gradle --no-daemon clean assembleDebug
+
+      - name: Validate APK, signature, package, offline database, and audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='native-app/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/apksigner" verify --verbose --print-certs "$APK"
+          "$BT/zipalign" -c -P 16 -v 4 "$APK"
+          "$BT/aapt" dump badging "$APK" | tee /tmp/native-badging.txt
+          grep -q "^package: name='com.kosratdahmad.mashxall.nativeapp'" /tmp/native-badging.txt
+          grep -q "^sdkVersion:'24'" /tmp/native-badging.txt
+          grep -q "^targetSdkVersion:'32'" /tmp/native-badging.txt
+          grep -q "^application: label='مەشخەڵ'" /tmp/native-badging.txt
+          python - <<'PY'
+          import hashlib,zipfile
+          p='native-app/app/build/outputs/apk/debug/app-debug.apk'
+          expected='527913aaf9813d922f30f33a19cc59cea59d638206e57b2d8e28fb13d519deaa'
+          audio={'abdulbasit.mp3','abdulmajid.mp3','hijaz.mp3','madina.mp3','madina_fajr.mp3','majid.mp3','mansur.mp3','mecca.ogg','mecca_short.ogg','mshari_fajr.mp3','names99.mp3','naqshbandi.mp3','nasr.mp3','peshawa.mp3','rahid.mp3','ramazan.mp3'}
+          with zipfile.ZipFile(p) as z:
+              if z.testzip():raise SystemExit('APK ZIP integrity failure')
+              db=z.read('assets/muslim_db_v2.5.1.db')
+              actual={n.rsplit('/',1)[-1] for n in z.namelist() if n.startswith('res/raw/') and n.rsplit('/',1)[-1] in audio}
+              if actual!=audio:raise SystemExit('Audio missing: '+repr(sorted(audio-actual)))
+          if hashlib.sha256(db).hexdigest()!=expected:raise SystemExit('Bundled database bytes mismatch')
+          print('APK contains exact original database and all 16 audio tracks.')
+          PY
+          mkdir -p dist
+          cp "$APK" dist/Mashxall-Native-Android11.apk
+          sha256sum dist/Mashxall-Native-Android11.apk | tee dist/SHA256SUMS.txt
+          cp /tmp/native-badging.txt dist/aapt-badging.txt
+
+      - name: Upload validated native APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-native-android11-${{ github.run_number }}
+          path: |
+            dist/Mashxall-Native-Android11.apk
+            dist/SHA256SUMS.txt
+            dist/aapt-badging.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish native APK test release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mashxall-native-android11-v1
+          name: Mashxall Native — Android 11
+          prerelease: true
+          draft: false
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/Mashxall-Native-Android11.apk
+            dist/SHA256SUMS.txt
+          body: |
+            Native Android Java/Views test build.
+            Package ID: com.kosratdahmad.mashxall.nativeapp.
+            Static checks validate signature, alignment, Android API levels, verified offline database, and all 16 bundled original audio assets.
+            Runtime test status is available in the separate emulator job.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  emulator-test:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download exact APK built in this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-native-android11-${{ github.run_number }}
+          path: dist
+      - name: Install, launch, and inspect native UI on Android 11
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_4
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -accel off
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p dist
+            adb devices -l
+            adb shell getprop ro.build.version.release
+            adb shell getprop ro.build.version.sdk
+            adb logcat -c
+            adb install -r dist/Mashxall-Native-Android11.apk
+            adb shell monkey -p com.kosratdahmad.mashxall.nativeapp -c android.intent.category.LAUNCHER 1
+            sleep 18
+            adb logcat -d -v brief -t 4000 > dist/native-logcat.txt || true
+            pid="$(adb shell pidof com.kosratdahmad.mashxall.nativeapp | tr -d '\r')"
+            if [[ -z "$pid" ]]; then
+              echo 'FAIL: app process exited after launch'
+              grep -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal|Database|no such table' dist/native-logcat.txt || true
+              exit 1
+            fi
+            adb shell uiautomator dump /sdcard/mashxall-window.xml >/dev/null
+            adb pull /sdcard/mashxall-window.xml dist/native-ui.xml >/dev/null
+            grep -Eq 'مەشخەڵ|کاتەکانی نوێژ|Prayer times|مواقيت الصلاة' dist/native-ui.xml || { echo 'Expected home UI text missing'; cat dist/native-ui.xml; exit 1; }
+            echo "PASS: native app installed, stayed open, and home UI was visible; pid=$pid"
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-native-android11-diagnostics-${{ github.run_number }}
+          path: |
+            dist/native-logcat.txt
+            dist/native-ui.xml
+          if-no-files-found: ignore
+          retention-days: 14
