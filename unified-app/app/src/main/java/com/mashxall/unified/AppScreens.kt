@@ -1,17 +1,27 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
+import android.graphics.pdf.PdfRenderer
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.ParcelFileDescriptor
 import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +57,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.mashxall.unified.data.*
 import java.io.File
 import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -74,7 +88,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit) {
     val context = LocalContext.current
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var selected by rememberSaveable { mutableIntStateOf(initialSurah) }
@@ -82,12 +96,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var loading by remember { mutableStateOf(true) }
     var query by rememberSaveable { mutableStateOf("") }
     var chooseSurah by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
     LaunchedEffect(selected, language, query) {
         loading = true
         verses = ContentRepository.loadAyahs(context, selected, language.key, query.trim())
         loading = false
+    }
+    LaunchedEffect(verses, initialAyah, query) {
+        if (query.isBlank() && verses.isNotEmpty()) {
+            val startAt = verses.indexOfFirst { it.number >= initialAyah }
+            if (startAt >= 0) listState.scrollToItem(startAt)
+        }
     }
     val currentSurah = surahs.firstOrNull { it.number == selected }
     Column(Modifier.fillMaxSize()) {
@@ -104,7 +125,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Spacer(Modifier.height(5.dp))
             Text(currentSurah?.let { it.ayahCount.toString() + " • " + tr(language, "verse") } ?: "", color = foreground.copy(alpha = 0.55f), fontSize = 11.sp)
         }
-        if (verses.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (verses.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
                     Column(Modifier.padding(15.dp)) {
@@ -119,9 +140,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Icon(Icons.Outlined.AutoStories, tr(language, "tafsir"), tint = Gold, modifier = Modifier.size(19.dp))
                             }
                             IconButton(onClick = {
-                                context.getSharedPreferences("mashxall_bookmarks", 0).edit()
-                                    .putString("last_ayah", verse.surah.toString() + ":" + verse.number).apply()
-                                Toast.makeText(context, tr(language, "available_data"), Toast.LENGTH_SHORT).show()
+                                onBookmark(verse.surah, verse.number)
+                                val message = when (language) {
+                                    AppLanguage.CKB -> "ئایەتەکە پاشەکەوت کرا"
+                                    AppLanguage.AR -> "تم حفظ الآية في العلامات المرجعية"
+                                    AppLanguage.EN -> "Verse saved to bookmarks"
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }, modifier = Modifier.size(32.dp)) {
                                 Icon(Icons.Outlined.BookmarkBorder, null, tint = foreground.copy(alpha = 0.6f), modifier = Modifier.size(19.dp))
                             }
@@ -152,6 +177,54 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         },
         confirmButton = { TextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
     )
+}
+
+@Composable
+fun BookmarksScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    onOpen: (Int, Int) -> Unit
+) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var bookmarks by remember {
+        mutableStateOf(
+            prefs.getStringSet("bookmarks", emptySet()).orEmpty().mapNotNull { value ->
+                val pieces = value.split(":")
+                val surah = pieces.getOrNull(0)?.toIntOrNull()
+                val ayah = pieces.getOrNull(1)?.toIntOrNull()
+                if (surah != null && ayah != null && surah in 1..114 && ayah > 0) surah to ayah else null
+            }.distinct().sortedWith(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
+        )
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(tr(language, "bookmarks"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        if (bookmarks.isEmpty()) {
+            Text(tr(language, "no_bookmarks"), color = foreground.copy(alpha = 0.6f), fontSize = 13.sp)
+        } else {
+            LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(bookmarks, key = { it.first.toString() + ":" + it.second.toString() }) { saved ->
+                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable { onOpen(saved.first, saved.second) }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(tr(language, "surah") + " " + saved.first, color = foreground, fontWeight = FontWeight.SemiBold)
+                                Text(tr(language, "ayah") + " " + saved.second, color = foreground.copy(alpha = 0.55f), fontSize = 12.sp)
+                            }
+                            TextButton(onClick = {
+                                val remaining = bookmarks.filterNot { it == saved }
+                                bookmarks = remaining
+                                prefs.edit().putStringSet("bookmarks", remaining.map { it.first.toString() + ":" + it.second.toString() }.toSet()).apply()
+                            }) { Text("×", color = Gold, fontSize = 20.sp) }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -366,7 +439,7 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         Text(tr(language, "offline"), color = foreground.copy(alpha = 0.58f), fontSize = 12.sp)
         Spacer(Modifier.height(9.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(listOf(0, 1)) { index ->
+            items(listOf(0, 1, 2)) { index ->
                 FilterChip(
                     selected = selectedTab == index,
                     onClick = { selectedTab = index; AudioController.stop(); playing = "" },
@@ -374,17 +447,22 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         Text(
                             when (index) {
                                 0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
-                                else -> if (language == AppLanguage.EN) "80+ reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
+                                1 -> if (language == AppLanguage.EN) "Reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
+                                else -> if (language == AppLanguage.EN) "Adhan & mosque audio" else if (language == AppLanguage.AR) "الأذان وأصوات المساجد" else "بانگ و دەنگی مزگەوت"
                             }
                         )
                     }
                 )
             }
         }
-        if (selectedTab == 0) {
-            if (audio.isEmpty()) LoadingOrEmpty(loading, language, foreground)
+        if (selectedTab == 0 || selectedTab == 2) {
+            val visibleAudio = if (selectedTab == 2) audio.filter { item ->
+                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase()
+                listOf("adhan", "athan", "azan", "madina", "mecca", "fajr", "hijaz", "takbir", "ramazan", "nasr", "mshari").any { name.contains(it) }
+            } else audio
+            if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                items(audio, key = { it.assetPath }) { item ->
+                items(visibleAudio, key = { it.assetPath }) { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
                         Row(Modifier.fillMaxWidth().clickable {
                             if (playing == item.assetPath) {
@@ -523,7 +601,7 @@ private object AudioController {
 }
 
 @Composable
-fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
+fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPdf: (String) -> Unit) {
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var books by remember { mutableStateOf<List<BookItem>>(emptyList()) }
@@ -539,7 +617,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             if (pdfs.isNotEmpty()) {
                 item { Text("PDF • " + pdfs.size, color = Gold, fontWeight = FontWeight.Bold) }
                 items(pdfs, key = { it }) { path ->
-                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp)) {
+                    Card(Modifier.clickable { onOpenPdf(path) }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp)) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.MenuBook, null, tint = Gold)
                             Spacer(Modifier.width(10.dp))
@@ -565,6 +643,88 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         }) { Text(if (language == AppLanguage.EN) "Open external link" else if (language == AppLanguage.AR) "فتح الرابط" else "کردنەوەی بەستەر") }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String) {
+    val context = LocalContext.current
+    var pageIndex by rememberSaveable(assetPath) { mutableIntStateOf(0) }
+    var pageCount by remember(assetPath) { mutableIntStateOf(0) }
+    var bitmap by remember(assetPath) { mutableStateOf<Bitmap?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(assetPath, pageIndex) {
+        if (assetPath.isBlank()) {
+            loading = false
+            loadFailed = true
+        } else {
+            loading = true
+            loadFailed = false
+            try {
+                val rendered = withContext(Dispatchers.IO) {
+                    val digest = MessageDigest.getInstance("SHA-256")
+                        .digest(assetPath.toByteArray(Charsets.UTF_8))
+                        .take(10).joinToString("") { "%02x".format(it) }
+                    val localPdf = File(context.cacheDir, "mashxall-$digest.pdf")
+                    if (!localPdf.exists() || localPdf.length() == 0L) {
+                        context.assets.open(assetPath).use { input ->
+                            localPdf.outputStream().use { output -> input.copyTo(output, 128 * 1024) }
+                        }
+                    }
+                    ParcelFileDescriptor.open(localPdf, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                        PdfRenderer(descriptor).use { renderer ->
+                            val total = renderer.pageCount
+                            if (total <= 0) Pair(total, null as Bitmap?) else {
+                                val safeIndex = pageIndex.coerceIn(0, total - 1)
+                                renderer.openPage(safeIndex).use { page ->
+                                    val width = page.width.coerceAtMost(1400)
+                                    val scale = width.toFloat() / page.width.toFloat()
+                                    val height = (page.height * scale).toInt().coerceAtLeast(1)
+                                    val image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                    image.eraseColor(AndroidColor.WHITE)
+                                    page.render(image, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                    Pair(total, image)
+                                }
+                            }
+                        }
+                    }
+                }
+                pageCount = rendered.first
+                bitmap = rendered.second
+                pageIndex = pageIndex.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+                loadFailed = pageCount <= 0 || bitmap == null
+            } catch (_: Exception) {
+                bitmap = null
+                pageCount = 0
+                loadFailed = true
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Text(assetPath.substringAfterLast('/'), color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0 && !loading) {
+                Text(tr(language, "previous"))
+            }
+            Text(if (pageCount > 0) tr(language, "page") + " " + (pageIndex + 1) + " / " + pageCount else tr(language, "open_pdf"), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            OutlinedButton(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(pageCount - 1) }, enabled = pageCount > 0 && pageIndex < pageCount - 1 && !loading) {
+                Text(tr(language, "next"))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1B2925)), contentAlignment = Alignment.Center) {
+            when {
+                loading -> CircularProgressIndicator(color = Gold)
+                bitmap != null -> Image(bitmap!!.asImageBitmap(), contentDescription = assetPath.substringAfterLast('/'), contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                loadFailed -> Text(tr(language, "data_notice"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
             }
         }
     }
@@ -675,25 +835,89 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
     val context = LocalContext.current
     var city by remember { mutableStateOf<City?>(null) }
-    LaunchedEffect(selectedCity) { city = ContentRepository.loadCities(context).firstOrNull { it.name.equals(selectedCity, true) } }
+    var azimuth by remember { mutableFloatStateOf(0f) }
+    var sensorAvailable by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCity) {
+        city = ContentRepository.loadCities(context).firstOrNull { it.name.equals(selectedCity, true) }
+    }
+    DisposableEffect(context) {
+        val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val magnetometer = manager?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        val gravity = FloatArray(3)
+        val magnetic = FloatArray(3)
+        var hasGravity = false
+        var hasMagnetic = false
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                when (event.sensor.type) {
+                    Sensor.TYPE_ACCELEROMETER -> {
+                        System.arraycopy(event.values, 0, gravity, 0, 3)
+                        hasGravity = true
+                    }
+                    Sensor.TYPE_MAGNETIC_FIELD -> {
+                        System.arraycopy(event.values, 0, magnetic, 0, 3)
+                        hasMagnetic = true
+                    }
+                }
+                if (hasGravity && hasMagnetic) {
+                    val matrix = FloatArray(9)
+                    val orientation = FloatArray(3)
+                    if (SensorManager.getRotationMatrix(matrix, null, gravity, magnetic)) {
+                        SensorManager.getOrientation(matrix, orientation)
+                        azimuth = ((Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f)
+                        sensorAvailable = true
+                    }
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        if (manager != null && accelerometer != null && magnetometer != null) {
+            manager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+            manager.registerListener(listener, magnetometer, SensorManager.SENSOR_DELAY_UI)
+        }
+        onDispose { manager?.unregisterListener(listener) }
+    }
     val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) } ?: 0.0
-    Column(Modifier.fillMaxSize().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    val relativeHeading = ((bearing.toFloat() - azimuth + 540f) % 360f) - 180f
+    val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = relativeHeading,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
+        label = "qiblaHeading"
+    )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(tr(language, "qibla"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(28.dp))
         Box(Modifier.size(260.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(DeepGreen, Color(0xFF071E1A)))), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(160.dp).rotate(bearing.toFloat()))
+            Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(160.dp).rotate(animatedHeading))
             Text("N", color = MainText, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp))
             Text("🕋", fontSize = 26.sp)
         }
         Spacer(Modifier.height(24.dp))
         Text(city?.name ?: selectedCity, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Text(tr(language, "qibla_heading"), color = foreground.copy(alpha = 0.65f), fontSize = 12.sp)
+        Text(
+            if (sensorAvailable) {
+                when (language) {
+                    AppLanguage.CKB -> "ڕووگێڕانی کۆمپاوی مۆبایل چالاکە"
+                    AppLanguage.AR -> "تم تصحيح الاتجاه ببوصلة الهاتف"
+                    AppLanguage.EN -> "Direction calibrated by phone compass"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.CKB -> "ئاڕاستەی گشتی بەپێی شار"
+                    AppLanguage.AR -> "الاتجاه المحسوب حسب إحداثيات المدينة"
+                    AppLanguage.EN -> "Estimated direction from city coordinates"
+                }
+            },
+            color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, textAlign = TextAlign.Center
+        )
         Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(Modifier.height(18.dp))
         Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.52f), fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
     }
 }
+
 private fun qiblaBearing(latitude: Double, longitude: Double): Double {
     val kaabaLat = Math.toRadians(21.4225)
     val kaabaLon = Math.toRadians(39.8262)
