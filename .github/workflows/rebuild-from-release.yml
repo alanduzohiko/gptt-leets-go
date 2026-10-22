@@ -230,7 +230,7 @@ jobs:
           ANALYZER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name apkanalyzer | head -n 1)"
           test -x "$ANALYZER"
           "$ANALYZER" manifest print "$APK" | tee dist/standalone-manifest.xml
-          if grep -Eq 'android:isSplitRequired="true"|[[:space:]]split="' dist/standalone-manifest.xml; then
+          if grep -Eq 'android:(isSplitRequired|requiredSplitTypes|splitTypes|isFeatureSplit|configForSplit)="[^"]*"|[[:space:]]split="' dist/standalone-manifest.xml; then
             echo "ERROR: merged APK manifest still declares split-only installation requirements."
             exit 1
           fi

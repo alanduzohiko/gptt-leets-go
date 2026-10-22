@@ -63,6 +63,7 @@ class PrepareSplitSetTests(unittest.TestCase):
             manifest = root / "AndroidManifest.xml"
             manifest.write_text(
                 '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
+                'android:requiredSplitTypes="base__abi,base__density" android:splitTypes="" '
                 f'package="{ORIGINAL_PACKAGE}">'
                 f'<uses-permission android:name="{ORIGINAL_PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />'
                 '<application>'
@@ -76,10 +77,13 @@ class PrepareSplitSetTests(unittest.TestCase):
             report = rewrite_package_identity(root)
             after_root = ET.parse(manifest).getroot()
             self.assertEqual(after_root.attrib["package"], TARGET_PACKAGE)
+            ns = "{" + "http://schemas.android.com/apk/res/android" + "}"
+            self.assertNotIn(ns + "requiredSplitTypes", after_root.attrib)
+            self.assertNotIn(ns + "splitTypes", after_root.attrib)
+            self.assertEqual(len(report["removed_split_only_manifest_attributes"]), 2)
             provider = after_root.find("application/provider")
             activity = after_root.find("application/activity")
             permission = after_root.find("uses-permission")
-            ns = "{" + "http://schemas.android.com/apk/res/android" + "}"
             self.assertEqual(provider.attrib[ns + "authorities"], TARGET_PACKAGE + ".firebaseinitprovider")
             self.assertEqual(activity.attrib[ns + "name"], ORIGINAL_PACKAGE + ".screens.MainActivity")
             self.assertEqual(permission.attrib[ns + "name"], TARGET_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")

@@ -62,6 +62,20 @@ def manifest_semantics(manifest_path: Path, ignore_tool_added_split_flag: bool =
         for key, value in node.attrib.items():
             if key in ignored_attrs:
                 continue
+            # Android App Bundle split-only root flags must be stripped for a standalone APK.
+            # Exclude those packaging metadata flags from source-vs-rebuilt semantic comparison.
+            split_only_root_attributes = {
+                "split", "splitTypes", "requiredSplitTypes", "isSplitRequired",
+                "isFeatureSplit", "configForSplit",
+                "{" + ANDROID_NS + "}split",
+                "{" + ANDROID_NS + "}splitTypes",
+                "{" + ANDROID_NS + "}requiredSplitTypes",
+                "{" + ANDROID_NS + "}isSplitRequired",
+                "{" + ANDROID_NS + "}isFeatureSplit",
+                "{" + ANDROID_NS + "}configForSplit",
+            }
+            if is_root and key in split_only_root_attributes:
+                continue
             if (
                 ignore_tool_added_split_flag
                 and key == "{" + ANDROID_NS + "}isSplitRequired"
@@ -134,6 +148,23 @@ def rewrite_package_identity(decoded_dir: Path) -> dict:
     root = tree.getroot()
     if root.attrib.get("package") != ORIGINAL_PACKAGE:
         raise ValueError("Unexpected source package ID: " + str(root.attrib.get("package")))
+    # The Play-delivered base APK declares required ABI/density splits. Once the
+    # original base + ABI + density parts are merged into a standalone APK, these
+    # root metadata flags must go, or Package Manager may report missing splits.
+    split_only_root_attributes = (
+        "split", "splitTypes", "requiredSplitTypes", "isSplitRequired",
+        "isFeatureSplit", "configForSplit",
+        "{" + ANDROID_NS + "}split",
+        "{" + ANDROID_NS + "}splitTypes",
+        "{" + ANDROID_NS + "}requiredSplitTypes",
+        "{" + ANDROID_NS + "}isSplitRequired",
+        "{" + ANDROID_NS + "}isFeatureSplit",
+        "{" + ANDROID_NS + "}configForSplit",
+    )
+    removed_split_attributes = []
+    for attr in split_only_root_attributes:
+        if attr in root.attrib:
+            removed_split_attributes.append({"attribute": attr, "value": root.attrib.pop(attr)})
     root.set("package", TARGET_PACKAGE)
     changed_authorities = []
     changed_permission_names = []
@@ -160,6 +191,7 @@ def rewrite_package_identity(decoded_dir: Path) -> dict:
         "changed_authorities": changed_authorities,
         "changed_custom_permission_names": changed_permission_names,
         "component_class_names_preserved": True,
+        "removed_split_only_manifest_attributes": removed_split_attributes,
     }
 
 
@@ -382,8 +414,8 @@ def main() -> int:
         "source_package_id": ORIGINAL_PACKAGE,
         "package_id_target": TARGET_PACKAGE,
         "package_identity": package_identity,
-        "manifest_semantics_preserved_except_explicit_identity_remap": True,
-        "manifest_normalization_note": "Only Apktool-added android:isSplitRequired=true is ignored in the post-build comparison; the output is verified as the complete three-split set. All other manifest attributes and components remain strict.",
+        "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
+        "manifest_normalization_note": "The standalone rebuild removes Android App Bundle split-only root metadata (split, splitTypes, requiredSplitTypes, isSplitRequired, isFeatureSplit, configForSplit); all other manifest semantics and components remain strict.",
         "dex_files_reassembled_from_original_smali": True,
         "original_class_descriptors_preserved": True,
         "smali_class_file_count_preserved": len(source_smali),

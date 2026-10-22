@@ -87,15 +87,15 @@ def main() -> int:
         raise ValueError("Preparation report does not identify the expected source package ID")
     if prepare.get("package_id_target") != "com.kosratdahmad.mashxall.full":
         raise ValueError("Preparation report does not identify the distinct Mashxall package ID")
-    if prepare.get("manifest_semantics_preserved_except_explicit_identity_remap") is not True:
-        raise ValueError("Preparation report does not confirm manifest semantics outside the explicit package-identity remap")
+    if prepare.get("manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal") is not True:
+        raise ValueError("Preparation report does not confirm manifest semantics outside the explicit identity remap and split-metadata removal")
     report = {
         "status": "STATIC_VALIDATION_PASSED",
         "source_sha256": sha(args.source.read_bytes()),
         "output_sha256": sha(args.output.read_bytes()),
         "source_package_id": "com.kosratdahmad.myprayers",
         "package_id": "com.kosratdahmad.mashxall.full",
-        "manifest_semantics_preserved_except_explicit_identity_remap": True,
+        "manifest_semantics_preserved_except_explicit_identity_remap_and_split_metadata_removal": True,
         "dex_files_reassembled_from_original_smali": True,
         "offline_database": db,
         "parts": rows,
