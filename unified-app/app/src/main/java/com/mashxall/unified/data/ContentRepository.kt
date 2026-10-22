@@ -523,7 +523,12 @@ object ContentRepository {
                 ""
             } else {
                 db.rawQuery("SELECT text FROM quran WHERE surah_id=? AND verse_id=? LIMIT 1", arrayOf(surah.toString(), ayah.toString())).use { c ->
-                    if (c.moveToFirst()) c.string("text") else ""
+                    if (c.moveToFirst()) {
+                        Html.fromHtml(c.string("text"), Html.FROM_HTML_MODE_LEGACY)
+                            .toString()
+                            .replace("\\u00a0", " ")
+                            .trim()
+                    } else ""
                 }
             }
         }
