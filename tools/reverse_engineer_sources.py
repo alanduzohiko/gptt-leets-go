@@ -127,13 +127,19 @@ def main() -> int:
                 "jadx_tail": tool_output,
             }
             caps = {name: 0 for name in PATTERNS}
-            app_report["code_contexts"] = []
-            seen_context_lines: set[tuple[str, int]] = set()
+            context_rules = {
+                "hadith_of_ayah": (re.compile(r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I), 35),
+                "cryptography": (re.compile(r"Cipher|SecretKeySpec|IvParameterSpec|Base64\\.decode|PBKDF2|AES|decrypt|encrypt|doFinal", re.I), 30),
+                "database_asset_access": (re.compile(r"SQLiteDatabase|SQLiteOpenHelper|openDatabase|db_hadith_of_ayah|\\.sqlite|\\.db|AssetManager|getAssets", re.I), 25),
+            }
+            app_report["code_contexts"] = {name: [] for name in context_rules}
+            seen_context_lines: set[tuple[str, int, str]] = set()
             for java in java_files:
                 try:
                     lines = java.read_text(encoding="utf-8", errors="replace").splitlines()
                 except OSError:
                     continue
+                relative_file = str(java.relative_to(decompiled))
                 for line_no, line in enumerate(lines, 1):
                     stripped = " ".join(line.strip().split())
                     if not stripped:
@@ -142,33 +148,33 @@ def main() -> int:
                         if caps[label] >= 100 or not pattern.search(stripped):
                             continue
                         app_report["findings"].setdefault(label, []).append({
-                            "file": str(java.relative_to(decompiled)),
+                            "file": relative_file,
                             "line": line_no,
                             "snippet": stripped[:260],
                         })
                         caps[label] += 1
 
-                    # Compact context excerpts help identify real decoder methods,
-                    # DB-opening logic and key construction without shipping the
-                    # original decompiled source tree. Context stays scoped to
-                    # lines explicitly mentioning sensitive data flow indicators.
-                    if FOCUS_CONTEXT.search(stripped) and len(app_report["code_contexts"]) < 45:
-                        context_key = (str(java.relative_to(decompiled)), line_no)
+                    for context_name, (pattern, max_items) in context_rules.items():
+                        target = app_report["code_contexts"][context_name]
+                        if len(target) >= max_items or not pattern.search(stripped):
+                            continue
+                        context_key = (relative_file, line_no, context_name)
                         if context_key in seen_context_lines:
                             continue
                         seen_context_lines.add(context_key)
-                        start = max(0, line_no - 9)
-                        end = min(len(lines), line_no + 32)
-                        app_report["code_contexts"].append({
-                            "file": str(java.relative_to(decompiled)),
+                        start = max(0, line_no - 10)
+                        end = min(len(lines), line_no + 36)
+                        target.append({
+                            "file": relative_file,
                             "match_line": line_no,
                             "match": stripped[:240],
                             "context_start_line": start + 1,
                             "context": "\\n".join(
-                                f"{idx + 1}: {line.rstrip()[:260]}"
-                                for idx, line in enumerate(lines[start:end], start)
+                                f"{idx + 1}: {item.rstrip()[:260]}"
+                                for idx, item in enumerate(lines[start:end], start)
                             ),
                         })
+            app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
             # Manifest/resources and binaries stay temporary; only metadata and snippets are emitted.
             shutil.rmtree(decompiled, ignore_errors=True)
