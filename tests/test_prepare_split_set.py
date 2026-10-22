@@ -87,6 +87,32 @@ class PrepareSplitSetTests(unittest.TestCase):
             self.assertEqual(report["target_package_id"], TARGET_PACKAGE)
             self.assertTrue(report["component_class_names_preserved"])
 
+    def test_rewrites_only_runtime_application_id_and_audio_uris(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            smali = root / "smali/com/kosratdahmad/myprayers/BuildConfig.smali"
+            smali.parent.mkdir(parents=True)
+            lines = [
+                '.class public Lcom/kosratdahmad/myprayers/BuildConfig;\n',
+                '.super Ljava/lang/Object;\n',
+                '    const-string v0, "com.kosratdahmad.myprayers"\n',
+                '    const-string v1, "Lcom/kosratdahmad/myprayers/screens/MainActivity;"\n',
+            ]
+            lines.extend(
+                f'    const-string v2, "android.resource://{ORIGINAL_PACKAGE}/raw/tone{i}"\n'
+                for i in range(12)
+            )
+            lines.append('    const-string v3, "com.kosratdahmad.myprayers.ACTION_WIDGET_UPDATED"\n')
+            smali.write_text("".join(lines), encoding="utf-8")
+            report = patch_runtime_package_literals(root)
+            text = smali.read_text(encoding="utf-8")
+            self.assertEqual(report["exact_application_id_literals_rewritten"], 1)
+            self.assertEqual(report["audio_resource_uri_literals_rewritten"], 12)
+            self.assertIn('const-string v0, "' + TARGET_PACKAGE + '"', text)
+            self.assertIn('Lcom/kosratdahmad/myprayers/screens/MainActivity;', text)
+            self.assertNotIn('android.resource://' + ORIGINAL_PACKAGE + '/raw/', text)
+            self.assertIn('const-string v3, "com.kosratdahmad.myprayers.ACTION_WIDGET_UPDATED"', text)
+
     def test_manifest_semantics_ignores_only_tool_build_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
