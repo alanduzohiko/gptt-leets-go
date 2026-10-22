@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Checkout diagnostic script
+        uses: actions/checkout@v4
+
       - name: Download the exact APK from repair build 43
         uses: actions/download-artifact@v4
         with:
