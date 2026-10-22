@@ -282,7 +282,7 @@ def main() -> int:
             path = db.get("asset_path", "")
             if not selected.search(path):
                 continue
-            schema_report.append({
+            item = {
                 "asset_path": path,
                 "size_bytes": db.get("size_bytes"),
                 "integrity": db.get("integrity"),
@@ -290,7 +290,36 @@ def main() -> int:
                     {"name": table.get("name"), "rows": table.get("rows"), "columns": table.get("columns")}
                     for table in db.get("tables", [])
                 ],
-            })
+            }
+            if path.endswith("/ayah_info.db"):
+                db_path = out / Path(path)
+                detail = {}
+                with sqlite3.connect(db_path) as connection:
+                    detail["config"] = connection.execute(
+                        "SELECT mkey,val FROM config ORDER BY mkey"
+                    ).fetchall()
+                    for table_name in ("page_data_line", "v2_tajweed_page_data_line"):
+                        stats = connection.execute(
+                            f"""
+                            SELECT COUNT(*),MIN(page_number),MAX(page_number),
+                                   MIN(line_number),MAX(line_number),
+                                   MIN(min_x),MAX(max_x),MIN(min_y),MAX(max_y),
+                                   COUNT(DISTINCT glyph_id)
+                            FROM "{table_name}"
+                            """
+                        ).fetchone()
+                        samples = connection.execute(
+                            f"""
+                            SELECT glyph_id,page_number,line_number,surah_id,verse_id,
+                                   min_x,max_x,min_y,max_y
+                            FROM "{table_name}"
+                            ORDER BY page_number,line_number,glyph_id
+                            LIMIT 8
+                            """
+                        ).fetchall()
+                        detail[table_name] = {"stats": stats, "samples": samples}
+                item["geometry_probe"] = detail
+            schema_report.append(item)
         print("MASHXALL_DB_SCHEMA_REPORT_BEGIN")
         print(json.dumps(schema_report, ensure_ascii=False, separators=(",", ":")))
         print("MASHXALL_DB_SCHEMA_REPORT_END")
