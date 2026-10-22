@@ -40,7 +40,7 @@ The workflow checks the SHA-256 against the exact file previously supplied. If i
 
 ## Important install caveat
 
-This repair build uses the new package ID com.kosratdahmad.mashxall.repair2.repair2. It is distinct from both the official app (com.kosratdahmad.myprayers) and the prior test build (com.kosratdahmad.mashxall.repair2), so it should avoid an update-signature conflict with either. Do not uninstall the official app. Each test build still needs a stable signing key for in-place updates; while no stable key is configured, treat each unique-package build as a separate test installation.
+This repair build uses the new package ID com.kosratdahmad.mashxall.repair2. It is distinct from both the official app (com.kosratdahmad.myprayers) and the prior test build (com.kosratdahmad.mashxall), so it should avoid an update-signature conflict with either. Do not uninstall the official app. Each test build still needs a stable signing key for in-place updates; while no stable key is configured, treat each unique-package build as a separate test installation.
 
 The previous standalone APK was statically validated, but its Android 11 install/launch test never completed. That was not enough to call it fixed. The current workflow must install and launch the new package in an Android emulator; if that test is unavailable or fails, the app remains unverified and crash logs are required.
 
