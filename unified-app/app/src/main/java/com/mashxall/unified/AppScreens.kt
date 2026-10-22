@@ -83,6 +83,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.security.MessageDigest
 import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -2007,6 +2008,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
     var chooseCity by remember { mutableStateOf(false) }
+    var dayOffset by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
@@ -2124,22 +2126,26 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             PrayerAlarmScheduler.cancelAll(context)
         }
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, calculationMethod, asrSchool) {
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, calculationMethod, asrSchool, dayOffset) {
         var loadedDate = ""
         while (true) {
-            val today = SimpleDateFormat("MM-dd", Locale.US).format(Date())
-            if (today != loadedDate) {
+            val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val requestedKey = "$todayKey:$dayOffset"
+            if (requestedKey != loadedDate) {
                 loading = true
+                val targetDate = Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_YEAR, dayOffset)
+                }.time
                 times = if (gpsLatitude != null && gpsLongitude != null) {
                     ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, Date(),
+                        context, gpsLatitude!!, gpsLongitude!!, targetDate,
                         PrayerCalculationMethod.fromId(calculationMethod),
                         AsrCalculationSchool.fromId(asrSchool)
                     )
                 } else {
-                    ContentRepository.loadPrayerTimes(context, selectedCity)
+                    ContentRepository.loadPrayerTimes(context, selectedCity, targetDate)
                 }
-                loadedDate = today
+                loadedDate = requestedKey
                 loading = false
             }
             delay(60_000L)
@@ -2148,7 +2154,41 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
+        val displayDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
+        val displayDateText = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(displayDate)
+        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { dayOffset = (dayOffset - 1).coerceAtLeast(-366) }, enabled = dayOffset > -366) {
+                    Icon(Icons.Outlined.ChevronLeft, null, tint = Gold)
+                }
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> if (dayOffset == 0) "Today" else if (dayOffset < 0) "Past date" else "Upcoming date"
+                            AppLanguage.AR -> if (dayOffset == 0) "اليوم" else if (dayOffset < 0) "تاريخ سابق" else "تاريخ قادم"
+                            AppLanguage.CKB -> if (dayOffset == 0) "ئەمڕۆ" else if (dayOffset < 0) "ڕۆژی ڕابردوو" else "ڕۆژی داهاتوو"
+                        }, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                    )
+                    Text(displayDateText, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                }
+                IconButton(onClick = { dayOffset = (dayOffset + 1).coerceAtMost(366) }, enabled = dayOffset < 366) {
+                    Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+                }
+                if (dayOffset != 0) {
+                    TextButton(onClick = { dayOffset = 0 }) {
+                        Text(when (language) {
+                            AppLanguage.EN -> "Today"
+                            AppLanguage.AR -> "اليوم"
+                            AppLanguage.CKB -> "ئەمڕۆ"
+                        }, fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
         Card(colors = CardDefaults.cardColors(containerColor = DeepGreen), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
