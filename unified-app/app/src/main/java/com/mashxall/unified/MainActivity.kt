@@ -105,7 +105,7 @@ enum class AppLanguage(val key: String, val label: String) {
 enum class AppScreen(val key: String) {
     HOME("home"), QURAN("quran"), LIBRARY("library"), WORSHIP("worship"), PRAYER("prayer"),
     TAFSIR("tafsir"), HADITH("hadith"), AZKAR("azkar"), NAMES("names"), TASBIH("tasbih"),
-    AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings")
+    AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
 private data class HomeModule(
@@ -194,7 +194,7 @@ fun MashxallApp() {
                         AppHeader(
                             language = language, foreground = foreground, isDark = dark,
                             onLanguage = { language = it; prefs.edit().putString("language", it.key).apply() },
-                            onBack = { screen = if (screen in rootScreens) "home" else "library" },
+                            onBack = { screen = if (screen == "backup") "settings" else if (screen in rootScreens) "home" else "library" },
                             onSettings = { screen = AppScreen.SETTINGS.key }, showBack = !isRoot
                         )
                         Box(Modifier.fillMaxSize()) {
@@ -253,7 +253,8 @@ fun MashxallApp() {
                                 "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
-                                }, onDataInfo = { screen = "library" })
+                                }, onDataInfo = { screen = "library" }, onBackup = { screen = "backup" })
+                                "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor) { screen = it.key }
                             }
                         }
@@ -472,7 +473,7 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 @Composable
 private fun SettingsScreen(
     language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean,
-    onDark: (Boolean) -> Unit, onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit
+    onDark: (Boolean) -> Unit, onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "settings"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -490,6 +491,34 @@ private fun SettingsScreen(
             FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
         }
         Spacer(Modifier.height(22.dp))
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth().clickable { onBackup() }
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Backup & restore"
+                            AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"
+                            AppLanguage.CKB -> "پاشەکەوتکردن و گەڕاندنەوە"
+                        }, color = foreground, fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Save bookmarks, notes and personal preferences to a file"
+                            AppLanguage.AR -> "حفظ العلامات والملاحظات والإعدادات في ملف"
+                            AppLanguage.CKB -> "نیشانەکان، تێبینی و ڕێکخستنەکانت لە فایلی پاشەکەوتدا هەڵبگرە"
+                        }, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp, lineHeight = 16.sp
+                    )
+                }
+                Text("›", color = Gold, fontSize = 25.sp)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), modifier = Modifier.clickable { onDataInfo() }) {
             Column(Modifier.padding(16.dp)) {
                 Text(tr(language, "about_data"), color = foreground, fontWeight = FontWeight.Bold)
