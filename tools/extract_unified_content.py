@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import lzma
 import re
 import shutil
 import sqlite3
@@ -118,6 +119,49 @@ def sqlite_summary(data: bytes, ext: str) -> dict:
         finally:
             con.close()
 
+
+def index_mushaf_svg_pages(pages_bin: Path, index_path: Path) -> dict:
+    """Index concatenated XZ streams without storing the 300+ MB decoded pages."""
+    data = pages_bin.read_bytes()
+    pages = []
+    position = 0
+    chunk_size = 64 * 1024
+    while position < len(data):
+        stream_start = position
+        decoder = lzma.LZMADecompressor(format=lzma.FORMAT_XZ)
+        decoded = bytearray()
+        while position < len(data) and not decoder.eof:
+            chunk = data[position:min(position + chunk_size, len(data))]
+            decoded.extend(decoder.decompress(chunk))
+            position += len(chunk)
+            if decoder.eof:
+                position -= len(decoder.unused_data)
+        if not decoder.eof or position <= stream_start:
+            raise SystemExit(f"Corrupt concatenated XZ stream at byte {stream_start}")
+        raw = bytes(decoded)
+        match = re.search(rb'<svg\b[^>]*\bid="Mushaf_Page_(\d+)"', raw[:8192])
+        expected_page = len(pages) + 1
+        if not match or int(match.group(1)) != expected_page or b"</svg>" not in raw[-512:]:
+            raise SystemExit(f"Unexpected SVG page structure at stream {expected_page}")
+        pages.append({
+            "page": expected_page,
+            "offset": stream_start,
+            "compressed_length": position - stream_start,
+            "uncompressed_length": len(raw),
+            "sha256": sha_bytes(raw),
+        })
+    if len(pages) != 604:
+        raise SystemExit(f"Expected 604 Mushaf SVG pages, indexed {len(pages)}")
+    result = {
+        "schema_version": 1,
+        "source_asset_path": "content/khairah_1.2/base/assets/mushaf/pages.bin",
+        "page_count": len(pages),
+        "pages": pages,
+    }
+    index_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Indexed {len(pages)} Mushaf SVG pages from {pages_bin.name}; index: {index_path}")
+    return result
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle", required=True, type=Path)
@@ -132,7 +176,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     if not zipfile.is_zipfile(bundle):
         raise SystemExit("Source bundle is not a valid ZIP archive")
-    inventory = {"bundle_sha256": sha_file(bundle), "sources": [], "files": [], "databases": [], "audio": [], "fonts": [], "documents": []}
+    inventory = {"bundle_sha256": sha_file(bundle), "sources": [], "files": [], "databases": [], "audio": [], "fonts": [], "documents": [], "generated_assets": []}
     with zipfile.ZipFile(bundle) as wrapper:
         bad = wrapper.testzip()
         if bad:
@@ -203,6 +247,19 @@ def main() -> int:
                                     elif suffix in IMAGES:
                                         pass
             inventory["sources"].append(source)
+
+    mushaf_bin = out / "content" / "khairah_1.2" / "base" / "assets" / "mushaf" / "pages.bin"
+    if not mushaf_bin.is_file():
+        raise SystemExit("Khairah Mushaf page asset is missing: " + str(mushaf_bin))
+    mushaf_index_path = out / "mushaf_svg_index.json"
+    mushaf_index = index_mushaf_svg_pages(mushaf_bin, mushaf_index_path)
+    inventory["generated_assets"].append({
+        "asset_path": "mushaf_svg_index.json",
+        "purpose": "Offsets and SHA-256 values for the 604 concatenated XZ-compressed SVG Mushaf pages",
+        "page_count": mushaf_index["page_count"],
+        "size_bytes": mushaf_index_path.stat().st_size,
+        "sha256": sha_file(mushaf_index_path),
+    })
     inventory["counts"] = {
         "source_apps": len(inventory["sources"]),
         "files": len(inventory["files"]),
@@ -211,6 +268,7 @@ def main() -> int:
         "font_files": len(inventory["fonts"]),
         "pdf_documents": len(inventory["documents"]),
         "total_content_bytes": sum(x["size_bytes"] for x in inventory["files"]),
+        "mushaf_svg_pages": mushaf_index["page_count"],
     }
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     catalog_path.write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding="utf-8")

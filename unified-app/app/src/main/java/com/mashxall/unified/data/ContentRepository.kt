@@ -12,6 +12,8 @@ import java.io.File
 import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
 import org.json.JSONArray
+import org.json.JSONObject
+import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,6 +39,10 @@ private data class KhairahPageMeta(
     val id: Int, val volume: String, val page: String, val offset: Int,
     val length: Int, val byteCount: Int, val sha256: String
 )
+private data class MushafSvgMeta(
+    val page: Int, val offset: Int, val compressedLength: Int,
+    val uncompressedLength: Int, val sha256: String
+)
 
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
@@ -50,6 +56,9 @@ object ContentRepository {
     const val LEXICON_DB = "content/noor_tafsir_1.2.2/base/assets/db_words_lexicon.db"
     const val AZKAR_DB = "content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db"
     const val BOOKS_DB = "content/noor_tafsir_1.2.2/base/assets/tn_books.db"
+    private const val MUSHAF_SVG_BIN = "content/khairah_1.2/base/assets/mushaf/pages.bin"
+    private const val MUSHAF_SVG_INDEX = "mushaf_svg_index.json"
+    @Volatile private var cachedMushafIndex: Map<Int, MushafSvgMeta>? = null
 
     val tafsirBooks = listOf(
         TafsirBook("roshn", "ڕۆشن", "تفسير ڕۆشن", "Roshn Kurdish Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_roshn.db", "ckb"),
@@ -106,6 +115,87 @@ object ContentRepository {
     private fun Cursor.double(name: String, default: Double = 0.0): Double {
         val i = getColumnIndex(name)
         return if (i >= 0 && !isNull(i)) getDouble(i) else default
+    }
+
+
+    private fun mushafSvgIndex(context: Context): Map<Int, MushafSvgMeta> {
+        cachedMushafIndex?.let { return it }
+        synchronized(this) {
+            cachedMushafIndex?.let { return it }
+            val root = context.assets.open(MUSHAF_SVG_INDEX).bufferedReader(Charsets.UTF_8).use {
+                JSONObject(it.readText())
+            }
+            val rows = root.getJSONArray("pages")
+            val result = buildMap<Int, MushafSvgMeta> {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val page = row.getInt("page")
+                    put(page, MushafSvgMeta(
+                        page = page,
+                        offset = row.getInt("offset"),
+                        compressedLength = row.getInt("compressed_length"),
+                        uncompressedLength = row.getInt("uncompressed_length"),
+                        sha256 = row.getString("sha256")
+                    ))
+                }
+            }
+            if (root.optInt("page_count") != 604 || result.size != 604) {
+                throw IllegalStateException("Mushaf page index is incomplete")
+            }
+            cachedMushafIndex = result
+            return result
+        }
+    }
+
+    suspend fun loadMushafPageSvg(context: Context, page: Int): String? = withContext(Dispatchers.IO) {
+        val meta = try { mushafSvgIndex(context)[page.coerceIn(1, 604)] }
+        catch (error: Exception) {
+            Log.e("MashxallData", "Mushaf page index could not be loaded", error)
+            null
+        } ?: return@withContext null
+        val compressed = try {
+            context.assets.openFd(MUSHAF_SVG_BIN).use { descriptor ->
+                descriptor.createInputStream().use { input ->
+                    var remaining = meta.offset.toLong()
+                    while (remaining > 0L) {
+                        val skipped = input.skip(remaining)
+                        if (skipped > 0L) {
+                            remaining -= skipped
+                        } else {
+                            if (input.read() < 0) throw java.io.EOFException("Mushaf page offset exceeds asset size")
+                            remaining--
+                        }
+                    }
+                    val buffer = ByteArray(meta.compressedLength)
+                    var written = 0
+                    while (written < buffer.size) {
+                        val count = input.read(buffer, written, buffer.size - written)
+                        if (count < 0) throw java.io.EOFException("Truncated Mushaf page stream")
+                        written += count
+                    }
+                    buffer
+                }
+            }
+        } catch (error: Exception) {
+            Log.e("MashxallData", "Could not read compressed Mushaf page ${meta.page}", error)
+            return@withContext null
+        }
+        val raw = try {
+            XZInputStream(ByteArrayInputStream(compressed)).use { it.readBytes() }
+        } catch (error: Exception) {
+            Log.e("MashxallData", "Could not decompress Mushaf page ${meta.page}", error)
+            return@withContext null
+        }
+        if (raw.size != meta.uncompressedLength || sha256Hex(raw) != meta.sha256) {
+            Log.e("MashxallData", "Mushaf page integrity check failed: ${meta.page}")
+            return@withContext null
+        }
+        val svg = String(raw, Charsets.UTF_8)
+        if (!svg.contains("Mushaf_Page_%03d".format(Locale.US, meta.page)) || !svg.contains("</svg>")) {
+            Log.e("MashxallData", "Mushaf SVG identity does not match page ${meta.page}")
+            return@withContext null
+        }
+        svg
     }
 
     suspend fun loadSurahs(context: Context): List<Surah> = withContext(Dispatchers.IO) {

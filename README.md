@@ -12,9 +12,9 @@ A new native Android Islamic-library app, designed independently in Kotlin + Jet
 
 The new app source currently includes a UI and repository layer for:
 
-- Quran browsing/search, persistent return-to-last-read position, and a removable saved-verse bookmark list.
+- Quran browsing/search, persistent verse bookmarks/reading position, plus an offline, page-by-page SVG Mushaf viewer (604 original pages) with integrity-checked on-demand decompression.
 - Sorani translation from Noor's Quran database and separate English/Arabic translation sources.
-- Tafsir selector for the accessible verse-indexed SQLite tafsir sources.
+- Tafsir selector for Noor's verse-indexed SQLite collection plus all four Khairah book tafsirs, decoded on demand with page-range and SHA-256 checks.
 - Hadith search from the Noor database.
 - Adhkar/dua browsing with persistent repetition counters, Salawati Kurdish/English text enrichment and references, and Names of Allah.
 - City-based annual prayer times and a Qibla arrow corrected using the device compass sensors when available.
@@ -22,7 +22,7 @@ The new app source currently includes a UI and repository layer for:
 - Book catalogue with an in-app PDF page reader, lexicon lookup, word-by-word Quran grammar/root data, Farmuda records, and a persistent haptic tasbih counter.
 - A validated extraction script that catalogs SQLite databases, audio, fonts, PDFs and source assets.
 
-**Important limitations:** the full data-enabled APK still needs to complete its GitHub Actions build and then be installed/tested on a physical Android 11 device. Khairah's `pages.bin` / tafsir binary page format remains an open item: source files are preserved and JADX discovery has been run, but those legacy pages are not yet decoded/rendered in the unified UI. The source apps' complete internal behavior has not been independently verified screen-by-screen, so do not treat this as a certified 1:1 replacement yet.
+**Important limitations:** the current data-enabled APK passed extraction, Gradle tests/lint/assembleDebug, APK integrity/signature checks and artifact upload; it still needs to be installed and tested on a physical Android 11 phone. Khairah's four legacy tafsir binaries and the 604-page SVG Mushaf are now decoded on demand using build-generated offsets and SHA-256 verification. The source apps' complete internal behavior has not been independently verified screen-by-screen, so do not treat this as a certified 1:1 replacement yet.
 
 ## Input bundle and safe build
 

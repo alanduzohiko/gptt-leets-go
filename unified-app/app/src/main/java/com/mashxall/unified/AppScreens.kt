@@ -2,6 +2,7 @@ package com.mashxall.unified
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
 import android.hardware.Sensor
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.mashxall.unified.data.*
+import com.caverock.androidsvg.SVG
 import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
@@ -96,12 +98,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var loading by remember { mutableStateOf(true) }
     var query by rememberSaveable { mutableStateOf("") }
     var chooseSurah by remember { mutableStateOf(false) }
+    var mushafMode by rememberSaveable { mutableStateOf(false) }
+    var mushafPage by rememberSaveable { mutableIntStateOf(1) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
-    LaunchedEffect(selected, language, query) {
+    LaunchedEffect(selected, language, query, initialAyah) {
         loading = true
-        verses = ContentRepository.loadAyahs(context, selected, language.key, query.trim())
+        val loaded = ContentRepository.loadAyahs(context, selected, language.key, query.trim())
+        verses = loaded
+        if (query.isBlank()) {
+            (loaded.firstOrNull { it.number >= initialAyah } ?: loaded.firstOrNull())?.page
+                ?.takeIf { it in 1..604 }?.let { mushafPage = it }
+        }
         loading = false
     }
     LaunchedEffect(verses, initialAyah, query) {
@@ -122,10 +131,31 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
             Spacer(Modifier.height(8.dp))
             SearchBox(query, { query = it }, tr(language, "search"))
-            Spacer(Modifier.height(5.dp))
-            Text(currentSurah?.let { it.ayahCount.toString() + " • " + tr(language, "verse") } ?: "", color = foreground.copy(alpha = 0.55f), fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = !mushafMode, onClick = { mushafMode = false },
+                    label = { Text(tr(language, "verse_view"), fontSize = 11.sp, maxLines = 1) },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = mushafMode, onClick = { mushafMode = true; query = "" },
+                    label = { Text(tr(language, "mushaf_view"), fontSize = 11.sp, maxLines = 1) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            if (!mushafMode) {
+                Spacer(Modifier.height(5.dp))
+                Text(currentSurah?.let { it.ayahCount.toString() + " • " + tr(language, "verse") } ?: "", color = foreground.copy(alpha = 0.55f), fontSize = 11.sp)
+            }
         }
-        if (verses.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (mushafMode) {
+            MushafPageViewer(language, foreground, mushafPage) { requested ->
+                mushafPage = requested.coerceIn(1, 604)
+            }
+        } else if (verses.isEmpty()) {
+            LoadingOrEmpty(loading, language, foreground)
+        } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
                     Column(Modifier.padding(15.dp)) {
@@ -177,6 +207,79 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         },
         confirmButton = { TextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
     )
+}
+
+@Composable
+private fun MushafPageViewer(
+    language: AppLanguage,
+    foreground: Color,
+    page: Int,
+    onPageChange: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    var loading by remember(page) { mutableStateOf(true) }
+    var failed by remember(page) { mutableStateOf(false) }
+    LaunchedEffect(page) {
+        loading = true
+        failed = false
+        bitmap = null
+        val source = ContentRepository.loadMushafPageSvg(context, page)
+        if (source == null) {
+            failed = true
+        } else {
+            bitmap = withContext(Dispatchers.Default) {
+                try {
+                    val svg = SVG.getFromString(source)
+                    Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
+                        image.eraseColor(AndroidColor.WHITE)
+                        svg.renderToCanvas(Canvas(image))
+                    }
+                } catch (error: Exception) {
+                    android.util.Log.e("MashxallMushaf", "Could not render SVG page $page", error)
+                    null
+                }
+            }
+            failed = bitmap == null
+        }
+        loading = false
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
+                Text(tr(language, "previous"), fontSize = 11.sp)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(tr(language, "mushaf_view"), color = Gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(tr(language, "page") + " " + page + " / 604", color = foreground.copy(alpha = 0.6f), fontSize = 10.sp)
+            }
+            OutlinedButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
+                Text(tr(language, "next"), fontSize = 11.sp)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(13.dp),
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.25f))
+        ) {
+            Box(Modifier.fillMaxSize().padding(5.dp), contentAlignment = Alignment.Center) {
+                when {
+                    loading -> CircularProgressIndicator(color = Gold)
+                    bitmap != null -> Image(
+                        bitmap!!.asImageBitmap(),
+                        contentDescription = tr(language, "mushaf_view") + " " + page,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    failed -> Text(tr(language, "mushaf_unavailable"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    }
 }
 
 @Composable
