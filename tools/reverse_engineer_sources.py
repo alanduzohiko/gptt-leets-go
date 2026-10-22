@@ -207,8 +207,8 @@ def main() -> int:
                         # Record the precise string transform invoked by the Hadith mapper;
                         # broad crypto matches often hit unrelated app/dependency helpers.
                         exact_signatures = re.compile(
-                            r"(?:static\\s+)?(?:final\\s+)?String\\s+j\\s*\\(|"
-                            r"String\\s+j\\s*\\(|f10929e|SecretKeySpec|Cipher\\.getInstance|Base64\\.decode",
+                            r"(?:static\s+)?(?:final\s+)?String\s+j\s*\(|"
+                            r"String\s+j\s*\(|f10929e|SecretKeySpec|Cipher\.getInstance|Base64\.decode",
                             re.I,
                         )
                         indices = [i for i, line in enumerate(source_lines) if exact_signatures.search(line)]
