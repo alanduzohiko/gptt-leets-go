@@ -90,6 +90,10 @@ def manifest_semantics(manifest_path: Path, ignore_tool_added_split_flag: bool =
                 value = ORIGINAL_PACKAGE
             if key == "{" + ANDROID_NS + "}authorities" and value.startswith(TARGET_PACKAGE + "."):
                 value = ORIGINAL_PACKAGE + value[len(TARGET_PACKAGE):]
+            # The resource-preserving build stores the rebranded launcher label
+            # directly in the compiled manifest to avoid rebuilding resources.arsc.
+            if node.tag == "application" and key == "{" + ANDROID_NS + "}label" and value == APP_NAME:
+                value = "@string/app_name"
             if (
                 key == "{" + ANDROID_NS + "}name"
                 and value == TARGET_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -841,6 +845,105 @@ def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
         "non_manifest_payloads_byte_identical": True,
     })
     return report
+
+
+
+
+
+
+def build_resource_preserving_base(
+    source_apk: Path,
+    rebuilt_dex_apk: Path,
+    destination_apk: Path,
+    standalone: bool,
+) -> dict:
+    """Inject rebuilt DEX into the original base while preserving all resource IDs."""
+    source_entries = zip_entries(source_apk)
+    rebuilt_entries = zip_entries(rebuilt_dex_apk)
+    source_dex = {
+        name: payload for name, payload in source_entries.items()
+        if re.fullmatch(r"classes\d*\.dex", name)
+    }
+    rebuilt_dex = {
+        name: payload for name, payload in rebuilt_entries.items()
+        if re.fullmatch(r"classes\d*\.dex", name)
+    }
+    if not source_dex or set(source_dex) != set(rebuilt_dex):
+        raise ValueError("Resource-preserving build has a different multidex file set")
+    patched_manifest, manifest_report = patch_binary_xml_manifest(
+        source_entries["AndroidManifest.xml"],
+        ORIGINAL_PACKAGE,
+        TARGET_PACKAGE,
+        app_label=APP_NAME,
+        standalone=standalone,
+    )
+    if not manifest_report["manifest_package_id_rewritten"] or not manifest_report["application_label_literal"]:
+        raise ValueError("Original manifest package or application label was not patched")
+    patched_resources, resource_report = patch_resources_table_package_name(
+        source_entries["resources.arsc"], ORIGINAL_PACKAGE, TARGET_PACKAGE
+    )
+
+    destination_apk.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(source_apk, "r") as source_zip, zipfile.ZipFile(
+        destination_apk, "w", allowZip64=True
+    ) as destination_zip:
+        for info in source_zip.infolist():
+            if _is_apk_signature_entry(info.filename):
+                continue
+            if info.filename == "AndroidManifest.xml":
+                payload = patched_manifest
+            elif info.filename == "resources.arsc":
+                payload = patched_resources
+            elif info.filename in rebuilt_dex:
+                payload = rebuilt_dex[info.filename]
+            else:
+                payload = source_zip.read(info.filename)
+            copied = zipfile.ZipInfo(info.filename, info.date_time)
+            copied.compress_type = info.compress_type
+            copied.comment = info.comment
+            copied.create_system = info.create_system
+            copied.external_attr = info.external_attr
+            copied.internal_attr = info.internal_attr
+            copied.extra = b""
+            destination_zip.writestr(
+                copied, payload, compress_type=info.compress_type, compresslevel=6
+            )
+
+    output_entries = zip_entries(destination_apk)
+    expected_names = {
+        name for name in source_entries if not _is_apk_signature_entry(name)
+    }
+    if set(output_entries) != expected_names:
+        raise ValueError("Resource-preserving base changed the ZIP entry inventory")
+    for name, payload in source_entries.items():
+        if _is_apk_signature_entry(name) or name == "AndroidManifest.xml" or name in source_dex:
+            continue
+        if name == "resources.arsc":
+            if output_entries[name] != patched_resources:
+                raise ValueError("Original resources.arsc differs from the package-name-only patch")
+        elif output_entries[name] != payload:
+            raise ValueError("Base APK payload changed unexpectedly: " + name)
+    if {name: sha(payload) for name, payload in output_entries.items() if re.fullmatch(r"classes\d*\.dex", name)} != {
+        name: sha(payload) for name, payload in rebuilt_dex.items()
+    }:
+        raise ValueError("Rebuilt DEX payloads were not injected byte-for-byte")
+    database_name = next((name for name in source_entries if name.endswith("muslim_db_v2.5.1.db")), None)
+    if not database_name or sha(output_entries[database_name]) != sha(source_entries[database_name]):
+        raise ValueError("Original offline database changed in resource-preserving base")
+    return {
+        "file": destination_apk.name,
+        "standalone": standalone,
+        "source_bytes": source_apk.stat().st_size,
+        "output_bytes": destination_apk.stat().st_size,
+        "manifest_patch": manifest_report,
+        "resource_table_package_name_patch": resource_report,
+        "resource_table_length_preserved": len(source_entries["resources.arsc"]) == len(output_entries["resources.arsc"]),
+        "original_resource_ids_and_entries_preserved_except_package_name": True,
+        "original_database_byte_identical": True,
+        "all_non_manifest_non_dex_payloads_byte_identical_except_resource_package_name": True,
+        "dex_file_set_preserved": set(source_dex) == set(rebuilt_dex),
+        "dex_payloads_from_reassembled_original_smali": True,
+    }
 
 
 
