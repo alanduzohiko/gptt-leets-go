@@ -75,7 +75,13 @@ jobs:
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/jadx"
-          curl -fL --retry 3 "$url" -o "$RUNNER_TEMP/jadx.zip"
+          if ! curl -fL --retry 3 --retry-all-errors --retry-delay 2 "$url" -o "$RUNNER_TEMP/jadx.zip"; then
+            echo "Latest JADX asset URL failed; retrying the previously verified 1.5.6 release."
+            rm -f "$RUNNER_TEMP/jadx.zip"
+            curl -fL --retry 4 --retry-all-errors --retry-delay 2 \
+              "https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip" \
+              -o "$RUNNER_TEMP/jadx.zip"
+          fi
           unzip -q "$RUNNER_TEMP/jadx.zip" -d "$RUNNER_TEMP/jadx"
           JADX_BIN="$(find "$RUNNER_TEMP/jadx" -type f -path '*/bin/jadx' | head -n 1)"
           if [[ -z "$JADX_BIN" ]]; then
