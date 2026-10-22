@@ -117,7 +117,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -275,6 +275,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             Spacer(Modifier.weight(1f))
                             IconButton(onClick = { onTafsir(verse.surah, verse.number) }, modifier = Modifier.size(32.dp)) {
                                 Icon(Icons.Outlined.AutoStories, tr(language, "tafsir"), tint = Gold, modifier = Modifier.size(19.dp))
+                            }
+                            IconButton(onClick = { onPlayAudio(verse.surah, verse.number) }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Outlined.PlayCircle,
+                                    if (language == AppLanguage.EN) "Play this verse" else if (language == AppLanguage.AR) "استمع إلى هذه الآية" else "گوێگرتن لەم ئایەتە",
+                                    tint = Gold,
+                                    modifier = Modifier.size(19.dp)
+                                )
                             }
                             IconButton(onClick = {
                                 onBookmark(verse.surah, verse.number)
@@ -1286,16 +1294,28 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 }
 
 @Composable
-fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
+fun AudioScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    initialSurah: Int = 1,
+    initialAyah: Int = 1,
+    focusReciters: Boolean = false
+) {
     val context = LocalContext.current
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var playing by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
-    var surahText by rememberSaveable { mutableStateOf("1") }
-    var ayahText by rememberSaveable { mutableStateOf("1") }
+    var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
+    var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
+    LaunchedEffect(initialSurah, initialAyah, focusReciters) {
+        surahText = initialSurah.coerceIn(1, 114).toString()
+        ayahText = initialAyah.coerceAtLeast(1).toString()
+        if (focusReciters) selectedTab = 1
+    }
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
         reciters = ContentRepository.loadReciters(context)

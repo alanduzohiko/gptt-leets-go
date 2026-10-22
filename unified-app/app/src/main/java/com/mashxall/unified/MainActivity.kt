@@ -164,6 +164,7 @@ fun MashxallApp() {
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
+    var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
     var selectedPdf by rememberSaveable { mutableStateOf("") }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -187,7 +188,10 @@ fun MashxallApp() {
                     containerColor = background,
                     contentWindowInsets = WindowInsets.statusBars,
                     bottomBar = {
-                        if (isRoot) BottomNavigationBar(screen, language, cardColor, foreground) { target -> screen = target }
+                        if (isRoot) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
+                            screen = target
+                            audioStartsAtReciters = false
+                        }
                     }
                 ) { padding ->
                     Column(Modifier.fillMaxSize().padding(padding)) {
@@ -222,6 +226,13 @@ fun MashxallApp() {
                                         selectedSurah = s
                                         selectedAyah = a
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                    },
+                                    onPlayAudio = { s, a ->
+                                        selectedSurah = s
+                                        selectedAyah = a
+                                        audioStartsAtReciters = true
+                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                        screen = "audio"
                                     }
                                 )
                                 "library" -> LibraryScreen(language, foreground, cardColor) { screen = it.key }
@@ -238,7 +249,7 @@ fun MashxallApp() {
                                 "azkar" -> AzkarScreen(language, foreground, cardColor)
                                 "names" -> NamesScreen(language, foreground, cardColor)
                                 "tasbih" -> TasbihScreen(language, foreground, cardColor)
-                                "audio" -> AudioScreen(language, foreground, cardColor)
+                                "audio" -> AudioScreen(language, foreground, cardColor, selectedSurah, selectedAyah, audioStartsAtReciters)
                                 "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; screen = "pdf" })
                                 "pdf" -> PdfReaderScreen(language, foreground, selectedPdf)
                                 "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
