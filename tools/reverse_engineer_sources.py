@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -247,6 +248,23 @@ def main() -> int:
                         ],
                     }
                 app_report["focused_application_source_context"] = focused
+                # Emit only concise targeted contexts to the action log so the
+                # string decoder can be reviewed without downloading the 230+ MB APK.
+                if os.environ.get("MASHXALL_RE_DUMP_FOCUSED") == "1":
+                    print("FOCUSED_NOOR_DECODER_BEGIN", flush=True)
+                    for tag in ("hadith_row_mapper", "string_and_crypto_helpers", "string_decoder_key_map"):
+                        for window in focused.get(tag, {}).get("windows", [])[:3]:
+                            if tag == "hadith_row_mapper":
+                                # Limit to the mapper's first region; output around the
+                                # actual decryption-related call sites is emitted below.
+                                lines_out = window["source"].splitlines()
+                                selected = [line for line in lines_out if re.search(r"U0\\(|K0\\(|decrypt|encrypt|f10929e|hadith_on_ayah|db_hadith_of_ayah", line, re.I)]
+                                print(f"TARGET {tag} lines={window['start_line']}-{window['end_line']}", flush=True)
+                                print("\\n".join(selected[:50]), flush=True)
+                            else:
+                                print(f"TARGET {tag} lines={window['start_line']}-{window['end_line']}", flush=True)
+                                print(window["source"][:18000], flush=True)
+                    print("FOCUSED_NOOR_DECODER_END", flush=True)
 
             app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
