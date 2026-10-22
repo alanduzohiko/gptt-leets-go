@@ -29,9 +29,9 @@ jobs:
 
       - name: Verify the original input bundle was uploaded to the correct release
         env:
-          GH_TOKEN: \${{ github.token }}
-          RELEASE_TAG: \${{ github.event.release.tag_name || 'unified-source-v1' }}
-          ASSET_NAME: \${{ inputs.source_asset_name || 'Mashxall-Unified-Source-Bundle.zip' }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || 'unified-source-v1' }}
+          ASSET_NAME: ${{ inputs.source_asset_name || 'Mashxall-Unified-Source-Bundle.zip' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -61,9 +61,11 @@ jobs:
 
       - name: Prepare Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install SDK build tools
-        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+        with:
+          packages: |-
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -103,7 +105,7 @@ jobs:
       - name: Upload APK, extracted content catalog and verification report
         uses: actions/upload-artifact@v4
         with:
-          name: mashxall-unified-android11-build-\${{ github.run_number }}
+          name: mashxall-unified-android11-build-${{ github.run_number }}
           path: |
             dist/Mashxall-Unified-debug.apk
             dist/content-catalog.json
