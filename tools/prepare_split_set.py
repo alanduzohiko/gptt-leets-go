@@ -697,6 +697,7 @@ def patch_binary_xml_manifest(
         "manifest_package_id_rewritten": True,
         "split_identity_preserved": True,
         "binary_manifest_patched_only": True,
+        "binary_manifest_only_changed": True,
         "application_label_literal": app_label if label_changed else None,
         "changed_authorities": changed_authorities,
         "changed_custom_permissions": changed_permissions,

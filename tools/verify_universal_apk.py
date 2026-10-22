@@ -108,7 +108,7 @@ def main() -> int:
     launcher_raster_entries = sorted(
         name for name in output
         if re.fullmatch(
-            r"res/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)(?:-v\\d+)?/ic_launcher\\.(?:png|webp)",
+            r"res/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)(?:-v\d+)?/ic_launcher\.(?:png|webp)",
             name,
         )
     )
