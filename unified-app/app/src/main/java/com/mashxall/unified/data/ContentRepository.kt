@@ -889,11 +889,52 @@ object ContentRepository {
         }
     }
 
-    suspend fun searchLexicon(context: Context, query: String): List<LexiconItem> = withContext(Dispatchers.IO) {
+    private fun lexiconFilter(query: String): String =
+        if (query.isBlank()) "" else "WHERE w.title LIKE ? OR w.content LIKE ? OR w.root LIKE ? OR r.reference_name LIKE ?"
+
+    private fun lexiconArgs(query: String): Array<String> =
+        Array(4) { "%${query.trim()}%" }
+
+    suspend fun loadLexiconCount(context: Context, query: String = ""): Int = withContext(Dispatchers.IO) {
+        queryDb(context, LEXICON_DB, 0) { db ->
+            val filter = lexiconFilter(query)
+            val args = if (query.isBlank()) null else lexiconArgs(query)
+            db.rawQuery(
+                """
+                SELECT COUNT(*)
+                FROM word_list w
+                LEFT JOIN "references" r ON r.id=w.reference
+                $filter
+                """.trimIndent(), args
+            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        }
+    }
+
+    suspend fun searchLexicon(
+        context: Context,
+        query: String,
+        offset: Int = 0,
+        limit: Int = 100
+    ): List<LexiconItem> = withContext(Dispatchers.IO) {
         queryDb(context, LEXICON_DB, emptyList()) { db ->
-            val like = if (query.isBlank()) "%" else "%$query%"
-            db.rawQuery("SELECT w.title,w.content,r.reference_name,w.root FROM word_list w LEFT JOIN \"references\" r ON r.id=w.reference WHERE w.title LIKE ? OR w.content LIKE ? OR w.root LIKE ? ORDER BY w.title LIMIT 100", arrayOf(like, like, like)).use { c ->
-                buildList { while (c.moveToNext()) add(LexiconItem(c.string("title"), c.string("content"), c.string("reference_name"), c.string("root"))) }
+            val filter = lexiconFilter(query)
+            val baseArgs = if (query.isBlank()) emptyArray() else lexiconArgs(query)
+            val args = baseArgs + arrayOf(limit.coerceIn(1, 300).toString(), offset.coerceAtLeast(0).toString())
+            db.rawQuery(
+                """
+                SELECT w.title,w.content,r.reference_name,w.root
+                FROM word_list w
+                LEFT JOIN "references" r ON r.id=w.reference
+                $filter
+                ORDER BY w.title,w.root
+                LIMIT ? OFFSET ?
+                """.trimIndent(), args
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        add(LexiconItem(c.string("title"), c.string("content"), c.string("reference_name"), c.string("root")))
+                    }
+                }
             }
         }
     }
