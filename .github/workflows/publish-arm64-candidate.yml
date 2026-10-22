@@ -13,7 +13,7 @@ permissions:
 jobs:
   publish-arm64-candidate:
     if: >-
-      \${{ github.event.workflow_run.conclusion == 'success' &&
+      ${{ github.event.workflow_run.conclusion == 'success' &&
           github.event.workflow_run.head_sha == '3d18f822697160328afa568ace8cbc417b5866be' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -24,8 +24,8 @@ jobs:
           name: android11-package-manager-diagnostic
           path: diagnostics
           repository: alanduzohiko/gptt-leets-go
-          run-id: \${{ github.event.workflow_run.id }}
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Require an Android 11 PackageManager result consistent with ARM64-only libraries
         shell: bash
@@ -49,7 +49,7 @@ jobs:
           path: dist
           repository: alanduzohiko/gptt-leets-go
           run-id: 39743141594
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify exact APK hash and archive integrity
         shell: bash
