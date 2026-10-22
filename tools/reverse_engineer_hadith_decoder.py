@@ -18,11 +18,13 @@ TARGETS = [
     ("string_crypto_helper", "m5.l"),
     ("string_decoder_key_map", "m5.f"),
     ("hadith_model", "m4.f"),
+    ("tajweed_mushaf_activity", "com.dev.hazhanjalal.tafseerinoor.ui.page_style.AyahMushafActivity"),
 ]
 INTERESTING = re.compile(
     r"U0[(]|K0[(]|f10929e|Cipher|SecretKeySpec|IvParameterSpec|Base64|doFinal|"
     r"decrypt|encrypt|hadith_on_ayah|db_hadith_of_ayah|StringBuilder|new String|"
-    r"Map<|HashMap|put[(]",
+    r"Map<|HashMap|put[(]|v2_tajweed_page_data_line|page_data_line|glyph_id|"
+    r"ayah_info|tajweed|mushaf|Mushaf",
     re.I,
 )
 
