@@ -1,25 +1,49 @@
-# مەشخەڵ — original-app reverse engineering and Android rebuild
+# مـــەشــخـــەڵ — Mashxall Unified
 
-## What the original source actually is
+A new native Android Islamic-library app, designed independently in Kotlin + Jetpack Compose. This is **not** a repackaging of one source app and does not modify any other GitHub repository.
 
-The supplied source is the compiled, three-part Android APK bundle in Release `source-3.1.3`; the repository initially did not contain the publisher's original Gradle/Kotlin source project. The original APK has five DEX files, 14 manifest activities (including dependency activities), 16 services, 18 receivers, three providers, about 1,126 resource files, and a large offline database. Its compiled app contains prayer screens and widgets, Azkar and favorites, Names of Allah, Qibla compass/map, language/location onboarding, detailed settings, azan/notification tones, alarms, and scheduled notifications.
+## UI and languages
 
-## Primary workflow: full original-app rebuild
+- New emerald-and-gold visual identity, custom launcher mark, animated home surface and responsive module cards.
+- Sorani Kurdish (کوردی), Arabic (العربية), and English (English); Sorani/Arabic use RTL layout, English uses LTR.
+- Native Android UI; minimum Android 7.0 (API 24), designed to be tested on Android 11.
 
-`Rebuild safe Mashxall split set` now decodes the original DEX into smali, updates only the application-ID literal and hardcoded `android.resource://` audio URIs that must follow a separate app ID, reassembles the DEX, preserves the original component class names, label resources, original offline database, app assets, and ARM64 native libraries, then merges the three split APKs into one standalone APK. Static checks verify the DEX file set, original class descriptors, package ID, launcher icon resources, original database bytes/integrity, and four native libraries. The Android 11 emulator job attempts an actual install and launch; a static build alone is not a runtime guarantee.
+## Current source implementation
 
-- Original app ID: `com.kosratdahmad.myprayers`
-- Full rebuild test app ID: `com.kosratdahmad.mashxall.full<RUN_ID>`
-- Exact source bundle SHA-256: `bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3`
+The new app source currently includes a UI and repository layer for:
 
-## Separate Native prototype
+- Quran browsing, searching, surah selection, and verse bookmarks.
+- Sorani translation from Noor's Quran database and separate English/Arabic translation sources.
+- Tafsir selector for the accessible verse-indexed SQLite tafsir sources.
+- Hadith search from the Noor database.
+- Adhkar/dua browsing, repetition counter, and Names of Allah.
+- Static city-based prayer times and Qibla bearing calculation.
+- Local bundled audio playback plus an online reciter list sourced from the Noor audio index.
+- Book catalogue, lexicon lookup, word-by-word Quran grammar/root data, Farmuda records, and a persistent tasbih counter.
+- A validated extraction script that catalogs SQLite databases, audio, fonts, PDFs and source assets.
 
-`native-app/` is a separate clean Java/Android Views implementation. It was created when the original APK builds repeatedly failed, but it is **not** feature-equivalent to the original compiled app. It uses selected original offline data/audio and demonstrates a native alternative. The original-app rebuild workflow is the correct route when preserving the existing app's full screen/component set is the priority.
+**Important limitations:** this source project has not yet produced a confirmed, data-enabled release APK, and it has not been tested on a physical phone. Some Khairah tafsir pages use a separate binary page store referenced by offsets/hashes; those raw files are preserved, but their custom page decoder still needs reverse-engineering before those pages can be shown in the unified UI. Some book/PDF assets are currently catalogued but do not yet have a full built-in reader. Do not treat the current UI skeleton as containing every feature of all source apps yet.
 
-## Known limits
+## Input bundle and safe build
 
-The original APK contains Firebase/Maps/Huawei integrations. A re-signed clone with a different application ID can be restricted by the original service owner's package ID, signing certificate, or API-key settings; private backend behavior cannot be guaranteed from APK code alone. No claim of complete runtime parity should be made unless the Android 11 installation/startup test passes and the affected service flows are checked.
+The three original user-supplied APK sets are kept as inputs, not treated as original source-code projects. Their SHA-256 fingerprints are checked by the pipeline:
 
-## Repository boundary
+- Salawati 3.1.3: `bba56d408b552e31be43071af6a02dcdd66608b594b1fa10ca1a63fb51a504e3`
+- Khairah 1.2: `36b605314a66e5809c111565e7452f91578d4b0de3e009801118d40f1def85b8`
+- Tafseeri Noor 1.2.2: `fa9259501abd4b1c7f870109a1ad49567badb27792510cee3d5ce2ee28e11ce8`
 
-All work stays in `alanduzohiko/gptt-leets-go`. No other repository is modified.
+The unified build workflow expects a GitHub Release tagged `unified-source-v1` with one asset named `Mashxall-Unified-Source-Bundle.zip`. It extracts verified assets into the new project's Android assets, checks every SQLite database, then runs Gradle tests/lint/build and official APK signing checks.
+
+### Publish the source bundle (phone-only)
+
+1. **Make this repository Private first**: https://github.com/alanduzohiko/gptt-leets-go/settings/general . Under “Danger Zone” / repository visibility, choose Private. The supplied source APK sets may contain copyrighted data and app assets; do not upload them to a public repository.
+2. Download the source bundle supplied in the ChatGPT conversation. Its SHA-256 is `9430a52d73bfff7d897320e36173ce9d6f72f7c8d24b24dcc45b3dd4e70aba96`.
+3. Open https://github.com/alanduzohiko/gptt-leets-go/releases/new .
+4. Set tag `unified-source-v1`, title `Mashxall Unified Source Bundle`, attach exactly `Mashxall-Unified-Source-Bundle.zip`, and publish.
+5. Open the Actions tab. Watch `Build the new unified Mashxall Android app`. If the build succeeds, download its artifact `mashxall-unified-android11-build-…`.
+
+The build artifact is a debug APK. Static checks do not prove launch success. The app must still be installed and tested on Android 11; if it closes, capture a crash log before changing code again.
+
+## Source data and rights
+
+The app is being developed from user-supplied APK sets and their embedded databases/resources. Before redistribution or public release, verify the original apps' licenses, permissions to redistribute content, audio, fonts and Quran/tafsir translations, and include all required notices. This repository contains newly written UI/source code, not the original app source code.
