@@ -3,6 +3,13 @@ name: Build the new unified Mashxall Android app
 on:
   release:
     types: [published]
+  push:
+    branches: ["main"]
+    paths:
+      - "unified-app/**"
+      - "tools/extract_unified_content.py"
+      - "tools/reverse_engineer_sources.py"
+      - ".github/workflows/build-unified-mashxall.yml"
   workflow_dispatch:
     inputs:
       source_asset_name:
@@ -15,7 +22,7 @@ permissions:
 
 jobs:
   build-unified-app:
-    if: github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'unified-source-v1'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
