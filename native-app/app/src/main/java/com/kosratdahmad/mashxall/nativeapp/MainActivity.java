@@ -199,7 +199,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         body.addView(note,margin(0,8,0,0));
     }
     private void feature(String icon,String title,String subtitle,Runnable action){
-        LinearLayout c=card();c.setOrientation(HORIZONTAL);c.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout c=card();c.setOrientation(LinearLayout.HORIZONTAL);c.setGravity(Gravity.CENTER_VERTICAL);
         TextView ico=txt(icon,24,Color.rgb(158,123,34),true);ico.setGravity(Gravity.CENTER);ico.setMinWidth(dp(39));c.addView(ico);
         LinearLayout words=col();words.setPadding(dp(10),0,dp(4),0);
         words.addView(txt(title,15,GREEN,true));words.addView(txt(subtitle,11,MUTED,false),margin(0,4,0,0));
@@ -245,7 +245,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         String sql="SELECT n._id,n.name,COALESCE((SELECT t.name FROM name_translation t WHERE t.name_id=n._id AND t.language=? LIMIT 1),(SELECT t.name FROM name_translation t WHERE t.name_id=n._id AND t.language='ar' LIMIT 1),'') FROM name n ORDER BY n._id";
         try(Cursor c=db.rawQuery(sql,new String[]{lang})){
             while(c.moveToNext()){
-                LinearLayout box=card();box.setOrientation(HORIZONTAL);box.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout box=card();box.setOrientation(LinearLayout.HORIZONTAL);box.setGravity(Gravity.CENTER_VERTICAL);
                 TextView num=txt(String.valueOf(c.getInt(0)),12,Color.rgb(158,123,34),true);num.setGravity(Gravity.CENTER);num.setPadding(dp(9),dp(8),dp(9),dp(8));num.setBackground(round(0xFFF5EEDB,30,0));box.addView(num);
                 LinearLayout detail=col();detail.setPadding(dp(11),0,dp(4),0);
                 detail.addView(txt(safe(c.getString(1)),21,GREEN,true));detail.addView(txt(safe(c.getString(2)),12,MUTED,false),margin(0,4,0,0));
@@ -423,8 +423,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     private String safe(String s){return s==null?"":s;}
     private int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
 
-    private LinearLayout col(){LinearLayout l=new LinearLayout(this);l.setOrientation(VERTICAL);l.setLayoutDirection(isEn()?View.LAYOUT_DIRECTION_LTR:View.LAYOUT_DIRECTION_RTL);return l;}
-    private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(HORIZONTAL);l.setLayoutDirection(isEn()?View.LAYOUT_DIRECTION_LTR:View.LAYOUT_DIRECTION_RTL);return l;}
+    private LinearLayout col(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setLayoutDirection(isEn()?View.LAYOUT_DIRECTION_LTR:View.LAYOUT_DIRECTION_RTL);return l;}
+    private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setLayoutDirection(isEn()?View.LAYOUT_DIRECTION_LTR:View.LAYOUT_DIRECTION_RTL);return l;}
     private TextView txt(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s==null?"":s);t.setTextSize(size);t.setTextColor(color);t.setGravity(isEn()?Gravity.LEFT:Gravity.RIGHT);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setIncludeFontPadding(true);return t;}
     private GradientDrawable round(int color,int radius,int stroke){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));if(stroke!=0)g.setStroke(dp(1),stroke);return g;}
     private LinearLayout card(){LinearLayout l=col();l.setPadding(dp(15),dp(15),dp(15),dp(15));l.setBackground(round(WHITE,20,BORDER));return l;}
