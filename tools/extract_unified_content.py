@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import lzma
+import os
 import re
 import shutil
 import sqlite3
@@ -274,6 +275,25 @@ def main() -> int:
     catalog_path.write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(inventory["counts"], ensure_ascii=False, indent=2))
     print("catalog:", catalog_path)
+    if os.environ.get("MASHXALL_PRINT_DB_SCHEMAS") == "1":
+        selected = re.compile(r"tafseer|tafsir|hadith|prayertime|farmuda|book|quran|azkar|word_by_word|lexicon", re.I)
+        schema_report = []
+        for db in inventory["databases"]:
+            path = db.get("asset_path", "")
+            if not selected.search(path):
+                continue
+            schema_report.append({
+                "asset_path": path,
+                "size_bytes": db.get("size_bytes"),
+                "integrity": db.get("integrity"),
+                "tables": [
+                    {"name": table.get("name"), "rows": table.get("rows"), "columns": table.get("columns")}
+                    for table in db.get("tables", [])
+                ],
+            })
+        print("MASHXALL_DB_SCHEMA_REPORT_BEGIN")
+        print(json.dumps(schema_report, ensure_ascii=False, separators=(",", ":")))
+        print("MASHXALL_DB_SCHEMA_REPORT_END")
     return 0
 
 if __name__ == "__main__":

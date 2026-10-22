@@ -99,6 +99,8 @@ jobs:
             --timeout-per-app 1200
 
       - name: Extract all source content and validate every SQLite database
+        env:
+          MASHXALL_PRINT_DB_SCHEMAS: "1"
         run: |
           set -euo pipefail
           python tools/extract_unified_content.py \
