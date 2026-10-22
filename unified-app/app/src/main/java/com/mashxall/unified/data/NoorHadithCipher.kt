@@ -63,7 +63,7 @@ internal object NoorHadithCipher {
 
     fun parseVerseReferences(encodedReferences: String?): List<Pair<Int, Int>> {
         if (encodedReferences.isNullOrBlank()) return emptyList()
-        val pattern = Regex("""\\[?\\s*(\\d{1,3})\\s*:\\s*(\\d{1,3})\\s*\\]?""")
+        val pattern = Regex("""\[?\s*(\d{1,3})\s*:\s*(\d{1,3})\s*\]?""")
         return pattern.findAll(encodedReferences).mapNotNull { match ->
             val surah = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
             val ayah = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
@@ -91,6 +91,7 @@ internal object NoorHadithCipher {
             if (bits >= 8) {
                 bits -= 8
                 output.write((accumulator shr bits) and 0xFF)
+                accumulator = accumulator and ((1 shl bits) - 1)
             }
         }
         return output.toByteArray()
