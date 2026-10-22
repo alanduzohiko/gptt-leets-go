@@ -236,6 +236,7 @@ jobs:
           fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee dist/aapt-badging.txt
           grep -q "^package: name='com.kosratdahmad.mashxall.repair2'" dist/aapt-badging.txt
+          grep -q "^application: label='مەشخەڵ' icon='res/mipmap-anydpi-v26/ic_launcher.xml'" dist/aapt-badging.txt
           grep -q "^sdkVersion:" dist/aapt-badging.txt
 
       - name: Package set and verify preservation
