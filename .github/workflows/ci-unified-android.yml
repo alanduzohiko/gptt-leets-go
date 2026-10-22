@@ -1,0 +1,27 @@
+name: Validate unified Mashxall Android source
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "unified-app/**"
+      - ".github/workflows/ci-unified-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-source-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Compile app source without production data payload
+        run: gradle --no-daemon --project-dir unified-app testDebugUnitTest lintDebug assembleDebug
