@@ -319,7 +319,9 @@ jobs:
           target: google_apis
           arch: arm64-v8a
           profile: pixel_4
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          # Hosted macOS ARM runners may reject HVF nested acceleration; force software emulation.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -accel off
+          emulator-boot-timeout: 1200
           disable-animations: false
           script: bash tools/test-emulator.sh
 
