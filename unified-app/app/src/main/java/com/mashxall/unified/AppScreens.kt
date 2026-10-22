@@ -249,7 +249,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     } else Modifier,
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18.dp))
+                    border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
