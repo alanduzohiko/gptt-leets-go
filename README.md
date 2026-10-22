@@ -7,12 +7,12 @@ This is a separate workspace created specifically to diagnose and repair the sta
 - All work for this task stays in alanduzohiko/gptt-leets-go.
 - No code, branch, workflow, or pull request is being sent to alanduzohiko/masheqal or any other repository.
 - Do not declare the app fixed unless it has been installed and launched on a real Android 11 device.
-- The safe build path preserves the original package ID, manifest semantics, all DEX bytes, the offline database, and the three-split structure. It changes only the visible app-label resource and launcher-icon palette.
+- The repair build uses a new, unique test package ID to avoid conflicts with previously installed test builds, while preserving the original DEX bytes, offline database, native libraries, and app components. It changes the visible label and launcher-icon palette.
 - APK alignment and signing use the official Android SDK tools. The workflow does not manually construct APK signing blocks.
 
 ## Why this is a different repair attempt
 
-Earlier experiments changed the package ID and edited DEX strings as part of rebranding. That may break package-scoped providers or external-service configuration, and editing DEX caused a checksum problem in one build. This workspace avoids those changes completely. It rebuilds only the resource layer via Apktool, confirms that DEX bytes and the offline database are unchanged, and uses zipalign plus apksigner for signing.
+This repair changes only manifest package identity/provider authorities plus the label and icon palette at the resource layer. It does not edit DEX code. Static validation checks that DEX bytes, the offline database, and native libraries remain identical; runtime installation and launch must still pass before calling the app fixed.
 
 This is a conservative test build, not a guarantee that the runtime crash is fixed. Only a real-device launch test can prove that.
 
@@ -40,9 +40,9 @@ The workflow checks the SHA-256 against the exact file previously supplied. If i
 
 ## Important install caveat
 
-This safe test keeps the original package ID com.kosratdahmad.myprayers. That is intentional: it avoids breaking app code and service authorities by renaming the package. But a custom signature cannot update the official signed app in place. If the official app with that package ID is installed, you may need to uninstall it before trying the rebranded build. Back up its data first. Do not uninstall the original app unless you are willing and able to restore it. This rebranded build will not coexist with the official app under the same package ID.
+This repair build uses the new package ID com.kosratdahmad.mashxall.repair2.repair2. It is distinct from both the official app (com.kosratdahmad.myprayers) and the prior test build (com.kosratdahmad.mashxall.repair2), so it should avoid an update-signature conflict with either. Do not uninstall the official app. Each test build still needs a stable signing key for in-place updates; while no stable key is configured, treat each unique-package build as a separate test installation.
 
-If this run opens and stays open, the crash is resolved for this build. If it still closes, the next step is a real crash log; do not guess by removing more services or editing DEX code.
+The previous standalone APK was statically validated, but its Android 11 install/launch test never completed. That was not enough to call it fixed. The current workflow must install and launch the new package in an Android emulator; if that test is unavailable or fails, the app remains unverified and crash logs are required.
 
 ## Public-repository privacy note
 
