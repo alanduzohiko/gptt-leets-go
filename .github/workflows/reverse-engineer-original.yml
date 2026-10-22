@@ -65,16 +65,26 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p analysis/jadx-source
+          set +e
           "$JADX_BIN" --show-bad-code --threads-count 2 -d analysis/jadx-source analysis/original-splits/base.apk 2>&1 | tee analysis/jadx.log
-          test -d analysis/jadx-source/sources
+          jadx_status=${PIPESTATUS[0]}
+          set -e
+          echo "JADX exit code: $jadx_status" | tee analysis/jadx-exit-status.txt
+          if [[ ! -d analysis/jadx-source/sources ]]; then
+            echo "JADX produced no Java source directory; stopping rather than silently reporting success."
+            exit 1
+          fi
           find analysis/jadx-source/sources -type f -name '*.java' | wc -l | tee analysis/java-class-count.txt
+          if [[ "$jadx_status" -ne 0 ]]; then
+            echo "JADX reported recoverable source-decompilation errors; continuing to preserve partial Java plus original resources and manifest."
+          fi
 
       - name: Decode original manifest and all base resources
         shell: bash
         run: |
           set -euo pipefail
           java -jar "$APKTOOL_JAR" d -f -s analysis/original-splits/base.apk -o analysis/apktool-resources 2>&1 | tee analysis/apktool.log
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print analysis/original-splits/base.apk > analysis/original-manifest.xml
+          cp analysis/apktool-resources/AndroidManifest.xml analysis/original-manifest.xml
           find analysis/apktool-resources/res -type f | sort > analysis/resource-file-inventory.txt
           find analysis/apktool-resources/assets -type f | sort > analysis/asset-file-inventory.txt
           find analysis/jadx-source/sources -type f -name '*.java' | sort > analysis/java-file-inventory.txt
@@ -156,6 +166,7 @@ jobs:
             analysis/asset-file-inventory.txt
             analysis/native-library-inventory.txt
             analysis/java-class-count.txt
+            analysis/jadx-exit-status.txt
           if-no-files-found: error
           compression-level: 6
           retention-days: 14
