@@ -20,6 +20,7 @@ jobs:
       - name: Checkout diagnostic script
         uses: actions/checkout@v4
 
+      # Re-run the fixed build-50 PackageManager probe after the publish gate fix.
       - name: Download the resource-preserving APK from repair build 50
         uses: actions/download-artifact@v4
         with:
