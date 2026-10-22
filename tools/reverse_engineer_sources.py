@@ -30,18 +30,19 @@ SOURCES = {
     },
 }
 PATTERNS = {
-    "binary_page_store": re.compile(r"pages\\.bin|\\.bin\\b|byte_count|search_segments|sha256|page_id", re.I),
-    "cryptography_and_integrity": re.compile(r"Cipher\\.getInstance|SecretKeySpec|IvParameterSpec|MessageDigest|AES|PBKDF2|decrypt|encrypt|CRC32|Base64", re.I),
+    "binary_page_store": re.compile(r"pages\.bin|\.bin\b|byte_count|search_segments|sha256|page_id", re.I),
+    "cryptography_and_integrity": re.compile(r"Cipher\.getInstance|SecretKeySpec|IvParameterSpec|MessageDigest|AES|PBKDF2|decrypt|encrypt|CRC32|Base64", re.I),
     "compression": re.compile(r"Inflater|InflaterInputStream|GZIP|Deflater|ZipInputStream|zstd|brotli|LZ4|XZInputStream", re.I),
-    "asset_loading": re.compile(r"getAssets\\(|openFd\\(|AssetManager|assets/tafsir|\\.sqlite|quran\\.db|pages\\.bin|db_hadith_of_ayah", re.I),
-    "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\\.quran|\\.mp3", re.I),
+    "asset_loading": re.compile(r"getAssets\(|openFd\(|AssetManager|assets/tafsir|\.sqlite|quran\.db|pages\.bin|db_hadith_of_ayah", re.I),
+    "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\.quran|\.mp3", re.I),
     "hadith_of_ayah": re.compile(r"hadith_on_ayah|db_hadith_of_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I),
 }
 
 FOCUS_CONTEXT = re.compile(
-    r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|Base64\\.decode|Cipher\\.getInstance|SecretKeySpec|IvParameterSpec|PBKDF2|AES|decrypt|encrypt|sqlcipher",
+    r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|Base64\.decode|Cipher\.getInstance|SecretKeySpec|IvParameterSpec|PBKDF2|AES|decrypt|encrypt|sqlcipher",
     re.I,
 )
+
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
