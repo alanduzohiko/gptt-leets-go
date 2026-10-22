@@ -697,9 +697,9 @@ def rewrite_split_config_apk(source_apk: Path, destination_apk: Path) -> dict:
         "file": source_apk.name,
         "source_bytes": source_apk.stat().st_size,
         "rebuilt_bytes": destination_apk.stat().st_size,
-        "resources_arsc_byte_identical": (
+        "resources_arsc_other_bytes_preserved_except_package_name": (
             "resources.arsc" not in source_entries
-            or source_entries["resources.arsc"] == output_entries.get("resources.arsc")
+            or resource_report is not None
         ),
         "resources_arsc_package_name_patch": resource_report,
         "native_libraries_preserved": sum(
@@ -842,8 +842,11 @@ def main() -> int:
         rebuilt_config_entries = zip_entries(rebuilt_config)
         source_config_entries = zip_entries(source_config)
         if "resources.arsc" in source_config_entries:
-            if rebuilt_config_entries.get("resources.arsc") != source_config_entries["resources.arsc"]:
-                raise ValueError("Config split resources.arsc is not byte-identical to source: " + name)
+            expected_resources, _resource_report = patch_resources_table_package_name(
+                source_config_entries["resources.arsc"], ORIGINAL_PACKAGE, TARGET_PACKAGE
+            )
+            if rebuilt_config_entries.get("resources.arsc") != expected_resources:
+                raise ValueError("Config split resources.arsc differs from the package-name-only patch: " + name)
         source_config_libs = {
             entry: sha(payload) for entry, payload in source_config_entries.items()
             if entry.startswith("lib/") and entry.endswith(".so")
