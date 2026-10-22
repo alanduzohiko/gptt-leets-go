@@ -43,7 +43,7 @@ jobs:
             exit 1
           fi
           ACTUAL="$(sha256sum "$SOURCE" | awk '{print $1}')"
-          EXPECTED="0dfae458d9cc1dd32294b545ff9234c2567ece4ba7e18914c73a1c81eddccd05"
+          EXPECTED="9430a52d73bfff7d897320e36173ce9d6f72f7c8d24b24dcc45b3dd4e70aba96"
           echo "Uploaded source bundle SHA-256: $ACTUAL"
           if [[ "$ACTUAL" != "$EXPECTED" ]]; then
             echo "Source bundle fingerprint differs from the package prepared from the supplied files. Build stopped."
