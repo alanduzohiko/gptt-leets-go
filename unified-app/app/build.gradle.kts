@@ -23,7 +23,9 @@ android {
     }
 
     androidResources {
-        noCompress += "bin"
+        // These files are accessed through AssetManager.openFd / ParcelFileDescriptor:
+        // random-access Mushaf streams and the native PdfRenderer need uncompressed assets.
+        noCompress += setOf("bin", "pdf")
     }
 
     packaging {
