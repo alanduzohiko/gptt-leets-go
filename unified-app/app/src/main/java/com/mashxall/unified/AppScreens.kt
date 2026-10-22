@@ -2057,6 +2057,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
     var chooseCity by remember { mutableStateOf(false) }
+    var citySearch by rememberSaveable { mutableStateOf("") }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
@@ -2073,6 +2074,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     var chooseAdhanSound by remember { mutableStateOf(false) }
     var adhanMessage by remember { mutableStateOf("") }
+    val visibleCities = remember(cities, citySearch) {
+        if (citySearch.isBlank()) cities
+        else cities.filter { city ->
+            city.name.contains(citySearch.trim(), ignoreCase = true) ||
+                city.country.contains(citySearch.trim(), ignoreCase = true)
+        }
+    }
 
     val onFix: (Location) -> Unit = { fix ->
         // A new fix supersedes the previous location even if its reported accuracy
@@ -2261,7 +2269,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         } else Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
                     }
                     IconButton(onClick = locateNow) { Icon(Icons.Outlined.GpsFixed, null, tint = Gold) }
-                    IconButton(onClick = { chooseCity = true }) { Icon(Icons.Outlined.Search, null, tint = Gold) }
+                    IconButton(onClick = { citySearch = ""; chooseCity = true }) { Icon(Icons.Outlined.Search, null, tint = Gold) }
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(
@@ -2451,18 +2459,44 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         Spacer(Modifier.height(10.dp))
     }
     if (chooseCity) AlertDialog(
-        onDismissRequest = { chooseCity = false }, title = { Text(tr(language, "select_city")) },
+        onDismissRequest = { chooseCity = false },
+        title = { Text(tr(language, "select_city")) },
         text = {
-            LazyColumn(Modifier.height(420.dp)) {
-                items(cities, key = { it.name }) { city ->
-                    Text(city.name, Modifier.fillMaxWidth().clickable {
-                        onCity(city.name)
-                        gpsLatitude = null
-                        gpsLongitude = null
-                        gpsAccuracy = null
-                        prefs.edit().remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy").apply()
-                        chooseCity = false
-                    }.padding(vertical = 10.dp), color = foreground)
+            Column(Modifier.fillMaxWidth()) {
+                SearchBox(
+                    citySearch,
+                    { citySearch = it },
+                    when (language) {
+                        AppLanguage.EN -> "Search city or country…"
+                        AppLanguage.AR -> "ابحث عن مدينة أو دولة…"
+                        AppLanguage.CKB -> "گەڕان بە ناوی شار یان وڵات…"
+                    }
+                )
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "${visibleCities.size} matching locations"
+                        AppLanguage.AR -> "${visibleCities.size} موقعًا مطابقًا"
+                        AppLanguage.CKB -> "${visibleCities.size} شوێنی هاوتا"
+                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
+                )
+                LazyColumn(Modifier.height(355.dp)) {
+                    items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                onCity(city.name)
+                                gpsLatitude = null
+                                gpsLongitude = null
+                                gpsAccuracy = null
+                                prefs.edit().remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy").apply()
+                                chooseCity = false
+                            }.padding(vertical = 9.dp, horizontal = 4.dp)
+                        ) {
+                            Text(city.name, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            if (city.country.isNotBlank()) Text(city.country, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp)
+                        }
+                        Divider(color = foreground.copy(alpha = 0.08f))
+                    }
                 }
             }
         },

@@ -83,7 +83,7 @@ data class AllahName(
     val farsi: String = "",
     val extraText: String = ""
 )
-data class City(val name: String, val latitude: Double, val longitude: Double)
+data class City(val name: String, val latitude: Double, val longitude: Double, val country: String = "")
 data class PrayerRow(
     val city: String, val date: String, val fajr: String, val sunrise: String,
     val dhuhr: String, val asr: String, val maghrib: String, val isha: String,
@@ -975,23 +975,31 @@ object ContentRepository {
     suspend fun loadCities(context: Context): List<City> = withContext(Dispatchers.IO) {
         val noorCities = queryDb(context, PRAYER_DB, emptyList<City>()) { db ->
             db.rawQuery("SELECT city,lat,lon FROM cities ORDER BY city", null).use { c ->
-                buildList { while (c.moveToNext()) add(City(c.string("city"), c.double("lat"), c.double("lon"))) }
+                buildList {
+                    while (c.moveToNext()) add(City(c.string("city"), c.double("lat"), c.double("lon"), ""))
+                }
             }
         }
         val salawatiCities = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
             db.rawQuery(
                 """
-                SELECT DISTINCT l.name,l.latitude,l.longitude
-                FROM location l JOIN prayer_time pt ON pt.location_id=l._id
-                ORDER BY l.name
+                SELECT DISTINCT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
+                FROM location l
+                JOIN prayer_time pt ON pt.location_id=l._id
+                LEFT JOIN country ON country._id=l.country_id
+                ORDER BY country_name,l.name
                 """.trimIndent(), null
             ).use { c ->
-                buildList { while (c.moveToNext()) add(City(c.string("name"), c.double("latitude"), c.double("longitude"))) }
+                buildList {
+                    while (c.moveToNext()) add(
+                        City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name"))
+                    )
+                }
             }
         }
         (noorCities + salawatiCities)
-            .distinctBy { it.name.trim().lowercase(Locale.ROOT) }
-            .sortedBy { it.name.lowercase(Locale.ROOT) }
+            .distinctBy { "${it.name.trim().lowercase(Locale.ROOT)}|${it.country.trim().lowercase(Locale.ROOT)}" }
+            .sortedWith(compareBy<City> { it.country.lowercase(Locale.ROOT) }.thenBy { it.name.lowercase(Locale.ROOT) })
     }
 
     suspend fun loadPrayerTimes(context: Context, city: String, date: Date = Date()): PrayerRow? = withContext(Dispatchers.IO) {
