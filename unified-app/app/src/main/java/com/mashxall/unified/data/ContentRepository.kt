@@ -23,9 +23,24 @@ data class Surah(val number: Int, val arabicName: String, val englishName: Strin
 data class QuranTranslation(val id: String, val ckb: String, val arabic: String, val english: String)
 data class Ayah(val surah: Int, val number: Int, val arabic: String, val translation: String, val page: Int = 0)
 data class HadithItem(
-    val id: Int, val arabic: String, val sorani: String, val english: String, val bookId: Int,
-    val bookName: String = "", val bookNameAr: String = "", val bookNameEn: String = "",
-    val chapterName: String = "", val chapterNameAr: String = "", val chapterNameEn: String = ""
+    val id: Int,
+    val sort: Int,
+    val sortInBook: String,
+    val arabic: String,
+    val sorani: String,
+    val english: String,
+    val bookId: Int,
+    val bookName: String = "",
+    val bookNameAr: String = "",
+    val bookNameEn: String = "",
+    val kitabName: String = "",
+    val kitabNameAr: String = "",
+    val kitabNameEn: String = "",
+    val chapterName: String = "",
+    val chapterNameAr: String = "",
+    val chapterNameEn: String = "",
+    val note: String = "",
+    val footnote: String = ""
 )
 data class AzkarItem(
     val id: Int, val titleCkb: String, val titleAr: String, val titleEn: String,
@@ -34,7 +49,17 @@ data class AzkarItem(
 )
 data class AzkarCategory(val id: Int, val ckb: String, val arabic: String, val english: String)
 data class TasbihPreset(val id: Int, val zikr: String, val targetCount: Int, val timeOfDay: Int, val meaningCkb: String)
-data class AllahName(val number: Int, val arabic: String, val ckb: String, val badini: String, val english: String)
+data class AllahName(
+    val number: Int,
+    val arabic: String,
+    val ckb: String,
+    val badini: String,
+    val english: String,
+    val surahAyah: String = "",
+    val highlightSection: String = "",
+    val farsi: String = "",
+    val extraText: String = ""
+)
 data class City(val name: String, val latitude: Double, val longitude: Double)
 data class PrayerRow(
     val city: String, val date: String, val fajr: String, val sunrise: String,
@@ -446,6 +471,34 @@ object ContentRepository {
     private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
+    private fun hadithSearchFilter(query: String): String = if (query.isBlank()) "" else """
+        WHERE h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
+           OR b.name LIKE ? OR b.name_ar LIKE ? OR b.name_en LIKE ?
+           OR k.title LIKE ? OR k.title_ar LIKE ? OR k.title_en LIKE ?
+           OR ch.title LIKE ? OR ch.title_ar LIKE ? OR ch.title_en LIKE ?
+           OR h.note LIKE ? OR h.footnote LIKE ?
+    """.trimIndent()
+
+    private fun hadithSearchArgs(query: String): Array<String> =
+        Array(14) { "%${query.trim()}%" }
+
+    suspend fun loadHadithCount(context: Context, query: String = ""): Int = withContext(Dispatchers.IO) {
+        queryDb(context, HADITH_DB, 0) { db ->
+            val filter = hadithSearchFilter(query)
+            val args = if (query.isBlank()) null else hadithSearchArgs(query)
+            db.rawQuery(
+                """
+                SELECT COUNT(DISTINCT h.id)
+                FROM hadiths h
+                LEFT JOIN book b ON b.id=h.book_id
+                LEFT JOIN kitab k ON k.id=h.kitab_id
+                LEFT JOIN chapters ch ON ch.id=h.chapter_id
+                $filter
+                """.trimIndent(), args
+            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        }
+    }
+
     suspend fun loadHadiths(
         context: Context,
         query: String = "",
@@ -453,40 +506,35 @@ object ContentRepository {
         limit: Int = 100
     ): List<HadithItem> = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, emptyList()) { db ->
-            val term = "%${query.trim()}%"
-            val filter = if (query.isBlank()) "" else """
-                WHERE h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
-                   OR b.name LIKE ? OR b.name_ar LIKE ? OR b.name_en LIKE ?
-                   OR k.title LIKE ? OR k.title_ar LIKE ? OR k.title_en LIKE ?
-            """.trimIndent()
+            val filter = hadithSearchFilter(query)
+            val baseArgs = if (query.isBlank()) emptyArray() else hadithSearchArgs(query)
+            val args = baseArgs + arrayOf(limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString())
             val sql = """
-                SELECT h.id,h.text_ar,h.text,h.text_en,h.book_id,
+                SELECT h.id,h.sort,h.sort_in_book,h.text_ar,h.text,h.text_en,h.book_id,h.note,h.footnote,
                        COALESCE(b.name,'') AS book_name,
                        COALESCE(b.name_ar,'') AS book_name_ar,
                        COALESCE(b.name_en,'') AS book_name_en,
-                       COALESCE(k.title,'') AS chapter_name,
-                       COALESCE(k.title_ar,'') AS chapter_name_ar,
-                       COALESCE(k.title_en,'') AS chapter_name_en
+                       COALESCE(k.title,'') AS kitab_name,
+                       COALESCE(k.title_ar,'') AS kitab_name_ar,
+                       COALESCE(k.title_en,'') AS kitab_name_en,
+                       COALESCE(ch.title,'') AS chapter_name,
+                       COALESCE(ch.title_ar,'') AS chapter_name_ar,
+                       COALESCE(ch.title_en,'') AS chapter_name_en
                 FROM hadiths h
                 LEFT JOIN book b ON b.id=h.book_id
                 LEFT JOIN kitab k ON k.id=h.kitab_id
+                LEFT JOIN chapters ch ON ch.id=h.chapter_id
                 $filter
-                ORDER BY h.id
+                ORDER BY h.book_id,h.sort,h.id
                 LIMIT ? OFFSET ?
             """.trimIndent()
-            val args = if (query.isBlank()) {
-                arrayOf(limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString())
-            } else {
-                arrayOf(
-                    term, term, term, term, term, term, term, term, term,
-                    limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString()
-                )
-            }
             db.rawQuery(sql, args).use { c ->
                 buildList {
                     while (c.moveToNext()) add(
                         HadithItem(
                             id = c.int("id"),
+                            sort = c.int("sort"),
+                            sortInBook = c.string("sort_in_book"),
                             arabic = c.string("text_ar"),
                             sorani = c.string("text"),
                             english = c.string("text_en"),
@@ -494,9 +542,14 @@ object ContentRepository {
                             bookName = c.string("book_name"),
                             bookNameAr = c.string("book_name_ar"),
                             bookNameEn = c.string("book_name_en"),
+                            kitabName = c.string("kitab_name"),
+                            kitabNameAr = c.string("kitab_name_ar"),
+                            kitabNameEn = c.string("kitab_name_en"),
                             chapterName = c.string("chapter_name"),
                             chapterNameAr = c.string("chapter_name_ar"),
-                            chapterNameEn = c.string("chapter_name_en")
+                            chapterNameEn = c.string("chapter_name_en"),
+                            note = c.string("note"),
+                            footnote = c.string("footnote")
                         )
                     )
                 }
@@ -632,8 +685,25 @@ object ContentRepository {
 
     suspend fun loadNames(context: Context): List<AllahName> = withContext(Dispatchers.IO) {
         queryDb(context, PRAYER_DB, emptyList()) { db ->
-            db.rawQuery("SELECT _id,arabic,sorani,badini,english FROM allah_names ORDER BY _id", null).use { c ->
-                buildList { while (c.moveToNext()) add(AllahName(c.int("_id") + 1, c.string("arabic"), c.string("sorani"), c.string("badini"), c.string("english"))) }
+            db.rawQuery(
+                "SELECT _id,arabic,sorani,badini,english,surah_ayah,highlight_section,farsi,nu FROM allah_names ORDER BY _id",
+                null
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        AllahName(
+                            c.int("_id") + 1,
+                            c.string("arabic"),
+                            c.string("sorani"),
+                            c.string("badini"),
+                            c.string("english"),
+                            c.string("surah_ayah"),
+                            c.string("highlight_section"),
+                            c.string("farsi"),
+                            c.string("nu")
+                        )
+                    )
+                }
             }
         }
     }
