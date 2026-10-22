@@ -797,6 +797,7 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var playing by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf("1") }
     var ayahText by rememberSaveable { mutableStateOf("1") }
     LaunchedEffect(Unit) {
@@ -826,11 +827,19 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 )
             }
         }
+        Spacer(Modifier.height(7.dp))
+        SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
         if (selectedTab == 0 || selectedTab == 2) {
-            val visibleAudio = if (selectedTab == 2) audio.filter { item ->
-                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase()
-                listOf("adhan", "athan", "azan", "madina", "mecca", "fajr", "hijaz", "takbir", "ramazan", "nasr", "mshari").any { name.contains(it) }
-            } else audio
+            val adhanKeywords = listOf(
+                "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
+                "mecca", "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
+                "majid", "mansur", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan"
+            )
+            val visibleAudio = audio.filter { item ->
+                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
+                (selectedTab == 0 || adhanKeywords.any { name.contains(it) }) &&
+                    (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
+            }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 items(visibleAudio, key = { it.assetPath }) { item ->
@@ -856,6 +865,9 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
             }
         } else {
+            val visibleReciters = reciters.filter { reciter ->
+                (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+            }
             Text(
                 if (language == AppLanguage.EN) "Streaming requires an internet connection. Pick a verse to audition a reciter."
                 else if (language == AppLanguage.AR) "يحتاج البث إلى اتصال بالإنترنت. اختر آية لتجربة القارئ."
@@ -881,8 +893,9 @@ fun AudioScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             }
             Spacer(Modifier.height(7.dp))
             if (reciters.isEmpty()) LoadingOrEmpty(loading, language, foreground)
+            else if (visibleReciters.isEmpty()) LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(reciters, key = { it.id }) { reciter ->
+                items(visibleReciters, key = { it.id }) { reciter ->
                     val url = ContentRepository.reciterSampleUrl(
                         reciter,
                         surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1,
