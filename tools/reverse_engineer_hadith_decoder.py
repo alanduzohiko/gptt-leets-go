@@ -20,9 +20,9 @@ TARGETS = [
     ("hadith_model", "m4.f"),
 ]
 INTERESTING = re.compile(
-    r"U0\\(|K0\\(|f10929e|Cipher|SecretKeySpec|IvParameterSpec|Base64|doFinal|"
+    r"U0[(]|K0[(]|f10929e|Cipher|SecretKeySpec|IvParameterSpec|Base64|doFinal|"
     r"decrypt|encrypt|hadith_on_ayah|db_hadith_of_ayah|StringBuilder|new String|"
-    r"Map<|HashMap|put\\(",
+    r"Map<|HashMap|put[(]",
     re.I,
 )
 
