@@ -9,6 +9,8 @@ on:
       - "unified-app/**"
       - "tools/extract_unified_content.py"
       - "tools/reverse_engineer_sources.py"
+      - "tools/audit_content_wiring.py"
+      - "tests/test_audit_content_wiring.py"
       - "tools/reverse_engineer_hadith_decoder.py"
       - ".github/workflows/build-unified-mashxall.yml"
   workflow_dispatch:
@@ -127,6 +129,14 @@ jobs:
             --out unified-app/app/src/main/assets \
             --catalog unified-app/app/src/main/assets/content_catalog.json
 
+      - name: Audit that every referenced content asset exists
+        run: |
+          set -euo pipefail
+          python tools/audit_content_wiring.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --source-root unified-app/app/src/main/java/com/mashxall/unified \
+            --out dist/content-wiring-audit.json
+
       - name: Prepare Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -174,6 +184,7 @@ jobs:
           path: |
             dist/Mashxall-Unified-debug.apk
             dist/content-catalog.json
+            dist/content-wiring-audit.json
             dist/BUILD-STATUS-AR.txt
             dist/reverse-engineering-report.json
           if-no-files-found: warn
