@@ -258,7 +258,7 @@ def main() -> int:
                                 # Limit to the mapper's first region; output around the
                                 # actual decryption-related call sites is emitted below.
                                 lines_out = window["source"].splitlines()
-                                selected = [line for line in lines_out if re.search(r"U0\\(|K0\\(|decrypt|encrypt|f10929e|hadith_on_ayah|db_hadith_of_ayah", line, re.I)]
+                                selected = [line for line in lines_out if re.search(r"U0[(]|K0[(]|decrypt|encrypt|f10929e|hadith_on_ayah|db_hadith_of_ayah", line, re.I)]
                                 print(f"TARGET {tag} lines={window['start_line']}-{window['end_line']}", flush=True)
                                 print("\\n".join(selected[:50]), flush=True)
                             else:
