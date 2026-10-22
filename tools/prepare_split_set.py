@@ -1039,33 +1039,58 @@ def main() -> int:
     if not title_found:
         raise ValueError("Rebuilt app label is not present after decoding")
 
-    # Build a second base for split installation. The standalone merge input
-    # must not retain split requirements; the real split base must retain them.
-    split_manifest_path = decoded / "AndroidManifest.xml"
-    split_tree = ET.parse(split_manifest_path)
-    split_root = split_tree.getroot()
-    for item in package_identity["removed_split_only_manifest_attributes"]:
-        split_root.set(item["attribute"], item["value"])
-    split_tree.write(split_manifest_path, encoding="utf-8", xml_declaration=True)
+    # Do not use Apktool's rebuilt resources.arsc in a base that will be paired
+    # with the original density split. Inject only the reassembled DEX into each
+    # version of the original base, and patch binary-manifest identity in place.
     rebuilt_split_base = rebuilt_dir / "base-split.apk"
-    run(apktool + ["b", "--use-aapt2", "--no-crunch", str(decoded), "-o", str(rebuilt_split_base)])
+    split_base_report = build_resource_preserving_base(
+        original_base, rebuilt_base, rebuilt_split_base, standalone=False
+    )
+    rebuilt_standalone_base = rebuilt_dir / "base-standalone.apk"
+    standalone_base_report = build_resource_preserving_base(
+        original_base, rebuilt_base, rebuilt_standalone_base, standalone=True
+    )
+
     redecoded_split_base = work / "redecoded-split-base"
     run(apktool + ["d", "--force", str(rebuilt_split_base), "-o", str(redecoded_split_base)])
     split_base_root = ET.parse(redecoded_split_base / "AndroidManifest.xml").getroot()
     if split_base_root.attrib.get("package") != TARGET_PACKAGE:
-        raise ValueError("Split-install base APK has the wrong package ID")
-    for item in package_identity["removed_split_only_manifest_attributes"]:
-        if split_base_root.attrib.get(item["attribute"]) != item["value"]:
-            raise ValueError("Split-install base APK did not preserve " + item["attribute"])
-    if manifest_semantics(redecoded_split_base / "AndroidManifest.xml") != manifest_before:
-        raise ValueError("Split-install base APK changed manifest semantics beyond package identity")
+        raise ValueError("Resource-preserving split base has the wrong package ID")
+    split_application = split_base_root.find("application")
+    if split_application is None or split_application.attrib.get("{" + ANDROID_NS + "}label") != APP_NAME:
+        raise ValueError("Resource-preserving split base does not display the Mashxall application label")
+    if manifest_semantics(redecoded_split_base / "AndroidManifest.xml", ignore_tool_added_split_flag=True) != manifest_before:
+        raise ValueError("Resource-preserving split base manifest changed beyond the explicit identity/label remap")
     split_base_entries = zip_entries(rebuilt_split_base)
     split_base_dex = {n: b for n, b in split_base_entries.items() if re.fullmatch(r"classes\d*\.dex", n)}
     if set(split_base_dex) != set(source_dex):
-        raise ValueError("Split-install base APK changed the original multidex file set")
+        raise ValueError("Resource-preserving split base changed the original multidex file set")
     split_base_db = next((n for n in split_base_entries if n.endswith("muslim_db_v2.5.1.db")), None)
     if not split_base_db or sha(split_base_entries[split_base_db]) != sha(source_entries[dbname]):
-        raise ValueError("Split-install base APK changed or lost the original offline database")
+        raise ValueError("Resource-preserving split base changed or lost the original offline database")
+
+    redecoded_standalone_base = work / "redecoded-standalone-base"
+    run(apktool + ["d", "--force", str(rebuilt_standalone_base), "-o", str(redecoded_standalone_base)])
+    standalone_root = ET.parse(redecoded_standalone_base / "AndroidManifest.xml").getroot()
+    if standalone_root.attrib.get("package") != TARGET_PACKAGE:
+        raise ValueError("Resource-preserving standalone base has the wrong package ID")
+    standalone_app = standalone_root.find("application")
+    if standalone_app is None or standalone_app.attrib.get("{" + ANDROID_NS + "}label") != APP_NAME:
+        raise ValueError("Resource-preserving standalone base does not display the Mashxall application label")
+    standalone_split_attrs = {
+        "split", "splitTypes", "requiredSplitTypes", "isSplitRequired",
+        "isFeatureSplit", "configForSplit",
+        "{" + ANDROID_NS + "}split",
+        "{" + ANDROID_NS + "}splitTypes",
+        "{" + ANDROID_NS + "}requiredSplitTypes",
+        "{" + ANDROID_NS + "}isSplitRequired",
+        "{" + ANDROID_NS + "}isFeatureSplit",
+        "{" + ANDROID_NS + "}configForSplit",
+    }
+    if any(key in standalone_root.attrib for key in standalone_split_attrs):
+        raise ValueError("Standalone base still has split-only manifest attributes")
+    if manifest_semantics(redecoded_standalone_base / "AndroidManifest.xml") != manifest_before:
+        raise ValueError("Resource-preserving standalone base manifest changed beyond the explicit identity/label remap")
 
     # Patch only each config split's binary manifest. Apktool rebuilding a config
     # APK independently can rewrite resources.arsc and break package-resource linkage.
