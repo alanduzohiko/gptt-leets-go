@@ -47,8 +47,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GpsFixed
@@ -2164,7 +2162,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { dayOffset = (dayOffset - 1).coerceAtLeast(-366) }, enabled = dayOffset > -366) {
-                    Icon(Icons.Outlined.ChevronLeft, null, tint = Gold)
+                    Text("‹", color = Gold, fontSize = 22.sp)
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
@@ -2177,7 +2175,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Text(displayDateText, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
                 }
                 IconButton(onClick = { dayOffset = (dayOffset + 1).coerceAtMost(366) }, enabled = dayOffset < 366) {
-                    Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+                    Text("›", color = Gold, fontSize = 22.sp)
                 }
                 if (dayOffset != 0) {
                     TextButton(onClick = { dayOffset = 0 }) {
