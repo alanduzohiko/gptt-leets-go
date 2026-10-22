@@ -2512,20 +2512,66 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         if (records.isEmpty()) LoadingOrEmpty(loading, language, foreground)
         else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(records, key = { it.id }) { item ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+                var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
+                val title = item.title.ifBlank { item.badiniTitle }
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
+                ) {
                     Column(Modifier.padding(15.dp)) {
-                        Text(item.title.ifBlank { item.badiniTitle }, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Text(if (expanded) "−" else "+", color = Gold, fontSize = 20.sp)
+                        }
                         Spacer(Modifier.height(7.dp))
-                        val translation = when (language) {
-                            AppLanguage.CKB -> item.sorani.ifBlank { item.badini }
-                            AppLanguage.AR -> item.arabic
-                            AppLanguage.EN -> item.arabic
+                        when (language) {
+                            AppLanguage.CKB -> {
+                                if (item.sorani.isNotBlank()) Text(item.sorani, color = foreground.copy(alpha = 0.84f), fontSize = 13.sp, lineHeight = 21.sp)
+                                else if (item.arabic.isNotBlank()) Text(item.arabic, color = foreground, fontSize = 16.sp, lineHeight = 27.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                            }
+                            AppLanguage.AR -> {
+                                if (item.arabic.isNotBlank()) Text(item.arabic, color = foreground, fontSize = 16.sp, lineHeight = 27.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                else Text(item.title, color = foreground, fontSize = 13.sp, lineHeight = 20.sp)
+                            }
+                            AppLanguage.EN -> {
+                                if (item.arabic.isNotBlank()) {
+                                    Text(item.arabic, color = foreground, fontSize = 16.sp, lineHeight = 27.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                    Spacer(Modifier.height(5.dp))
+                                }
+                                Text(
+                                    "The supplied source includes Arabic and Kurdish descriptions for this item; no separate English translation is present.",
+                                    color = foreground.copy(alpha = 0.57f), fontSize = 10.sp, lineHeight = 16.sp
+                                )
+                            }
                         }
-                        if (item.arabic.isNotBlank()) {
-                            Text(item.arabic, color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                            Spacer(Modifier.height(7.dp))
+                        if (expanded) {
+                            Spacer(Modifier.height(10.dp))
+                            if (item.title.isNotBlank()) {
+                                Text(if (language == AppLanguage.EN) "Source title" else if (language == AppLanguage.AR) "العنوان الأصلي" else "ناونیشانی سەرچاوە", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(item.title, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                            }
+                            if (item.arabic.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(if (language == AppLanguage.EN) "Arabic description" else if (language == AppLanguage.AR) "الوصف العربي" else "ڕوونکردنەوەی عەرەبی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(item.arabic, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 19.sp)
+                            }
+                            if (item.sorani.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(if (language == AppLanguage.EN) "Sorani Kurdish" else if (language == AppLanguage.AR) "الكردية السورانية" else "کوردی سۆرانی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(item.sorani, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 19.sp)
+                            }
+                            if (item.badiniTitle.isNotBlank() && item.badiniTitle != item.title) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(if (language == AppLanguage.EN) "Badini title" else if (language == AppLanguage.AR) "العنوان الباديني" else "ناونیشانی بادینی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(item.badiniTitle, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
+                            }
+                            if (item.badini.isNotBlank() && item.badini != item.sorani) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(if (language == AppLanguage.EN) "Badini Kurdish" else if (language == AppLanguage.AR) "الكردية البادينية" else "کوردی بادینی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(item.badini, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 19.sp)
+                            }
                         }
-                        if (translation.isNotBlank()) Text(translation, color = foreground.copy(alpha = 0.82f), fontSize = 13.sp, lineHeight = 21.sp)
                     }
                 }
             }
