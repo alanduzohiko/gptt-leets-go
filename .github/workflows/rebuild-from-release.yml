@@ -211,6 +211,9 @@ jobs:
           MERGE_INPUT_DIR="$GITHUB_WORKSPACE/work/prepared/standalone-input"
           java -jar "$APKEDITOR_JAR" m -i "$MERGE_INPUT_DIR" -o "$UNIVERSAL_UNSIGNED" -f
           test -s "$UNIVERSAL_UNSIGNED"
+          # APKEditor deflates DEX entries when merging splits. Restore install-friendly
+          # APK storage (DEX/native libraries/resources.arsc uncompressed) before zipalign/sign.
+          python tools/normalize_standalone_apk.py --input "$UNIVERSAL_UNSIGNED" --report "$GITHUB_WORKSPACE/dist/storage-normalization.json"
           "$BT/zipalign" -P 16 -f 4 "$UNIVERSAL_UNSIGNED" "$UNIVERSAL_ALIGNED"
           "$BT/apksigner" sign \
             --ks "$KEYSTORE" --ks-key-alias "$ALIAS" \
@@ -294,6 +297,7 @@ jobs:
           path: |
             dist/Mashxall-3.1.3.apk
             dist/universal-verification.json
+            dist/storage-normalization.json
             dist/standalone-manifest.xml
             dist/aapt-badging.txt
             dist/Mashxall-3.1.3-rebranded.apks

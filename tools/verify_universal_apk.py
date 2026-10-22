@@ -69,6 +69,24 @@ def main() -> int:
         raise ValueError(f"Unexpected source split list: {sorted(source_parts)}")
     source_base = apk_map(source_parts["base.apk"], "source base.apk")
     source_abi = apk_map(source_parts["split_config.arm64_v8a.apk"], "source arm64 split")
+    with zipfile.ZipFile(args.output, "r") as final_zip:
+        output_info = {info.filename: info for info in final_zip.infolist()}
+        if len(output_info) != len(final_zip.infolist()):
+            raise ValueError("Standalone APK has duplicate ZIP entry names")
+        final_dex_names = [name for name in output_info if re.fullmatch(r"classes\d*\.dex", name)]
+        if not final_dex_names:
+            raise ValueError("Standalone APK contains no DEX files")
+        compressed_dex = [name for name in final_dex_names if output_info[name].compress_type != zipfile.ZIP_STORED]
+        if compressed_dex:
+            raise ValueError("Android-installable standalone APK must store DEX files uncompressed: " + repr(compressed_dex))
+        compressed_native = [
+            name for name, info in output_info.items()
+            if name.startswith("lib/") and name.endswith(".so") and info.compress_type != zipfile.ZIP_STORED
+        ]
+        if compressed_native:
+            raise ValueError("Standalone APK must store native libraries uncompressed: " + repr(compressed_native))
+        if output_info["resources.arsc"].compress_type != zipfile.ZIP_STORED:
+            raise ValueError("Standalone APK must store resources.arsc uncompressed")
     output = zip_map(args.output)
 
     required = {"AndroidManifest.xml", "resources.arsc"}
@@ -126,6 +144,13 @@ def main() -> int:
         "output_bytes": args.output.stat().st_size,
         "standalone_apk": True,
         "required_entries_present": True,
+        "android_install_storage_layout_validated": True,
+        "dex_entries_stored_uncompressed": len(final_dex_names),
+        "native_libraries_stored_uncompressed": len([
+            name for name, info in output_info.items()
+            if name.startswith("lib/") and name.endswith(".so") and info.compress_type == zipfile.ZIP_STORED
+        ]),
+        "resources_arsc_stored_uncompressed": True,
         "launcher_icon_resources_present": True,
         "launcher_icon_entries": sorted(required_launcher),
         "source_package_id": "com.kosratdahmad.myprayers",
