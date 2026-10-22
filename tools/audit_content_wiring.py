@@ -30,9 +30,10 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
 
     missing: list[dict] = []
     for path, owners in sorted(referenced.items()):
-        if path in available:
-            continue
-        missing.append({"path": path, "sources": sorted(owners)})
+        if path not in available:
+            missing.append({"path": path, "sources": sorted(owners)})
+        # Khairah tafsir loader computes the companion .bin path from the
+        # .sqlite database path, so check it even when the DB itself exists.
         derived = TAFSIR_DB.match(path)
         if derived:
             companion = derived.group(1) + ".bin"
