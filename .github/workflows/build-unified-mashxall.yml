@@ -9,6 +9,7 @@ on:
       - "unified-app/**"
       - "tools/extract_unified_content.py"
       - "tools/reverse_engineer_sources.py"
+      - "tools/reverse_engineer_hadith_decoder.py"
       - ".github/workflows/build-unified-mashxall.yml"
   workflow_dispatch:
     inputs:
