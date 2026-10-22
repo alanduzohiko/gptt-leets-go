@@ -734,13 +734,65 @@ object ContentRepository {
         }
     }
 
+    private const val SALAWATI_ID_OFFSET = 1_000_000
+
+    private suspend fun loadSalawatiAzkarItems(context: Context, query: String): List<AzkarItem> =
+        withContext(Dispatchers.IO) {
+            queryDb(context, AZKAR_DB, emptyList()) { db ->
+                val term = if (query.isBlank()) "%" else "%${query.trim()}%"
+                val sql = """
+                    SELECT it._id AS item_id,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='ckb' LIMIT 1),'') AS title_ckb,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='ar' LIMIT 1),'') AS title_ar,
+                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='en' LIMIT 1),'') AS title_en,
+                           it.item AS arabic,
+                           COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='ckb' LIMIT 1),'') AS ckb_text,
+                           COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='en' LIMIT 1),'') AS en_text,
+                           COALESCE((SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1),'') AS ref_ckb,
+                           COALESCE(cat._id,0) AS category_id,
+                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='ckb' LIMIT 1),'') AS category_ckb,
+                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='ar' LIMIT 1),'') AS category_ar,
+                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='en' LIMIT 1),'') AS category_en
+                    FROM azkar_item it
+                    LEFT JOIN azkar_chapter ch ON ch._id=it.chapter_id
+                    LEFT JOIN azkar_category cat ON cat._id=ch.category_id
+                    WHERE it.item LIKE ?
+                       OR EXISTS(SELECT 1 FROM azkar_item_translation t WHERE t.item_id=it._id AND t.item_translation LIKE ?)
+                       OR EXISTS(SELECT 1 FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.chapter_name LIKE ?)
+                       OR EXISTS(SELECT 1 FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.category_name LIKE ?)
+                    ORDER BY cat._id,ch._id,it._id
+                """.trimIndent()
+                db.rawQuery(sql, arrayOf(term, term, term, term)).use { c ->
+                    buildList {
+                        while (c.moveToNext()) add(
+                            AzkarItem(
+                                c.int("item_id") + SALAWATI_ID_OFFSET,
+                                c.string("title_ckb"),
+                                c.string("title_ar"),
+                                c.string("title_en"),
+                                c.string("arabic"),
+                                c.string("ckb_text"),
+                                c.string("en_text"),
+                                1,
+                                c.string("ref_ckb"),
+                                c.int("category_id") + SALAWATI_ID_OFFSET,
+                                c.string("category_ckb"),
+                                c.string("category_ar"),
+                                c.string("category_en")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
     suspend fun loadAzkarCategories(context: Context): List<AzkarCategory> = withContext(Dispatchers.IO) {
         val noor = queryDb(context, PRAYER_DB, emptyList<AzkarCategory>()) { db ->
             db.rawQuery("SELECT _id,ckb,ar,en FROM azkar_categories ORDER BY _id", null).use { c ->
                 buildList { while (c.moveToNext()) add(AzkarCategory(c.int("_id"), c.string("ckb"), c.string("ar"), c.string("en"))) }
             }
         }
-        if (noor.isNotEmpty()) noor else queryDb(context, AZKAR_DB, emptyList<AzkarCategory>()) { db ->
+        val salawati = queryDb(context, AZKAR_DB, emptyList<AzkarCategory>()) { db ->
             db.rawQuery(
                 """
                 SELECT category._id AS id,
@@ -750,9 +802,20 @@ object ContentRepository {
                 FROM azkar_category category ORDER BY category._id
                 """.trimIndent(), null
             ).use { c ->
-                buildList { while (c.moveToNext()) add(AzkarCategory(c.int("id"), c.string("ckb"), c.string("ar"), c.string("en"))) }
+                buildList { while (c.moveToNext()) add(AzkarCategory(c.int("id") + SALAWATI_ID_OFFSET, c.string("ckb"), c.string("ar"), c.string("en"))) }
             }
         }
+        val seenLabels = noor.flatMap { listOf(it.ckb, it.arabic, it.english) }
+            .filter { it.isNotBlank() }
+            .map { normalizeArabicKey(it) }
+            .toMutableSet()
+        val extra = salawati.filter { item ->
+            val labels = listOf(item.ckb, item.arabic, item.english).filter { it.isNotBlank() }.map { normalizeArabicKey(it) }
+            labels.none { it.isNotBlank() && it in seenLabels }.also { unique ->
+                if (unique) seenLabels.addAll(labels.filter { it.isNotBlank() })
+            }
+        }
+        (noor + extra).distinctBy { it.id }
     }
 
     suspend fun loadAzkar(context: Context, language: String, query: String = ""): List<AzkarItem> = withContext(Dispatchers.IO) {
@@ -772,7 +835,7 @@ object ContentRepository {
                    OR cat.ckb LIKE ? OR cat.ar LIKE ? OR cat.en LIKE ?
                 ORDER BY cat._id,ch._id,it._id
             """.trimIndent()
-            val term = if (query.isBlank()) "%" else "%$query%"
+            val term = if (query.isBlank()) "%" else "%${query.trim()}%"
             db.rawQuery(sql, arrayOf(term, term, term, term, term, term, term, term, term)).use { c ->
                 buildList {
                     while (c.moveToNext()) add(
@@ -785,15 +848,17 @@ object ContentRepository {
                 }
             }
         }
+
         val translations = queryDb(context, AZKAR_DB, emptyMap<String, SalawatiAzkarText>()) { db ->
-            val sql = """
+            db.rawQuery(
+                """
                 SELECT it.item AS arabic,
                        (SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='ckb' LIMIT 1) AS ckb_text,
                        (SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='en' LIMIT 1) AS en_text,
                        (SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1) AS ref_ckb
                 FROM azkar_item it
-            """.trimIndent()
-            db.rawQuery(sql, null).use { c ->
+                """.trimIndent(), null
+            ).use { c ->
                 buildMap {
                     while (c.moveToNext()) {
                         val key = normalizeArabicKey(c.string("arabic"))
@@ -802,50 +867,23 @@ object ContentRepository {
                 }
             }
         }
-        if (primary.isNotEmpty()) {
-            primary.map { item ->
-                val extra = translations[normalizeArabicKey(item.arabic)]
-                if (extra == null) item else item.copy(
-                    ckb = extra.ckb.ifBlank { item.ckb },
-                    english = extra.english.ifBlank { item.english },
-                    referenceCkb = extra.reference.ifBlank { item.referenceCkb }
-                )
-            }
-        } else {
-            queryDb(context, AZKAR_DB, emptyList<AzkarItem>()) { db ->
-                val term = if (query.isBlank()) "%" else "%$query%"
-                val sql = """
-                    SELECT it._id AS item_id,
-                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='ckb' LIMIT 1),'') AS title_ckb,
-                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='ar' LIMIT 1),'') AS title_ar,
-                           COALESCE((SELECT t.chapter_name FROM azkar_chapter_translation t WHERE t.chapter_id=ch._id AND t.language='en' LIMIT 1),'') AS title_en,
-                           it.item AS arabic,
-                           COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='ckb' LIMIT 1),'') AS ckb_text,
-                           COALESCE((SELECT t.item_translation FROM azkar_item_translation t WHERE t.item_id=it._id AND t.language='en' LIMIT 1),'') AS en_text,
-                           COALESCE((SELECT r.reference FROM azkar_reference ref JOIN azkar_reference_translation r ON r.reference_id=ref._id WHERE ref.item_id=it._id AND r.language='ckb' LIMIT 1),'') AS ref_ckb,
-                           cat._id AS category_id,
-                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='ckb' LIMIT 1),'') AS category_ckb,
-                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='ar' LIMIT 1),'') AS category_ar,
-                           COALESCE((SELECT t.category_name FROM azkar_category_translation t WHERE t.category_id=cat._id AND t.language='en' LIMIT 1),'') AS category_en
-                    FROM azkar_item it
-                    LEFT JOIN azkar_chapter ch ON ch._id=it.chapter_id
-                    LEFT JOIN azkar_category cat ON cat._id=ch.category_id
-                    WHERE it.item LIKE ? OR EXISTS(SELECT 1 FROM azkar_item_translation t WHERE t.item_id=it._id AND t.item_translation LIKE ?)
-                    ORDER BY cat._id,ch._id,it._id
-                """.trimIndent()
-                db.rawQuery(sql, arrayOf(term, term)).use { c ->
-                    buildList {
-                        while (c.moveToNext()) add(
-                            AzkarItem(
-                                c.int("item_id"), c.string("title_ckb"), c.string("title_ar"), c.string("title_en"),
-                                c.string("arabic"), c.string("ckb_text"), c.string("en_text"), 1, c.string("ref_ckb"),
-                                c.int("category_id"), c.string("category_ckb"), c.string("category_ar"), c.string("category_en")
-                            )
-                        )
-                    }
-                }
-            }
+        val enrichedNoor = primary.map { item ->
+            val extra = translations[normalizeArabicKey(item.arabic)]
+            if (extra == null) item else item.copy(
+                ckb = extra.ckb.ifBlank { item.ckb },
+                english = extra.english.ifBlank { item.english },
+                referenceCkb = extra.reference.ifBlank { item.referenceCkb }
+            )
         }
+        val salawatiItems = loadSalawatiAzkarItems(context, query)
+        val seenArabic = enrichedNoor.map { normalizeArabicKey(it.arabic) }
+            .filter { it.isNotBlank() }
+            .toMutableSet()
+        val uniqueSalawati = salawatiItems.filter { item ->
+            val key = normalizeArabicKey(item.arabic)
+            if (key.isBlank()) true else seenArabic.add(key)
+        }
+        (enrichedNoor + uniqueSalawati).distinctBy { it.id }
     }
 
     suspend fun loadTasbihPresets(context: Context): List<TasbihPreset> = withContext(Dispatchers.IO) {
