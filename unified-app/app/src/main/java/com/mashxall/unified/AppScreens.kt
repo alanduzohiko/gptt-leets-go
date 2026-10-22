@@ -132,13 +132,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
+    var showUnvowelled by rememberSaveable { mutableStateOf(false) }
+    var showVerseNote by rememberSaveable { mutableStateOf(false) }
     var mushafPage by rememberSaveable { mutableIntStateOf(1) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
     LaunchedEffect(selected, language, query, initialAyah, translationKey) {
         loading = true
-        val loaded = ContentRepository.loadAyahs(context, selected, language.key, query.trim(), translationKey)
+        val loaded = if (query.isBlank()) {
+            ContentRepository.loadAyahs(context, selected, language.key, translationKey = translationKey)
+        } else {
+            ContentRepository.searchAyahs(context, query.trim(), language.key, translationKey)
+        }
         verses = loaded
         if (query.isBlank()) {
             (loaded.firstOrNull { it.number >= initialAyah } ?: loaded.firstOrNull())?.page
@@ -158,7 +164,15 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(tr(language, "quran"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text(currentSurah?.arabicName ?: tr(language, "choose_surah"), color = Gold, fontSize = 14.sp)
+                    Text(
+                        if (query.isBlank()) currentSurah?.arabicName ?: tr(language, "choose_surah")
+                        else when (language) {
+                            AppLanguage.EN -> "Search across all 114 surahs"
+                            AppLanguage.AR -> "بحث في القرآن الكريم كاملًا"
+                            AppLanguage.CKB -> "گەڕان لە هەموو ١١٤ سوورەتدا"
+                        },
+                        color = Gold, fontSize = 12.sp
+                    )
                 }
                 OutlinedButton(onClick = { chooseSurah = true }) { Text(tr(language, "choose_surah"), fontSize = 11.sp) }
             }
@@ -192,7 +206,30 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
             if (!mushafMode) {
                 Spacer(Modifier.height(5.dp))
-                Text(currentSurah?.let { it.ayahCount.toString() + " • " + tr(language, "verse") } ?: "", color = foreground.copy(alpha = 0.55f), fontSize = 11.sp)
+                Text(
+                    if (query.isNotBlank()) {
+                        when (language) {
+                            AppLanguage.EN -> "${verses.size} matching verses"
+                            AppLanguage.AR -> "${verses.size} آية مطابقة"
+                            AppLanguage.CKB -> "${verses.size} ئایەتی هاوتا"
+                        }
+                    } else currentSurah?.let { it.ayahCount.toString() + " • " + tr(language, "verse") } ?: "",
+                    color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
+                )
+                Spacer(Modifier.height(5.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(
+                        selected = !showUnvowelled,
+                        onClick = { showUnvowelled = false },
+                        label = { Text(if (language == AppLanguage.EN) "With diacritics" else if (language == AppLanguage.AR) "بالتشكيل" else "بە حەرەکات", fontSize = 10.sp) }
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    FilterChip(
+                        selected = showUnvowelled,
+                        onClick = { showUnvowelled = true },
+                        label = { Text(if (language == AppLanguage.EN) "Without diacritics" else if (language == AppLanguage.AR) "بلا تشكيل" else "بێ حەرەکات", fontSize = 10.sp) }
+                    )
+                }
             }
         }
         if (mushafMode) {
@@ -203,14 +240,31 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             LoadingOrEmpty(loading, language, foreground)
         } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
+                Card(
+                    modifier = if (query.isNotBlank()) Modifier.clickable {
+                        selected = verse.surah
+                        onSurah(verse.surah)
+                        prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
+                        query = ""
+                        showVerseNote = false
+                    } else Modifier,
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18.dp))
+                ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(32.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
                                 Text(verse.number.toString(), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Spacer(Modifier.width(8.dp))
-                            Text(tr(language, "ayah") + " " + verse.number, color = foreground.copy(alpha = 0.5f), fontSize = 11.sp)
+                            Text(
+                                if (query.isNotBlank()) {
+                                    val name = if (language == AppLanguage.EN) verse.surahNameEnglish else verse.surahNameArabic
+                                    "$name • ${tr(language, "ayah")} ${verse.number}"
+                                } else tr(language, "ayah") + " " + verse.number,
+                                color = foreground.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1
+                            )
                             Spacer(Modifier.weight(1f))
                             IconButton(onClick = { onTafsir(verse.surah, verse.number) }, modifier = Modifier.size(32.dp)) {
                                 Icon(Icons.Outlined.AutoStories, tr(language, "tafsir"), tint = Gold, modifier = Modifier.size(19.dp))
@@ -228,7 +282,33 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                         }
                         Spacer(Modifier.height(6.dp))
-                        Text(verse.arabic, color = foreground, fontSize = 23.sp, lineHeight = 39.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic,
+                            color = foreground, fontSize = 23.sp, lineHeight = 39.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
+                        )
+                        if (verse.hasHadith) {
+                            Spacer(Modifier.height(5.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Hadith references available for this verse"
+                                    AppLanguage.AR -> "توجد روايات مرتبطة بهذه الآية في المصدر"
+                                    AppLanguage.CKB -> "لە سەرچاوەدا ئاماژەی فەرموودە بۆ ئەم ئایەتە هەیە"
+                                },
+                                color = Gold.copy(alpha = 0.92f), fontSize = 10.sp
+                            )
+                        }
+                        if (verse.note.isNotBlank()) {
+                            TextButton(onClick = { showVerseNote = !showVerseNote }) {
+                                Text(
+                                    if (showVerseNote) {
+                                        if (language == AppLanguage.EN) "Hide verse note" else if (language == AppLanguage.AR) "إخفاء ملاحظة الآية" else "تێبینی ئایەت بشارەوە"
+                                    } else {
+                                        if (language == AppLanguage.EN) "Verse note" else if (language == AppLanguage.AR) "ملاحظة الآية" else "تێبینی ئایەت"
+                                    }, fontSize = 10.sp
+                                )
+                            }
+                            if (showVerseNote) Text(verse.note.replace("<br>", "\\n").replace("<br/>", "\\n"), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                        }
                         if (verse.translation.isNotBlank()) {
                             Spacer(Modifier.height(8.dp)); Divider(color = Gold.copy(alpha = 0.24f)); Spacer(Modifier.height(8.dp))
                             Text(verse.translation, color = foreground.copy(alpha = 0.83f), fontSize = 14.sp, lineHeight = 23.sp)
