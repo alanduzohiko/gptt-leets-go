@@ -174,6 +174,60 @@ def main() -> int:
                                 for idx, item in enumerate(lines[start:end], start)
                             ),
                         })
+            # Narrowly capture the app's own database row mapper and encrypted-resource
+            # opener. Generic cryptography scans hit bundled Android/Firebase code first,
+            # so these named application classes are crucial for interoperability.
+            if meta["label"] == "Tafseeri Noor 1.2.2" and decompiled.exists():
+                focused = {}
+                exact_files = {
+                    "hadith_row_mapper": "sources/ab/b.java",
+                    "database_opening_and_versioning": "sources/n4/a.java",
+                    "string_and_crypto_helpers": "sources/m5/l.java",
+                    "hadith_models": "sources/m4/f.java",
+                }
+                crypto_line = re.compile(
+                    r"Cipher|SecretKey|IvParameter|Base64\.decode|doFinal|decrypt|encrypt|AES|PBKDF|"
+                    r"U0\(|K0\(|getString\(cursor|getColumnIndex|hadith_on_ayah|db_hadith_of_ayah",
+                    re.I,
+                )
+                for tag, rel in exact_files.items():
+                    file = decompiled / rel
+                    if not file.exists():
+                        continue
+                    try:
+                        source_lines = file.read_text(encoding="utf-8", errors="replace").splitlines()
+                    except OSError:
+                        continue
+                    windows = []
+                    if tag == "hadith_row_mapper":
+                        # This class maps encrypted database text fields into the UI model.
+                        windows = [(0, min(len(source_lines), 340))]
+                    else:
+                        indices = [i for i, line in enumerate(source_lines) if crypto_line.search(line)]
+                        used = set()
+                        for idx in indices[:30]:
+                            lo, hi = max(0, idx - 12), min(len(source_lines), idx + 35)
+                            if any(not (hi <= a or lo >= b) for a, b in used):
+                                continue
+                            used.add((lo, hi))
+                            windows.append((lo, hi))
+                    focused[tag] = {
+                        "file": rel,
+                        "line_count": len(source_lines),
+                        "windows": [
+                            {
+                                "start_line": lo + 1,
+                                "end_line": hi,
+                                "source": "\\n".join(
+                                    f"{i + 1}: {source_lines[i].rstrip()[:300]}"
+                                    for i in range(lo, hi)
+                                ),
+                            }
+                            for lo, hi in windows
+                        ],
+                    }
+                app_report["focused_application_source_context"] = focused
+
             app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
             # Manifest/resources and binaries stay temporary; only metadata and snippets are emitted.
