@@ -738,6 +738,20 @@ object ContentRepository {
 
     private suspend fun loadSalawatiAzkarItems(context: Context, query: String): List<AzkarItem> =
         withContext(Dispatchers.IO) {
+            val visibleCategories = loadAzkarCategories(context)
+            fun categoryIdFor(sourceId: Int, ckb: String, arabic: String, english: String): Int {
+                val labels = listOf(ckb, arabic, english)
+                    .filter { it.isNotBlank() }
+                    .map { normalizeArabicKey(it) }
+                    .filter { it.isNotBlank() }
+                val match = visibleCategories.firstOrNull { category ->
+                    listOf(category.ckb, category.arabic, category.english)
+                        .filter { it.isNotBlank() }
+                        .map { normalizeArabicKey(it) }
+                        .any { it.isNotBlank() && it in labels }
+                }
+                return match?.id ?: (sourceId + SALAWATI_ID_OFFSET)
+            }
             queryDb(context, AZKAR_DB, emptyList()) { db ->
                 val term = if (query.isBlank()) "%" else "%${query.trim()}%"
                 val sql = """
@@ -764,23 +778,28 @@ object ContentRepository {
                 """.trimIndent()
                 db.rawQuery(sql, arrayOf(term, term, term, term)).use { c ->
                     buildList {
-                        while (c.moveToNext()) add(
-                            AzkarItem(
-                                c.int("item_id") + SALAWATI_ID_OFFSET,
-                                c.string("title_ckb"),
-                                c.string("title_ar"),
-                                c.string("title_en"),
-                                c.string("arabic"),
-                                c.string("ckb_text"),
-                                c.string("en_text"),
-                                1,
-                                c.string("ref_ckb"),
-                                c.int("category_id") + SALAWATI_ID_OFFSET,
-                                c.string("category_ckb"),
-                                c.string("category_ar"),
-                                c.string("category_en")
+                        while (c.moveToNext()) {
+                            val categoryCkb = c.string("category_ckb")
+                            val categoryArabic = c.string("category_ar")
+                            val categoryEnglish = c.string("category_en")
+                            add(
+                                AzkarItem(
+                                    c.int("item_id") + SALAWATI_ID_OFFSET,
+                                    c.string("title_ckb"),
+                                    c.string("title_ar"),
+                                    c.string("title_en"),
+                                    c.string("arabic"),
+                                    c.string("ckb_text"),
+                                    c.string("en_text"),
+                                    1,
+                                    c.string("ref_ckb"),
+                                    categoryIdFor(c.int("category_id"), categoryCkb, categoryArabic, categoryEnglish),
+                                    categoryCkb,
+                                    categoryArabic,
+                                    categoryEnglish
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
