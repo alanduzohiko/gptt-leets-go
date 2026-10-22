@@ -23,7 +23,8 @@ data class BookItem(val id: Int, val title: String, val writer: String, val desc
 data class LexiconItem(val title: String, val content: String, val reference: String, val root: String)
 data class WordItem(val position: Int, val root: String, val grammar: String, val arabicShape: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
-data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)\ndata class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)\ndata class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
+data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
+data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)\ndata class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
 
 object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
