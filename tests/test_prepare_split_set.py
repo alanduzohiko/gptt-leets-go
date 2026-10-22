@@ -1,6 +1,7 @@
 import sys
 import tempfile
 import unittest
+import struct
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -8,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.prepare_split_set import (
     APP_NAME, ORIGINAL_PACKAGE, TARGET_PACKAGE, find_label_key,
-    manifest_semantics, rewrite_package_identity, rewrite_split_config_manifest,
+    manifest_semantics, rewrite_package_identity, patch_binary_xml_package_id,
     update_app_label, patch_runtime_package_literals
 )
 
@@ -92,25 +93,54 @@ class PrepareSplitSetTests(unittest.TestCase):
             self.assertEqual(report["target_package_id"], TARGET_PACKAGE)
             self.assertTrue(report["component_class_names_preserved"])
 
-    def test_rewrite_split_config_manifest_changes_package_but_keeps_split_identity(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            manifest = Path(tmp) / "AndroidManifest.xml"
-            manifest.write_text(
-                '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
-                f'package="{ORIGINAL_PACKAGE}" split="config.arm64_v8a">'
-                '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/>'
-                '<application android:label="@string/app_name"/>'
-                '</manifest>',
-                encoding="utf-8",
-            )
-            before = manifest_semantics(manifest)
-            report = rewrite_split_config_manifest(manifest)
-            root = ET.parse(manifest).getroot()
-            self.assertEqual(root.attrib["package"], TARGET_PACKAGE)
-            self.assertEqual(root.attrib["split"], "config.arm64_v8a")
-            self.assertEqual(manifest_semantics(manifest), before)
-            self.assertTrue(report["manifest_package_id_rewritten"])
-            self.assertTrue(report["split_identity_preserved"])
+    def test_binary_xml_package_patch_preserves_split_and_updates_long_package(self):
+        def length8(value):
+            if value <= 0x7F:
+                return bytes([value])
+            return bytes([(value >> 8) | 0x80, value & 0xFF])
+
+        values = ["manifest", "package", ORIGINAL_PACKAGE, "split", "config.arm64_v8a"]
+        string_data = bytearray()
+        offsets = []
+        for value in values:
+            offsets.append(len(string_data))
+            raw = value.encode("utf-8")
+            utf16_length = len(value.encode("utf-16le")) // 2
+            string_data.extend(length8(utf16_length) + length8(len(raw)) + raw + b"\0")
+        while len(string_data) % 4:
+            string_data.append(0)
+        strings_start = 28 + len(values) * 4
+        pool_size = strings_start + len(string_data)
+        pool = (
+            struct.pack("<HHIIIIII", 0x0001, 28, pool_size, len(values), 0, 0x100, strings_start, 0)
+            + b"".join(struct.pack("<I", offset) for offset in offsets)
+            + bytes(string_data)
+        )
+
+        def attr(name_index, value_index):
+            return struct.pack("<IIIHBBI", 0xFFFFFFFF, name_index, value_index, 8, 0, 3, value_index)
+
+        attr_bytes = attr(1, 2) + attr(3, 4)
+        start_size = 16 + 20 + len(attr_bytes)
+        start = (
+            struct.pack("<HHIII", 0x0102, 16, start_size, 1, 0xFFFFFFFF)
+            + struct.pack("<IIHHHHHH", 0xFFFFFFFF, 0, 20, 20, 2, 0, 0, 0)
+            + attr_bytes
+        )
+        end = struct.pack("<HHIII", 0x0103, 16, 24, 1, 0xFFFFFFFF) + struct.pack("<II", 0xFFFFFFFF, 0)
+        total_size = 8 + len(pool) + len(start) + len(end)
+        original_axml = struct.pack("<HHI", 0x0003, 8, total_size) + pool + start + end
+
+        patched, report = patch_binary_xml_package_id(original_axml, ORIGINAL_PACKAGE, TARGET_PACKAGE)
+        self.assertEqual(struct.unpack_from("<I", patched, 4)[0], len(patched))
+        self.assertGreater(len(patched), len(original_axml))
+        self.assertEqual(report["source_package_id"], ORIGINAL_PACKAGE)
+        self.assertEqual(report["target_package_id"], TARGET_PACKAGE)
+        self.assertEqual(report["split_name"], "config.arm64_v8a")
+        self.assertTrue(report["binary_manifest_only_changed"])
+        restored, restored_report = patch_binary_xml_package_id(patched, TARGET_PACKAGE, ORIGINAL_PACKAGE)
+        self.assertEqual(restored_report["split_name"], "config.arm64_v8a")
+        self.assertEqual(struct.unpack_from("<I", restored, 4)[0], len(restored))
 
     def test_rewrites_only_runtime_application_id_and_audio_uris(self):
         with tempfile.TemporaryDirectory() as tmp:
