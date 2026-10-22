@@ -17,7 +17,7 @@ The new app source currently includes a UI and repository layer for:
 - Tafsir selector for Noor's verse-indexed SQLite collection plus all four Khairah book tafsirs, decoded on demand with page-range and SHA-256 checks.
 - Hadith search from the Noor database.
 - Adhkar/dua browsing with persistent repetition counters, Salawati Kurdish/English text enrichment and references, and Names of Allah.
-- City-based annual prayer times and a Qibla arrow corrected using the device compass sensors when available.
+- Foreground GPS/Network location request with visible reported accuracy, source-city timetable lookup from both embedded databases where nearby, calculated times from precise coordinates elsewhere, selectable prayer calculation methods and Asr school, and Qibla using GPS coordinates plus device compass sensors.
 - Local bundled audio playback, a dedicated filter for included adhan/mosque audio, and 80 reciter entries from Noor's audio index.
 - Book catalogue with an in-app PDF page reader, lexicon lookup, word-by-word Quran grammar/root data, Farmuda records, and a persistent haptic tasbih counter.
 - A validated extraction script that catalogs SQLite databases, audio, fonts, PDFs and source assets.

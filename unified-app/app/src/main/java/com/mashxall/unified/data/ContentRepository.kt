@@ -25,7 +25,11 @@ data class HadithItem(val id: Int, val arabic: String, val sorani: String, val e
 data class AzkarItem(val id: Int, val titleCkb: String, val titleAr: String, val titleEn: String, val arabic: String, val ckb: String, val english: String, val count: Int, val referenceCkb: String)
 data class AllahName(val number: Int, val arabic: String, val ckb: String, val badini: String, val english: String)
 data class City(val name: String, val latitude: Double, val longitude: Double)
-data class PrayerRow(val city: String, val date: String, val fajr: String, val sunrise: String, val dhuhr: String, val asr: String, val maghrib: String, val isha: String)
+data class PrayerRow(
+    val city: String, val date: String, val fajr: String, val sunrise: String,
+    val dhuhr: String, val asr: String, val maghrib: String, val isha: String,
+    val source: String = "timetable", val latitude: Double? = null, val longitude: Double? = null
+)
 data class TafsirBook(val id: String, val labelCkb: String, val labelAr: String, val labelEn: String, val assetPath: String, val language: String)
 data class BookItem(val id: Int, val title: String, val writer: String, val description: String, val pages: Int, val url: String)
 data class LexiconItem(val title: String, val content: String, val reference: String, val root: String)
@@ -55,6 +59,7 @@ object ContentRepository {
     const val WORD_DB = "content/noor_tafsir_1.2.2/base/assets/db_word_by_word.db"
     const val LEXICON_DB = "content/noor_tafsir_1.2.2/base/assets/db_words_lexicon.db"
     const val AZKAR_DB = "content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db"
+    const val SALAWATI_DB = AZKAR_DB
     const val BOOKS_DB = "content/noor_tafsir_1.2.2/base/assets/tn_books.db"
     private const val MUSHAF_SVG_BIN = "content/khairah_1.2/base/assets/mushaf/pages.bin"
     private const val MUSHAF_SVG_INDEX = "mushaf_svg_index.json"
@@ -69,8 +74,10 @@ object ContentRepository {
         TafsirBook("hawrami", "هەورامی", "التفسير الهورامي", "Hawrami Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_hawrami.db", "ckb"),
         TafsirBook("runahi", "ڕووناهی بادینی", "التفسير الباديني", "Runahi Badini Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_runahi_badini.db", "bad"),
         TafsirBook("zhian", "ژیان بادینی", "تفسير ژيان", "Zhian Badini Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_zhian_badini.db", "bad"),
-        TafsirBook("saadi", "تفسير السعدي", "تفسير السعدي", "Saadi Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_saadi.db", "ckb"),
+        TafsirBook("saadi", "تفسير السعدي", "تفسير السعدي", "Saadi Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_saadi.db", "ar"),
         TafsirBook("mukhtasar", "مختصر", "المختصر", "Mukhtasar Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_mukhtasar.db", "ar"),
+        TafsirBook("rebar", "ڕێبەر", "تفسير ريبار", "Rebar Tafsir (Sorani)", "content/noor_tafsir_1.2.2/base/assets/tafseer_rebar.db", "ckb"),
+        TafsirBook("tawhid", "تەوحید", "تفسير التوحيد", "Tawhid Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_tawhid.db", "ar"),
         TafsirBook("khairah_ibn_kathir", "ابن کەثیر", "تفسير ابن كثير", "Ibn Kathir (Khairah)", "content/khairah_1.2/base/assets/tafsir/ibn-kathir.sqlite", "ar"),
         TafsirBook("khairah_muyassar", "التفسير الميسّر", "التفسير الميسر", "Al-Muyassar (Khairah)", "content/khairah_1.2/base/assets/tafsir/muyassar.sqlite", "ar"),
         TafsirBook("khairah_saadi", "تفسير السعدي", "تفسير السعدي", "Al-Saadi (Khairah)", "content/khairah_1.2/base/assets/tafsir/saadi.sqlite", "ar"),
@@ -453,20 +460,73 @@ object ContentRepository {
     }
 
     suspend fun loadCities(context: Context): List<City> = withContext(Dispatchers.IO) {
-        queryDb(context, PRAYER_DB, emptyList()) { db ->
+        val noorCities = queryDb(context, PRAYER_DB, emptyList<City>()) { db ->
             db.rawQuery("SELECT city,lat,lon FROM cities ORDER BY city", null).use { c ->
                 buildList { while (c.moveToNext()) add(City(c.string("city"), c.double("lat"), c.double("lon"))) }
             }
         }
+        val salawatiCities = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
+            db.rawQuery(
+                """
+                SELECT DISTINCT l.name,l.latitude,l.longitude
+                FROM location l JOIN prayer_time pt ON pt.location_id=l._id
+                ORDER BY l.name
+                """.trimIndent(), null
+            ).use { c ->
+                buildList { while (c.moveToNext()) add(City(c.string("name"), c.double("latitude"), c.double("longitude"))) }
+            }
+        }
+        (noorCities + salawatiCities)
+            .distinctBy { it.name.trim().lowercase(Locale.ROOT) }
+            .sortedBy { it.name.lowercase(Locale.ROOT) }
     }
 
     suspend fun loadPrayerTimes(context: Context, city: String, date: Date = Date()): PrayerRow? = withContext(Dispatchers.IO) {
         val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
-        queryDb(context, PRAYER_DB, null) { db ->
+        val noor = queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
             db.rawQuery("SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha FROM staticprayertimes WHERE lower(city)=lower(?) AND date=? LIMIT 1", arrayOf(city, md)).use { c ->
-                if (c.moveToFirst()) PrayerRow(c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"), c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha")) else null
+                if (c.moveToFirst()) PrayerRow(c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"), c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"), source = "noor:${c.string("city")}") else null
             }
         }
+        if (noor != null) return@withContext noor
+        queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
+            db.rawQuery(
+                """
+                SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                       l.latitude AS lat,l.longitude AS lon
+                FROM location l JOIN prayer_time pt ON pt.location_id=l._id
+                WHERE lower(l.name)=lower(?) AND pt.date=? LIMIT 1
+                """.trimIndent(), arrayOf(city, md)
+            ).use { c ->
+                if (c.moveToFirst()) PrayerRow(c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"), c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"), source = "salawati:${c.string("city")}", latitude = c.double("lat"), longitude = c.double("lon")) else null
+            }
+        }
+    }
+
+    suspend fun loadPrayerTimesAtLocation(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        date: Date = Date(),
+        method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
+        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
+        staticRadiusKm: Double = 7.0
+    ): PrayerRow = withContext(Dispatchers.IO) {
+        val nearest = loadCities(context)
+            .map { city -> city to PrayerTimeCalculator.distanceKm(latitude, longitude, city.latitude, city.longitude) }
+            .filter { it.second <= staticRadiusKm }
+            .sortedBy { it.second }
+        for ((city, distance) in nearest) {
+            val row = loadPrayerTimes(context, city.name, date)
+            if (row != null) {
+                return@withContext row.copy(
+                    source = "timetable:${city.name}:${"%.1f".format(Locale.US, distance)}km",
+                    latitude = latitude,
+                    longitude = longitude
+                )
+            }
+        }
+        PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool)
     }
 
     suspend fun loadBooks(context: Context, query: String = ""): List<BookItem> = withContext(Dispatchers.IO) {
