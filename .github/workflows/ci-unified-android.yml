@@ -8,6 +8,10 @@ on:
       - ".github/workflows/ci-unified-android.yml"
   workflow_dispatch:
 
+concurrency:
+  group: unified-android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

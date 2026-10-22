@@ -17,6 +17,10 @@ on:
       - ".github/workflows/ci.yml"
   workflow_dispatch:
 
+concurrency:
+  group: python-tooling-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
