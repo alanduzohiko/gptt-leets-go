@@ -183,6 +183,7 @@ def main() -> int:
                     "hadith_row_mapper": "sources/ab/b.java",
                     "database_opening_and_versioning": "sources/n4/a.java",
                     "string_and_crypto_helpers": "sources/m5/l.java",
+                    "string_decoder_key_map": "sources/m5/f.java",
                     "hadith_models": "sources/m4/f.java",
                 }
                 crypto_line = re.compile(
@@ -202,6 +203,25 @@ def main() -> int:
                     if tag == "hadith_row_mapper":
                         # This class maps encrypted database text fields into the UI model.
                         windows = [(0, min(len(source_lines), 340))]
+                    elif tag == "string_and_crypto_helpers":
+                        # Record the precise string transform invoked by the Hadith mapper;
+                        # broad crypto matches often hit unrelated app/dependency helpers.
+                        exact_signatures = re.compile(
+                            r"(?:static\\s+)?(?:final\\s+)?String\\s+j\\s*\\(|"
+                            r"String\\s+j\\s*\\(|f10929e|SecretKeySpec|Cipher\\.getInstance|Base64\\.decode",
+                            re.I,
+                        )
+                        indices = [i for i, line in enumerate(source_lines) if exact_signatures.search(line)]
+                        windows = []
+                        used = set()
+                        for idx in indices[:40]:
+                            lo, hi = max(0, idx - 12), min(len(source_lines), idx + 90)
+                            if any(not (hi <= a or lo >= b) for a, b in used):
+                                continue
+                            used.add((lo, hi))
+                            windows.append((lo, hi))
+                    elif tag == "string_decoder_key_map":
+                        windows = [(0, min(len(source_lines), 360))]
                     else:
                         indices = [i for i, line in enumerate(source_lines) if crypto_line.search(line)]
                         used = set()
