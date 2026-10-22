@@ -38,12 +38,12 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_4
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          emulator-boot-timeout: 600
-          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -wipe-data
+          emulator-boot-timeout: 900
+          disable-animations: false
           script: bash tools/probe-package-manager.sh
 
       - name: Upload exact PackageManager diagnostic
@@ -57,5 +57,14 @@ jobs:
             dist/package-manager-exit-code.txt
             dist/package-manager-result.txt
             dist/package-probe-logcat.txt
+            dist/package-probe-platform.txt
+            dist/package-probe-services-before.txt
+            dist/package-probe-services-after.txt
+            dist/control-install.txt
+            dist/control-install-exit-code.txt
+            dist/probe-build.txt
+            dist/package-service-after-control.txt
+            dist/package-service-after-target.txt
+            dist/package-probe-dumpsys.txt
           if-no-files-found: ignore
           retention-days: 14
