@@ -4090,6 +4090,14 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
+    LaunchedEffect(Unit) {
+        val alreadyAsked = prefs.getBoolean("prayer_location_prompted", false)
+        if (!alreadyAsked && gpsLatitude == null && gpsLongitude == null) {
+            prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+            locateNow()
+        }
+    }
+
     LaunchedEffect(citySearch) {
         delay(250L)
         cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
@@ -4097,7 +4105,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(Unit) {
         while (true) {
             clockNowMillis = System.currentTimeMillis()
-            delay(1_000L)
+            // A 15-second refresh is sufficient for a prayer countdown and
+            // avoids forcing expensive prayer-screen recomposition every second.
+            delay(15_000L)
         }
     }
     val currentLocalDateKey = remember(clockNowMillis) {
