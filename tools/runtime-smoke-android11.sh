@@ -563,6 +563,46 @@ if [[ "$word_analysis_content_visible" -ne 1 ]]; then
   exit 1
 fi
 check_screen farmuda 'فەرموودە و دوعاکان|المأثورات والأدعية|Supplications & sayings'
+
+# A supplication should be a compact titled card. Open one entry and verify its
+# own detail sheet contains dedicated actions rather than dumping all source
+# languages into the same long list row.
+farmuda_detail_coords="$(python3 - dist/runtime-test/window-farmuda.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Read full text|قراءة النص كاملًا|دەقەکە بە تەواوی بخوێنەوە", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$farmuda_detail_coords" ]]; then
+  echo "FAIL: Farmuda list did not expose a separate read-full-text action."
+  cat dist/runtime-test/window-farmuda.xml
+  exit 1
+fi
+read -r farmuda_x farmuda_y <<< "$farmuda_detail_coords"
+adb shell input tap "$farmuda_x" "$farmuda_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-farmuda-detail.xml > dist/runtime-test/uiautomator-farmuda-detail.txt 2>&1 || true
+adb pull /sdcard/mashxall-farmuda-detail.xml dist/runtime-test/window-farmuda-detail.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Favourite|مفضلة|دڵخواز' dist/runtime-test/window-farmuda-detail.xml ||
+   ! grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-farmuda-detail.xml; then
+  echo "FAIL: opening a Farmuda entry did not expose its own favourite and copy controls."
+  cat dist/runtime-test/window-farmuda-detail.xml
+  exit 1
+fi
+echo "PASS: Farmuda entries open individual details with source text, favourites and copy actions."
 check_screen tafsir 'تەفسیرو وەرگێڕان|التفسير والترجمة|Tafsir & translation'
 check_screen azkar 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
 
