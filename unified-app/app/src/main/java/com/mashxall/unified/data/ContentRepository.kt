@@ -342,8 +342,10 @@ object ContentRepository {
                 }
             }
         }
-        val baseRects = readRects("page_data_line")
-        if (baseRects.isNotEmpty()) baseRects else readRects("v2_tajweed_page_data_line")
+        // Prefer the detailed Tajweed glyph geometry; the legacy table is only
+        // a fallback for pages/verses not represented in the v2 table.
+        val tajweedRects = readRects("v2_tajweed_page_data_line")
+        if (tajweedRects.isNotEmpty()) tajweedRects else readRects("page_data_line")
     }
 
     /**
