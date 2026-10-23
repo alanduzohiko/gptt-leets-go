@@ -61,7 +61,11 @@ data class HadithArticle(
     val titleEnglish: String,
     val bodyCkb: String,
     val bodyArabic: String,
-    val bodyEnglish: String
+    val bodyEnglish: String,
+    val authorCkb: String = "",
+    val authorArabic: String = "",
+    val authorEnglish: String = "",
+    val authorDetail: String = ""
 )
 data class HadithItem(
     val id: Int,
@@ -804,18 +808,58 @@ object ContentRepository {
 
     suspend fun loadHadithArticles(context: Context, query: String = ""): List<HadithArticle> = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, emptyList()) { db ->
+            fun columns(table: String): Set<String> =
+                db.rawQuery("PRAGMA table_info($table)", null).use { c ->
+                    buildSet { while (c.moveToNext()) add(c.string("name")) }
+                }
+            val articleColumns = columns("articles")
+            val authorColumns = columns("author")
+            fun findColumn(columns: Set<String>, vararg candidates: String): String? {
+                val lower = columns.associateBy { it.lowercase(Locale.ROOT) }
+                return candidates.firstNotNullOfOrNull { lower[it.lowercase(Locale.ROOT)] }
+            }
+
+            // Inspect the bundled source schema instead of assuming every source build
+            // uses the same field names for article-author relationships.
+            val articleAuthorId = findColumn(articleColumns, "author_id", "authorid", "author")
+            val authorPrimaryKey = findColumn(authorColumns, "id", "_id", "author_id", "authorid")
+            val authorCkbColumn = findColumn(authorColumns, "name_ckb", "name_ku", "name_sorani", "name", "title", "author_name")
+            val authorArabicColumn = findColumn(authorColumns, "name_ar", "arabic_name", "nameArabic", "author_name_ar", "name")
+            val authorEnglishColumn = findColumn(authorColumns, "name_en", "english_name", "nameEnglish", "author_name_en", "name")
+            val directAuthorColumn = findColumn(articleColumns, "author_name", "author", "author_text")
+            val canJoin = articleAuthorId != null && authorPrimaryKey != null &&
+                authorCkbColumn != null && authorArabicColumn != null && authorEnglishColumn != null
+
+            val join = if (canJoin) "LEFT JOIN author auth ON auth.${authorPrimaryKey} = a.${articleAuthorId}" else ""
+            val ckbExpr = when {
+                canJoin -> "COALESCE(auth.${authorCkbColumn},'')"
+                directAuthorColumn != null -> "COALESCE(a.${directAuthorColumn},'')"
+                else -> "''"
+            }
+            val arabicExpr = if (canJoin) "COALESCE(auth.${authorArabicColumn},'')" else ckbExpr
+            val englishExpr = if (canJoin) "COALESCE(auth.${authorEnglishColumn},'')" else ckbExpr
+            val detailColumn = findColumn(authorColumns, "biography", "bio", "description", "details", "about")
+            val detailExpr = if (canJoin && detailColumn != null) "COALESCE(auth.${detailColumn},'')" else "''"
+
             val filter = if (query.isBlank()) "" else """
-                WHERE description LIKE ? OR description_text_ar LIKE ? OR description_text_en LIKE ?
-                   OR text LIKE ? OR text_ar LIKE ? OR text_en LIKE ?
+                WHERE a.description LIKE ? OR a.description_text_ar LIKE ? OR a.description_text_en LIKE ?
+                   OR a.text LIKE ? OR a.text_ar LIKE ? OR a.text_en LIKE ?
+                   OR $ckbExpr LIKE ? OR $arabicExpr LIKE ? OR $englishExpr LIKE ?
             """.trimIndent()
             val term = "%${query.trim()}%"
-            val args = if (query.isBlank()) null else arrayOf(term, term, term, term, term, term)
+            val args = if (query.isBlank()) null else arrayOf(term, term, term, term, term, term, term, term, term)
             db.rawQuery(
                 """
-                SELECT id,description,description_text_ar,description_text_en,text,text_ar,text_en
-                FROM articles
+                SELECT a.id,a.description,a.description_text_ar,a.description_text_en,
+                       a.text,a.text_ar,a.text_en,
+                       $ckbExpr AS author_ckb,
+                       $arabicExpr AS author_arabic,
+                       $englishExpr AS author_english,
+                       $detailExpr AS author_detail
+                FROM articles a
+                $join
                 $filter
-                ORDER BY id
+                ORDER BY a.id
                 """.trimIndent(), args
             ).use { c ->
                 buildList {
@@ -825,12 +869,16 @@ object ContentRepository {
                         add(
                             HadithArticle(
                                 id = c.int("id"),
-                                titleCkb = c.string("description"),
-                                titleArabic = c.string("description_text_ar"),
-                                titleEnglish = c.string("description_text_en"),
+                                titleCkb = plain(c.string("description")),
+                                titleArabic = plain(c.string("description_text_ar")),
+                                titleEnglish = plain(c.string("description_text_en")),
                                 bodyCkb = plain(c.string("text")),
                                 bodyArabic = plain(c.string("text_ar")),
-                                bodyEnglish = plain(c.string("text_en"))
+                                bodyEnglish = plain(c.string("text_en")),
+                                authorCkb = plain(c.string("author_ckb")),
+                                authorArabic = plain(c.string("author_arabic")),
+                                authorEnglish = plain(c.string("author_english")),
+                                authorDetail = plain(c.string("author_detail"))
                             )
                         )
                     }
