@@ -4516,6 +4516,41 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             )
         }
 
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Clock format"
+                    AppLanguage.AR -> "تنسيق الساعة"
+                    AppLanguage.CKB -> "شێوازی کاتژمێر"
+                }, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = !use24Hour,
+                onClick = {
+                    use24Hour = false
+                    prefs.edit().putBoolean("time_format_24h", false).apply()
+                },
+                label = { Text("12 h") }
+            )
+            Spacer(Modifier.width(7.dp))
+            FilterChip(
+                selected = use24Hour,
+                onClick = {
+                    use24Hour = true
+                    prefs.edit().putBoolean("time_format_24h", true).apply()
+                },
+                label = { Text("24 h") }
+            )
+        }
+        Text(
+            when (language) {
+                AppLanguage.EN -> "12-hour display is the default; changing this updates the home card too."
+                AppLanguage.AR -> "عرض 12 ساعة هو الافتراضي؛ تغيير هذا الخيار يحدّث بطاقة الرئيسية أيضًا."
+                AppLanguage.CKB -> "شێوازی ١٢ کاتژمێر بنەڕەتە؛ گۆڕینی ئەم هەڵبژاردەیە کارتی سەرەکییش نوێ دەکاتەوە."
+            }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
+        )
         Spacer(Modifier.height(14.dp))
         Text(if (language == AppLanguage.EN) "Calculation method" else if (language == AppLanguage.AR) "طريقة الحساب" else "شێوازی حسابکردن", color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
