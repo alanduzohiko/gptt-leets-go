@@ -166,6 +166,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             AppLanguage.CKB -> "roshn"
         })
     }
+    var readerReciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
+    var preferredReaderReciterId by rememberSaveable {
+        mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1))
+    }
+    LaunchedEffect(Unit) {
+        readerReciters = ContentRepository.loadReciters(context)
+        if (preferredReaderReciterId == -1) {
+            preferredReaderReciterId = readerReciters.firstOrNull { it.audioType == 0 }?.id ?: -1
+            if (preferredReaderReciterId > 0) {
+                prefs.edit().putInt("preferred_reciter_id", preferredReaderReciterId).apply()
+            }
+        }
+    }
     var selectedAyahForSheet by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var sheetVerse by remember { mutableStateOf<Ayah?>(null) }
     var sheetTafsir by remember { mutableStateOf("") }
@@ -853,6 +866,43 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         })
                         Spacer(Modifier.width(5.dp))
                         Text(label, color = foreground, fontSize = 12.sp)
+                    }
+                }
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Divider(color = Gold.copy(alpha = 0.25f))
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "DEFAULT VERSE-BY-VERSE RECITER"
+                            AppLanguage.AR -> "القارئ الافتراضي آيةً بآية"
+                            AppLanguage.CKB -> "قورئان‌خوێنی بنەڕەت بۆ ئایەت بە ئایەت"
+                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    if (readerReciters.isEmpty()) {
+                        Text(tr(language, "loading"), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                    }
+                }
+                items(readerReciters.filter { it.audioType == 0 }, key = { "reader-reciter-" + it.id }) { reciter ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            preferredReaderReciterId = reciter.id
+                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                        }.padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = preferredReaderReciterId == reciter.id,
+                            onClick = {
+                                preferredReaderReciterId = reciter.id
+                                prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                            }
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
+                        }
                     }
                 }
             }
