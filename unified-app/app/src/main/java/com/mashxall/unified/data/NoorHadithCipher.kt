@@ -58,15 +58,34 @@ internal object NoorHadithCipher {
         }
     }
 
+    private val collectionSorani = mapOf(
+        "AbuDawud" to "ئەبو داوود",
+        "Adab" to "ئەدەبی موفرەد",
+        "Bukhari" to "سەحیحی بوخاری",
+        "IbnMajah" to "سونەنی ئیبن ماجە",
+        "Malik" to "موەتا مالیک",
+        "Maram" to "بولغول مەرام",
+        "Muslim" to "سەحیحی موسلیم",
+        "Nasai" to "سونەنی نەسائی",
+        "Saliheen" to "ڕیاز الصالحین",
+        "Tirmidhi" to "جامعی ترمیزی"
+    )
+
     fun collectionArabic(code: String): String = collectionArabic[code.trim()].orEmpty()
     fun collectionEnglish(code: String): String = collectionEnglish[code.trim()].orEmpty()
+    fun collectionSorani(code: String): String = collectionSorani[code.trim()].orEmpty()
 
     /**
-     * Reproduce Noor's reference cleanup for the verse-linked Hadith screen.
-     * Turn internal collection and book tokens into readable Sorani references.
+     * Format the source references in the requested UI language. The default
+     * remains Sorani so existing callers and tests retain their prior behavior.
      */
-    fun formatReference(rawReference: String?, collectionLabel: String): String {
+    fun formatReference(rawReference: String?, collectionLabel: String, language: String = "ckb"): String {
         if (rawReference.isNullOrBlank()) return collectionLabel
+        fun labels(ckb: String, ar: String, en: String): String = when (language.lowercase()) {
+            "ar" -> ar
+            "en" -> en
+            else -> ckb
+        }
         val tokens = rawReference.split(",").map { it.trim() }.filter { it.isNotBlank() }
             .mapNotNull { token ->
                 when {
@@ -76,21 +95,37 @@ internal object NoorHadithCipher {
                             .find(token)?.groupValues?.getOrNull(1).orEmpty().trim()
                         val parts = remainder.split(":").map { it.trim() }.filter { it.isNotBlank() }
                         val readable = when {
-                            parts.size >= 3 -> "بەرگی ${parts[0]} پەرتووکى ${parts[1]} حدیثی ژمارە ${parts[2]}"
-                            parts.size == 2 -> "پەرتووکى ${parts[0]} حدیثی ژمارە ${parts[1]}"
+                            parts.size >= 3 -> labels(
+                                "بەرگی ${parts[0]} پەرتووکى ${parts[1]} حدیثی ژمارە ${parts[2]}",
+                                "المجلد ${parts[0]}، الكتاب ${parts[1]}، الحديث رقم ${parts[2]}",
+                                "Vol. ${parts[0]}, Book ${parts[1]}, Hadith no. ${parts[2]}"
+                            )
+                            parts.size == 2 -> labels(
+                                "پەرتووکى ${parts[0]} حدیثی ژمارە ${parts[1]}",
+                                "الكتاب ${parts[0]}، الحديث رقم ${parts[1]}",
+                                "Book ${parts[0]}, Hadith no. ${parts[1]}"
+                            )
                             else -> remainder
                         }
-                        listOf("دار السلام", readable).filter { it.isNotBlank() }.joinToString(" ")
+                        listOf(labels("دار السلام", "دار السلام", "Dar al-Salam"), readable)
+                            .filter { it.isNotBlank() }.joinToString(" ")
                     }
                     token.contains("in-book", ignoreCase = true) -> {
                         val remainder = token.substringAfter("in-book", "").trim()
                         val parts = remainder.split(":").map { it.trim() }.filter { it.isNotBlank() }
                         val numberText = when {
-                            parts.size >= 2 -> "${parts[0]} حدیثی ژمارە ${parts[1]}"
+                            parts.size >= 2 -> labels(
+                                "${parts[0]} حدیثی ژمارە ${parts[1]}",
+                                "${parts[0]}، الحديث رقم ${parts[1]}",
+                                "${parts[0]}, Hadith no. ${parts[1]}"
+                            )
                             parts.size == 1 -> parts[0]
                             else -> ""
                         }
-                        listOf("لە پەرتووکى ژمارە", numberText).filter { it.isNotBlank() }.joinToString(" ")
+                        listOf(
+                            labels("لە پەرتووکى ژمارە", "في الكتاب رقم", "In book"),
+                            numberText
+                        ).filter { it.isNotBlank() }.joinToString(" ")
                     }
                     token.contains("reference", ignoreCase = true) ->
                         token.replace(Regex("(?i)reference"), collectionLabel).trim()

@@ -61,6 +61,8 @@ class NoorHadithCipherTest {
         }
         assertEquals("", NoorHadithCipher.collectionArabic("UnlistedCollection"))
         assertEquals("", NoorHadithCipher.collectionEnglish("UnlistedCollection"))
+        assertEquals("", NoorHadithCipher.collectionSorani("UnlistedCollection"))
+        assertEquals("سەحیحی بوخاری", NoorHadithCipher.collectionSorani("Bukhari"))
     }
 
     @Test
@@ -75,6 +77,24 @@ class NoorHadithCipherTest {
         assertTrue(formatted.contains("حدیثی ژمارە 3"))
         assertTrue(formatted.contains("4 حدیثی ژمارە 5"))
         assertTrue(!formatted.contains("USC"))
+    }
+
+    @Test
+    fun formatsRelatedReferencesInArabicAndEnglishWhenRequested() {
+        val raw = "DarusSalam 1:2:3, USC, in-book 4:5"
+        val arabic = NoorHadithCipher.formatReference(raw, "صحيح البخاري", "ar")
+        val english = NoorHadithCipher.formatReference(raw, "Sahih al-Bukhari", "en")
+
+        assertTrue(arabic.contains("المجلد 1"))
+        assertTrue(arabic.contains("الكتاب 2"))
+        assertTrue(arabic.contains("الحديث رقم 3"))
+        assertTrue(arabic.contains("في الكتاب رقم"))
+        assertTrue(english.contains("Vol. 1"))
+        assertTrue(english.contains("Book 2"))
+        assertTrue(english.contains("Hadith no. 3"))
+        assertTrue(english.contains("In book"))
+        assertTrue(!arabic.contains("بەرگی"))
+        assertTrue(!english.contains("بەرگی"))
     }
 
     @Test

@@ -38,7 +38,10 @@ data class AyahHadith(
     val collectionCode: String,
     val collectionArabic: String,
     val collectionEnglish: String,
+    val collectionSorani: String,
     val reference: String,
+    val referenceArabic: String,
+    val referenceEnglish: String,
     val verseReference: String,
     val verseReferences: List<Pair<Int, Int>>,
     val arabic: String,
@@ -840,15 +843,21 @@ object ContentRepository {
                         val collectionCode = NoorHadithCipher.decrypt(c.string("collection"))
                         val collectionArabic = NoorHadithCipher.collectionArabic(collectionCode)
                         val collectionEnglish = NoorHadithCipher.collectionEnglish(collectionCode)
+                        val collectionSorani = NoorHadithCipher.collectionSorani(collectionCode)
                         val rawReference = NoorHadithCipher.decrypt(c.string("reference"))
-                        val reference = NoorHadithCipher.formatReference(rawReference, collectionArabic)
+                        val reference = NoorHadithCipher.formatReference(rawReference, collectionSorani, "ckb")
+                        val referenceArabic = NoorHadithCipher.formatReference(rawReference, collectionArabic, "ar")
+                        val referenceEnglish = NoorHadithCipher.formatReference(rawReference, collectionEnglish, "en")
                         add(
                             AyahHadith(
                                 id = c.int("id"),
                                 collectionCode = collectionCode,
                                 collectionArabic = collectionArabic,
                                 collectionEnglish = collectionEnglish,
+                                collectionSorani = collectionSorani,
                                 reference = reference,
+                                referenceArabic = referenceArabic,
+                                referenceEnglish = referenceEnglish,
                                 verseReference = verseReference,
                                 verseReferences = verseReferences,
                                 arabic = NoorHadithCipher.decrypt(c.string("arabic")),

@@ -479,7 +479,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                                 val collectionLabel = when (language) {
                                                     AppLanguage.EN -> related.collectionEnglish.ifBlank { related.collectionCode }
                                                     AppLanguage.AR -> related.collectionArabic.ifBlank { related.collectionCode }
-                                                    AppLanguage.CKB -> related.collectionArabic.ifBlank { related.collectionCode }
+                                                    AppLanguage.CKB -> related.collectionSorani.ifBlank { related.collectionArabic.ifBlank { related.collectionCode } }
                                                 }
                                                 if (collectionLabel.isNotBlank()) {
                                                     Text(collectionLabel, color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -487,20 +487,32 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                                 Text(related.arabic, color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                                                 val translation = when (language) {
                                                     AppLanguage.CKB -> related.kurdish
-                                                    AppLanguage.AR -> related.english
+                                                    AppLanguage.AR -> ""
                                                     AppLanguage.EN -> related.english
                                                 }
                                                 if (translation.isNotBlank()) {
                                                     Spacer(Modifier.height(7.dp))
                                                     Text(translation, color = foreground.copy(alpha = 0.84f), fontSize = 12.sp, lineHeight = 20.sp)
                                                 }
-                                                if (language != AppLanguage.EN && related.english.isNotBlank() && related.english != translation) {
+                                                if (language != AppLanguage.EN && related.english.isNotBlank()) {
                                                     Spacer(Modifier.height(5.dp))
-                                                    Text("English: " + related.english, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp, lineHeight = 18.sp)
+                                                    Text(
+                                                        when (language) {
+                                                            AppLanguage.AR -> "الترجمة الإنجليزية: " + related.english
+                                                            AppLanguage.CKB -> "English: " + related.english
+                                                            AppLanguage.EN -> related.english
+                                                        },
+                                                        color = foreground.copy(alpha = 0.65f), fontSize = 11.sp, lineHeight = 18.sp
+                                                    )
                                                 }
-                                                if (related.reference.isNotBlank()) {
+                                                val localizedReference = when (language) {
+                                                    AppLanguage.EN -> related.referenceEnglish
+                                                    AppLanguage.AR -> related.referenceArabic
+                                                    AppLanguage.CKB -> related.reference
+                                                }
+                                                if (localizedReference.isNotBlank()) {
                                                     Spacer(Modifier.height(6.dp))
-                                                    Text(related.reference, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 16.sp)
+                                                    Text(localizedReference, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 16.sp)
                                                 }
                                                 if (related.verseReferences.size > 1) {
                                                     Spacer(Modifier.height(3.dp))
