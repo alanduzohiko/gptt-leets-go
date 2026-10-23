@@ -34,6 +34,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -68,6 +72,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -160,7 +165,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
-    LaunchedEffect(selected, language, query, initialAyah, translationKey) {
+    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode) {
+        if (mushafMode) {
+            loading = false
+            return@LaunchedEffect
+        }
         loading = true
         val loaded = if (query.isBlank()) {
             ContentRepository.loadAyahs(context, selected, language.key, translationKey = translationKey)
@@ -184,6 +193,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
         ?: ContentRepository.quranTranslations.first()
     Column(Modifier.fillMaxSize()) {
+        if (!mushafMode) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -286,6 +296,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     )
                 }
             }
+        }
         }
         if (mushafMode) {
             MushafPageViewer(
@@ -635,6 +646,19 @@ private fun MushafPageViewer(
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    var scale by remember(page) { mutableFloatStateOf(1f) }
+    var offsetX by remember(page) { mutableFloatStateOf(0f) }
+    var offsetY by remember(page) { mutableFloatStateOf(0f) }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 4f)
+        if (scale > 1.01f) {
+            offsetX += panChange.x
+            offsetY += panChange.y
+        } else {
+            offsetX = 0f
+            offsetY = 0f
+        }
+    }
     LaunchedEffect(page) { pageInput = page.toString() }
     LaunchedEffect(page) {
         loading = true
@@ -717,7 +741,26 @@ private fun MushafPageViewer(
                         bitmap!!.asImageBitmap(),
                         contentDescription = tr(language, "mushaf_view") + " " + page,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offsetX
+                                translationY = offsetY
+                            }
+                            .transformable(transformState)
+                            .pointerInput(page, scale) {
+                                detectTapGestures(onDoubleTap = {
+                                    if (scale > 1.01f) {
+                                        scale = 1f
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    } else {
+                                        scale = 2f
+                                    }
+                                })
+                            }
                     )
                     failed -> Text(tr(language, "mushaf_unavailable"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
                 }
