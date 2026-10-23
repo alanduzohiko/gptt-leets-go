@@ -29,4 +29,33 @@ class PrayerTimeCorrectionTest {
         assertEquals("05:10", ContentRepository.addMinutesToPrayerTime("05:10", 0))
         assertEquals("time unavailable", ContentRepository.addMinutesToPrayerTime("time unavailable", 2))
     }
+
+    @Test
+    fun prefersTheSelectedSalawatiCityScheduleOverNoorWhenBothExist() {
+        val salawati = PrayerRow(
+            city = "Sulaymaniyah", date = "10-23",
+            fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
+            asr = "14:49", maghrib = "17:21", isha = "18:36",
+            source = "salawati:Sulaymaniyah, Iraq"
+        )
+        val noor = PrayerRow(
+            city = "Sulaymaniyah", date = "10-23",
+            fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
+            asr = "14:49", maghrib = "17:21", isha = "18:36",
+            source = "noor:Sulaymaniyah"
+        )
+        assertEquals(salawati, ContentRepository.preferredSourcePrayerTimes(salawati, noor))
+    }
+
+    @Test
+    fun fallsBackToNoorWhenSalawatiHasNoMatchingSchedule() {
+        val noor = PrayerRow(
+            city = "Halabja", date = "10-23",
+            fajr = "04:46", sunrise = "06:16", dhuhr = "11:46",
+            asr = "14:50", maghrib = "17:17", isha = "18:25",
+            source = "noor:Halabja"
+        )
+        assertEquals(noor, ContentRepository.preferredSourcePrayerTimes(null, noor))
+        assertEquals(null, ContentRepository.preferredSourcePrayerTimes(null, null))
+    }
 }
