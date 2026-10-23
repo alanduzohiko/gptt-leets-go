@@ -752,59 +752,165 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 
 @Composable
 private fun SettingsScreen(
-    language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean,
-    onDark: (Boolean) -> Unit, onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    dark: Boolean,
+    onDark: (Boolean) -> Unit,
+    onLanguage: (AppLanguage) -> Unit,
+    onDataInfo: () -> Unit,
+    onBackup: () -> Unit,
+    onAudio: () -> Unit,
+    onPrayer: () -> Unit,
+    onQuran: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(tr(language, "settings"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(20.dp))
-        Text(tr(language, "language"), color = foreground, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AppLanguage.entries.forEach { item -> FilterChip(selected = item == language, onClick = { onLanguage(item) }, label = { Text(item.label) }) }
+        Text(tr(language, "settings"), color = foreground, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Personalize reading, prayer, audio and the appearance of Mashxall."
+                AppLanguage.AR -> "خصّص القراءة ومواقيت الصلاة والصوتيات ومظهر مەشخەڵ."
+                AppLanguage.CKB -> "خوێندنەوە، کاتی نوێژ، دەنگ و ڕووکاری مەشخەڵ بەپێی دڵخوازی خۆت ڕێکبخە."
+            }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp, lineHeight = 19.sp
+        )
+        Spacer(Modifier.height(18.dp))
+
+        Text(
+            when (language) { AppLanguage.EN -> "LANGUAGE"; AppLanguage.AR -> "اللغة"; AppLanguage.CKB -> "زمان" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(9.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            AppLanguage.entries.forEach { item ->
+                FilterChip(
+                    selected = item == language,
+                    onClick = { onLanguage(item) },
+                    label = { Text(item.label, fontSize = 12.sp) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         Spacer(Modifier.height(20.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cardColor).clickable { onDark(!dark) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Tune, null, tint = Gold)
-            Spacer(Modifier.width(12.dp))
-            Text(if (language == AppLanguage.EN) "Dark luxurious theme" else if (language == AppLanguage.AR) "المظهر الداكن الفاخر" else "ڕووکارە تاریک و فەخمەکە", color = foreground, modifier = Modifier.weight(1f))
-            FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
-        }
-        Spacer(Modifier.height(22.dp))
+
+        Text(
+            when (language) { AppLanguage.EN -> "APPEARANCE"; AppLanguage.AR -> "المظهر"; AppLanguage.CKB -> "ڕووکار" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(9.dp))
         Card(
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth().clickable { onBackup() }
+            modifier = Modifier.fillMaxWidth().clickable { onDark(!dark) },
+            colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)
         ) {
-            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold, modifier = Modifier.size(24.dp))
+            Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Tune, null, tint = Gold, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        when (language) {
-                            AppLanguage.EN -> "Backup & restore"
-                            AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"
-                            AppLanguage.CKB -> "پاشەکەوتکردن و گەڕاندنەوە"
-                        }, color = foreground, fontWeight = FontWeight.Bold
+                        when (language) { AppLanguage.EN -> "Dark / light theme"; AppLanguage.AR -> "المظهر الداكن / الفاتح"; AppLanguage.CKB -> "ڕووکاری تاریک / ڕوون" },
+                        color = foreground, fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        when (language) {
-                            AppLanguage.EN -> "Save bookmarks, notes and personal preferences to a file"
-                            AppLanguage.AR -> "حفظ العلامات والملاحظات والإعدادات في ملف"
-                            AppLanguage.CKB -> "نیشانەکان، تێبینی و ڕێکخستنەکانت لە فایلی پاشەکەوتدا هەڵبگرە"
-                        }, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp, lineHeight = 16.sp
+                        when (language) { AppLanguage.EN -> "Switch the app-wide palette"; AppLanguage.AR -> "تغيير ألوان التطبيق بالكامل"; AppLanguage.CKB -> "گۆڕینی ڕەنگی گشتی ئەپەکە" },
+                        color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
                     )
                 }
-                Text("›", color = Gold, fontSize = 25.sp)
+                FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), modifier = Modifier.clickable { onDataInfo() }) {
-            Column(Modifier.padding(16.dp)) {
-                Text(tr(language, "about_data"), color = foreground, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.6f), fontSize = 12.sp, lineHeight = 18.sp)
+        Spacer(Modifier.height(9.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+            Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Schedule, null, tint = Gold, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (language) { AppLanguage.EN -> "Prayer time format"; AppLanguage.AR -> "تنسيق وقت الصلاة"; AppLanguage.CKB -> "شێوازی کاتی نوێژ" },
+                        color = foreground, fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        when (language) { AppLanguage.EN -> "12-hour format is the default"; AppLanguage.AR -> "نظام 12 ساعة هو الافتراضي"; AppLanguage.CKB -> "شێوازی ١٢ کاتژمێر بە بنەڕەتە" },
+                        color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
+                    )
+                }
+                FilterChip(
+                    selected = !use24Hour,
+                    onClick = {
+                        use24Hour = false
+                        prefs.edit().putBoolean("time_format_24h", false).apply()
+                    },
+                    label = { Text("12 h") }
+                )
+                Spacer(Modifier.width(5.dp))
+                FilterChip(
+                    selected = use24Hour,
+                    onClick = {
+                        use24Hour = true
+                        prefs.edit().putBoolean("time_format_24h", true).apply()
+                    },
+                    label = { Text("24 h") }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) { AppLanguage.EN -> "READING & WORSHIP"; AppLanguage.AR -> "القراءة والعبادة"; AppLanguage.CKB -> "خوێندنەوە و پەرستش" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(9.dp))
+        val actions = listOf(
+            Triple(
+                when (language) { AppLanguage.EN -> "Quran reader settings"; AppLanguage.AR -> "إعدادات قارئ القرآن"; AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان" },
+                when (language) { AppLanguage.EN -> "Mushaf, translations, tafsir and verse tools"; AppLanguage.AR -> "المصحف والترجمات والتفسير وأدوات الآية"; AppLanguage.CKB -> "مصحەف، وەرگێڕان، تەفسیر و ئامرازەکانی ئایەت" },
+                Icons.Outlined.MenuBook to onQuran
+            ),
+            Triple(
+                when (language) { AppLanguage.EN -> "Prayer & location"; AppLanguage.AR -> "الصلاة والموقع"; AppLanguage.CKB -> "نوێژ و شوێن" },
+                when (language) { AppLanguage.EN -> "City, GPS permission, calculation method and adhan alerts"; AppLanguage.AR -> "المدينة وإذن GPS وطريقة الحساب وتنبيهات الأذان"; AppLanguage.CKB -> "شار، مۆڵەتی GPS، شێوازی حساب و ئاگادارکردنەوەی بانگ" },
+                Icons.Outlined.Schedule to onPrayer
+            ),
+            Triple(
+                when (language) { AppLanguage.EN -> "Reciters & adhan library"; AppLanguage.AR -> "مكتبة القراء والمؤذنين"; AppLanguage.CKB -> "کتێبخانەی قورئان‌خوێن و موئەزین" },
+                when (language) { AppLanguage.EN -> "Browse included audio and available reciters"; AppLanguage.AR -> "تصفّح الصوتيات والقراء المتاحين"; AppLanguage.CKB -> "گەڕان لە دەنگ و قورئان‌خوێنە بەردەستەکان" },
+                Icons.Outlined.GraphicEq to onAudio
+            ),
+            Triple(
+                when (language) { AppLanguage.EN -> "Backup & restore"; AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"; AppLanguage.CKB -> "پاشەکەوتکردن و گەڕاندنەوە" },
+                when (language) { AppLanguage.EN -> "Protect personal notes, bookmarks and preferences"; AppLanguage.AR -> "حماية الملاحظات والعلامات والإعدادات الشخصية"; AppLanguage.CKB -> "پاراستنی تێبینی، نیشانە و ڕێکخستنە تایبەتییەکان" },
+                Icons.Outlined.BookmarkBorder to onBackup
+            ),
+            Triple(
+                when (language) { AppLanguage.EN -> "Data sources & book library"; AppLanguage.AR -> "مصادر البيانات ومكتبة الكتب"; AppLanguage.CKB -> "سەرچاوەی داتا و کتێبخانە" },
+                when (language) { AppLanguage.EN -> "Offline content, book catalogue and source notes"; AppLanguage.AR -> "المحتوى دون اتصال وفهرس الكتب ومصادر البيانات"; AppLanguage.CKB -> "ناوەڕۆکی ناوخۆیی، فهرستی کتێب و سەرچاوەی داتا" },
+                Icons.Outlined.LibraryBooks to onDataInfo
+            )
+        )
+        actions.forEach { (title, subtitle, item) ->
+            val (icon, callback) = item
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).clickable { callback() },
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = RoundedCornerShape(19.dp),
+                border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
+            ) {
+                Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = Gold, modifier = Modifier.size(23.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(3.dp))
+                        Text(subtitle, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp)
+                    }
+                    Text("›", color = Gold, fontSize = 25.sp)
+                }
             }
         }
     }
 }
+
