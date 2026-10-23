@@ -2429,6 +2429,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         mutableStateOf(prefs.getString("adhan_audio_asset", "") ?: "")
     }
     var adhanSoundQuery by rememberSaveable { mutableStateOf("") }
+    var previewingAdhan by remember { mutableStateOf("") }
     var chooseAdhanSound by remember { mutableStateOf(false) }
     var adhanMessage by remember { mutableStateOf("") }
     val visibleCities = remember(cities, citySearch) {
@@ -2890,7 +2891,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         confirmButton = { TextButton(onClick = { chooseCity = false }) { Text(tr(language, "back")) } }
     )
     if (chooseAdhanSound) AlertDialog(
-        onDismissRequest = { chooseAdhanSound = false },
+        onDismissRequest = {
+            AudioController.stop()
+            previewingAdhan = ""
+            chooseAdhanSound = false
+        },
         title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
         text = {
             Column(Modifier.fillMaxWidth()) {
@@ -2915,6 +2920,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
                     Row(
                         Modifier.fillMaxWidth().clickable {
+                            AudioController.stop()
+                            previewingAdhan = ""
                             selectedAdhanAsset = sound.assetPath
                             prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
                             chooseAdhanSound = false
@@ -2922,6 +2929,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(selected = selectedAdhanAsset == sound.assetPath, onClick = {
+                            AudioController.stop()
+                            previewingAdhan = ""
                             selectedAdhanAsset = sound.assetPath
                             prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
                             chooseAdhanSound = false
@@ -2931,12 +2940,37 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             Text(sound.title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(sound.assetPath.substringAfterLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
                         }
+                        IconButton(onClick = {
+                            if (previewingAdhan == sound.assetPath) {
+                                AudioController.stop()
+                                previewingAdhan = ""
+                            } else {
+                                AudioController.stop()
+                                previewingAdhan = sound.assetPath
+                                AudioController.play(context, sound.assetPath) { active ->
+                                    if (!active) previewingAdhan = ""
+                                }
+                            }
+                        }, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                if (previewingAdhan == sound.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
+                                contentDescription = if (language == AppLanguage.EN) "Preview audio" else if (language == AppLanguage.AR) "معاينة الصوت" else "تاقیکردنەوەی دەنگ",
+                                tint = Gold,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { chooseAdhanSound = false }) { Text(tr(language, "back")) } }
+        confirmButton = {
+            TextButton(onClick = {
+                AudioController.stop()
+                previewingAdhan = ""
+                chooseAdhanSound = false
+            }) { Text(tr(language, "back")) }
+        }
     )
 
 }
