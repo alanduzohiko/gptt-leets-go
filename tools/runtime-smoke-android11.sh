@@ -183,6 +183,57 @@ if ! grep -Eq '8202|٨٬٢٠٢|٨٢٠٢' dist/runtime-test/window-hadith.xml; th
   exit 1
 fi
 
+article_coords="$(python3 - dist/runtime-test/window-hadith.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Articles\s*\(11\)|المقالات\s*\(11\)|وتارەکان\s*\(11\)", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$article_coords" ]]; then
+  echo "FAIL: the 11-article tab is missing from the Hadith screen."
+  cat dist/runtime-test/window-hadith.xml
+  exit 1
+fi
+read -r article_x article_y <<< "$article_coords"
+adb shell input tap "$article_x" "$article_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-hadith-articles.xml > dist/runtime-test/uiautomator-hadith-articles.txt || true
+adb pull /sdcard/mashxall-hadith-articles.xml dist/runtime-test/window-hadith-articles.xml >/dev/null || true
+if ! grep -Eq 'سیفەتەکانی شکۆ و گەورەیی|صفات الجلال والعظمة|Attributes of Majesty and Greatness' dist/runtime-test/window-hadith-articles.xml; then
+  echo "FAIL: the source Hadith articles did not render their localized title."
+  cat dist/runtime-test/window-hadith-articles.xml
+  adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+  exit 1
+fi
+if ! python3 - dist/runtime-test/window-hadith-articles.xml <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+texts = [node.attrib.get("text", "").strip() for node in root.iter("node")]
+if max((len(text) for text in texts), default=0) < 120:
+    raise SystemExit(1)
+PY
+then
+  echo "FAIL: the source Hadith article title appeared but its body text did not render."
+  cat dist/runtime-test/window-hadith-articles.xml
+  exit 1
+fi
+echo "PASS: original Hadith articles and body text render in the second Hadith tab."
+
 check_screen books 'کتێبخانە|المكتبة|Book library'
 if ! grep -q '94' dist/runtime-test/window-books.xml; then
   echo "FAIL: expected 94-record source book catalogue was not visible."

@@ -87,6 +87,8 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
 
     # Hadith, all source collections and Hadith linked to Quran verses.
     require_table(noor + "db_hadith.db", "hadiths", 8202)
+    require_table(noor + "db_hadith.db", "articles", 11)
+    require_table(noor + "db_hadith.db", "author", 11)
     require_table(noor + "db_hadith.db", "book", 13)
     require_table(noor + "db_hadith.db", "kitab", 427)
     require_table(noor + "db_hadith.db", "chapters", 6150)
@@ -113,6 +115,7 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
     require_table(salawati + "muslim_db_v2.5.1.db", "azkar_chapter", 133)
     require_table(salawati + "muslim_db_v2.5.1.db", "azkar_item", 287)
     require_table(salawati + "muslim_db_v2.5.1.db", "name", 99)
+    require_table(salawati + "muslim_db_v2.5.1.db", "name_translation", 594)
 
     # Additional source catalogues.
     require_table(noor + "farmuda.db", "farmuda", 240)
@@ -146,7 +149,10 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
             "total_tafsir_works_required": len(configured_tafsir_paths),
             "quran_verses_minimum": 6236,
             "hadith_records_minimum": 8202,
+            "hadith_articles_minimum": 11,
+            "hadith_author_records_minimum": 11,
             "ayah_related_hadith_minimum": 1141,
+            "salawati_name_translation_minimum": 594,
             "word_analysis_records_minimum": 77429,
             "lexicon_entries_minimum": 620,
             "prayer_locations_minimum": 166404,

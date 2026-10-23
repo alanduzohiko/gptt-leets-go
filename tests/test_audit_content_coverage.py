@@ -51,6 +51,41 @@ class AuditContentCoverageTests(unittest.TestCase):
         )
         self.assertFalse(quran_check["passed"])
 
+    def test_multilingual_hadith_articles_and_salawati_name_translations_are_required(self):
+        hadith_path = "content/noor_tafsir_1.2.2/base/assets/db_hadith.db"
+        salawati_path = "content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db"
+        catalog = {
+            "counts": {},
+            "databases": [
+                {
+                    "asset_path": hadith_path,
+                    "integrity": "ok",
+                    "tables": [
+                        {"name": "articles", "rows": 11, "columns": ["description", "text", "text_ar", "text_en"]},
+                        {"name": "author", "rows": 11, "columns": ["author"]},
+                    ],
+                },
+                {
+                    "asset_path": salawati_path,
+                    "integrity": "ok",
+                    "tables": [
+                        {"name": "name_translation", "rows": 594, "columns": ["name_id", "language", "name"]},
+                    ],
+                },
+            ],
+        }
+        report = verify(catalog)
+        checks = {check["name"]: check for check in report["checks"]}
+        for table_path, table in [
+            (hadith_path, "articles"),
+            (hadith_path, "author"),
+            (salawati_path, "name_translation"),
+        ]:
+            check = checks[f"table:{table_path}:{table}"]
+            self.assertTrue(check["passed"], check)
+        self.assertEqual(11, report["summary"]["hadith_articles_minimum"])
+        self.assertEqual(594, report["summary"]["salawati_name_translation_minimum"])
+
     def test_database_with_failed_integrity_does_not_pass_by_row_count_alone(self):
         quran_path = "content/noor_tafsir_1.2.2/base/assets/quran.db"
         catalog = {
