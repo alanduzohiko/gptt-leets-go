@@ -56,7 +56,9 @@ check_screen() {
 
   echo "=== Runtime screen smoke: ${route} ==="
   adb shell am force-stop com.mashxall.unified
-  adb shell am start -S -W --activity-clear-task --activity-new-task \
+  # Android's am start parser on API 30 accepts Intent flags through -f,
+  # not the unsupported long options --activity-new-task / --activity-clear-task.
+  adb shell am start -S -W -f 0x10008000 \
     -n com.mashxall.unified/.MainActivity \
     --es com.mashxall.unified.OPEN_SCREEN "$route" |
     tee "dist/runtime-test/launch-${route}.txt"
