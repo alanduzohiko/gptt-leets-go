@@ -97,6 +97,36 @@ def main() -> int:
                     selected = [(0, min(len(lines), 340))]
                 elif label == "string_decoder_key_map":
                     selected = [(0, min(len(lines), 360))]
+                elif label == "tajweed_mushaf_activity":
+                    # Prioritize the actual Mushaf/Tajweed view wiring and its
+                    # cursor/schema use rather than unrelated generic UI imports.
+                    tajweed_signatures = re.compile(
+                        r"v2_tajweed_page_data_line|page_data_line|ayah_info|"
+                        r"glyph_id|glyphId|tajweed|Tajweed|rule.?id|rule.?color|"
+                        r"page.?number|pageNumber|surah.?id|verse.?id|"
+                        r"getColumnIndex|getString\\(|getInt\\(|query\\(|"
+                        r"Cursor|RecyclerView|Spannable|ForegroundColorSpan|"
+                        r"setTextColor|TextView|Typeface|font|color",
+                        re.I,
+                    )
+                    ranked = []
+                    for index, line in enumerate(lines):
+                        if tajweed_signatures.search(line):
+                            strong = bool(re.search(
+                                r"v2_tajweed_page_data_line|page_data_line|ayah_info|"
+                                r"glyph_id|rule.?id|rule.?color|tajweed|Tajweed|"
+                                r"ForegroundColorSpan|setTextColor",
+                                line, re.I
+                            ))
+                            ranked.append((0 if strong else 1, index))
+                    selected = []
+                    for _, index in sorted(ranked)[:24]:
+                        low, high = max(0, index - 18), min(len(lines), index + 75)
+                        if any(not (high <= a or low >= b) for a, b in selected):
+                            continue
+                        selected.append((low, high))
+                        if len(selected) >= 12:
+                            break
                 else:
                     windows = []
                     for index, line in enumerate(lines):
