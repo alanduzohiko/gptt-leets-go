@@ -2172,6 +2172,7 @@ private val MASHXALL_BACKUP_PREFS = listOf(
     "mashxall_azkar_favorites",
     "mashxall_farmuda_favorites",
     "mashxall_book_favorites",
+    "mashxall_hadith_favorites",
     "mashxall_name_favorites"
 )
 
@@ -2321,6 +2322,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
                 Spacer(Modifier.height(8.dp))
                 listOf(
                     when (language) { AppLanguage.EN -> "Saved Quran verses and personal notes"; AppLanguage.AR -> "الآيات المحفوظة وملاحظاتها الشخصية"; AppLanguage.CKB -> "ئایەتە پاشەکەوتکراوەکان و تێبینییەکانیان" },
+                    when (language) { AppLanguage.EN -> "Saved Hadith, books, names and Farmuda favourites"; AppLanguage.AR -> "الأحاديث والكتب والأسماء والمأثورات المحفوظة"; AppLanguage.CKB -> "فەرموودە و کتێب و ناو و فەرموودە/دوعا دڵخوازەکان" },
                     when (language) { AppLanguage.EN -> "Language, theme, last reading location and prayer settings"; AppLanguage.AR -> "اللغة والمظهر وآخر موضع قراءة وإعدادات الصلاة"; AppLanguage.CKB -> "زمان، ڕووکار، شوێنی خوێندنەوە و ڕێکخستنەکانی نوێژ" },
                     when (language) { AppLanguage.EN -> "Adhkar favourites and repetition counters"; AppLanguage.AR -> "مفضّلات الأذكار وعدّادات التكرار"; AppLanguage.CKB -> "دڵخوازەکانی زیکر و ژمارەکانی دووبارەکردنەوە" },
                     when (language) { AppLanguage.EN -> "Tasbih counts and adhan preferences"; AppLanguage.AR -> "عدادات التسبيح وتفضيلات الأذان"; AppLanguage.CKB -> "ژمارەی تەسبیح و هەڵبژاردەکانی بانگ" }
