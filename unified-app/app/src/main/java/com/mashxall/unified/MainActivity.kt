@@ -1,13 +1,19 @@
 package com.mashxall.unified
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Bundle
 import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.PaddingValues
@@ -414,6 +420,28 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
     }
 }
 
+private fun prayerSourceLabel(source: String, language: AppLanguage): String {
+    val normalized = source.substringBefore(" • ").lowercase(Locale.ROOT)
+    return when {
+        normalized.startsWith("noor") -> when (language) {
+            AppLanguage.EN -> "Noor timetable"
+            AppLanguage.AR -> "جدول نور"
+            AppLanguage.CKB -> "خشتەی نور"
+        }
+        normalized.startsWith("salawati") -> when (language) {
+            AppLanguage.EN -> "Salawati timetable"
+            AppLanguage.AR -> "جدول صلواتي"
+            AppLanguage.CKB -> "خشتەی صلواتی"
+        }
+        normalized.contains("calculated") || normalized.contains("astronomical") -> when (language) {
+            AppLanguage.EN -> "Calculated from coordinates"
+            AppLanguage.AR -> "حساب فلكي من الإحداثيات"
+            AppLanguage.CKB -> "حسابکردن لە کۆئۆردیناتەکانەوە"
+        }
+        else -> ""
+    }
+}
+
 private fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
     val match = Regex("""(\\d{1,2}):(\\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
         ?: return raw
@@ -449,6 +477,9 @@ private fun HomeScreen(
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
     var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
+    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
+    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var locationMessage by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -457,18 +488,16 @@ private fun HomeScreen(
             delay(60_000L)
         }
     }
-    LaunchedEffect(selectedCity, clockNow / 86_400_000L, prefs.getString("gps_latitude", ""), prefs.getString("gps_longitude", ""), prefs.getString("prayer_method", "mwl"), prefs.getString("asr_school", "shafi"), prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("prayer_method", "mwl"), prefs.getString("asr_school", "shafi"), prefs.getString("selected_city_country", "")) {
         loadingTimes = true
         val date = Date(clockNow)
         val country = prefs.getString("selected_city_country", "") ?: ""
-        val gpsLat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
-        val gpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
         val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl") ?: "mwl")
         val asr = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi") ?: "shafi")
         prayerTimes = runCatching {
             when {
-                gpsLat != null && gpsLon != null ->
-                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLat, gpsLon, date, method, asr)
+                gpsLatitude != null && gpsLongitude != null ->
+                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date, method, asr)
                 else -> ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
                     ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
                         PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, asr)
@@ -496,6 +525,75 @@ private fun HomeScreen(
             AppLanguage.CKB -> "ئێوارەت باش"
         }
     }
+    val saveLocationFix: (Location) -> Unit = { fix ->
+        gpsLatitude = fix.latitude
+        gpsLongitude = fix.longitude
+        prefs.edit()
+            .putString("gps_latitude", fix.latitude.toString())
+            .putString("gps_longitude", fix.longitude.toString())
+            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .putBoolean("prayer_location_prompted", true)
+            .apply()
+        locationMessage = if (fix.hasAccuracy()) {
+            val accuracy = fix.accuracy.toInt()
+            when (language) {
+                AppLanguage.EN -> "Location updated • reported accuracy ±$accuracy m"
+                AppLanguage.AR -> "تم تحديث الموقع • الدقة التقريبية ±$accuracy متر"
+                AppLanguage.CKB -> "شوێن نوێکرایەوە • وردبینی نزیکەی ±$accuracy مەتر"
+            }
+        } else {
+            when (language) {
+                AppLanguage.EN -> "Location updated."
+                AppLanguage.AR -> "تم تحديث الموقع."
+                AppLanguage.CKB -> "شوێن نوێکرایەوە."
+            }
+        }
+    }
+    val handleLocationError: (String) -> Unit = { error ->
+        locationMessage = when (error) {
+            "LOCATION_SETTINGS_OPENED" -> when (language) {
+                AppLanguage.EN -> "Location settings opened. Turn on Location, return here, then retry."
+                AppLanguage.AR -> "فُتحت إعدادات الموقع. فعّل الموقع، ثم ارجع إلى التطبيق وأعد المحاولة."
+                AppLanguage.CKB -> "ڕێکخستنەکانی شوێن کرانەوە؛ شوێن چالاک بکە، بگەڕێوە و دووبارە هەوڵ بدەوە."
+            }
+            "LOCATION_SERVICES_OFF" -> when (language) {
+                AppLanguage.EN -> "Location services are off. Turn them on in Android settings."
+                AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android."
+                AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە."
+            }
+            else -> when (language) {
+                AppLanguage.EN -> "Could not obtain location. Choose your city manually."
+                AppLanguage.AR -> "تعذر تحديد الموقع. اختر مدينتك يدويًا."
+                AppLanguage.CKB -> "نەتوانرا شوێن دیاری بکرێت؛ شارەکەت بە دەستی هەڵبژێرە."
+            }
+        }
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (allowed) requestCurrentLocation(context, saveLocationFix, handleLocationError)
+        else locationMessage = when (language) {
+            AppLanguage.EN -> "Location permission was denied. Choose your city in prayer settings."
+            AppLanguage.AR -> "رُفض إذن الموقع. اختر مدينتك من إعدادات الصلاة."
+            AppLanguage.CKB -> "مۆڵەتی شوێن ڕەتکرایەوە؛ لە ڕێکخستنەکانی نوێژ شارەکەت هەڵبژێرە."
+        }
+    }
+    val requestHomeLocation: () -> Unit = {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) requestCurrentLocation(context, saveLocationFix, handleLocationError)
+        else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+    LaunchedEffect(Unit) {
+        if (!prefs.getBoolean("prayer_location_prompted", false) && gpsLatitude == null && gpsLongitude == null) {
+            prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+            requestHomeLocation()
+        }
+    }
+
     val prayerEntries = prayerTimes?.let { times ->
         listOf(
             Triple("fajr", tr(language, "fajr"), formatPrayerTime(times.fajr, language, use24Hour)),
@@ -564,8 +662,16 @@ private fun HomeScreen(
                             when (language) { AppLanguage.EN -> "Prayer times"; AppLanguage.AR -> "مواقيت الصلاة"; AppLanguage.CKB -> "کاتەکانی نوێژ" },
                             color = foreground, fontWeight = FontWeight.Bold, fontSize = 17.sp
                         )
+                        val displayedLocation = if (gpsLatitude != null && gpsLongitude != null) {
+                            when (language) {
+                                AppLanguage.EN -> "Current location"
+                                AppLanguage.AR -> "الموقع الحالي"
+                                AppLanguage.CKB -> "شوێنی ئێستا"
+                            }
+                        } else selectedCity
+                        val sourceLabel = prayerTimes?.source?.let { prayerSourceLabel(it, language) }.orEmpty()
                         Text(
-                            selectedCity + if (prayerTimes?.source?.isNotBlank() == true) " • " + prayerTimes!!.source else "",
+                            listOf(displayedLocation, sourceLabel).filter { it.isNotBlank() }.joinToString(" • "),
                             color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, maxLines = 1
                         )
                     }
@@ -601,14 +707,29 @@ private fun HomeScreen(
                         if (trio.firstOrNull()?.first == "fajr") Spacer(Modifier.height(8.dp))
                     }
                 }
+                if (locationMessage.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(locationMessage, color = if (locationMessage.contains("±")) foreground.copy(alpha = 0.58f) else Gold, fontSize = 10.sp, lineHeight = 15.sp)
+                }
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Open prayer settings and location"
-                        AppLanguage.AR -> "إعدادات الصلاة والموقع"
-                        AppLanguage.CKB -> "ڕێکخستن و شوێنی نوێژ"
-                    }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Use my location"
+                            AppLanguage.AR -> "استخدم موقعي"
+                            AppLanguage.CKB -> "شوێنی ئێستام بەکاربهێنە"
+                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { requestHomeLocation() }.padding(end = 12.dp)
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Prayer settings"
+                            AppLanguage.AR -> "إعدادات الصلاة"
+                            AppLanguage.CKB -> "ڕێکخستنەکانی نوێژ"
+                        }, color = foreground.copy(alpha = 0.63f), fontSize = 11.sp
+                    )
+                }
             }
         }
 
