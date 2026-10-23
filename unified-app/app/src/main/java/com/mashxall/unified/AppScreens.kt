@@ -2426,8 +2426,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
     var selectedAdhanAsset by rememberSaveable {
-        mutableStateOf(prefs.getString("adhan_audio_asset", "content/salawati_3.1.3/base/res/raw/madina.mp3") ?: "content/salawati_3.1.3/base/res/raw/madina.mp3")
+        mutableStateOf(prefs.getString("adhan_audio_asset", "") ?: "")
     }
+    var adhanSoundQuery by rememberSaveable { mutableStateOf("") }
     var chooseAdhanSound by remember { mutableStateOf(false) }
     var adhanMessage by remember { mutableStateOf("") }
     val visibleCities = remember(cities, citySearch) {
@@ -2522,13 +2523,27 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         delay(250L)
         cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
     }
-    LaunchedEffect(Unit) {
-        adhanAssets = ContentRepository.loadAudioItems(context).filter { item ->
-            val name = (item.title + " " + item.assetPath).lowercase(Locale.ROOT)
-            listOf("abdulbasit", "abdulmajid", "hijaz", "madina", "fajr", "majid", "mansur", "mecca", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan", "adhan", "athan", "azan").any { name.contains(it) }
+    val visibleAdhanAssets = remember(adhanAssets, adhanSoundQuery) {
+        if (adhanSoundQuery.isBlank()) adhanAssets else adhanAssets.filter { sound ->
+            (sound.title + " " + sound.group + " " + sound.assetPath)
+                .contains(adhanSoundQuery.trim(), ignoreCase = true)
         }
-        if (adhanAssets.none { it.assetPath == selectedAdhanAsset } && adhanAssets.isNotEmpty()) {
-            selectedAdhanAsset = adhanAssets.first().assetPath
+    }
+    LaunchedEffect(Unit) {
+        // Keep the full original audio inventory available; file-name filtering
+        // must never hide an audio asset from the user's explicit selection.
+        adhanAssets = ContentRepository.loadAudioItems(context)
+        val preferredKeywords = listOf(
+            "adhan", "athan", "azan", "muezzin", "madina", "madinah", "mecca",
+            "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
+            "mshari", "peshawa", "ramazan", "mansur"
+        )
+        if (adhanAssets.none { it.assetPath == selectedAdhanAsset }) {
+            val recommended = adhanAssets.firstOrNull { sound ->
+                val label = (sound.title + " " + sound.assetPath + " " + sound.group).lowercase(Locale.ROOT)
+                preferredKeywords.any(label::contains)
+            } ?: adhanAssets.firstOrNull()
+            selectedAdhanAsset = recommended?.assetPath.orEmpty()
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
@@ -2761,7 +2776,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 if (adhanEnabled) {
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = { chooseAdhanSound = true }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { adhanSoundQuery = ""; chooseAdhanSound = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.VolumeUp, null, tint = Gold, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(8.dp))
                         val soundLabel = adhanAssets.firstOrNull { it.assetPath == selectedAdhanAsset }?.title
@@ -2878,8 +2893,26 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         onDismissRequest = { chooseAdhanSound = false },
         title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
         text = {
-            LazyColumn(Modifier.height(380.dp)) {
-                items(adhanAssets, key = { it.assetPath }) { sound ->
+            Column(Modifier.fillMaxWidth()) {
+                SearchBox(
+                    adhanSoundQuery,
+                    { adhanSoundQuery = it },
+                    when (language) {
+                        AppLanguage.EN -> "Search every bundled audio file…"
+                        AppLanguage.AR -> "ابحث في كل الملفات الصوتية المرفقة…"
+                        AppLanguage.CKB -> "گەڕان لە هەموو فایلە دەنگییە ناوخۆییەکان…"
+                    }
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "${visibleAdhanAssets.size} of ${adhanAssets.size} audio files"
+                        AppLanguage.AR -> "${visibleAdhanAssets.size} من ${adhanAssets.size} ملفًا صوتيًا"
+                        AppLanguage.CKB -> "${visibleAdhanAssets.size} لە ${adhanAssets.size} فایل دەنگییەکە"
+                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
+                )
+                LazyColumn(Modifier.height(340.dp)) {
+                items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
                     Row(
                         Modifier.fillMaxWidth().clickable {
                             selectedAdhanAsset = sound.assetPath
@@ -2899,6 +2932,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             Text(sound.assetPath.substringAfterLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
                         }
                     }
+                }
                 }
             }
         },
