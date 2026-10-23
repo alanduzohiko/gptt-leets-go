@@ -3897,7 +3897,7 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
-private fun requestCurrentLocation(
+internal fun requestCurrentLocation(
     context: Context,
     onLocation: (Location) -> Unit,
     onError: (String) -> Unit
