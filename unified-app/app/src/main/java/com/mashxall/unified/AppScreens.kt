@@ -136,6 +136,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1587,6 +1588,7 @@ private fun cleanHadithDisplayText(value: String): String =
         .toString().replace('\u00a0', ' ').trim()
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2034,6 +2036,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
