@@ -184,9 +184,33 @@ check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy
 # falsely declaring the data missing after a single 12-second screenshot.
 quran_content_visible=0
 for attempt in $(seq 1 20); do
-  if grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/window-quran.xml; then
+  # Uthmani Mushaf text uses Quran-specific signs (for example ۡ rather
+  # than the common ْ). Normalize Unicode combining marks before matching
+  # so the smoke assertion verifies actual content instead of one spelling.
+  if python3 - dist/runtime-test/window-quran.xml <<'PY'
+import sys
+import unicodedata
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(1)
+
+def normalize_arabic(value):
+    normalized = unicodedata.normalize("NFD", value).replace("\u0640", "")
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return normalized.replace("\u0671", "\u0627")
+
+visible_text = " ".join(node.attrib.get("text", "") for node in root.iter("node"))
+normalized = normalize_arabic(visible_text)
+if "بسم الله الرحمن الرحيم" in normalized or "الحمد لله رب العالمين" in normalized:
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+  then
     quran_content_visible=1
-    echo "PASS: readable Quran verse text appeared after cold-start poll $attempt."
+    echo "PASS: readable Quran verse text appeared after cold-start poll $attempt (Uthmani diacritics normalized)."
     break
   fi
   if [[ "$attempt" -lt 20 ]]; then
