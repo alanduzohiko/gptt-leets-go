@@ -2952,24 +2952,60 @@ fun WordAnalysisScreen(
 @Composable
 fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val favoritesPrefs = remember { context.getSharedPreferences("mashxall_farmuda_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
     var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var favorites by remember {
+        mutableStateOf(favoritesPrefs.getStringSet("farmuda_ids", emptySet()).orEmpty().toSet())
+    }
     LaunchedEffect(query) {
         loading = true
         records = ContentRepository.loadFarmuda(context, query.trim())
         loading = false
     }
+    val visibleRecords = records.filter { !favoritesOnly || favorites.contains(it.id.toString()) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(tr(language, "farmuda"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${records.size} source records • ${favorites.size} favourites"
+                    AppLanguage.AR -> "${records.size} سجلًا من المصدر • ${favorites.size} مفضلة"
+                    AppLanguage.CKB -> "${records.size} تۆماری سەرچاوە • ${favorites.size} دڵخواز"
+                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            )
             Spacer(Modifier.height(10.dp))
             SearchBox(query, { query = it }, tr(language, "search"))
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FilterChip(
+                    selected = !favoritesOnly,
+                    onClick = { favoritesOnly = false },
+                    label = { Text(if (language == AppLanguage.EN) "All records" else if (language == AppLanguage.AR) "كل السجلات" else "هەموو تۆمارەکان", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = favoritesOnly,
+                    onClick = { favoritesOnly = true },
+                    label = { Text(if (language == AppLanguage.EN) "Favourites" else if (language == AppLanguage.AR) "المفضلة" else "دڵخوازەکان", fontSize = 11.sp) }
+                )
+            }
         }
-        if (records.isEmpty()) LoadingOrEmpty(loading, language, foreground)
-        else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            items(records, key = { it.id }) { item ->
+        if (visibleRecords.isEmpty()) {
+            LoadingOrEmpty(
+                loading, language, foreground,
+                if (favoritesOnly && favorites.isEmpty()) {
+                    if (language == AppLanguage.EN) "No favourites yet. Tap the star on a record to save it."
+                    else if (language == AppLanguage.AR) "لا توجد مفضلات بعد. اضغط النجمة لحفظ السجل."
+                    else "هێشتا دڵخواز نییە؛ بۆ پاشەکەوتکردن ئەستێرەکە دابگرە."
+                } else tr(language, "not_found")
+            )
+        } else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            items(visibleRecords, key = { it.id }) { item ->
                 var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
+                val isFavorite = favorites.contains(item.id.toString())
                 val title = item.title.ifBlank { item.badiniTitle }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -2979,6 +3015,13 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                val key = item.id.toString()
+                                favorites = if (isFavorite) favorites - key else favorites + key
+                                favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
+                            }) {
+                                Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 22.sp)
+                            }
                             Text(if (expanded) "−" else "+", color = Gold, fontSize = 20.sp)
                         }
                         Spacer(Modifier.height(7.dp))
