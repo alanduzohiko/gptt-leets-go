@@ -2043,125 +2043,284 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var selectedCategory by rememberSaveable { mutableIntStateOf(0) }
+    var selectedItem by remember { mutableStateOf<AzkarItem?>(null) }
     var favoriteIds by remember {
         mutableStateOf(favoritePrefs.getStringSet("favorite_ids", emptySet()).orEmpty().toSet())
     }
 
     LaunchedEffect(Unit) { categories = ContentRepository.loadAzkarCategories(context) }
-    LaunchedEffect(query) {
+    LaunchedEffect(query, language) {
         loading = true
         allItems = ContentRepository.loadAzkar(context, language.key, query.trim())
         loading = false
     }
-    val visibleItems = allItems.filter { item ->
-        val tabMatch = when (selectedTab) {
-            1 -> item.titleCkb.contains("بەیانی", true) || item.titleAr.contains("الصباح", true) || item.titleEn.contains("morning", true)
-            2 -> item.titleCkb.contains("ئێوار", true) || item.titleAr.contains("المساء", true) || item.titleEn.contains("evening", true)
+    val tabItems = allItems.filter { item ->
+        when (selectedTab) {
+            1 -> item.titleCkb.contains("بەیانی", true) ||
+                item.titleAr.contains("الصباح", true) ||
+                item.titleEn.contains("morning", true) ||
+                item.categoryCkb.contains("بەیانی", true) ||
+                item.categoryArabic.contains("الصباح", true) ||
+                item.categoryEnglish.contains("morning", true)
+            2 -> item.titleCkb.contains("ئێوار", true) ||
+                item.titleAr.contains("المساء", true) ||
+                item.titleEn.contains("evening", true) ||
+                item.categoryCkb.contains("ئێوار", true) ||
+                item.categoryArabic.contains("المساء", true) ||
+                item.categoryEnglish.contains("evening", true)
             3 -> favoriteIds.contains(item.id.toString())
             else -> true
         }
-        tabMatch && (selectedCategory == 0 || item.categoryId == selectedCategory)
     }
+    val visibleItems = tabItems.filter { selectedCategory == 0 || it.categoryId == selectedCategory }
+    val showCategoryLanding = selectedCategory == 0 && query.isBlank() && selectedTab == 0
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "azkar"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            SearchBox(query, { query = it }, tr(language, "search_azkar"))
-            Spacer(Modifier.height(7.dp))
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectedCategory != 0) {
+                    IconButton(onClick = { selectedCategory = 0; selectedItem = null }) {
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold)
+                    }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (selectedCategory == 0) tr(language, "azkar")
+                        else categories.firstOrNull { it.id == selectedCategory }?.let {
+                            when (language) { AppLanguage.CKB -> it.ckb; AppLanguage.AR -> it.arabic; AppLanguage.EN -> it.english }
+                        } ?: tr(language, "azkar"),
+                        color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> if (selectedCategory == 0) "Choose a topic to read its adhkar separately." else "${visibleItems.size} remembrance entries"
+                            AppLanguage.AR -> if (selectedCategory == 0) "اختر قسمًا لعرض أذكاره في صفحة مستقلة." else "${visibleItems.size} ذكرًا"
+                            AppLanguage.CKB -> if (selectedCategory == 0) "بابەتێک هەڵبژێرە بۆ خوێندنەوەی زیکرەکانی." else "${visibleItems.size} زیکر"
+                        }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            SearchBox(query, { query = it; if (it.isNotBlank()) selectedCategory = 0 }, tr(language, "search_azkar"))
+            Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(listOf(0, 1, 2, 3)) { index ->
                     FilterChip(
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        onClick = {
+                            selectedTab = index
+                            selectedCategory = 0
+                        },
                         label = {
-                            Text(when (language) {
-                                AppLanguage.CKB -> listOf("هەموو", "بەیانی", "ئێواران", "دڵخوازەکان")[index]
-                                AppLanguage.AR -> listOf("الكل", "الصباح", "المساء", "المفضلة")[index]
-                                AppLanguage.EN -> listOf("All", "Morning", "Evening", "Favourites")[index]
-                            }, fontSize = 11.sp)
+                            Text(
+                                when (language) {
+                                    AppLanguage.CKB -> listOf("بەشەکان", "بەیانی", "ئێواران", "دڵخوازەکان")[index]
+                                    AppLanguage.AR -> listOf("الأقسام", "الصباح", "المساء", "المفضلة")[index]
+                                    AppLanguage.EN -> listOf("Categories", "Morning", "Evening", "Favourites")[index]
+                                }, fontSize = 11.sp
+                            )
                         }
-                    )
-                }
-            }
-            Spacer(Modifier.height(7.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                item {
-                    FilterChip(
-                        selected = selectedCategory == 0,
-                        onClick = { selectedCategory = 0 },
-                        label = { Text(if (language == AppLanguage.EN) "All categories" else if (language == AppLanguage.AR) "كل الأقسام" else "هەموو بەشەکان", fontSize = 10.sp) }
-                    )
-                }
-                items(categories, key = { it.id }) { category ->
-                    val label = when (language) {
-                        AppLanguage.CKB -> category.ckb
-                        AppLanguage.AR -> category.arabic
-                        AppLanguage.EN -> category.english
-                    }
-                    FilterChip(
-                        selected = selectedCategory == category.id,
-                        onClick = { selectedCategory = category.id },
-                        label = { Text(label, fontSize = 10.sp, maxLines = 1) }
                     )
                 }
             }
         }
-        if (visibleItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
-            contentPadding = PaddingValues(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(visibleItems, key = { it.id }) { item ->
-                var count by rememberSaveable(item.id) { mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0)) }
-                val isFavorite = favoriteIds.contains(item.id.toString())
-                val categoryLabel = when (language) {
-                    AppLanguage.CKB -> item.categoryCkb
-                    AppLanguage.AR -> item.categoryArabic
-                    AppLanguage.EN -> item.categoryEnglish
-                }
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
-                    Column(Modifier.padding(15.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+
+        if (loading) {
+            LoadingOrEmpty(true, language, foreground)
+        } else if (showCategoryLanding) {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                items(categories, key = { it.id }) { category ->
+                    val label = when (language) {
+                        AppLanguage.CKB -> category.ckb.ifBlank { category.arabic }
+                        AppLanguage.AR -> category.arabic.ifBlank { category.ckb }
+                        AppLanguage.EN -> category.english.ifBlank { category.ckb }
+                    }
+                    val count = allItems.count { it.categoryId == category.id }
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { selectedCategory = category.id },
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
+                    ) {
+                        Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(Gold.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Outlined.Spa, null, tint = Gold, modifier = Modifier.size(25.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                if (categoryLabel.isNotBlank()) Text(categoryLabel, color = foreground.copy(alpha = 0.45f), fontSize = 10.sp)
+                                Text(label, color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(3.dp))
                                 Text(
-                                    when (language) { AppLanguage.CKB -> item.titleCkb; AppLanguage.AR -> item.titleAr; AppLanguage.EN -> item.titleEn },
-                                    color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                                    when (language) {
+                                        AppLanguage.EN -> "$count entries • tap to open"
+                                        AppLanguage.AR -> "$count ذكرًا • اضغط للفتح"
+                                        AppLanguage.CKB -> "$count زیکر • بۆ کردنەوە دەست لێبدە"
+                                    }, color = foreground.copy(alpha = 0.57f), fontSize = 10.sp
                                 )
                             }
-                            TextButton(onClick = {
-                                val id = item.id.toString()
-                                favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
-                                favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
-                            }) { Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 21.sp) }
+                            Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text(item.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                        val translation = when (language) { AppLanguage.CKB -> item.ckb; AppLanguage.AR -> ""; AppLanguage.EN -> item.english }
-                        if (translation.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(translation, color = foreground.copy(alpha = 0.78f), fontSize = 13.sp, lineHeight = 21.sp)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    }
+                }
+                if (categories.isEmpty()) {
+                    item { LoadingOrEmpty(false, language, foreground, tr(language, "not_found")) }
+                }
+            }
+        } else if (visibleItems.isEmpty()) {
+            LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                items(visibleItems, key = { it.id }) { item ->
+                    val title = when (language) {
+                        AppLanguage.CKB -> item.titleCkb.ifBlank { item.titleAr }
+                        AppLanguage.AR -> item.titleAr.ifBlank { item.titleCkb }
+                        AppLanguage.EN -> item.titleEn.ifBlank { item.titleCkb }
+                    }
+                    val categoryLabel = when (language) {
+                        AppLanguage.CKB -> item.categoryCkb
+                        AppLanguage.AR -> item.categoryArabic
+                        AppLanguage.EN -> item.categoryEnglish
+                    }
+                    val count = item.count.coerceAtLeast(1)
+                    val completed = progressPrefs.getInt(item.id.toString(), 0)
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { selectedItem = item },
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(19.dp),
+                        border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    if (categoryLabel.isNotBlank()) Text(categoryLabel, color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
+                                    Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp)
+                                }
+                                TextButton(onClick = {
+                                    val id = item.id.toString()
+                                    favoriteIds = if (favoriteIds.contains(id)) favoriteIds - id else favoriteIds + id
+                                    favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
+                                }) { Text(if (favoriteIds.contains(item.id.toString())) "★" else "☆", color = Gold, fontSize = 22.sp) }
+                            }
+                            Spacer(Modifier.height(7.dp))
                             Text(
-                                if (language == AppLanguage.EN) "Repeat: $count / " + item.count.coerceAtLeast(1)
-                                else if (language == AppLanguage.AR) "التكرار: $count / " + item.count.coerceAtLeast(1)
-                                else "ژمارە: $count / " + item.count.coerceAtLeast(1),
-                                color = foreground.copy(alpha = 0.64f), fontSize = 11.sp, modifier = Modifier.weight(1f)
+                                cleanHadithDisplayText(item.arabic).take(155).let { if (item.arabic.length > 155) it.trimEnd() + "…" else it },
+                                color = foreground, fontSize = 18.sp, lineHeight = 30.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (language == AppLanguage.EN) "Repeat: $completed / $count"
+                                    else if (language == AppLanguage.AR) "التكرار: $completed / $count"
+                                    else "ژمارە: $completed / $count",
+                                    color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    when (language) { AppLanguage.EN -> "Open remembrance"; AppLanguage.AR -> "فتح الذكر"; AppLanguage.CKB -> "زیکرەکە بکەرەوە" },
+                                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    selectedItem?.let { item ->
+        val title = when (language) {
+            AppLanguage.CKB -> item.titleCkb.ifBlank { item.titleAr }
+            AppLanguage.AR -> item.titleAr.ifBlank { item.titleCkb }
+            AppLanguage.EN -> item.titleEn.ifBlank { item.titleCkb }
+        }
+        val translation = when (language) {
+            AppLanguage.CKB -> item.ckb
+            AppLanguage.AR -> ""
+            AppLanguage.EN -> item.english
+        }
+        var count by remember(item.id) { mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0)) }
+        val targetCount = item.count.coerceAtLeast(1)
+        val isFavorite = favoriteIds.contains(item.id.toString())
+        ModalBottomSheet(
+            onDismissRequest = { selectedItem = null },
+            containerColor = cardColor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Text(title, color = Gold, fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 29.sp)
+                Spacer(Modifier.height(13.dp))
+                Text(cleanHadithDisplayText(item.arabic), color = foreground, fontSize = 25.sp, lineHeight = 44.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                if (translation.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        when (language) { AppLanguage.EN -> "TRANSLATION"; AppLanguage.AR -> "الترجمة"; AppLanguage.CKB -> "وەرگێڕان" },
+                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(translation), color = foreground.copy(alpha = 0.85f), fontSize = 14.sp, lineHeight = 24.sp)
+                }
+                if (item.referenceCkb.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        when (language) { AppLanguage.EN -> "SOURCE"; AppLanguage.AR -> "المصدر"; AppLanguage.CKB -> "سەرچاوە" },
+                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text(item.referenceCkb, color = foreground.copy(alpha = 0.67f), fontSize = 12.sp, lineHeight = 20.sp)
+                }
+                Spacer(Modifier.height(19.dp))
+                Card(colors = CardDefaults.cardColors(containerColor = foreground.copy(alpha = 0.045f)), shape = RoundedCornerShape(19.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            if (language == AppLanguage.EN) "Repetitions" else if (language == AppLanguage.AR) "عدد التكرارات" else "ژمارەی دووبارەکردنەوە",
+                            color = foreground.copy(alpha = 0.65f), fontSize = 12.sp
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text("$count / $targetCount", color = Gold, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                count = 0
+                                progressPrefs.edit().putInt(item.id.toString(), 0).apply()
+                            }) {
+                                Text(if (language == AppLanguage.EN) "Reset" else if (language == AppLanguage.AR) "إعادة" else "سفر")
+                            }
                             Button(onClick = {
-                                val target = item.count.coerceAtLeast(1)
-                                count = if (count + 1 >= target) 0 else count + 1
+                                count = if (count + 1 >= targetCount) 0 else count + 1
                                 progressPrefs.edit().putInt(item.id.toString(), count).apply()
                             }) {
-                                Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
+                                Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(5.dp))
                                 Text(if (language == AppLanguage.EN) "Count" else if (language == AppLanguage.AR) "تسبيح" else "ژماردن")
                             }
                         }
-                        if (item.referenceCkb.isNotBlank()) Text(item.referenceCkb, color = foreground.copy(alpha = 0.45f), fontSize = 10.sp)
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        val id = item.id.toString()
+                        favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
+                        favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
+                    }
+                ) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> if (isFavorite) "★ Remove from favourites" else "☆ Add to favourites"
+                            AppLanguage.AR -> if (isFavorite) "★ إزالة من المفضلة" else "☆ أضف إلى المفضلة"
+                            AppLanguage.CKB -> if (isFavorite) "★ لە دڵخوازەکان بیسڕەوە" else "☆ بیخە ناو دڵخوازەکان"
+                        }, color = if (isFavorite) Gold else foreground
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
