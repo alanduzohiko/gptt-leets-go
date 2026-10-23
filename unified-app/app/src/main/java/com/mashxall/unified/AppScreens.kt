@@ -2262,6 +2262,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
+    val manualCountry = prefs.getString("selected_city_country", "") ?: ""
     var calculationMethod by rememberSaveable { mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl") }
     var asrSchool by rememberSaveable { mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi") }
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
