@@ -888,6 +888,8 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
+    var collections by remember { mutableStateOf<List<HadithCollection>>(emptyList()) }
+    var selectedCollectionId by rememberSaveable { mutableIntStateOf(0) }
     var hadithItems by remember { mutableStateOf<List<HadithItem>>(emptyList()) }
     var totalMatches by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
@@ -895,13 +897,17 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var offset by remember { mutableIntStateOf(0) }
     var hasMore by remember { mutableStateOf(true) }
 
-    LaunchedEffect(query) {
+    LaunchedEffect(Unit) {
+        collections = ContentRepository.loadHadithCollections(context)
+    }
+    LaunchedEffect(query, selectedCollectionId) {
         loading = true
         loadingMore = false
         offset = 0
         hasMore = true
-        totalMatches = ContentRepository.loadHadithCount(context, query.trim())
-        hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100)
+        val bookFilter = selectedCollectionId.takeIf { it > 0 }
+        totalMatches = ContentRepository.loadHadithCount(context, query.trim(), bookFilter)
+        hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100, bookId = bookFilter)
         offset = hadithItems.size
         hasMore = hadithItems.size == 100 && offset < totalMatches
         loading = false
@@ -920,6 +926,36 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             )
             Spacer(Modifier.height(10.dp))
             SearchBox(query, { query = it }, tr(language, "search_hadith"))
+            Spacer(Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                item(key = "all-hadith-collections") {
+                    FilterChip(
+                        selected = selectedCollectionId == 0,
+                        onClick = { selectedCollectionId = 0 },
+                        label = {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "All books"
+                                    AppLanguage.AR -> "كل الكتب"
+                                    AppLanguage.CKB -> "هەموو کتێبەکان"
+                                }, fontSize = 10.sp
+                            )
+                        }
+                    )
+                }
+                items(collections, key = { it.id }) { collection ->
+                    val label = when (language) {
+                        AppLanguage.EN -> collection.nameEnglish.ifBlank { collection.name }
+                        AppLanguage.AR -> collection.nameArabic.ifBlank { collection.name }
+                        AppLanguage.CKB -> collection.name.ifBlank { collection.nameArabic }
+                    }
+                    FilterChip(
+                        selected = selectedCollectionId == collection.id,
+                        onClick = { selectedCollectionId = collection.id },
+                        label = { Text("$label · ${collection.hadithCount}", fontSize = 10.sp, maxLines = 1) }
+                    )
+                }
+            }
         }
         if (hadithItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
             state = listState,
@@ -1023,7 +1059,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         onClick = {
                             if (!loadingMore) scope.launch {
                                 loadingMore = true
-                                val nextPage = ContentRepository.loadHadiths(context, query.trim(), offset, 100)
+                                val nextPage = ContentRepository.loadHadiths(
+                                    context, query.trim(), offset, 100, selectedCollectionId.takeIf { it > 0 }
+                                )
                                 hadithItems = hadithItems + nextPage
                                 offset += nextPage.size
                                 hasMore = nextPage.size == 100 && offset < totalMatches
