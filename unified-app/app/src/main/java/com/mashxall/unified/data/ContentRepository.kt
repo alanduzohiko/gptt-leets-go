@@ -1684,6 +1684,24 @@ object ContentRepository {
     internal fun preferredSourcePrayerTimes(salawati: PrayerRow?, noor: PrayerRow?): PrayerRow? =
         salawati ?: noor
 
+    /**
+     * GPS can find Noor and Salawati rows at identical coordinates. Keep physical
+     * distance as the first criterion, but prefer Salawati when distances tie;
+     * otherwise a stable combined-list order can silently undo the city-source
+     * preference.
+     */
+    internal fun orderPrayerCandidates(candidates: List<Pair<PrayerRow, Double>>): List<Pair<PrayerRow, Double>> =
+        candidates.sortedWith(
+            compareBy<Pair<PrayerRow, Double>> { it.second }
+                .thenBy {
+                    when {
+                        it.first.source.startsWith("salawati", ignoreCase = true) -> 0
+                        it.first.source.startsWith("noor", ignoreCase = true) -> 1
+                        else -> 2
+                    }
+                }
+        )
+
     suspend fun loadPrayerTimes(
         context: Context,
         city: String,
@@ -1937,7 +1955,7 @@ object ContentRepository {
                 if (distance <= staticRadiusKm) row to distance else null
             }
             .sortedBy { it.second }
-        val nearest = candidates.firstOrNull()
+        val nearest = orderPrayerCandidates(candidates).firstOrNull()
         if (nearest != null) {
             nearest.first.copy(
                 source = "${nearest.first.source} • ${"%.1f".format(Locale.US, nearest.second)}km",
