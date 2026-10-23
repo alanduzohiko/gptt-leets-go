@@ -793,6 +793,77 @@ private fun MushafPageViewer(
     }
 }
 
+le = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        if (verseRects.isNotEmpty()) {
+                            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                                val fit = minOf(size.width / 1148f, size.height / 1641f)
+                                val left = (size.width - 1148f * fit) / 2f
+                                val top = (size.height - 1641f * fit) / 2f
+                                verseRects.forEach { rect ->
+                                    val rectLeft = left + rect.minX * fit
+                                    val rectTop = top + rect.minY * fit
+                                    val rectWidth = (rect.maxX - rect.minX) * fit
+                                    val rectHeight = (rect.maxY - rect.minY) * fit
+                                    if (rectWidth > 0f && rectHeight > 0f) {
+                                        drawRect(
+                                            color = Color(0x66F4C542),
+                                            topLeft = androidx.compose.ui.geometry.Offset(rectLeft, rectTop),
+                                            size = androidx.compose.ui.geometry.Size(rectWidth, rectHeight)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    failed -> Text(tr(language, "mushaf_unavailable"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
+                }
+            }
+        }
+        if (pageVerses.isNotEmpty()) {
+            Spacer(Modifier.height(5.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Tap the Mushaf text or choose a verse to highlight its original word bounds."
+                    AppLanguage.AR -> "اضغط على نص المصحف أو اختر آية لإظهار حدود كلماتها الأصلية."
+                    AppLanguage.CKB -> "لەسەر دەقی مصحەف دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنووری وشەکانی."
+                },
+                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
+            )
+            selectedVerse?.let { picked ->
+                Text(
+                    (if (language == AppLanguage.EN) "Highlighted verse: " else if (language == AppLanguage.AR) "الآية المحددة: " else "ئایەتی دیاریکراو: ") + "${picked.surah}:${picked.ayah}",
+                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
+                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
+                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
+                },
+                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
+            )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
+                    FilterChip(
+                        selected = selectedVerse == verse,
+                        onClick = { selectedVerse = verse },
+                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
+                    )
+                }
+            }
+        }
+        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    }
+}
+
 @Composable
 fun BookmarksScreen(
     language: AppLanguage,
