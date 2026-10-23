@@ -156,6 +156,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
+    var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
