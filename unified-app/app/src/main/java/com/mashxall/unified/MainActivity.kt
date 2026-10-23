@@ -443,11 +443,16 @@ private fun prayerSourceLabel(source: String, language: AppLanguage): String {
 }
 
 internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
-    val match = Regex("""(\\d{1,2}):(\\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
+    val match = Regex("""(\d{1,2}):(\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
         ?: return raw
     var hour = match.groupValues[1].toIntOrNull() ?: return raw
+    val minuteNumber = match.groupValues[2].toIntOrNull() ?: return raw
     val minute = match.groupValues[2]
     val suffix = match.groupValues.getOrNull(3).orEmpty().uppercase(Locale.ROOT)
+    if (minuteNumber !in 0..59) return raw
+    if (suffix.isNotBlank() && hour !in 1..12) return raw
+    if (suffix.isBlank() && hour !in 0..23) return raw
+
     val hour24 = if (suffix.isNotBlank()) (hour % 12) + if (suffix == "PM") 12 else 0 else hour % 24
     if (use24Hour) return String.format(Locale.US, "%02d:%s", hour24, minute)
     val isPm = if (suffix.isNotBlank()) suffix == "PM" else hour >= 12
