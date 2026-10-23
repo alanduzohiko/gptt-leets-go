@@ -74,7 +74,7 @@ jobs:
               adb shell am force-stop com.mashxall.unified
               adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN "$route" | tee "dist/runtime-test/launch-${route}.txt"
               sleep 12
-              pid="$(adb shell pidof com.mashxall.unified | tr -d '\\r')"
+              pid="$(adb shell pidof com.mashxall.unified | tr -d '\r')"
               if [ -z "$pid" ]; then
                 echo "FAIL: app process died while opening route: $route"
                 adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
@@ -119,6 +119,15 @@ jobs:
             fi
             check_screen word_by_word 'شیکردنەوەی وشە بە وشە|تفسير كلمة بكلمة|Word-by-word analysis'
             check_screen farmuda 'فەرموودە و دوعاکان|المأثورات والأدعية|Supplications & sayings'
+            check_screen tafsir 'تەفسیرو وەرگێڕان|التفسير والترجمة|Tafsir & translation'
+            check_screen azkar 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
+            check_screen names 'ناوە پیرۆزەکان|أسماء الله الحسنى|Names of Allah'
+            check_screen tasbih 'تەسبیح|المسبحة|Digital tasbih'
+            check_screen audio 'دەنگ و تلاوەت|التلاوات والصوتيات|Recitations & audio'
+            check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
+            check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
+            check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
+            check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
 
             adb logcat -d -v threadtime > dist/runtime-test/logcat.txt
             if grep -E 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' dist/runtime-test/logcat.txt; then
