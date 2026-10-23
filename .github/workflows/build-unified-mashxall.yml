@@ -1,5 +1,9 @@
 name: Build the new unified Mashxall Android app
 
+concurrency:
+  group: mashxall-android-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   release:
     types: [published]
