@@ -1233,6 +1233,12 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 items(articles, key = { "hadith-article-" + it.id }) { article ->
                     var showSorani by rememberSaveable(article.id) { mutableStateOf(language != AppLanguage.CKB) }
                     var showEnglish by rememberSaveable(article.id) { mutableStateOf(language == AppLanguage.EN) }
+                    var showAuthorDetail by rememberSaveable(article.id) { mutableStateOf(false) }
+                    val localizedAuthor = when (language) {
+                        AppLanguage.CKB -> article.authorCkb.ifBlank { article.authorArabic }
+                        AppLanguage.AR -> article.authorArabic.ifBlank { article.authorCkb }
+                        AppLanguage.EN -> article.authorEnglish.ifBlank { article.authorCkb }
+                    }
                     val localizedTitle = when (language) {
                         AppLanguage.CKB -> article.titleCkb.ifBlank { article.titleArabic }
                         AppLanguage.AR -> article.titleArabic.ifBlank { article.titleCkb }
@@ -1261,8 +1267,31 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     Toast.makeText(context, if (language == AppLanguage.EN) "Article copied" else if (language == AppLanguage.AR) "تم نسخ المقالة" else "وتارەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
                                 }) { Icon(Icons.Outlined.ContentCopy, null, tint = Gold, modifier = Modifier.size(18.dp)) }
                             }
+                            if (localizedAuthor.isNotBlank()) {
+                                Spacer(Modifier.height(5.dp))
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Author: $localizedAuthor"
+                                        AppLanguage.AR -> "المؤلف: $localizedAuthor"
+                                        AppLanguage.CKB -> "نووسەر: $localizedAuthor"
+                                    },
+                                    color = foreground.copy(alpha = 0.57f), fontSize = 10.sp
+                                )
+                            }
                             Spacer(Modifier.height(12.dp))
                             Text(localizedBody, color = foreground, fontSize = 13.sp, lineHeight = 23.sp)
+                            if (article.authorDetail.isNotBlank()) {
+                                TextButton(onClick = { showAuthorDetail = !showAuthorDetail }) {
+                                    Text(
+                                        when (language) {
+                                            AppLanguage.EN -> if (showAuthorDetail) "Hide author details" else "Author details"
+                                            AppLanguage.AR -> if (showAuthorDetail) "إخفاء معلومات المؤلف" else "معلومات المؤلف"
+                                            AppLanguage.CKB -> if (showAuthorDetail) "زانیاری نووسەر بشارەوە" else "زانیاری نووسەر"
+                                        }, fontSize = 10.sp
+                                    )
+                                }
+                                if (showAuthorDetail) Text(article.authorDetail, color = foreground.copy(alpha = 0.7f), fontSize = 11.sp, lineHeight = 18.sp)
+                            }
                             if (language != AppLanguage.CKB && article.bodyCkb.isNotBlank()) {
                                 TextButton(onClick = { showSorani = !showSorani }) {
                                     Text(
