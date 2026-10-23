@@ -983,9 +983,14 @@ object ContentRepository {
         }
     }
 
-    private fun hadithSearchFilter(query: String, bookId: Int? = null): String {
+    private fun hadithSearchFilter(query: String, bookId: Int? = null, hadithIds: Set<Int>? = null): String {
         val conditions = buildList {
             if (bookId != null) add("h.book_id=?")
+            if (hadithIds != null) {
+                val safeIds = hadithIds.asSequence().filter { it > 0 }.distinct().sorted().toList()
+                if (safeIds.isEmpty()) add("0=1")
+                else add("h.id IN (" + safeIds.joinToString(",") + ")")
+            }
             if (query.isNotBlank()) {
                 add(
                     """
@@ -1012,10 +1017,11 @@ object ContentRepository {
     suspend fun loadHadithCount(
         context: Context,
         query: String = "",
-        bookId: Int? = null
+        bookId: Int? = null,
+        hadithIds: Set<Int>? = null
     ): Int = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, 0) { db ->
-            val filter = hadithSearchFilter(query, bookId)
+            val filter = hadithSearchFilter(query, bookId, hadithIds)
             val args = hadithSearchArgs(query, bookId).takeIf { it.isNotEmpty() }
             db.rawQuery(
                 """
@@ -1035,10 +1041,12 @@ object ContentRepository {
         query: String = "",
         offset: Int = 0,
         limit: Int = 100,
-        bookId: Int? = null
+        bookId: Int? = null,
+        hadithIds: Set<Int>? = null
     ): List<HadithItem> = withContext(Dispatchers.IO) {
+        if (hadithIds != null && hadithIds.none { it > 0 }) return@withContext emptyList()
         queryDb(context, HADITH_DB, emptyList()) { db ->
-            val filter = hadithSearchFilter(query, bookId)
+            val filter = hadithSearchFilter(query, bookId, hadithIds)
             val baseArgs = hadithSearchArgs(query, bookId)
             val args = baseArgs + arrayOf(limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString())
             val sql = """

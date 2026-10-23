@@ -1144,6 +1144,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
+    val favoritePrefs = remember { context.getSharedPreferences("mashxall_hadith_favorites", Context.MODE_PRIVATE) }
+    var favoriteHadithIds by remember {
+        mutableStateOf(favoritePrefs.getStringSet("hadith_ids", emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.filter { it > 0 }.toSet())
+    }
+    var savedOnly by rememberSaveable { mutableStateOf(false) }
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     var articles by remember { mutableStateOf<List<HadithArticle>>(emptyList()) }
     var collections by remember { mutableStateOf<List<HadithCollection>>(emptyList()) }
@@ -1158,7 +1163,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     LaunchedEffect(Unit) {
         collections = ContentRepository.loadHadithCollections(context)
     }
-    LaunchedEffect(query, selectedCollectionId, selectedMode) {
+    LaunchedEffect(query, selectedCollectionId, selectedMode, savedOnly, favoriteHadithIds.takeIf { savedOnly }) {
         loading = true
         loadingMore = false
         offset = 0
@@ -1171,8 +1176,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             hasMore = false
         } else {
             val bookFilter = selectedCollectionId.takeIf { it > 0 }
-            totalMatches = ContentRepository.loadHadithCount(context, query.trim(), bookFilter)
-            hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100, bookId = bookFilter)
+            val idFilter = if (savedOnly) favoriteHadithIds else null
+            totalMatches = ContentRepository.loadHadithCount(context, query.trim(), bookFilter, idFilter)
+            hadithItems = ContentRepository.loadHadiths(
+                context, query.trim(), offset = 0, limit = 100, bookId = bookFilter, hadithIds = idFilter
+            )
             articles = emptyList()
             offset = hadithItems.size
             hasMore = hadithItems.size == 100 && offset < totalMatches
@@ -1207,6 +1215,21 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Spacer(Modifier.height(8.dp))
             SearchBox(query, { query = it }, tr(language, "search_hadith"))
             if (selectedMode == 0) LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                item(key = "saved-hadith-filter") {
+                    FilterChip(
+                        selected = savedOnly,
+                        onClick = { savedOnly = !savedOnly },
+                        label = {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Saved (${favoriteHadithIds.size})"
+                                    AppLanguage.AR -> "المحفوظات (${favoriteHadithIds.size})"
+                                    AppLanguage.CKB -> "پاشەکەوتکراوەکان (${favoriteHadithIds.size})"
+                                }, fontSize = 10.sp
+                            )
+                        }
+                    )
+                }
                 item(key = "all-hadith-collections") {
                     FilterChip(
                         selected = selectedCollectionId == 0,
@@ -1374,6 +1397,16 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     else "ژمارە $numberInBook • ناسنامە ${hadith.id}",
                                     color = foreground.copy(alpha = 0.42f), fontSize = 9.sp
                                 )
+                            }
+                            TextButton(
+                                onClick = {
+                                    val nextSaved = if (favoriteHadithIds.contains(hadith.id)) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
+                                    favoriteHadithIds = nextSaved
+                                    favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
+                                },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(if (favoriteHadithIds.contains(hadith.id)) "★" else "☆", color = Gold, fontSize = 22.sp)
                             }
                             IconButton(onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
