@@ -27,15 +27,16 @@ check_screen() {
     exit 1
   fi
 
-  # Android 11 emulators can occasionally raise an OS-level
-  # "Settings isn't responding" dialog under memory pressure. It is not
-  # the Mashxall window; choose Wait and re-inspect before evaluating UI.
+  # Android 11 emulators can raise a system-process ANR dialog while the
+  # large offline content bundle is being installed or first opened. Recover
+  # from System UI, Settings, or app ANR prompts by tapping Android's Wait
+  # button and re-inspecting the foreground window.
   local attempt
-  for attempt in 1 2 3; do
+  for attempt in 1 2 3 4; do
     adb shell uiautomator dump /sdcard/mashxall-window.xml > "dist/runtime-test/uiautomator-${route}.txt" || true
     adb pull /sdcard/mashxall-window.xml "$file" >/dev/null || true
-    if grep -Eqi "Settings isn't responding|Settings is not responding" "$file"; then
-      echo "WARNING: Android Settings ANR dialog covers route ${route}; waiting for system Settings."
+    if grep -Eqi "isn't responding|is not responding" "$file"; then
+      echo "WARNING: Android ANR dialog covers route ${route}; tapping Wait and re-inspecting."
       local coords
       coords="$(python3 - "$file" <<'PY'
 import re
@@ -64,7 +65,7 @@ PY
       else
         adb shell input keyevent 4 || true
       fi
-      sleep 6
+      sleep 8
       continue
     fi
     break
