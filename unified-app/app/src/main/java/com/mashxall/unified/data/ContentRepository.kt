@@ -8,6 +8,7 @@ import android.text.Html
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.io.File
 import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
@@ -197,6 +198,8 @@ object ContentRepository {
     private const val MUSHAF_SVG_BIN = "content/khairah_1.2/base/assets/mushaf/pages.bin"
     private const val MUSHAF_SVG_INDEX = "mushaf_svg_index.json"
     @Volatile private var cachedMushafIndex: Map<Int, MushafSvgMeta>? = null
+    private data class AssetSignature(val sizeBytes: Long, val sha256: String)
+    @Volatile private var cachedAssetSignatures: Map<String, AssetSignature>? = null
 
     val quranTranslations = listOf(
         QuranTranslation("puxta", "پوختە", "كردي (پۇختە)", "Sorani — Puxta"),
@@ -230,19 +233,108 @@ object ContentRepository {
     private fun digest(text: String): String = MessageDigest.getInstance("SHA-256")
         .digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }.take(20)
 
+    /**
+     * Content databases are copied into private storage so SQLite can open them read-only.
+     * Validate the copied file against the immutable content_catalog.json each time we
+     * open it. Checking only existence/length kept old databases across app updates and
+     * caused valid Quran queries to fail with "no such table" on upgraded installations.
+     */
+    private fun contentSignatures(context: Context): Map<String, AssetSignature> {
+        cachedAssetSignatures?.let { return it }
+        synchronized(this) {
+            cachedAssetSignatures?.let { return it }
+            val result = buildMap<String, AssetSignature> {
+                context.assets.open("content_catalog.json").bufferedReader(Charsets.UTF_8).use { reader ->
+                    val root = JSONObject(reader.readText())
+                    val rows = root.getJSONArray("files")
+                    for (index in 0 until rows.length()) {
+                        val row = rows.getJSONObject(index)
+                        val assetPath = row.optString("asset_path")
+                        val size = row.optLong("size_bytes", -1L)
+                        val sha = row.optString("sha256")
+                        if (assetPath.isNotBlank() && size >= 0L && sha.matches(Regex("[0-9a-fA-F]{64}"))) {
+                            put(assetPath, AssetSignature(size, sha.lowercase(Locale.ROOT)))
+                        }
+                    }
+                }
+            }
+            if (result.isEmpty()) throw IOException("Content asset catalog has no verifiable file entries")
+            cachedAssetSignatures = result
+            return result
+        }
+    }
+
+    private fun sha256File(file: File): String {
+        val hash = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered(256 * 1024).use { input ->
+            val buffer = ByteArray(256 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                hash.update(buffer, 0, count)
+            }
+        }
+        return hash.digest().joinToString("") { "%02x".format(it) }
+    }
+
     private fun openDb(context: Context, assetPath: String): SQLiteDatabase {
+        val signatures = contentSignatures(context)
+        val expected = signatures[assetPath]
+            ?: throw IOException("Content catalog has no SHA-256 entry for database: $assetPath")
         val databaseDir = File(context.filesDir, "content-databases").apply { mkdirs() }
-        val file = File(databaseDir, "\${digest(assetPath)}.db")
+        val cacheId = digest(assetPath)
+        val file = File(databaseDir, "$cacheId.db")
+        val signatureFile = File(databaseDir, "$cacheId.sha256")
         synchronized(file.absolutePath.intern()) {
-            if (!file.exists() || file.length() == 0L) {
-                val temp = File(databaseDir, "\${file.name}.tmp")
+            var needsCopy = !file.isFile || file.length() != expected.sizeBytes
+            if (!needsCopy) {
+                val recordedHash = runCatching { signatureFile.readText(Charsets.UTF_8).trim() }.getOrNull()
+                if (recordedHash == expected.sha256) {
+                    // This exact private file was previously verified against this
+                    // version's packaged content catalog.
+                    needsCopy = false
+                } else {
+                    val actualHash = runCatching { sha256File(file) }.getOrNull()
+                    if (actualHash == expected.sha256) {
+                        signatureFile.writeText(expected.sha256, Charsets.UTF_8)
+                        needsCopy = false
+                    } else {
+                        Log.w(
+                            "MashxallData",
+                            "Cached DB failed source SHA-256; refreshing $assetPath (cached=${actualHash ?: "unreadable"}, expected=${expected.sha256})"
+                        )
+                        needsCopy = true
+                    }
+                }
+            }
+
+            if (needsCopy) {
+                val temp = File(databaseDir, "$cacheId.db.tmp")
+                if (temp.exists()) temp.delete()
                 context.assets.open(assetPath).use { input ->
-                    temp.outputStream().use { output -> input.copyTo(output, 256 * 1024) }
+                    temp.outputStream().buffered(256 * 1024).use { output ->
+                        input.copyTo(output, 256 * 1024)
+                    }
+                }
+                val actualSize = temp.length()
+                val actualHash = sha256File(temp)
+                if (actualSize != expected.sizeBytes || actualHash != expected.sha256) {
+                    temp.delete()
+                    throw IOException(
+                        "Packaged database integrity mismatch for $assetPath: " +
+                            "size=$actualSize/${expected.sizeBytes}, sha256=$actualHash/${expected.sha256}"
+                    )
+                }
+                if (file.exists() && !file.delete()) {
+                    temp.delete()
+                    throw IOException("Could not replace stale cached database for $assetPath")
                 }
                 if (!temp.renameTo(file)) {
                     temp.copyTo(file, overwrite = true)
                     temp.delete()
                 }
+                signatureFile.writeText(expected.sha256, Charsets.UTF_8)
+                Log.i("MashxallData", "Verified and cached database $assetPath ($actualSize bytes)")
             }
         }
         return SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
