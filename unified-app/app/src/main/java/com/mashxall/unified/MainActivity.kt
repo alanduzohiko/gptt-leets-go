@@ -662,30 +662,38 @@ private fun HomeScreen(
 @Composable
 fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(tr(language, "library"), color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-        Text(tr(language, "library_hint"), color = foreground.copy(alpha = 0.6f), fontSize = 13.sp)
-        Spacer(Modifier.height(16.dp))
-        listOf(
-            AppScreen.TAFSIR to Icons.Outlined.AutoStories,
-            AppScreen.HADITH to Icons.Outlined.LibraryBooks,
-            AppScreen.LEXICON to Icons.Outlined.Search,
-            AppScreen.BOOKS to Icons.Outlined.MenuBook,
-            AppScreen.AUDIO to Icons.Outlined.GraphicEq,
-            AppScreen.QURAN to Icons.Outlined.MenuBook
-        ).forEach { (target, icon) ->
-            Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(target) }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, null, tint = Gold, modifier = Modifier.size(28.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(tr(language, target.key), color = foreground, fontWeight = FontWeight.Bold)
-                        Text(tr(language, "library_hint"), color = foreground.copy(alpha = 0.5f), fontSize = 11.sp)
-                    }
-                    Icon(Icons.Outlined.Explore, null, tint = Gold.copy(alpha = 0.8f))
+        Text(
+            when (language) { AppLanguage.EN -> "Book library"; AppLanguage.AR -> "مكتبة الكتب"; AppLanguage.CKB -> "کتێبخانەی کتێب" },
+            color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Original books and offline PDFs, kept separate from Quran reading and Hadith study."
+                AppLanguage.AR -> "الكتب الأصلية وملفات PDF دون اتصال، بعيدًا عن تجربة قراءة القرآن والحديث."
+                AppLanguage.CKB -> "کتێبە ڕەسەنەکان و PDFی ناوخۆیی؛ خوێندنەوەی قورئان و فەرموودە لەم بەشەدا تێکەڵ ناکرێن."
+            }, color = foreground.copy(alpha = 0.62f), fontSize = 13.sp, lineHeight = 21.sp
+        )
+        Spacer(Modifier.height(18.dp))
+        Card(
+            Modifier.fillMaxWidth().clickable { onOpen(AppScreen.BOOKS) },
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(22.dp),
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f))
+        ) {
+            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(52.dp).clip(RoundedCornerShape(17.dp)).background(Gold.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(29.dp))
                 }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr(language, "books"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(tr(language, "books_sub"), color = foreground.copy(alpha = 0.58f), fontSize = 11.sp)
+                }
+                Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(18.dp))
         Text(tr(language, "about_data"), color = foreground, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.62f), fontSize = 12.sp, lineHeight = 19.sp)
@@ -694,26 +702,43 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 
 @Composable
 fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
+    val worshipModules = listOf(
+        AppScreen.AZKAR to Icons.Outlined.Spa,
+        AppScreen.FARMUDA to Icons.Outlined.VolunteerActivism,
+        AppScreen.NAMES to Icons.Outlined.Favorite,
+        AppScreen.TASBIH to Icons.Outlined.Spa
+    )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(tr(language, "azkar"), color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(7.dp))
-        Text(tr(language, "welcome"), color = foreground.copy(alpha = 0.56f), fontSize = 13.sp)
+        Text(
+            when (language) { AppLanguage.EN -> "Worship"; AppLanguage.AR -> "العبادات والأذكار"; AppLanguage.CKB -> "پەرستش و زیکر" },
+            color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Each topic opens its own focused reading screen. Audio libraries are managed separately in settings."
+                AppLanguage.AR -> "يفتح كل موضوع شاشة مستقلة للقراءة؛ أما مكتبات الصوت فتُدار من الإعدادات."
+                AppLanguage.CKB -> "هەر بابەتێک شاشەی تایبەتی خۆی هەیە؛ کتێبخانەی دەنگ لە ڕێکخستنەکانەوە بەڕێوەدەبرێت."
+            }, color = foreground.copy(alpha = 0.58f), fontSize = 12.sp, lineHeight = 19.sp
+        )
         Spacer(Modifier.height(16.dp))
-        listOf(
-            AppScreen.AZKAR to Icons.Outlined.Spa, AppScreen.NAMES to Icons.Outlined.Favorite,
-            AppScreen.TASBIH to Icons.Outlined.Spa, AppScreen.AUDIO to Icons.Outlined.GraphicEq
-        ).forEach { (target, icon) ->
-            Card(Modifier.fillMaxWidth().padding(bottom = 11.dp).clickable { onOpen(target) }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp)) {
-                Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(Gold.copy(alpha = 0.14f)), Alignment.Center) {
-                        Icon(icon, null, tint = Gold, modifier = Modifier.size(25.dp))
+        worshipModules.forEach { (target, icon) ->
+            Card(
+                Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(target) },
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.2f))
+            ) {
+                Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(Gold.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = Gold, modifier = Modifier.size(26.dp))
                     }
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)) {
                         Text(tr(language, target.key), color = foreground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(tr(language, target.key + "_sub"), color = foreground.copy(alpha = 0.56f), fontSize = 11.sp)
                     }
-                    Icon(Icons.Outlined.VolunteerActivism, null, tint = Gold.copy(alpha = 0.7f))
+                    Icon(Icons.Outlined.ChevronRight, null, tint = Gold.copy(alpha = 0.8f))
                 }
             }
         }
