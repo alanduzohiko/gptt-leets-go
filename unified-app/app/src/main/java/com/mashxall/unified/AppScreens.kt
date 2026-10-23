@@ -126,6 +126,14 @@ private val MushafNightColorMatrix = ColorMatrix(
         0f, 0f, 0f, 1f, 0f
     )
 )
+private val MushafSepiaColorMatrix = ColorMatrix(
+    floatArrayOf(
+        0.393f, 0.769f, 0.189f, 0f, 0f,
+        0.349f, 0.686f, 0.168f, 0f, 0f,
+        0.272f, 0.534f, 0.131f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f
+    )
+)
 
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
@@ -170,6 +178,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
     var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
+    var mushafSepiaMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_sepia_mode", false)) }
     var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
@@ -384,6 +393,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 foreground = foreground,
                 page = mushafPage,
                 darkMode = mushafDarkMode,
+                sepiaMode = mushafSepiaMode,
                 onPageChange = { requested ->
                     mushafPage = requested.coerceIn(1, 604)
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
@@ -943,7 +953,41 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             checked = mushafDarkMode,
                             onCheckedChange = {
                                 mushafDarkMode = it
-                                prefs.edit().putBoolean("mushaf_dark_mode", it).apply()
+                                if (it) mushafSepiaMode = false
+                                prefs.edit()
+                                    .putBoolean("mushaf_dark_mode", it)
+                                    .putBoolean("mushaf_sepia_mode", mushafSepiaMode)
+                                    .apply()
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(9.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Warm paper / sepia"
+                                    AppLanguage.AR -> "الورق الدافئ / سيبيا"
+                                    AppLanguage.CKB -> "کاغەزی گەرم / سێپیا"
+                                }, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "A soft cream page tone for long reading"
+                                    AppLanguage.AR -> "لون كريمي هادئ للقراءة الطويلة"
+                                    AppLanguage.CKB -> "ڕەنگێکی کرێمی نەرم بۆ خوێندنەوەی درێژ"
+                                }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                            )
+                        }
+                        Switch(
+                            checked = mushafSepiaMode,
+                            onCheckedChange = {
+                                mushafSepiaMode = it
+                                if (it) mushafDarkMode = false
+                                prefs.edit()
+                                    .putBoolean("mushaf_sepia_mode", it)
+                                    .putBoolean("mushaf_dark_mode", mushafDarkMode)
+                                    .apply()
                             }
                         )
                     }
@@ -1193,6 +1237,7 @@ private fun MushafPageViewer(
     foreground: Color,
     page: Int,
     darkMode: Boolean,
+    sepiaMode: Boolean,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
@@ -1301,7 +1346,13 @@ private fun MushafPageViewer(
         Spacer(Modifier.height(7.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
-            colors = CardDefaults.cardColors(containerColor = if (darkMode) Color(0xFF141A18) else Color.White),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    darkMode -> Color(0xFF141A18)
+                    sepiaMode -> Color(0xFFF0E1BE)
+                    else -> Color.White
+                }
+            ),
             shape = RoundedCornerShape(13.dp),
             border = BorderStroke(1.dp, Gold.copy(alpha = 0.25f))
         ) {
@@ -1355,7 +1406,11 @@ private fun MushafPageViewer(
                             bitmap!!.asImageBitmap(),
                             contentDescription = tr(language, "mushaf_view") + " " + page,
                             contentScale = ContentScale.Fit,
-                            colorFilter = if (darkMode) ColorFilter.colorMatrix(MushafNightColorMatrix) else null,
+                            colorFilter = when {
+                                darkMode -> ColorFilter.colorMatrix(MushafNightColorMatrix)
+                                sepiaMode -> ColorFilter.colorMatrix(MushafSepiaColorMatrix)
+                                else -> null
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                         if (verseRects.isNotEmpty()) {
