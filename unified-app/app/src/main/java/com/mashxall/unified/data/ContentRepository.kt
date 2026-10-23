@@ -1676,6 +1676,14 @@ object ContentRepository {
         }
     }
 
+    /**
+     * Prefer the selected city's Salawati source timetable when it exists.
+     * Noor remains the verified regional fallback and supplies its source-linked
+     * correction table for Iraq/local cities without a direct Salawati row.
+     */
+    internal fun preferredSourcePrayerTimes(salawati: PrayerRow?, noor: PrayerRow?): PrayerRow? =
+        salawati ?: noor
+
     suspend fun loadPrayerTimes(
         context: Context,
         city: String,
@@ -1688,8 +1696,12 @@ object ContentRepository {
             country.contains("iraq", ignoreCase = true) ||
             country.contains("العراق", ignoreCase = true)
 
-        if (useNoorRegionalData) {
-            val noor = queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
+        // Salawati is the first-choice city database: users can select the exact
+        // country/location record from its 166k-location catalogue, including
+        // the original fixed and dependent timetable metadata.
+        val salawati = loadSalawatiPrayerTimesForCity(context, city, country, date)
+        val noor = if (useNoorRegionalData) {
+            queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
                 db.rawQuery(
                     "SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha FROM staticprayertimes WHERE lower(city)=lower(?) AND date=? LIMIT 1",
                     arrayOf(city, md)
@@ -1701,13 +1713,9 @@ object ContentRepository {
                     ) else null
                 }
             }
-            if (noor != null) return@withContext noor
-        }
+        } else null
 
-        val salawati = loadSalawatiPrayerTimesForCity(context, city, country, date)
-        if (salawati != null) return@withContext salawati
-        if (country.isNotBlank() && !useNoorRegionalData) return@withContext null
-
+        preferredSourcePrayerTimes(salawati, noor)?.let { return@withContext it }
         if (useNoorRegionalData) loadNoorPrayerTimesWithCorrection(context, city, date) else null
     }
 
