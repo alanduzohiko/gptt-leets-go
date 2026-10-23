@@ -21,7 +21,7 @@ class PrayerTimeFormatTest {
 
     @Test
     fun supportsExistingAmPmSuffixesAndLocalizesTheMarker() {
-        assertEquals("12:05", formatPrayerTime("12:05 AM", AppLanguage.EN, use24Hour = true))
+        assertEquals("00:05", formatPrayerTime("12:05 AM", AppLanguage.EN, use24Hour = true))
         assertEquals("12:05 PM", formatPrayerTime("12:05 PM", AppLanguage.EN, use24Hour = false))
         assertEquals("2:49 مساءً", formatPrayerTime("14:49", AppLanguage.AR, use24Hour = false))
         assertEquals("2:49 د.ن", formatPrayerTime("14:49", AppLanguage.CKB, use24Hour = false))
