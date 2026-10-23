@@ -224,6 +224,7 @@ fun MashxallApp(startScreen: String? = null) {
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
+    var resumeMushafRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var audioAutoPlayRequested by rememberSaveable { mutableStateOf(false) }
     var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
@@ -304,7 +305,14 @@ fun MashxallApp(startScreen: String? = null) {
                         )
                         Box(Modifier.fillMaxSize()) {
                             when (screen) {
-                                "home" -> HomeScreen(language, foreground, cardColor, selectedCity) { navigateTo(it.key) }
+                                "home" -> HomeScreen(
+                                    language, foreground, cardColor, selectedCity,
+                                    onOpen = { navigateTo(it.key) },
+                                    onResumeReading = {
+                                        resumeMushafRequested = true
+                                        navigateTo(AppScreen.QURAN.key)
+                                    }
+                                )
                                 "quran" -> QuranScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
                                     onSurah = { s ->
@@ -336,7 +344,9 @@ fun MashxallApp(startScreen: String? = null) {
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo("audio")
                                     },
-                                    onImmersiveMushaf = { immersiveMushaf = it }
+                                    onImmersiveMushaf = { immersiveMushaf = it },
+                                    resumeLastMushaf = resumeMushafRequested,
+                                    onResumeMushafHandled = { resumeMushafRequested = false }
                                 )
                                 "library" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
