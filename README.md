@@ -10,19 +10,20 @@ A new native Android Islamic-library app, designed independently in Kotlin + Jet
 
 ## Current source implementation
 
-The new app source currently includes a UI and repository layer for:
+The native Kotlin/Jetpack Compose app integrates checked content from all three supplied APK sets. Important current paths are:
 
-- Quran browsing/search, persistent verse bookmarks/reading position, plus an offline, page-by-page SVG Mushaf viewer (604 original pages) with integrity-checked on-demand decompression.
-- Sorani translation from Noor's Quran database and separate English/Arabic translation sources.
-- Tafsir selector for Noor's verse-indexed SQLite collection plus all four Khairah book tafsirs, decoded on demand with page-range and SHA-256 checks.
-- Hadith search from the Noor database.
-- Adhkar/dua browsing with persistent repetition counters, Salawati Kurdish/English text enrichment and references, and Names of Allah.
-- Foreground GPS/Network location request with visible reported accuracy, source-city timetable lookup from both embedded databases where nearby, calculated times from precise coordinates elsewhere, selectable prayer calculation methods and Asr school, and Qibla using GPS coordinates plus device compass sensors.
-- Local bundled audio playback, a dedicated filter for included adhan/mosque audio, and 80 reciter entries from Noor's audio index.
-- Book catalogue with an in-app PDF page reader, lexicon lookup, word-by-word Quran grammar/root data, Farmuda records, and a persistent haptic tasbih counter.
-- A validated extraction script that catalogs SQLite databases, audio, fonts, PDFs and source assets.
+- **Qur'an and Mushaf:** all 114 surah entries and 6,236 verse records; four Sorani/Badini translations from Noor, English Sahih International, Kurdish transliteration, Arabic-only reading, whole-Qur'an search, diacritic toggle, personal bookmarks/notes, verse notes, related-hadith links, and an offline 604-page original SVG Mushaf. The viewer saves page position and maps page selections back to verses.
+- **Tafsir:** 16 source selections from Noor and Khairah, including Roshn, Hazhar, Maisar, Sahih International, Noor, Hawrami, Runahi Badini, Zhian Badini, Saadi, Mukhtasar, Rebar and Tawhid, plus Ibn Kathir, Muyassar, Saadi and Tabari in Khairah. Khairah's compressed page data is decoded on demand and checked using recorded byte counts and SHA-256 hashes.
+- **Hadith library:** all 8,202 Noor narrations, grouped under the 13 source collections and searchable across text, kitab/chapter names, notes and footnotes. Results are paginated and show book hierarchy, reference numbers and copy/translation controls. Noor's separate 1,141-record verse-related hadith collection has its own decoder and matching to the referenced surah/ayah.
+- **Word-by-word study and lexicon:** all 77,429 morphology records, 45 word-type definitions, multi-segment glyph rendering with the original included Quran font, roots and grammar; the separate 620-entry lexicon has count-aware paging and search.
+- **Worship content:** Noor's 11 adhkar categories and 133 chapters are merged with Salawati's translated adhkar, references and unique items. Repeat counters and favourites persist. All built-in tasbih presets are browsable. Allah's names merge Noor's Quranic reference/Badini details with Salawati's 99-name translation set.
+- **Prayer location and alerts:** country-aware search against Salawati's 166,404-location catalogue plus Noor's city list, without putting the entire global location catalogue into UI memory. GPS/network fix, manual city coordinates, nearby source timetables from both databases, exact-distance candidate selection and coordinate-based calculated fallback are implemented. Calculation method and Asr school are selectable. Qibla uses the selected coordinates and device sensors. Adhan alerts are optional, select bundled audio, schedule recurring prayers, and reschedule on device boot/time-zone change when Android permissions allow.
+- **Audio, books and Farmuda:** 80 reciter entries, bundled audio playback and an adhan/mosque filter; the original 94-book catalogue plus all extracted offline PDFs and an in-app PDF page reader; all 240 Farmuda records with search and persistent favourites.
+- **Personal-data safety:** personal verse bookmarks and notes, reading position, prayer/location preferences, adhkar progress/favourites, tasbih counts and Farmuda favourites can be exported to and restored from a JSON backup file. The included Quran, tafsir, audio and books remain inside the APK and are not duplicated into that personal backup.
 
-**Important limitations:** the current data-enabled APK passed extraction, Gradle tests/lint/assembleDebug, APK integrity/signature checks and artifact upload; it still needs to be installed and tested on a physical Android 11 phone. Khairah's four legacy tafsir binaries and the 604-page SVG Mushaf are now decoded on demand using build-generated offsets and SHA-256 verification. The source apps' complete internal behavior has not been independently verified screen-by-screen, so do not treat this as a certified 1:1 replacement yet.
+The extraction workflow checks the SHA-256 identity of each source APK-set, archive integrity, SQLite integrity, the 604-page Mushaf index, and literal asset references from Kotlin. Android build jobs run Gradle unit tests, lint, assembly, APK signing/integrity checks and upload a ZIP containing the APK and verification reports.
+
+**Important limitation:** a successful build and database integrity report do not prove every screen behaves perfectly on a real phone. The latest build has not been manually installed and tested on the user's realme X2 Pro / Android 11 in this environment. Treat the current project as a data-rich working build pending that physical-device smoke test, not as a certified 1:1 clone of all original app behaviour. Public redistribution rights for bundled audio, fonts, translations and books must also be confirmed before production release.
 
 ## Input bundle and safe build
 
