@@ -3197,6 +3197,35 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
         }
         Spacer(Modifier.height(14.dp))
+        if (times == null) LoadingOrEmpty(loading, language, foreground) else {
+            val timeItems = listOf(
+                tr(language, "fajr") to times!!.fajr, tr(language, "sunrise") to times!!.sunrise,
+                tr(language, "dhuhr") to times!!.dhuhr, tr(language, "asr") to times!!.asr,
+                tr(language, "maghrib") to times!!.maghrib, tr(language, "isha") to times!!.isha
+            )
+            timeItems.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    pair.forEach { (label, time) ->
+                        Card(Modifier.weight(1f).padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                Text(label, color = foreground.copy(alpha = 0.64f), fontSize = 12.sp)
+                                Spacer(Modifier.height(7.dp))
+                                Text(time, color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Source: ${times!!.source}. Times shown in local phone time."
+                    AppLanguage.AR -> "المصدر: ${times!!.source}. الأوقات بتوقيت الهاتف المحلي."
+                    AppLanguage.CKB -> "سەرچاوە: ${times!!.source}. کاتەکان بە کاتی مۆبایلەکەتن."
+                }, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
         Text(if (language == AppLanguage.EN) "Calculation method" else if (language == AppLanguage.AR) "طريقة الحساب" else "شێوازی حسابکردن", color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -3267,33 +3296,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     }
                 }
             }
-        }
-        if (times == null) LoadingOrEmpty(loading, language, foreground) else {
-            val timeItems = listOf(
-                tr(language, "fajr") to times!!.fajr, tr(language, "sunrise") to times!!.sunrise,
-                tr(language, "dhuhr") to times!!.dhuhr, tr(language, "asr") to times!!.asr,
-                tr(language, "maghrib") to times!!.maghrib, tr(language, "isha") to times!!.isha
-            )
-            timeItems.chunked(2).forEach { pair ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    pair.forEach { (label, time) ->
-                        Card(Modifier.weight(1f).padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text(label, color = foreground.copy(alpha = 0.64f), fontSize = 12.sp)
-                                Spacer(Modifier.height(7.dp))
-                                Text(time, color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Source: ${times!!.source}. Times shown in local phone time."
-                    AppLanguage.AR -> "المصدر: ${times!!.source}. الأوقات بتوقيت الهاتف المحلي."
-                    AppLanguage.CKB -> "سەرچاوە: ${times!!.source}. کاتەکان بە کاتی مۆبایلەکەتن."
-                }, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
-            )
         }
         Spacer(Modifier.height(14.dp))
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
