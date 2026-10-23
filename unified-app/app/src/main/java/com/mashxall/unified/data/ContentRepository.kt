@@ -997,9 +997,9 @@ object ContentRepository {
     }
 
     suspend fun loadNames(context: Context): List<AllahName> = withContext(Dispatchers.IO) {
-        queryDb(context, PRAYER_DB, emptyList()) { db ->
+        val noorNames = queryDb(context, PRAYER_DB, emptyList<AllahName>()) { db ->
             db.rawQuery(
-                "SELECT _id,arabic,sorani,badini,english,surah_ayah,highlight_section,farsi,nu FROM allah_names ORDER BY _id",
+                "SELECT _id,arabic,surah_ayah,highlight_section,sorani,badini,english,farsi,nu FROM allah_names ORDER BY _id",
                 null
             ).use { c ->
                 buildList {
@@ -1019,6 +1019,51 @@ object ContentRepository {
                 }
             }
         }
+        val salawatiNames = queryDb(context, AZKAR_DB, emptyList<AllahName>()) { db ->
+            db.rawQuery(
+                """
+                SELECT n._id AS id,n.name AS arabic,
+                       COALESCE((SELECT t.name FROM name_translation t WHERE t.name_id=n._id AND t.language='ckb' LIMIT 1),'') AS ckb,
+                       COALESCE((SELECT t.name FROM name_translation t WHERE t.name_id=n._id AND t.language='en' LIMIT 1),'') AS english,
+                       COALESCE((SELECT t.name FROM name_translation t WHERE t.name_id=n._id AND t.language='ar' LIMIT 1),'') AS arabic_translation
+                FROM name n
+                ORDER BY n._id
+                """.trimIndent(), null
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        AllahName(
+                            number = c.int("id"),
+                            arabic = c.string("arabic").ifBlank { c.string("arabic_translation") },
+                            ckb = c.string("ckb"),
+                            badini = "",
+                            english = c.string("english"),
+                            extraText = c.string("arabic_translation")
+                        )
+                    )
+                }
+            }
+        }
+
+        val combined = linkedMapOf<String, AllahName>()
+        noorNames.forEach { name ->
+            val key = normalizeArabicKey(name.arabic).ifBlank { "noor:${name.number}" }
+            combined[key] = name
+        }
+        salawatiNames.forEach { name ->
+            val key = normalizeArabicKey(name.arabic).ifBlank { "salawati:${name.number}" }
+            val existing = combined[key]
+            if (existing == null) {
+                combined[key] = name.copy(number = combined.size + 1)
+            } else {
+                combined[key] = existing.copy(
+                    ckb = existing.ckb.ifBlank { name.ckb },
+                    english = existing.english.ifBlank { name.english },
+                    extraText = existing.extraText.ifBlank { name.extraText }
+                )
+            }
+        }
+        combined.values.mapIndexed { index, name -> name.copy(number = index + 1) }
     }
 
     /**
