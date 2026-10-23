@@ -2604,12 +2604,42 @@ private fun requestCurrentLocation(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+private data class PrayerCountdownTarget(
+    val prayerKey: String,
+    val timeText: String,
+    val targetMillis: Long
+)
+
+private fun prayerTimestampForDate(date: Date, clockText: String): Long? {
+    val parts = clockText.trim().split(":")
+    val hour = parts.getOrNull(0)?.toIntOrNull() ?: return null
+    val minute = parts.getOrNull(1)?.toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    return Calendar.getInstance().apply {
+        time = date
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+private fun formatPrayerCountdown(remainingMillis: Long): String {
+    val totalSeconds = remainingMillis.coerceAtLeast(0L) / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+}
+
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (String) -> Unit, onQibla: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
+    var tomorrowTimes by remember { mutableStateOf<PrayerRow?>(null) }
+    var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
@@ -2726,6 +2756,15 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         delay(250L)
         cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
     }
+    LaunchedEffect(Unit) {
+        while (true) {
+            clockNowMillis = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+    val currentLocalDateKey = remember(clockNowMillis) {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNowMillis))
+    }
     val visibleAdhanAssets = remember(adhanAssets, adhanSoundQuery) {
         if (adhanSoundQuery.isBlank()) adhanAssets else adhanAssets.filter { sound ->
             (sound.title + " " + sound.group + " " + sound.assetPath)
@@ -2793,6 +2832,64 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 loading = false
             }
             delay(60_000L)
+        }
+    }
+    LaunchedEffect(
+        selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
+        manualCountry, calculationMethod, asrSchool, dayOffset, currentLocalDateKey
+    ) {
+        if (dayOffset != 0) {
+            tomorrowTimes = null
+        } else {
+            val tomorrow = Calendar.getInstance().apply {
+                timeInMillis = clockNowMillis
+                add(Calendar.DAY_OF_YEAR, 1)
+            }.time
+            tomorrowTimes = when {
+                gpsLatitude != null && gpsLongitude != null ->
+                    ContentRepository.loadPrayerTimesAtLocation(
+                        context, gpsLatitude!!, gpsLongitude!!, tomorrow,
+                        PrayerCalculationMethod.fromId(calculationMethod),
+                        AsrCalculationSchool.fromId(asrSchool)
+                    )
+                manualLatitude != null && manualLongitude != null -> {
+                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                        ?: ContentRepository.loadPrayerTimesAtLocation(
+                            context, manualLatitude!!, manualLongitude!!, tomorrow,
+                            PrayerCalculationMethod.fromId(calculationMethod),
+                            AsrCalculationSchool.fromId(asrSchool)
+                        )
+                }
+                else -> ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow)
+            }
+        }
+    }
+    val nextPrayerTarget = remember(times, tomorrowTimes, dayOffset, clockNowMillis) {
+        val currentTimes = times
+        if (dayOffset != 0 || currentTimes == null) {
+            null
+        } else {
+            val now = Date(clockNowMillis)
+            val todaysPrayers = listOf(
+                "fajr" to currentTimes.fajr,
+                "dhuhr" to currentTimes.dhuhr,
+                "asr" to currentTimes.asr,
+                "maghrib" to currentTimes.maghrib,
+                "isha" to currentTimes.isha
+            )
+            val nextToday = todaysPrayers.firstNotNullOfOrNull { (key, text) ->
+                val target = prayerTimestampForDate(now, text)
+                if (target != null && target > clockNowMillis) PrayerCountdownTarget(key, text, target) else null
+            }
+            nextToday ?: tomorrowTimes?.let { nextDay ->
+                val nextDate = Calendar.getInstance().apply {
+                    timeInMillis = clockNowMillis
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }.time
+                prayerTimestampForDate(nextDate, nextDay.fajr)?.let { target ->
+                    PrayerCountdownTarget("fajr", nextDay.fajr, target)
+                }
+            }
         }
     }
 
@@ -2929,6 +3026,49 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }, label = { Text(if (language == AppLanguage.EN) "Hanafi" else if (language == AppLanguage.AR) "الحنفي" else "حەنەفی", fontSize = 10.sp) })
         }
         Spacer(Modifier.height(10.dp))
+        if (dayOffset == 0 && nextPrayerTarget != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DeepGreen),
+                shape = RoundedCornerShape(22.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.28f))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "NEXT PRAYER"
+                                AppLanguage.AR -> "الصلاة القادمة"
+                                AppLanguage.CKB -> "نوێژی داهاتوو"
+                            }, color = Color(0xFFC7D8CD), fontSize = 10.sp, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            tr(language, nextPrayerTarget.prayerKey),
+                            color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(nextPrayerTarget.timeText, color = Color(0xFFF1D78D), fontSize = 14.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            formatPrayerCountdown(nextPrayerTarget.targetMillis - clockNowMillis),
+                            color = Gold, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "remaining"
+                                AppLanguage.AR -> "الوقت المتبقي"
+                                AppLanguage.CKB -> "ماوە"
+                            }, color = Color(0xFFC7D8CD), fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+        }
         if (times == null) LoadingOrEmpty(loading, language, foreground) else {
             val timeItems = listOf(
                 tr(language, "fajr") to times!!.fajr, tr(language, "sunrise") to times!!.sunrise,

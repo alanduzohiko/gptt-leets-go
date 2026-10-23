@@ -82,12 +82,23 @@ def audit(database: Path) -> dict[str, Any]:
         if integrity != "ok":
             raise RuntimeError(f"SQLite integrity check failed: {integrity}")
         total = connection.execute("SELECT COUNT(*) FROM hadith_on_ayah").fetchone()[0]
+        distinct_collection_values = connection.execute(
+            "SELECT DISTINCT collection FROM hadith_on_ayah WHERE collection IS NOT NULL AND collection != '' LIMIT 100"
+        ).fetchall()
         rows = connection.execute(
             """
             SELECT id,collection,arabic,english,reference,verse_reference
             FROM hadith_on_ayah ORDER BY id LIMIT 100
             """
         ).fetchall()
+
+    distinct_codes: set[str] = set()
+    for value in distinct_collection_values:
+        code = decrypt_field(value[0], openssl)
+        if code in COLLECTIONS:
+            distinct_codes.add(code)
+        elif code:
+            unknown_codes.add(code)
 
     for row in rows:
         rows_examined += 1
@@ -124,13 +135,14 @@ def audit(database: Path) -> dict[str, Any]:
         "source_rows": total,
         "rows_examined": rows_examined,
         "valid_decrypted_rows": decoded_rows,
-        "known_source_collection_codes": sorted({row["collection_code"] for row in samples}),
+        "known_source_collection_codes": sorted(distinct_codes),
         "unknown_decrypted_collection_codes": sorted(unknown_codes),
         "source_aes_format": "AES-256-ECB with PKCS5/PKCS7 padding; Base64 payload",
         "checks": {
             "minimum_source_rows": total >= 1000,
             "minimum_real_rows_successfully_decrypted": decoded_rows >= 5,
-            "collection_codes_map_to_source_names": bool(samples) and all(row["collection_code"] in COLLECTIONS for row in samples),
+            "distinct_collection_values_decrypt": bool(distinct_codes),
+            "collection_codes_map_to_source_names": bool(samples) and not unknown_codes and all(row["collection_code"] in COLLECTIONS for row in samples),
             "arabic_fields_are_readable_unicode": bool(samples) and all(row["arabic_readable"] for row in samples),
         },
         "sample_rows": samples,
