@@ -2104,7 +2104,12 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             if (!loadingMore) scope.launch {
                                 loadingMore = true
                                 val nextPage = ContentRepository.loadHadiths(
-                                    context, query.trim(), offset, 100, selectedCollectionId.takeIf { it > 0 }
+                                    context,
+                                    query.trim(),
+                                    offset,
+                                    100,
+                                    selectedCollectionId.takeIf { it > 0 },
+                                    if (savedOnly) favoriteHadithIds else null
                                 )
                                 hadithItems = hadithItems + nextPage
                                 offset += nextPage.size
