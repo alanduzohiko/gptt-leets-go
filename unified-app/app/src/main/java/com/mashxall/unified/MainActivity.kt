@@ -348,7 +348,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
-                                }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") }, onAudio = { navigateTo("audio") }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
+                                }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") }, onAudio = { audioStartsAtReciters = true; navigateTo("audio") }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor, selectedCity) { navigateTo(it.key) }
                             }
@@ -442,7 +442,7 @@ private fun prayerSourceLabel(source: String, language: AppLanguage): String {
     }
 }
 
-private fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
+internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
     val match = Regex("""(\\d{1,2}):(\\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
         ?: return raw
     var hour = match.groupValues[1].toIntOrNull() ?: return raw
@@ -507,24 +507,6 @@ private fun HomeScreen(
         loadingTimes = false
     }
 
-    val hour = SimpleDateFormat("H", Locale.US).format(Date(clockNow)).toIntOrNull() ?: 12
-    val greeting = when {
-        hour < 12 -> when (language) {
-            AppLanguage.EN -> "Good morning"
-            AppLanguage.AR -> "صباح الخير"
-            AppLanguage.CKB -> "بەیانی باش"
-        }
-        hour < 17 -> when (language) {
-            AppLanguage.EN -> "Peaceful afternoon"
-            AppLanguage.AR -> "طاب نهارك"
-            AppLanguage.CKB -> "نیوەڕۆت باش"
-        }
-        else -> when (language) {
-            AppLanguage.EN -> "Peaceful evening"
-            AppLanguage.AR -> "مساء الخير"
-            AppLanguage.CKB -> "ئێوارەت باش"
-        }
-    }
     val saveLocationFix: (Location) -> Unit = { fix ->
         gpsLatitude = fix.latitude
         gpsLongitude = fix.longitude
@@ -606,45 +588,6 @@ private fun HomeScreen(
     }.orEmpty()
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth().animateContentSize(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = DeepGreen)
-        ) {
-            Box(
-                Modifier.fillMaxWidth()
-                    .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF155744), Ink)))
-                    .padding(20.dp)
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(Gold))
-                        Spacer(Modifier.width(8.dp))
-                        Text(greeting, color = PaleGold, fontSize = 11.sp, letterSpacing = 0.5.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(tr(language, "home_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 34.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(tr(language, "welcome"), color = SoftText, fontSize = 13.sp, lineHeight = 21.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Surface(
-                        color = Gold.copy(alpha = 0.16f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.38f)),
-                        modifier = Modifier.clickable { onOpen(AppScreen.QURAN) }
-                    ) {
-                        Row(Modifier.padding(horizontal = 13.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = PaleGold)
-                            Spacer(Modifier.width(8.dp))
-                            Text(tr(language, "continue_reading"), color = PaleGold, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                        }
-                    }
-                }
-                Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Gold.copy(alpha = 0.10f), modifier = Modifier.align(Alignment.BottomEnd).size(88.dp))
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
         Card(
             modifier = Modifier.fillMaxWidth().clickable { onOpen(AppScreen.PRAYER) },
             shape = RoundedCornerShape(24.dp),
@@ -733,7 +676,7 @@ private fun HomeScreen(
             }
         }
 
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(14.dp))
         Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(12.dp))
         homeModules.chunked(2).forEachIndexed { rowIndex, pair ->
