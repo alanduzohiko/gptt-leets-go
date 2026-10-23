@@ -2455,6 +2455,7 @@ private fun requestCurrentLocation(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (String) -> Unit, onQibla: () -> Unit) {
     val context = LocalContext.current
@@ -2644,17 +2645,17 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
+    val displayDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
+    val displayLocalDate = Instant.ofEpochMilli(displayDate.time).atZone(ZoneId.systemDefault()).toLocalDate()
+    val displayDateText = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(displayDate)
+    val datePickerState = key(dayOffset) {
+        rememberDatePickerState(
+            initialSelectedDateMillis = displayLocalDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+            yearRange = (LocalDate.now().year - 1)..(LocalDate.now().year + 1)
+        )
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        val displayDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
-        val displayLocalDate = Instant.ofEpochMilli(displayDate.time).atZone(ZoneId.systemDefault()).toLocalDate()
-        val displayDateText = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(displayDate)
-        val datePickerState = key(dayOffset) {
-            rememberDatePickerState(
-                initialSelectedDateMillis = displayLocalDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-                yearRange = (LocalDate.now().year - 1)..(LocalDate.now().year + 1)
-            )
-        }
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
@@ -2680,7 +2681,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Text("›", color = Gold, fontSize = 22.sp)
                 }
                 IconButton(onClick = { showDatePicker = true }) {
-                    Icon(Icons.Outlined.DateRange, contentDescription = if (language == AppLanguage.EN) "Choose date" else if (language == AppLanguage.AR) "اختيار التاريخ" else "بەروار هەڵبژێرە", tint = Gold)
+                    Text("▦", color = Gold, fontSize = 19.sp)
                 }
                 if (dayOffset != 0) {
                     TextButton(onClick = { dayOffset = 0 }) {
