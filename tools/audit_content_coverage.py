@@ -61,7 +61,7 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
     require_table(noor + "kurdish_transliteration.db", "quran", 6236)
     require_table(noor + "ayah_info.db", "page_data_line", 13000)
     require_table(noor + "ayah_info.db", "v2_tajweed_page_data_line", 12000)
-    require_asset(khairah + "assets/mushaf/pages.bin")
+    require_asset(khairah + "mushaf/pages.bin")
     mushaf_index = generated.get("mushaf_svg_index.json")
     mushaf_pages = mushaf_index.get("page_count") if mushaf_index else None
     record("mushaf_svg_index", mushaf_pages == 604, mushaf_pages, 604)
