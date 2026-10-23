@@ -15,7 +15,9 @@ check_screen() {
 
   echo "=== Runtime screen smoke: ${route} ==="
   adb shell am force-stop com.mashxall.unified
-  adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN "$route" |
+  adb shell am start -S -W --activity-clear-task --activity-new-task \
+    -n com.mashxall.unified/.MainActivity \
+    --es com.mashxall.unified.OPEN_SCREEN "$route" |
     tee "dist/runtime-test/launch-${route}.txt"
   sleep 12
 
@@ -70,13 +72,46 @@ PY
     fi
     break
   done
-  if ! grep -Eq "$expected_title" "$file"; then
-    echo "FAIL: expected title not visible for route: $route"
+  # Match the screen heading inside the main content area, not a same-named
+  # item in the persistent bottom-navigation bar (which caused a false positive
+  # for Quran when Prayer was still the active screen).
+  if ! python3 - "$file" "$expected_title" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+path, pattern = sys.argv[1], sys.argv[2]
+try:
+    root = ET.parse(path).getroot()
+except Exception as exc:
+    print(f"FAIL: cannot parse UI hierarchy: {exc}")
+    raise SystemExit(1)
+
+matcher = re.compile(pattern, re.I)
+matches = []
+for node in root.iter("node"):
+    text = node.attrib.get("text", "").strip()
+    bounds = node.attrib.get("bounds", "")
+    found = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if not text or not found or not matcher.search(text):
+        continue
+    x1, y1, x2, y2 = map(int, found.groups())
+    # The app content starts below the brand/language header and above the bottom bar.
+    if y1 >= 220 and y2 <= 1584 and y2 > y1 and x2 > x1:
+        matches.append((y1, text))
+if not matches:
+    print(f"FAIL: no content-area heading matched {pattern!r}; bottom-nav labels are intentionally ignored.")
+    raise SystemExit(1)
+y, heading = min(matches)
+print(f"PASS: content heading matched at y={y}: {heading}")
+PY
+  then
+    echo "FAIL: expected content title not visible for route: $route"
     cat "$file"
     adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
     exit 1
   fi
-  echo "PASS: route $route remained active; title matched."
+  echo "PASS: route $route remained active; its actual content heading matched."
 }
 
 check_screen prayer 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة'
