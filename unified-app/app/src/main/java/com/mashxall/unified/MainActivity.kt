@@ -149,7 +149,6 @@ private data class HomeModule(
 private val homeModules: List<HomeModule> get() = listOf(
     HomeModule(AppScreen.QURAN, "quran", "quran_sub", Icons.Outlined.MenuBook, Gold),
     HomeModule(AppScreen.BOOKMARKS, "bookmarks", "bookmarks_sub", Icons.Outlined.BookmarkBorder, Color(0xFFE0B86C)),
-    HomeModule(AppScreen.TAFSIR, "tafsir", "tafsir_sub", Icons.Outlined.AutoStories, Color(0xFF80C6B1)),
     HomeModule(AppScreen.HADITH, "hadith", "hadith_sub", Icons.Outlined.LibraryBooks, Color(0xFFA99AE8)),
     HomeModule(AppScreen.AZKAR, "azkar", "azkar_sub", Icons.Outlined.Spa, Color(0xFF9CCB7B)),
     HomeModule(AppScreen.PRAYER, "prayer", "prayer_sub", Icons.Outlined.Schedule, Color(0xFF82B7E8)),
@@ -157,10 +156,8 @@ private val homeModules: List<HomeModule> get() = listOf(
     HomeModule(AppScreen.QIBLA, "qibla", "qibla_sub", Icons.Outlined.Explore, Color(0xFF85C4C6)),
     HomeModule(AppScreen.BOOKS, "books", "books_sub", Icons.Outlined.LibraryBooks, Color(0xFFE1C36D)),
     HomeModule(AppScreen.LEXICON, "lexicon", "lexicon_sub", Icons.Outlined.Search, Color(0xFFB3A2F0)),
-    HomeModule(AppScreen.WORD_BY_WORD, "word_by_word", "word_by_word_sub", Icons.Outlined.AutoStories, Color(0xFF71BFC1)),
     HomeModule(AppScreen.FARMUDA, "farmuda", "farmuda_sub", Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
     HomeModule(AppScreen.TASBIH, "tasbih", "tasbih_sub", Icons.Outlined.Spa, Color(0xFF80C6B1)),
-    HomeModule(AppScreen.LIBRARY, "library", "library_sub", Icons.Outlined.AutoStories, Gold)
 )
 
 private val textMap = mapOf(
