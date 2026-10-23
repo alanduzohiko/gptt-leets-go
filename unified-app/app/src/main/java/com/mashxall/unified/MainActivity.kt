@@ -166,7 +166,11 @@ fun MashxallApp(startScreen: String? = null) {
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var screen by rememberSaveable {
-        mutableStateOf(startScreen?.takeIf { it == "prayer" } ?: AppScreen.HOME.key)
+        mutableStateOf(
+            startScreen?.takeIf { candidate ->
+                AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
+            } ?: AppScreen.HOME.key
+        )
     }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
