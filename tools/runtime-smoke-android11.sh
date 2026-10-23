@@ -76,30 +76,37 @@ check_screen() {
 
   echo "=== Runtime screen smoke: ${route} ==="
   adb shell am force-stop com.mashxall.unified
-  # Android's am start parser on API 30 accepts Intent flags through -f,
-  # not the unsupported long options --activity-new-task / --activity-clear-task.
-  adb shell am start -S -W -f 0x10008000 \
+  # Android 11 can spend >12 seconds restoring this large app. An activity-start
+  # timeout is not itself a failure if the requested route eventually renders.
+  timeout --foreground 45s adb shell am start -S -W -f 0x10008000 \
     -n com.mashxall.unified/.MainActivity \
-    --es com.mashxall.unified.OPEN_SCREEN "$route" |
-    tee "dist/runtime-test/launch-${route}.txt"
-  sleep 12
+    --es com.mashxall.unified.OPEN_SCREEN "$route" \
+    > "dist/runtime-test/launch-${route}.txt" 2>&1 || true
+  sleep 8
 
   local pid
-  pid="$(adb shell pidof com.mashxall.unified | tr -d '\r')"
+  pid="$(adb shell pidof com.mashxall.unified 2>/dev/null | tr -d '\r' || true)"
   if [[ -z "$pid" ]]; then
     echo "FAIL: app process died while opening route: $route"
     adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
     exit 1
   fi
 
-  # Android 11 emulators can raise a system-process ANR dialog while the
-  # large offline content bundle is being installed or first opened. Recover
-  # from System UI, Settings, or app ANR prompts by tapping Android's Wait
-  # button and re-inspecting the foreground window.
   local attempt
-  for attempt in 1 2 3 4; do
-    adb shell uiautomator dump /sdcard/mashxall-window.xml > "dist/runtime-test/uiautomator-${route}.txt" || true
-    adb pull /sdcard/mashxall-window.xml "$file" >/dev/null || true
+  local screen_ok=0
+  for attempt in $(seq 1 10); do
+    # Never reuse a UI hierarchy from the previous route. uiautomator can return
+    # a null root during an ANR; an old XML previously misreported Quran as Hadith.
+    rm -f "$file"
+    adb shell rm -f /sdcard/mashxall-window.xml >/dev/null 2>&1 || true
+    adb shell uiautomator dump /sdcard/mashxall-window.xml \
+      > "dist/runtime-test/uiautomator-${route}-${attempt}.txt" 2>&1 || true
+    if ! adb pull /sdcard/mashxall-window.xml "$file" >/dev/null 2>&1 || [[ ! -s "$file" ]]; then
+      echo "WARN: UI hierarchy unavailable for ${route} (attempt ${attempt}/10); retrying."
+      sleep 5
+      continue
+    fi
+
     if grep -Eqi "isn't responding|is not responding" "$file"; then
       echo "WARNING: Android ANR dialog covers route ${route}; tapping Wait and re-inspecting."
       local coords
@@ -110,18 +117,14 @@ import xml.etree.ElementTree as ET
 try:
     root = ET.parse(sys.argv[1]).getroot()
 except Exception:
-    print("")
     raise SystemExit(0)
 for node in root.iter("node"):
-    label = node.attrib.get("text", "").strip().lower()
-    if label == "wait":
-        bounds = node.attrib.get("bounds", "")
-        m = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
-        if m:
-            x1, y1, x2, y2 = map(int, m.groups())
+    if node.attrib.get("text", "").strip().lower() == "wait":
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
             print(f"{(x1+x2)//2} {(y1+y2)//2}")
         raise SystemExit(0)
-print("")
 PY
 )"
       if [[ -n "$coords" ]]; then
@@ -130,53 +133,51 @@ PY
       else
         adb shell input keyevent 4 || true
       fi
-      sleep 8
+      sleep 5
       continue
     fi
-    break
-  done
-  # Match the screen heading inside the main content area, not a same-named
-  # item in the persistent bottom-navigation bar (which caused a false positive
-  # for Quran when Prayer was still the active screen).
-  if ! python3 - "$file" "$expected_title" <<'PY'
+
+    if python3 - "$file" "$expected_title" <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
-
 path, pattern = sys.argv[1], sys.argv[2]
 try:
     root = ET.parse(path).getroot()
-except Exception as exc:
-    print(f"FAIL: cannot parse UI hierarchy: {exc}")
+except Exception:
     raise SystemExit(1)
-
 matcher = re.compile(pattern, re.I)
-matches = []
 for node in root.iter("node"):
     text = node.attrib.get("text", "").strip()
     bounds = node.attrib.get("bounds", "")
-    found = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
-    if not text or not found or not matcher.search(text):
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if not text or not match or not matcher.search(text):
         continue
-    x1, y1, x2, y2 = map(int, found.groups())
-    # The app content starts below the brand/language header and above the bottom bar.
+    x1, y1, x2, y2 = map(int, match.groups())
     if y1 >= 220 and y2 <= 1584 and y2 > y1 and x2 > x1:
-        matches.append((y1, text))
-if not matches:
-    print(f"FAIL: no content-area heading matched {pattern!r}; bottom-nav labels are intentionally ignored.")
-    raise SystemExit(1)
-y, heading = min(matches)
-print(f"PASS: content heading matched at y={y}: {heading}")
+        print(f"PASS: content heading matched at y={y1}: {text}")
+        raise SystemExit(0)
+raise SystemExit(1)
 PY
-  then
+    then
+      screen_ok=1
+      echo "PASS: route ${route} rendered its own content screen (attempt ${attempt})."
+      break
+    fi
+
+    echo "Waiting for the ${route} content screen to render (attempt ${attempt}/10)…"
+    sleep 5
+  done
+
+  if [[ "$screen_ok" -ne 1 ]]; then
     echo "FAIL: expected content title not visible for route: $route"
-    cat "$file"
-    adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+    cat "$file" 2>/dev/null || true
+    adb logcat -d -v threadtime > "dist/runtime-test/logcat-${route}-failure.txt" || true
+    grep -E 'ANR in com\\.mashxall|FATAL EXCEPTION|AndroidRuntime|MashxallData|Content query failed|Input dispatching timed out' \
+      "dist/runtime-test/logcat-${route}-failure.txt" | tail -n 100 || true
     exit 1
   fi
-  echo "PASS: route $route remained active; its actual content heading matched."
 }
-
 check_screen prayer 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة'
 if ! grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window-prayer.xml; then
   echo "FAIL: Fajr label is missing from the rendered prayer screen."
