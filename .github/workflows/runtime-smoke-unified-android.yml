@@ -56,7 +56,8 @@ jobs:
           emulator-wait-timeout: 900
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 2048 -cores 2
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes this block with /bin/sh, not Bash.
+            set -eu
             adb wait-for-device
             adb logcat -c
             adb install --no-streaming "$APK_PATH" | tee dist/runtime-test/install.txt
@@ -75,7 +76,7 @@ jobs:
               sleep 12
               local pid
               pid="$(adb shell pidof com.mashxall.unified | tr -d '\\r')"
-              if [[ -z "$pid" ]]; then
+              if [ -z "$pid" ]; then
                 echo "FAIL: app process died while opening route: $route"
                 adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
                 exit 1
