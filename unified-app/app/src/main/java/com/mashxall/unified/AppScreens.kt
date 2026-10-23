@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.mashxall.unified.data.*
 import com.mashxall.unified.notifications.PrayerAlarmScheduler
+import com.mashxall.unified.widgets.PrayerTimesWidgetProvider
 import com.caverock.androidsvg.SVG
 import java.io.File
 import java.net.HttpURLConnection
@@ -2609,6 +2610,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         } else {
             PrayerAlarmScheduler.cancelAll(context)
         }
+    }
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
+        PrayerTimesWidgetProvider.requestRefresh(context)
+    }
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
+        PrayerTimesWidgetProvider.requestRefresh(context)
     }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
         var loadedDate = ""

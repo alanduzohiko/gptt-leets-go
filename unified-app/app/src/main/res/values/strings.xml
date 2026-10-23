@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">مـــەشــخـــەڵ</string>
+    <string name="widget_prayer_label">مەشخەڵ • مواقيت الصلاة</string>
+    <string name="widget_prayer_description">مواقيت الصلاة القادمة والأوقات اليومية حسب موقعك المحفوظ.</string>
 </resources>

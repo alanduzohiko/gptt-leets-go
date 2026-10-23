@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -147,20 +148,26 @@ fun tr(language: AppLanguage, key: String): String =
     textMap[language.key]?.get(key) ?: textMap["en"]?.get(key) ?: key
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_OPEN_SCREEN = "com.mashxall.unified.OPEN_SCREEN"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = android.graphics.Color.rgb(7, 30, 26)
         window.navigationBarColor = android.graphics.Color.rgb(7, 30, 26)
-        setContent { MashxallApp() }
+        setContent { MashxallApp(startScreen = intent.getStringExtra(EXTRA_OPEN_SCREEN)) }
     }
 }
 
 @Composable
-fun MashxallApp() {
+fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
-    var screen by rememberSaveable { mutableStateOf(AppScreen.HOME.key) }
+    var screen by rememberSaveable {
+        mutableStateOf(startScreen?.takeIf { it == "prayer" } ?: AppScreen.HOME.key)
+    }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }

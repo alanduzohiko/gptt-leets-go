@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_prayer_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/widget_prayer_background">
+
+    <TextView
+        android:id="@+id/widget_prayer_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="مەشخەڵ • کاتی نوێژ"
+        android:textColor="#FFF3D4"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:maxLines="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp">
+
+        <TextView
+            android:id="@+id/widget_prayer_location"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Location"
+            android:textColor="#D3E5D9"
+            android:textSize="10sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/widget_prayer_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="2026-10-23"
+            android:textColor="#D3E5D9"
+            android:textSize="9sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_prayer_next"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
+        android:background="@drawable/widget_prayer_next_background"
+        android:text="Next: Fajr • 05:00"
+        android:textColor="#FFF3D4"
+        android:textStyle="bold"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="7dp">
+
+        <TextView
+            android:id="@+id/widget_time_fajr"
+            style="@style/Widget.Mashxall.TimeCell"
+            android:text="Fajr&#10;--:--" />
+
+        <TextView
+            android:id="@+id/widget_time_sunrise"
+            style="@style/Widget.Mashxall.TimeCell"
+            android:text="Sunrise&#10;--:--" />
+
+        <TextView
+            android:id="@+id/widget_time_dhuhr"
+            style="@style/Widget.Mashxall.TimeCell"
+            android:text="Dhuhr&#10;--:--" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+
+        <TextView
+            android:id="@+id/widget_time_asr"
+            style="@style/Widget.Mashxall.TimeCell"
+            android:text="Asr&#10;--:--" />
+
+        <TextView
+            android:id="@+id/widget_time_maghrib"
+            style="@style/Widget.Mashxall.TimeCell"
+            android:text="Maghrib&#10;--:--" />
+
+        <TextView
+            android:id="@+id/widget_time_isha"
+            style="@style/Widget.Mashxall.TimeCell"
+            android:text="Isha&#10;--:--" />
+    </LinearLayout>
+</LinearLayout>
