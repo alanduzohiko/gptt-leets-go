@@ -82,6 +82,49 @@ check_screen library 'کتێبخانەی ئیسلامی|المكتبة الإس�
 check_screen worship 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
+assert_visible_body_text() {
+  local route="$1"
+  local min_chars="${2:-35}"
+  local file="dist/runtime-test/window-${route}.xml"
+  echo "=== Content body smoke: ${route} (minimum ${min_chars} characters) ==="
+  if ! python3 - "$file" "$min_chars" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+path = Path(sys.argv[1])
+minimum = int(sys.argv[2])
+try:
+    root = ET.parse(path).getroot()
+except Exception as exc:
+    print(f"FAIL: cannot parse UI hierarchy {path}: {exc}")
+    raise SystemExit(1)
+texts = [node.attrib.get("text", "").strip() for node in root.iter()]
+longest = max((len(text) for text in texts), default=0)
+candidates = [text for text in texts if len(text) >= minimum]
+if not candidates:
+    print(f"FAIL: no visible content paragraph with at least {minimum} characters; longest text was {longest}.")
+    for text in sorted(texts, key=len, reverse=True)[:12]:
+        print(f"  ({len(text)}) {text[:180]}")
+    raise SystemExit(1)
+print(f"PASS: {len(candidates)} visible content text nodes; longest is {longest} characters.")
+for text in sorted(candidates, key=len, reverse=True)[:2]:
+    print(f"  ({len(text)}) {text[:180]}")
+PY
+  then
+    adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+    exit 1
+  fi
+}
+
+# A screen title alone is not enough; require content records to render too.
+assert_visible_body_text quran 35
+assert_visible_body_text tafsir 35
+assert_visible_body_text hadith 35
+assert_visible_body_text azkar 35
+assert_visible_body_text word_by_word 35
+assert_visible_body_text farmuda 35
+
 adb logcat -d -v threadtime > dist/runtime-test/logcat.txt
 if grep -E 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' dist/runtime-test/logcat.txt; then
   echo "FAIL: Android reported a fatal runtime error while exercising the screens."
@@ -92,7 +135,7 @@ cat > dist/runtime-test/RESULT.txt <<'EOF'
 PASS
 APK installed on Android 11 (API 30).
 Prayer, Quran, Hadith, 94-book catalogue, word-analysis, Farmuda, tafsir, adhkar, names, tasbih, audio, lexicon, Qibla, bookmarks, and backup screens were opened directly.
-UI automation verified the prayer-time title and Fajr label, Quran text, source Hadith count, and catalogue count.
+UI automation verified the prayer-time title and Fajr label, Quran text, source Hadith count, and catalogue count. It also required long visible content text in Quran, tafsir, Hadith, adhkar, word-analysis and Farmuda screens.
 No fatal process exception was found in the captured logcat.
 This CI emulator run does not replace checking GPS sensors, compass accuracy, adhan playback, and local alarm permissions on the user's realme phone.
 EOF
