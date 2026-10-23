@@ -19,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.time.LocalTime
 import java.util.Calendar
@@ -32,35 +31,37 @@ import java.util.Locale
  * the full prayer screen; it does not invent a default coordinate.
  */
 class PrayerTimesWidgetProvider : AppWidgetProvider() {
-    override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
-        appWidgetIds.forEach { updateOne(context.applicationContext, manager, it) }
-    }
-
     override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH) {
-            refreshAll(context.applicationContext)
-        }
-    }
-
-    private fun refreshAll(context: Context) {
-        val manager = AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(ComponentName(context, PrayerTimesWidgetProvider::class.java))
-        ids.forEach { updateOne(context, manager, it) }
-    }
-
-    private fun updateOne(context: Context, manager: AppWidgetManager, widgetId: Int) {
-        manager.updateAppWidget(widgetId, render(context, null, "…", ""))
-        scope.launch {
-            val loaded = runCatching { loadTodayAndTomorrow(context) }.getOrNull()
-            val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-                .getString("language", "ckb") ?: "ckb"
-            val remoteViews = withContext(Dispatchers.Main) {
-                render(context, loaded?.today, loaded?.locationLabel ?: locationFallback(language),
-                    loaded?.nextPrayerLabel(language).orEmpty())
+        val action = intent.action
+        if (action == ACTION_REFRESH || action == AppWidgetManager.ACTION_APPWIDGET_UPDATE) {
+            val manager = AppWidgetManager.getInstance(context)
+            val widgetIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
+                ?: manager.getAppWidgetIds(ComponentName(context, PrayerTimesWidgetProvider::class.java))
+            val pendingResult = goAsync()
+            scope.launch {
+                try {
+                    widgetIds.forEach { updateOne(context.applicationContext, manager, it) }
+                } finally {
+                    pendingResult.finish()
+                }
             }
-            manager.updateAppWidget(widgetId, remoteViews)
+            return
         }
+        super.onReceive(context, intent)
+    }
+
+    private suspend fun updateOne(context: Context, manager: AppWidgetManager, widgetId: Int) {
+        manager.updateAppWidget(widgetId, render(context, null, Companion.locationFallback("ckb"), ""))
+        val loaded = runCatching { loadTodayAndTomorrow(context) }.getOrNull()
+        val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+            .getString("language", "ckb") ?: "ckb"
+        val views = render(
+            context,
+            loaded?.today,
+            loaded?.locationLabel ?: Companion.locationFallback(language),
+            loaded?.nextPrayerLabel(language).orEmpty()
+        )
+        manager.updateAppWidget(widgetId, views)
     }
 
     private fun render(context: Context, row: PrayerRow?, locationLabel: String, nextPrayer: String): RemoteViews {
