@@ -177,12 +177,31 @@ if ! grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window-prayer.xml
 fi
 
 check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
-if ! grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/window-quran.xml; then
-  echo "FAIL: expected Quran verse text is missing from the rendered Quran screen."
-  echo "Capturing the Android logcat because the Quran route opened but the verse query returned no visible content."
+
+# First launch must copy and SHA-256 verify the original Quran database into
+# app-private storage. On a cold Android 11 emulator that can take longer than
+# the normal screen-navigation delay. Poll the visible verse text instead of
+# falsely declaring the data missing after a single 12-second screenshot.
+quran_content_visible=0
+for attempt in $(seq 1 20); do
+  if grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/window-quran.xml; then
+    quran_content_visible=1
+    echo "PASS: readable Quran verse text appeared after cold-start poll $attempt."
+    break
+  fi
+  if [[ "$attempt" -lt 20 ]]; then
+    echo "Waiting for Quran database initialization ($attempt/20)…"
+    sleep 3
+    adb shell uiautomator dump /sdcard/mashxall-quran-content-wait.xml > "dist/runtime-test/uiautomator-quran-content-wait-$attempt.txt" 2>&1 || true
+    adb pull /sdcard/mashxall-quran-content-wait.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
+  fi
+done
+if [[ "$quran_content_visible" -ne 1 ]]; then
+  echo "FAIL: expected Quran verse text is still missing after up to 60 seconds of waiting."
+  echo "Capturing Android logcat because the Quran route opened but readable verse content never appeared."
   timeout --foreground 20s "$ADB_BIN" logcat -d -v threadtime > dist/runtime-test/logcat-quran-data-failure.txt || true
   echo "=== Relevant Mashxall database errors ==="
-  grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|SQLite|Unable to open|quran\.db|no such column|no such table' \
+  grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|SQLite|Unable to open|quran\.db|no such column|no such table|database integrity mismatch' \
     dist/runtime-test/logcat-quran-data-failure.txt | tail -n 100 || true
   echo "=== APK content asset inventory (selected paths) ==="
   timeout --foreground 15s "$ADB_BIN" shell run-as com.mashxall.unified find files/content-databases -maxdepth 1 -type f -print 2>&1 | head -n 50 || true
