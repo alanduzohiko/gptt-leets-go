@@ -408,6 +408,68 @@ if ! grep -q '94' dist/runtime-test/window-books.xml; then
 fi
 
 check_screen word_by_word 'شیکردنەوەی وشە بە وشە|تفسير كلمة بكلمة|Word-by-word analysis'
+
+# The word-analysis screen starts with a default surah/ayah pair (1:1), but
+# must explicitly load it. Tap the visible arrow just as a user would; this
+# also verifies pressing the button works when the inputs have not changed.
+word_analysis_coords="$(python3 - dist/runtime-test/window-word_by_word.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() not in {"→", "←"}:
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$word_analysis_coords" ]]; then
+  echo "FAIL: word-analysis load button was not visible."
+  cat dist/runtime-test/window-word_by_word.xml
+  exit 1
+fi
+read -r word_analysis_x word_analysis_y <<< "$word_analysis_coords"
+adb shell input tap "$word_analysis_x" "$word_analysis_y"
+word_analysis_content_visible=0
+for attempt in $(seq 1 30); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/mashxall-word-analysis-loaded.xml > "dist/runtime-test/uiautomator-word-analysis-loaded-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-word-analysis-loaded.xml dist/runtime-test/window-word_by_word.xml >/dev/null 2>&1 || true
+  if python3 - dist/runtime-test/window-word_by_word.xml <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(1)
+texts = [node.attrib.get("text", "").strip() for node in root.iter("node")]
+# A rendered 1:1 verse is shown only inside the results list, so this confirms
+# the button triggered an actual content query rather than merely opening the screen.
+if any(len(text) >= 35 for text in texts):
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+  then
+    word_analysis_content_visible=1
+    echo "PASS: default word-analysis selection 1:1 loaded actual results (poll $attempt)."
+    break
+  fi
+done
+if [[ "$word_analysis_content_visible" -ne 1 ]]; then
+  echo "FAIL: tapping the word-analysis load button did not render verse/word results."
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-word-analysis-failure.txt || true
+  grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|db_word_by_word|quran_corpus|no such column|no such table' dist/runtime-test/logcat-word-analysis-failure.txt | tail -n 100 || true
+  cat dist/runtime-test/window-word_by_word.xml
+  exit 1
+fi
 check_screen farmuda 'فەرموودە و دوعاکان|المأثورات والأدعية|Supplications & sayings'
 check_screen tafsir 'تەفسیرو وەرگێڕان|التفسير والترجمة|Tafsir & translation'
 check_screen azkar 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
