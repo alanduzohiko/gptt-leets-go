@@ -64,41 +64,76 @@ jobs:
             adb shell am force-stop com.mashxall.unified
             adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN prayer | tee dist/runtime-test/launch.txt
 
-            # Allow the activity and the bundled prayer data to load before asserting.
-            sleep 35
-            PID="$(adb shell pidof com.mashxall.unified | tr -d '\r')"
-            if [[ -z "$PID" ]]; then
-              adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
-              echo "FAIL: app process did not remain alive after opening Prayer Times."
+            # Exercise data-backed screens, not just the launcher and the prayer UI.
+            # Every entry starts the same installed APK directly at the requested route.
+            check_screen() {
+              local route="$1"
+              local expected_title="$2"
+              local file="dist/runtime-test/window-${route}.xml"
+              echo "=== Runtime screen smoke: ${route} ==="
+              adb shell am force-stop com.mashxall.unified
+              adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN "$route" | tee "dist/runtime-test/launch-${route}.txt"
+              sleep 12
+              local pid
+              pid="$(adb shell pidof com.mashxall.unified | tr -d '\\r')"
+              if [[ -z "$pid" ]]; then
+                echo "FAIL: app process died while opening route: $route"
+                adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+                exit 1
+              fi
+              adb shell uiautomator dump /sdcard/mashxall-window.xml > "dist/runtime-test/uiautomator-${route}.txt"
+              adb pull /sdcard/mashxall-window.xml "$file" >/dev/null
+              if ! grep -Eq "$expected_title" "$file"; then
+                echo "FAIL: expected title not visible for route: $route"
+                cat "$file"
+                adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+                exit 1
+              fi
+              echo "PASS: route $route remained active; title matched."
+            }
+
+            # Prayer is the first data-intensive screen; the remaining tests verify the
+            # most important independent libraries also open and render on Android 11.
+            check_screen prayer 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة'
+            if ! grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window-prayer.xml; then
+              echo "FAIL: Fajr label is missing from the rendered prayer screen."
+              cat dist/runtime-test/window-prayer.xml
               exit 1
             fi
+            check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
+            if ! grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/window-quran.xml; then
+              echo "FAIL: expected Quran verse text is missing from the rendered Quran screen."
+              cat dist/runtime-test/window-quran.xml
+              exit 1
+            fi
+            check_screen hadith 'فەرموودەکان|الأحاديث|Hadith'
+            if ! grep -Eq '8202|٨٬٢٠٢|٨٢٠٢' dist/runtime-test/window-hadith.xml; then
+              echo "FAIL: expected source Hadith count was not visible."
+              cat dist/runtime-test/window-hadith.xml
+              exit 1
+            fi
+            check_screen books 'کتێبخانە|المكتبة|Book library'
+            if ! grep -q '94' dist/runtime-test/window-books.xml; then
+              echo "FAIL: expected 94-record source book catalogue was not visible."
+              cat dist/runtime-test/window-books.xml
+              exit 1
+            fi
+            check_screen word_by_word 'شیکردنەوەی وشە بە وشە|تفسير كلمة بكلمة|Word-by-word analysis'
+            check_screen farmuda 'فەرموودە و دوعاکان|المأثورات والأدعية|Supplications & sayings'
 
-            adb shell uiautomator dump /sdcard/mashxall-window.xml > dist/runtime-test/uiautomator-dump.txt
-            adb pull /sdcard/mashxall-window.xml dist/runtime-test/window.xml >/dev/null
             adb logcat -d -v threadtime > dist/runtime-test/logcat.txt
-
-            if ! grep -Eq 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة' dist/runtime-test/window.xml; then
-              echo "FAIL: Prayer Times screen title was not found in the visible Android UI tree."
-              cat dist/runtime-test/window.xml
-              exit 1
-            fi
-            if ! grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window.xml; then
-              echo "FAIL: expected Fajr label was not found on the Prayer Times screen."
-              cat dist/runtime-test/window.xml
-              exit 1
-            fi
             if grep -E 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' dist/runtime-test/logcat.txt; then
-              echo "FAIL: Android reported a fatal runtime error."
+              echo "FAIL: Android reported a fatal runtime error while exercising the screens."
               exit 1
             fi
 
             cat > dist/runtime-test/RESULT.txt <<'EOF'
             PASS
-            APK installed on an Android 11 (API 30) emulator.
-            MainActivity launched directly into Prayer Times and remained running.
-            UI automation found the prayer-time title and Fajr label.
-            Full logcat, UI hierarchy, install result, and APK checksum are attached.
-            This is a CI emulator smoke test; it is not a substitute for testing device sensors/audio on the user's realme phone.
+            APK installed on Android 11 (API 30).
+            Prayer, Quran, Hadith, 94-book catalogue, word-analysis, and Farmuda screens were opened directly.
+            UI automation verified the prayer-time title and Fajr label, Quran text, hadith-count display, and catalogue count.
+            No fatal process exception was found in the captured logcat.
+            This CI emulator run does not replace checking GPS sensors, compass accuracy, adhan playback, and local alarm permissions on the user's realme phone.
             EOF
             cat dist/runtime-test/RESULT.txt
 
