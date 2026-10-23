@@ -4,6 +4,18 @@ set -euo pipefail
 : "${APK_PATH:?The successful build APK path must be supplied by the workflow}"
 mkdir -p dist/runtime-test
 
+# Bound every ADB call so a hung emulator command cannot occupy the runner for
+# the workflow's full 45-minute timeout. The APK install gets a longer limit.
+ADB_BIN="$(command -v adb)"
+if [[ -z "$ADB_BIN" ]]; then
+  echo "FAIL: adb executable was not found in PATH."
+  exit 1
+fi
+MASHXALL_ADB_TIMEOUT_SECONDS="${MASHXALL_ADB_TIMEOUT_SECONDS:-180}"
+adb() {
+  timeout --foreground "${MASHXALL_ADB_TIMEOUT_SECONDS}s" "$ADB_BIN" "$@"
+}
+
 adb wait-for-device
 
 # On slow Android 11 CI emulators, sys.boot_completed may become 1 before
@@ -12,7 +24,7 @@ adb wait-for-device
 # never becomes ready.
 package_ready=0
 for attempt in $(seq 1 60); do
-  if adb shell pm list packages >/dev/null 2>dist/runtime-test/package-manager-check.txt; then
+  if timeout --foreground 15s "$ADB_BIN" shell pm list packages >/dev/null 2>dist/runtime-test/package-manager-check.txt; then
     package_ready=1
     echo "PackageManager ready after $attempt check(s)." | tee dist/runtime-test/package-manager-ready.txt
     break
@@ -23,7 +35,7 @@ if [[ "$package_ready" -ne 1 ]]; then
   echo "FAIL: PackageManager never became ready; app installation was not attempted." | tee dist/runtime-test/install.txt
   adb shell getprop > dist/runtime-test/getprop.txt || true
   adb shell service list > dist/runtime-test/services.txt 2>&1 || true
-  adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+  timeout --foreground 20s "$ADB_BIN" logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
   exit 1
 fi
 
@@ -31,7 +43,7 @@ adb logcat -c
 install_success=0
 for attempt in 1 2 3; do
   echo "Install attempt $attempt/3" | tee -a dist/runtime-test/install.txt
-  if adb install --no-streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
+  if timeout --foreground 300s "$ADB_BIN" install --no-streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
     install_success=1
     break
   fi
@@ -168,12 +180,12 @@ check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy
 if ! grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/window-quran.xml; then
   echo "FAIL: expected Quran verse text is missing from the rendered Quran screen."
   echo "Capturing the Android logcat because the Quran route opened but the verse query returned no visible content."
-  adb logcat -d -v threadtime > dist/runtime-test/logcat-quran-data-failure.txt || true
+  timeout --foreground 20s "$ADB_BIN" logcat -d -v threadtime > dist/runtime-test/logcat-quran-data-failure.txt || true
   echo "=== Relevant Mashxall database errors ==="
   grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|SQLite|Unable to open|quran\.db|no such column|no such table' \
     dist/runtime-test/logcat-quran-data-failure.txt | tail -n 100 || true
   echo "=== APK content asset inventory (selected paths) ==="
-  adb shell run-as com.mashxall.unified find files/content-databases -maxdepth 1 -type f -printf '%f %s bytes\\n' 2>&1 | head -n 50 || true
+  timeout --foreground 15s "$ADB_BIN" shell run-as com.mashxall.unified find files/content-databases -maxdepth 1 -type f -print 2>&1 | head -n 50 || true
   cat dist/runtime-test/window-quran.xml
   exit 1
 fi
