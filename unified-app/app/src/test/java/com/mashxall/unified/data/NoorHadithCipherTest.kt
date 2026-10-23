@@ -42,10 +42,39 @@ class NoorHadithCipherTest {
     }
 
     @Test
-    fun mapsSourceCollectionCodesToHumanReadableNames() {
-        assertEquals("صحيح البخاري", NoorHadithCipher.collectionArabic("Bukhari"))
-        assertEquals("Sahih al-Bukhari", NoorHadithCipher.collectionEnglish("Bukhari"))
+    fun mapsEverySourceCollectionCodeToReadableArabicAndEnglishNames() {
+        val expected = mapOf(
+            "AbuDawud" to ("سنن أبي داود" to "Sunan Abu Dawud"),
+            "Adab" to ("الأدب المفرد" to "Al-Adab Al-Mufrad"),
+            "Bukhari" to ("صحيح البخاري" to "Sahih al-Bukhari"),
+            "IbnMajah" to ("سنن ابن ماجه" to "Sunan Ibn Majah"),
+            "Malik" to ("موطأ مالك" to "Muwatta Malik"),
+            "Maram" to ("بلوغ المرام" to "Bulugh al-Maram"),
+            "Muslim" to ("صحيح مسلم" to "Sahih Muslim"),
+            "Nasai" to ("سنن النسائي" to "Sunan al-Nasa'i"),
+            "Saliheen" to ("رياض الصالحين" to "Riyad as-Salihin"),
+            "Tirmidhi" to ("جامع الترمذي" to "Jami at-Tirmidhi")
+        )
+        expected.forEach { (code, names) ->
+            assertEquals("Arabic collection name for $code", names.first, NoorHadithCipher.collectionArabic(code))
+            assertEquals("English collection name for $code", names.second, NoorHadithCipher.collectionEnglish(code))
+        }
         assertEquals("", NoorHadithCipher.collectionArabic("UnlistedCollection"))
+        assertEquals("", NoorHadithCipher.collectionEnglish("UnlistedCollection"))
+    }
+
+    @Test
+    fun formatsMultipleRelatedHadithReferenceTokensWithoutLosingSourceInformation() {
+        val formatted = NoorHadithCipher.formatReference(
+            "DarusSalam 1:2:3, USC, in-book 4:5",
+            "صحيح البخاري"
+        )
+        assertTrue(formatted.contains("دار السلام"))
+        assertTrue(formatted.contains("بەرگی 1"))
+        assertTrue(formatted.contains("پەرتووکى 2"))
+        assertTrue(formatted.contains("حدیثی ژمارە 3"))
+        assertTrue(formatted.contains("4 حدیثی ژمارە 5"))
+        assertTrue(!formatted.contains("USC"))
     }
 
     @Test
