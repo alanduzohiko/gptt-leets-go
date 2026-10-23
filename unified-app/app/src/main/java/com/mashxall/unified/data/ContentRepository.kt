@@ -969,24 +969,79 @@ object ContentRepository {
         }
     }
 
-    suspend fun loadCities(context: Context): List<City> = withContext(Dispatchers.IO) {
-        val noorCities = queryDb(context, PRAYER_DB, emptyList<City>()) { db ->
-            db.rawQuery("SELECT city,lat,lon FROM cities ORDER BY city", null).use { c ->
+    /**
+     * Search the city catalogue on demand instead of loading all 166k Salawati
+     * locations into Compose state. Results preserve the country so same-name
+     * cities in different countries remain selectable.
+     */
+    suspend fun searchCities(context: Context, query: String = "", limit: Int = 220): List<City> = withContext(Dispatchers.IO) {
+        val term = query.trim()
+        val pageLimit = limit.coerceIn(20, 300)
+        val pattern = "%$term%"
+        val noor = queryDb(context, PRAYER_DB, emptyList<City>()) { db ->
+            val sql = if (term.isBlank()) {
+                """
+                SELECT city,lat,lon
+                FROM cities
+                ORDER BY CASE
+                    WHEN lower(city) LIKE '%sulaymaniyah%' OR lower(city) LIKE '%sulaimani%' OR lower(city) LIKE '%halabja%' THEN 0
+                    WHEN lower(city) LIKE '%erbil%' OR lower(city) LIKE '%kirkuk%' OR lower(city) LIKE '%baghdad%' THEN 1
+                    WHEN lower(city) LIKE '%duhok%' OR lower(city) LIKE '%mosul%' THEN 2
+                    ELSE 3 END, city
+                LIMIT ?
+                """.trimIndent()
+            } else {
+                """
+                SELECT city,lat,lon FROM cities
+                WHERE city LIKE ?
+                ORDER BY CASE WHEN lower(city)=lower(?) THEN 0 WHEN lower(city) LIKE lower(?) THEN 1 ELSE 2 END,city
+                LIMIT ?
+                """.trimIndent()
+            }
+            val args = if (term.isBlank()) arrayOf(pageLimit.toString())
+                else arrayOf(pattern, term, "$term%", pageLimit.toString())
+            db.rawQuery(sql, args).use { c ->
                 buildList {
                     while (c.moveToNext()) add(City(c.string("city"), c.double("lat"), c.double("lon"), ""))
                 }
             }
         }
-        val salawatiCities = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
-            db.rawQuery(
+        val salawati = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
+            val where = if (term.isBlank()) {
                 """
+                (
+                    lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%'
+                    OR lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
+                    OR lower(l.name) LIKE '%halabja%' OR lower(l.name) LIKE '%erbil%'
+                    OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%kirkuk%'
+                    OR lower(l.name) LIKE '%baghdad%' OR lower(l.name) LIKE '%duhok%'
+                    OR lower(l.name) LIKE '%mosul%' OR lower(l.name) LIKE '%basra%'
+                    OR lower(l.name) LIKE '%najaf%' OR lower(l.name) LIKE '%karbala%'
+                )
+                """.trimIndent()
+            } else "(l.name LIKE ? OR country.name LIKE ?)"
+            val sql = """
                 SELECT DISTINCT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
                 FROM location l
                 JOIN prayer_time pt ON pt.location_id=l._id
                 LEFT JOIN country ON country._id=l.country_id
-                ORDER BY country_name,l.name
-                """.trimIndent(), null
-            ).use { c ->
+                WHERE $where
+                ORDER BY
+                    CASE
+                        WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0
+                        WHEN lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%' THEN 1
+                        ELSE 2
+                    END,
+                    CASE WHEN lower(l.name)=lower(?) THEN 0 WHEN lower(l.name) LIKE lower(?) THEN 1 ELSE 2 END,
+                    country_name,l.name
+                LIMIT ?
+            """.trimIndent()
+            val args = if (term.isBlank()) {
+                arrayOf("", "", pageLimit.toString())
+            } else {
+                arrayOf(pattern, pattern, term, "$term%", pageLimit.toString())
+            }
+            db.rawQuery(sql, args).use { c ->
                 buildList {
                     while (c.moveToNext()) add(
                         City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name"))
@@ -994,10 +1049,59 @@ object ContentRepository {
                 }
             }
         }
-        (noorCities + salawatiCities)
+        (noor + salawati)
             .distinctBy { "${it.name.trim().lowercase(Locale.ROOT)}|${it.country.trim().lowercase(Locale.ROOT)}" }
-            .sortedWith(compareBy<City> { it.country.lowercase(Locale.ROOT) }.thenBy { it.name.lowercase(Locale.ROOT) })
+            .let { results ->
+                if (term.isBlank()) results
+                else results.sortedWith(
+                    compareBy<City> {
+                        when {
+                            it.name.equals(term, true) -> 0
+                            it.name.startsWith(term, true) -> 1
+                            it.country.equals(term, true) -> 2
+                            else -> 3
+                        }
+                    }.thenBy { it.country.lowercase(Locale.ROOT) }.thenBy { it.name.lowercase(Locale.ROOT) }
+                )
+            }
     }
+
+    suspend fun findCityByName(context: Context, name: String, countryName: String = ""): City? = withContext(Dispatchers.IO) {
+        val noor = queryDb(context, PRAYER_DB, null as City?) { db ->
+            db.rawQuery(
+                "SELECT city,lat,lon FROM cities WHERE lower(city)=lower(?) LIMIT 1",
+                arrayOf(name)
+            ).use { c ->
+                if (c.moveToFirst()) City(c.string("city"), c.double("lat"), c.double("lon")) else null
+            }
+        }
+        if (noor != null && countryName.isBlank()) return@withContext noor
+        queryDb(context, SALAWATI_DB, noor) { db ->
+            val sql = if (countryName.isBlank()) {
+                """
+                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
+                FROM location l LEFT JOIN country ON country._id=l.country_id
+                WHERE lower(l.name)=lower(?)
+                ORDER BY CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END
+                LIMIT 1
+                """.trimIndent()
+            } else {
+                """
+                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
+                FROM location l LEFT JOIN country ON country._id=l.country_id
+                WHERE lower(l.name)=lower(?) AND lower(country.name)=lower(?)
+                LIMIT 1
+                """.trimIndent()
+            }
+            val args = if (countryName.isBlank()) arrayOf(name) else arrayOf(name, countryName)
+            db.rawQuery(sql, args).use { c ->
+                if (c.moveToFirst()) City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name")) else noor
+            }
+        }
+    }
+
+    /** Limited compatibility helper for callers that only need common city choices. */
+    suspend fun loadCities(context: Context): List<City> = searchCities(context, "", limit = 250)
 
     suspend fun loadPrayerTimes(context: Context, city: String, date: Date = Date()): PrayerRow? = withContext(Dispatchers.IO) {
         val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
@@ -1059,6 +1163,84 @@ object ContentRepository {
         }
     }
 
+    private suspend fun loadNearbyTimetableRows(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        date: Date,
+        radiusKm: Double
+    ): List<PrayerRow> = withContext(Dispatchers.IO) {
+        val monthDay = SimpleDateFormat("MM-dd", Locale.US).format(date)
+        val latDelta = radiusKm / 110.6
+        val lonDelta = radiusKm / (111.32 * kotlin.math.cos(Math.toRadians(latitude)).let { kotlin.math.abs(it).coerceAtLeast(0.15) })
+        val minLat = (latitude - latDelta).coerceAtLeast(-90.0)
+        val maxLat = (latitude + latDelta).coerceAtMost(90.0)
+        val minLon = (longitude - lonDelta).coerceAtLeast(-180.0)
+        val maxLon = (longitude + lonDelta).coerceAtMost(180.0)
+        val noorRows = queryDb(context, PRAYER_DB, emptyList<PrayerRow>()) { db ->
+            db.rawQuery(
+                """
+                SELECT c.city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,c.lat,c.lon
+                FROM staticprayertimes pt
+                JOIN cities c ON lower(c.city)=lower(pt.city)
+                WHERE pt.date=?
+                  AND c.lat BETWEEN ? AND ?
+                  AND c.lon BETWEEN ? AND ?
+                ORDER BY ((c.lat-?)*(c.lat-?)) + ((c.lon-?)*(c.lon-?))
+                LIMIT 120
+                """.trimIndent(),
+                arrayOf(
+                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
+                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
+                )
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        PrayerRow(
+                            city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
+                            sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
+                            maghrib=c.string("maghrib"), isha=c.string("isha"),
+                            source="noor:${c.string("city")}", latitude=c.double("lat"), longitude=c.double("lon")
+                        )
+                    )
+                }
+            }
+        }
+        val salawatiRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
+            db.rawQuery(
+                """
+                SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                       l.latitude AS lat,l.longitude AS lon,COALESCE(country.name,'') AS country_name
+                FROM prayer_time pt
+                JOIN location l ON l._id=pt.location_id
+                LEFT JOIN country ON country._id=l.country_id
+                WHERE pt.date=?
+                  AND l.latitude BETWEEN ? AND ?
+                  AND l.longitude BETWEEN ? AND ?
+                ORDER BY ((l.latitude-?)*(l.latitude-?)) + ((l.longitude-?)*(l.longitude-?))
+                LIMIT 120
+                """.trimIndent(),
+                arrayOf(
+                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
+                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
+                )
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        PrayerRow(
+                            city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
+                            sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
+                            maghrib=c.string("maghrib"), isha=c.string("isha"),
+                            source="salawati:${c.string("city")}, ${c.string("country_name")}",
+                            latitude=c.double("lat"), longitude=c.double("lon")
+                        )
+                    )
+                }
+            }
+        }
+        noorRows + salawatiRows
+    }
+
     suspend fun loadPrayerTimesAtLocation(
         context: Context,
         latitude: Double,
@@ -1068,25 +1250,24 @@ object ContentRepository {
         asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
         staticRadiusKm: Double = 7.0
     ): PrayerRow = withContext(Dispatchers.IO) {
-        val nearest = loadCities(context)
-            .map { city -> city to PrayerTimeCalculator.distanceKm(latitude, longitude, city.latitude, city.longitude) }
-            .filter { it.second <= staticRadiusKm }
+        val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
+            .mapNotNull { row ->
+                val rowLat = row.latitude ?: return@mapNotNull null
+                val rowLon = row.longitude ?: return@mapNotNull null
+                val distance = PrayerTimeCalculator.distanceKm(latitude, longitude, rowLat, rowLon)
+                if (distance <= staticRadiusKm) row to distance else null
+            }
             .sortedBy { it.second }
-        for ((city, distance) in nearest) {
-            val row = if (city.country.isNotBlank()) {
-                loadSalawatiPrayerTimesForCity(context, city, date)
-            } else {
-                loadPrayerTimes(context, city.name, date)
-            }
-            if (row != null) {
-                return@withContext row.copy(
-                    source = "${row.source} • ${"%.1f".format(Locale.US, distance)}km",
-                    latitude = latitude,
-                    longitude = longitude
-                )
-            }
+        val nearest = candidates.firstOrNull()
+        if (nearest != null) {
+            nearest.first.copy(
+                source = "${nearest.first.source} • ${"%.1f".format(Locale.US, nearest.second)}km",
+                latitude = latitude,
+                longitude = longitude
+            )
+        } else {
+            PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool)
         }
-        PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool)
     }
 
     suspend fun loadBooks(context: Context, query: String = ""): List<BookItem> = withContext(Dispatchers.IO) {
