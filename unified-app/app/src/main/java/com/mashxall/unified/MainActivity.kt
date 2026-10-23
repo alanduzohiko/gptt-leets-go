@@ -697,7 +697,8 @@ private fun HomeScreen(
                             AppLanguage.EN -> "Prayer settings"
                             AppLanguage.AR -> "إعدادات الصلاة"
                             AppLanguage.CKB -> "ڕێکخستنەکانی نوێژ"
-                        }, color = foreground.copy(alpha = 0.63f), fontSize = 11.sp
+                        }, color = foreground.copy(alpha = 0.63f), fontSize = 11.sp,
+                        modifier = Modifier.clickable { onOpen(AppScreen.PRAYER) }
                     )
                 }
             }
