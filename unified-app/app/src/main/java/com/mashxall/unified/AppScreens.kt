@@ -154,20 +154,42 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
-    var showUnvowelled by rememberSaveable { mutableStateOf(false) }
+    var showSurahList by rememberSaveable { mutableStateOf(true) }
+    var showReaderSettings by remember { mutableStateOf(false) }
+    var selectedTafsirBook by rememberSaveable {
+        mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
+            AppLanguage.EN -> "sahih"
+            AppLanguage.AR -> "mukhtasar"
+            AppLanguage.CKB -> "roshn"
+        })
+    }
+    var selectedAyahForSheet by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var sheetVerse by remember { mutableStateOf<Ayah?>(null) }
+    var sheetTafsir by remember { mutableStateOf("") }
+    var sheetRelatedHadith by remember { mutableStateOf<List<AyahHadith>>(emptyList()) }
+    var sheetLoading by remember { mutableStateOf(false) }
+    var showSheetHadith by remember { mutableStateOf(false) }
+    var showSheetWordStudy by remember { mutableStateOf(false) }
+    var sheetWords by remember { mutableStateOf<List<WordItem>>(emptyList()) }
+    var sheetWordLoading by remember { mutableStateOf(false) }
+    var sheetAudioPlaying by remember { mutableStateOf(false) }
     LaunchedEffect(mushafMode) { onImmersiveMushaf(mushafMode) }
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
     }
     androidx.activity.compose.BackHandler(enabled = mushafMode) {
-        mushafMode = false
+        if (selectedAyahForSheet != null) selectedAyahForSheet = null
+        else {
+            mushafMode = false
+            showSurahList = true
+        }
     }
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
-    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode) {
-        if (mushafMode) {
+    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList) {
+        if (mushafMode || showSurahList) {
             loading = false
             return@LaunchedEffect
         }
@@ -184,8 +206,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
         loading = false
     }
-    LaunchedEffect(verses, initialAyah, query) {
-        if (query.isBlank() && verses.isNotEmpty()) {
+    LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode) {
+        if (!showSurahList && !mushafMode && query.isBlank() && verses.isNotEmpty()) {
             val startAt = verses.indexOfFirst { it.number >= initialAyah }
             if (startAt >= 0) listState.scrollToItem(startAt)
         }
@@ -193,8 +215,37 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val currentSurah = surahs.firstOrNull { it.number == selected }
     val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
         ?: ContentRepository.quranTranslations.first()
+    LaunchedEffect(selectedAyahForSheet, language, translationKey, selectedTafsirBook) {
+        val target = selectedAyahForSheet
+        if (target == null) {
+            sheetVerse = null
+            sheetTafsir = ""
+            sheetRelatedHadith = emptyList()
+            sheetWords = emptyList()
+            showSheetHadith = false
+            showSheetWordStudy = false
+            sheetAudioPlaying = false
+            return@LaunchedEffect
+        }
+        sheetLoading = true
+        sheetVerse = null
+        showSheetHadith = false
+        showSheetWordStudy = false
+        try {
+            val versesForSurah = ContentRepository.loadAyahs(context, target.first, language.key, translationKey = translationKey)
+            sheetVerse = versesForSurah.firstOrNull { it.number == target.second }
+            sheetTafsir = ContentRepository.loadTafsir(context, selectedTafsirBook, target.first, target.second)
+            sheetRelatedHadith = ContentRepository.loadHadithsForAyah(context, target.first, target.second)
+        } catch (_: Exception) {
+            sheetVerse = null
+            sheetTafsir = ""
+            sheetRelatedHadith = emptyList()
+        } finally {
+            sheetLoading = false
+        }
+    }
     Column(Modifier.fillMaxSize()) {
-        if (!mushafMode) {
+        if (!mushafMode && !showSurahList) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -308,16 +359,104 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     mushafPage = requested.coerceIn(1, 604)
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
                 },
-                onExitFullscreen = { mushafMode = false },
+                onExitFullscreen = {
+                    mushafMode = false
+                    showSurahList = true
+                },
+                onReaderSettings = { showReaderSettings = true },
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
                     onOpenVerse(surahNumber, ayahNumber)
                     prefs.edit().putInt("last_surah", surahNumber).putInt("last_ayah_number", ayahNumber).apply()
                     query = ""
-                    mushafMode = false
+                    selectedAyahForSheet = surahNumber to ayahNumber
                 }
             )
+        } else if (showSurahList) {
+            Column(Modifier.fillMaxSize()) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(tr(language, "quran"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Choose a surah to open the printed Mushaf"
+                                    AppLanguage.AR -> "اختر سورة لفتح المصحف المطبوع"
+                                    AppLanguage.CKB -> "سوورەتێک هەڵبژێرە بۆ کردنەوەی مصحەف"
+                                }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp
+                            )
+                        }
+                        TextButton(onClick = { showReaderSettings = true }) {
+                            Text("⚙", color = Gold, fontSize = 24.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    SearchBox(query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
+                }
+                val filteredSurahs = surahs.filter { item ->
+                    query.isBlank() || item.arabicName.contains(query.trim(), true) ||
+                        item.englishName.contains(query.trim(), true) ||
+                        item.number.toString() == query.trim()
+                }
+                if (surahs.isEmpty()) {
+                    LoadingOrEmpty(true, language, foreground)
+                } else LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 13.dp, vertical = 5.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    items(filteredSurahs, key = { it.number }) { item ->
+                        val placeLabel = when {
+                            item.place.contains("meccan", ignoreCase = true) || item.place.contains("makki", ignoreCase = true) ->
+                                when (language) { AppLanguage.EN -> "Meccan"; AppLanguage.AR -> "مكية"; AppLanguage.CKB -> "مەککی" }
+                            item.place.contains("medinan", ignoreCase = true) || item.place.contains("madani", ignoreCase = true) ->
+                                when (language) { AppLanguage.EN -> "Medinan"; AppLanguage.AR -> "مدنية"; AppLanguage.CKB -> "مەدەنی" }
+                            else -> item.place
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                selected = item.number
+                                onSurah(item.number)
+                                query = ""
+                                showSurahList = false
+                                scope.launch {
+                                    val firstVerse = ContentRepository.loadAyahs(context, item.number, language.key, translationKey = "none").firstOrNull()
+                                    mushafPage = (firstVerse?.page ?: 1).coerceIn(1, 604)
+                                    prefs.edit().putInt("last_mushaf_page", mushafPage).putInt("last_surah", item.number).putInt("last_ayah_number", 1).apply()
+                                    mushafMode = true
+                                }
+                            },
+                            colors = CardDefaults.cardColors(containerColor = cardColor),
+                            shape = RoundedCornerShape(18.dp),
+                            border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.16f))
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.13f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(item.number.toString(), color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.arabicName, color = foreground, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                    Text(item.englishName, color = foreground.copy(alpha = 0.68f), fontSize = 11.sp)
+                                    Text(
+                                        listOf(
+                                            item.ayahCount.toString() + " " + when (language) { AppLanguage.EN -> "verses"; AppLanguage.AR -> "آية"; AppLanguage.CKB -> "ئایەت" },
+                                            placeLabel
+                                        ).filter { it.isNotBlank() }.joinToString(" • "),
+                                        color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
+                                    )
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+                            }
+                        }
+                    }
+                }
+            }
         } else if (verses.isEmpty()) {
             LoadingOrEmpty(loading, language, foreground)
         } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -651,6 +790,7 @@ private fun MushafPageViewer(
     page: Int,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
+    onReaderSettings: () -> Unit,
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -738,15 +878,19 @@ private fun MushafPageViewer(
             OutlinedTextField(
                 value = pageInput,
                 onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.width(112.dp),
-                label = { Text(if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە") },
+                modifier = Modifier.width(100.dp),
+                label = { Text(if (language == AppLanguage.EN) "Page" else if (language == AppLanguage.AR) "صفحة" else "پەڕە") },
                 singleLine = true
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Button(onClick = {
                 pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
             }) {
                 Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            }
+            Spacer(Modifier.width(5.dp))
+            OutlinedButton(onClick = onReaderSettings) {
+                Text(if (language == AppLanguage.EN) "Settings" else if (language == AppLanguage.AR) "الإعدادات" else "ڕێکخستن", fontSize = 10.sp)
             }
         }
         Spacer(Modifier.height(7.dp))
@@ -790,7 +934,10 @@ private fun MushafPageViewer(
                                             if (x in 0f..1148f && y in 0f..1641f) {
                                                 scope.launch {
                                                     val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
-                                                    if (hit != null) selectedVerse = hit
+                                                    if (hit != null) {
+                                                 selectedVerse = hit
+                                                 onVerseClick(hit.surah, hit.ayah)
+                                             }
                                                 }
                                             }
                                         }
@@ -862,7 +1009,10 @@ private fun MushafPageViewer(
                 items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
                     FilterChip(
                         selected = selectedVerse == verse,
-                        onClick = { selectedVerse = verse },
+                        onClick = {
+                            selectedVerse = verse
+                            onVerseClick(verse.surah, verse.ayah)
+                        },
                         label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
                         leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
                     )
