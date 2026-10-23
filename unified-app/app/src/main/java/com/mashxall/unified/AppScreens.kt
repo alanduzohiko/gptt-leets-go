@@ -1580,7 +1580,8 @@ private object AudioController {
 private val MASHXALL_BACKUP_PREFS = listOf(
     "mashxall_preferences",
     "mashxall_azkar_progress",
-    "mashxall_azkar_favorites"
+    "mashxall_azkar_favorites",
+    "mashxall_farmuda_favorites"
 )
 
 private fun createMashxallBackup(context: Context): org.json.JSONObject {
