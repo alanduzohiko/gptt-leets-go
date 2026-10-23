@@ -4023,6 +4023,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var times by remember { mutableStateOf<PrayerRow?>(null) }
     var tomorrowTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
@@ -4423,9 +4424,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         Spacer(Modifier.height(14.dp))
         if (times == null) LoadingOrEmpty(loading, language, foreground) else {
             val timeItems = listOf(
-                tr(language, "fajr") to times!!.fajr, tr(language, "sunrise") to times!!.sunrise,
-                tr(language, "dhuhr") to times!!.dhuhr, tr(language, "asr") to times!!.asr,
-                tr(language, "maghrib") to times!!.maghrib, tr(language, "isha") to times!!.isha
+                tr(language, "fajr") to formatPrayerTime(times!!.fajr, language, use24Hour),
+                tr(language, "sunrise") to formatPrayerTime(times!!.sunrise, language, use24Hour),
+                tr(language, "dhuhr") to formatPrayerTime(times!!.dhuhr, language, use24Hour),
+                tr(language, "asr") to formatPrayerTime(times!!.asr, language, use24Hour),
+                tr(language, "maghrib") to formatPrayerTime(times!!.maghrib, language, use24Hour),
+                tr(language, "isha") to formatPrayerTime(times!!.isha, language, use24Hour)
             )
             timeItems.chunked(2).forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -4503,7 +4507,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(3.dp))
-                        Text(nextPrayerTarget.timeText, color = Color(0xFFF1D78D), fontSize = 14.sp)
+                        Text(formatPrayerTime(nextPrayerTarget.timeText, language, use24Hour), color = Color(0xFFF1D78D), fontSize = 14.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
