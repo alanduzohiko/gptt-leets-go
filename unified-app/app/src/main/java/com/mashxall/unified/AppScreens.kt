@@ -2953,7 +2953,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
     var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         val encrypted = pendingExportBytes
         pendingExportBytes = null
@@ -2991,40 +2991,43 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
+            var candidateBytes: ByteArray? = null
             try {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                candidateBytes = context.contentResolver.openInputStream(uri)?.use { input ->
                     val result = input.readBytes()
-                    require(result.size in 1..(16 * 1024 * 1024)) { "Backup file is empty or too large" }
+                    require(result.size in 1..(40 * 1024 * 1024)) { "Backup file is empty or too large" }
                     result
                 } ?: error("Could not read the selected file")
-                val envelope = org.json.JSONObject(String(bytes, Charsets.UTF_8))
-                when (envelope.optString("format")) {
-                    BackupCrypto.FORMAT -> {
-                        pendingImportBytes?.fill(0)
-                        pendingImportBytes = bytes
-                        importPassword = ""
-                        importError = ""
-                        showImportPasswordDialog = true
-                        status = ""
-                    }
-                    "mashxall-backup" -> {
-                        // Backwards compatibility for older, unencrypted exports.
-                        restoreMashxallBackup(context, envelope)
-                        bytes.fill(0)
-                        status = when (language) {
-                            AppLanguage.EN -> "Legacy unencrypted backup restored. New exports are encrypted."
-                            AppLanguage.AR -> "تمت استعادة نسخة قديمة غير مشفّرة. النسخ الجديدة تُشفّر تلقائيًا."
-                            AppLanguage.CKB -> "پاشەکەوتی کۆنی نهێنیکراو نەبوو گەڕێندرایەوە؛ پاشەکەوتی نوێ نهێنی دەکرێت."
-                        }
-                        Toast.makeText(context, status, Toast.LENGTH_LONG).show()
-                        (context as? android.app.Activity)?.recreate()
-                    }
-                    else -> {
-                        bytes.fill(0)
+                val serialized = String(candidateBytes, Charsets.UTF_8)
+                if (serialized.startsWith("format=${BackupCrypto.FORMAT}\n")) {
+                    // New encrypted envelope is a portable line format, so test and
+                    // production code do not depend on Android's org.json stubs.
+                    pendingImportBytes?.fill(0)
+                    pendingImportBytes = candidateBytes
+                    candidateBytes = null
+                    importPassword = ""
+                    importError = ""
+                    showImportPasswordDialog = true
+                    status = ""
+                } else {
+                    // Backwards compatibility for earlier unencrypted JSON exports.
+                    val envelope = org.json.JSONObject(serialized)
+                    if (envelope.optString("format") != "mashxall-backup") {
                         error("Not a recognized Mashxall backup file")
                     }
+                    restoreMashxallBackup(context, envelope)
+                    candidateBytes?.fill(0)
+                    candidateBytes = null
+                    status = when (language) {
+                        AppLanguage.EN -> "Legacy unencrypted backup restored. New exports are encrypted."
+                        AppLanguage.AR -> "تمت استعادة نسخة قديمة غير مشفّرة. النسخ الجديدة تُشفّر تلقائيًا."
+                        AppLanguage.CKB -> "پاشەکەوتی کۆنی نهێنیکراو نەبوو گەڕێندرایەوە؛ پاشەکەوتی نوێ نهێنی دەکرێت."
+                    }
+                    Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+                    (context as? android.app.Activity)?.recreate()
                 }
             } catch (_: Exception) {
+                candidateBytes?.fill(0)
                 status = when (language) {
                     AppLanguage.EN -> "Import failed. Select a valid Mashxall backup file."
                     AppLanguage.AR -> "فشل الاستيراد. اختر ملف نسخة احتياطية صالحًا من مەشخەڵ."
@@ -3088,7 +3091,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
-            onClick = { importLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream")) },
+            onClick = { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "text/json", "*/*")) },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(if (language == AppLanguage.EN) "Restore from a backup file" else if (language == AppLanguage.AR) "استعادة من ملف نسخة احتياطية" else "لە فایلی پاشەکەوتەوە بیگەڕێنەوە")
@@ -3170,7 +3173,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
                             exportPassword = ""
                             confirmExportPassword = ""
                             exportError = ""
-                            exportLauncher.launch("Mashxall-Backup.encrypted.json")
+                            exportLauncher.launch("Mashxall-Backup.mashxall")
                         } catch (_: Exception) {
                             pendingExportBytes?.fill(0)
                             pendingExportBytes = null
