@@ -77,6 +77,10 @@ check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
 check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
+check_screen home 'دڵت ڕووناک بکە|أضئ قلبك بالمعرفة|Let knowledge light your heart'
+check_screen library 'کتێبخانەی ئیسلامی|المكتبة الإسلامية|Islamic library'
+check_screen worship 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
+check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
 adb logcat -d -v threadtime > dist/runtime-test/logcat.txt
 if grep -E 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' dist/runtime-test/logcat.txt; then
