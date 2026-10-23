@@ -5343,6 +5343,7 @@ fun WordAnalysisScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val favoritesPrefs = remember { context.getSharedPreferences("mashxall_farmuda_favorites", Context.MODE_PRIVATE) }
@@ -5353,6 +5354,8 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var favorites by remember {
         mutableStateOf(favoritesPrefs.getStringSet("farmuda_ids", emptySet()).orEmpty().toSet())
     }
+    var selectedRecord by remember { mutableStateOf<FarmudaItem?>(null) }
+
     LaunchedEffect(query) {
         loading = true
         records = ContentRepository.loadFarmuda(context, query.trim())
@@ -5397,17 +5400,31 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             )
         } else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(visibleRecords, key = { it.id }) { item ->
-                var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
                 val isFavorite = favorites.contains(item.id.toString())
                 val title = item.title.ifBlank { item.badiniTitle }
+                val preview = when (language) {
+                    AppLanguage.CKB -> item.sorani.ifBlank { item.arabic }
+                    AppLanguage.AR -> item.arabic.ifBlank { item.sorani }
+                    AppLanguage.EN -> item.sorani.ifBlank { item.arabic }
+                }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardColor),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f)),
+                    modifier = Modifier.fillMaxWidth().clickable { selectedRecord = item }
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Column(Modifier.weight(1f)) {
+                                Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp)
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Supplication / transmitted text"
+                                        AppLanguage.AR -> "دعاء أو مأثور"
+                                        AppLanguage.CKB -> "دوعا یان دەقی مەئسور"
+                                    }, color = foreground.copy(alpha = 0.54f), fontSize = 10.sp
+                                )
+                            }
                             IconButton(onClick = {
                                 val key = item.id.toString()
                                 favorites = if (isFavorite) favorites - key else favorites + key
@@ -5415,58 +5432,106 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }) {
                                 Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 22.sp)
                             }
-                            Text(if (expanded) "−" else "+", color = Gold, fontSize = 20.sp)
                         }
-                        Spacer(Modifier.height(7.dp))
-                        when (language) {
-                            AppLanguage.CKB -> {
-                                if (item.sorani.isNotBlank()) Text(item.sorani, color = foreground.copy(alpha = 0.84f), fontSize = 13.sp, lineHeight = 21.sp)
-                                else if (item.arabic.isNotBlank()) Text(item.arabic, color = foreground, fontSize = 16.sp, lineHeight = 27.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                            }
-                            AppLanguage.AR -> {
-                                if (item.arabic.isNotBlank()) Text(item.arabic, color = foreground, fontSize = 16.sp, lineHeight = 27.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                                else Text(item.title, color = foreground, fontSize = 13.sp, lineHeight = 20.sp)
-                            }
-                            AppLanguage.EN -> {
-                                if (item.arabic.isNotBlank()) {
-                                    Text(item.arabic, color = foreground, fontSize = 16.sp, lineHeight = 27.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                                    Spacer(Modifier.height(5.dp))
-                                }
-                                Text(
-                                    "The supplied source includes Arabic and Kurdish descriptions for this item; no separate English translation is present.",
-                                    color = foreground.copy(alpha = 0.57f), fontSize = 10.sp, lineHeight = 16.sp
-                                )
-                            }
+                        if (preview.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            val cleanPreview = cleanHadithDisplayText(preview)
+                            Text(
+                                if (cleanPreview.length > 125) cleanPreview.take(125).trimEnd() + "…" else cleanPreview,
+                                color = foreground.copy(alpha = 0.8f),
+                                fontSize = if (language == AppLanguage.AR) 16.sp else 12.sp,
+                                lineHeight = if (language == AppLanguage.AR) 27.sp else 20.sp,
+                                maxLines = 3,
+                                textAlign = if (language == AppLanguage.AR) TextAlign.End else TextAlign.Start,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-                        if (expanded) {
-                            Spacer(Modifier.height(10.dp))
-                            if (item.title.isNotBlank()) {
-                                Text(if (language == AppLanguage.EN) "Source title" else if (language == AppLanguage.AR) "العنوان الأصلي" else "ناونیشانی سەرچاوە", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text(item.title, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
-                            }
-                            if (item.arabic.isNotBlank()) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(if (language == AppLanguage.EN) "Arabic description" else if (language == AppLanguage.AR) "الوصف العربي" else "ڕوونکردنەوەی عەرەبی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text(item.arabic, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 19.sp)
-                            }
-                            if (item.sorani.isNotBlank()) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(if (language == AppLanguage.EN) "Sorani Kurdish" else if (language == AppLanguage.AR) "الكردية السورانية" else "کوردی سۆرانی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text(item.sorani, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 19.sp)
-                            }
-                            if (item.badiniTitle.isNotBlank() && item.badiniTitle != item.title) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(if (language == AppLanguage.EN) "Badini title" else if (language == AppLanguage.AR) "العنوان الباديني" else "ناونیشانی بادینی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text(item.badiniTitle, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
-                            }
-                            if (item.badini.isNotBlank() && item.badini != item.sorani) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(if (language == AppLanguage.EN) "Badini Kurdish" else if (language == AppLanguage.AR) "الكردية البادينية" else "کوردی بادینی", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text(item.badini, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 19.sp)
-                            }
+                        Spacer(Modifier.height(9.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Read full text"
+                                    AppLanguage.AR -> "قراءة النص كاملًا"
+                                    AppLanguage.CKB -> "دەقەکە بە تەواوی بخوێنەوە"
+                                }, color = Gold, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, modifier = Modifier.weight(1f)
+                            )
+                            Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    selectedRecord?.let { item ->
+        val title = item.title.ifBlank { item.badiniTitle }
+        ModalBottomSheet(
+            onDismissRequest = { selectedRecord = null },
+            containerColor = cardColor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Text(title, color = Gold, fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 29.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Original source text and available Kurdish renderings are kept separate below."
+                        AppLanguage.AR -> "النص الأصلي والترجمات الكردية المتاحة مفصولة أدناه."
+                        AppLanguage.CKB -> "دەقی ڕەسەن و وەرگێڕانە کوردییە بەردەستەکان لە خوارەوە جیاکراونەتەوە."
+                    }, color = foreground.copy(alpha = 0.56f), fontSize = 11.sp, lineHeight = 17.sp
+                )
+                if (item.arabic.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "ARABIC" else if (language == AppLanguage.AR) "النص العربي" else "دەقی عەرەبی", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(cleanHadithDisplayText(item.arabic), color = foreground, fontSize = 20.sp, lineHeight = 34.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                }
+                if (item.sorani.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "SORANI KURDISH" else if (language == AppLanguage.AR) "الكردية السورانية" else "کوردی سۆرانی", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(cleanHadithDisplayText(item.sorani), color = foreground.copy(alpha = 0.86f), fontSize = 14.sp, lineHeight = 25.sp)
+                }
+                if (item.badini.isNotBlank() && item.badini != item.sorani) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "BADINI KURDISH" else if (language == AppLanguage.AR) "الكردية البادينية" else "کوردی بادینی", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(cleanHadithDisplayText(item.badini), color = foreground.copy(alpha = 0.86f), fontSize = 14.sp, lineHeight = 25.sp)
+                }
+                if (item.title.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(if (language == AppLanguage.EN) "SOURCE TITLE" else if (language == AppLanguage.AR) "عنوان المصدر" else "ناونیشانی سەرچاوە", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(item.title), color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 20.sp)
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                        val key = item.id.toString()
+                        favorites = if (favorites.contains(key)) favorites - key else favorites + key
+                        favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
+                    }) {
+                        Text(if (favorites.contains(item.id.toString())) "★" else "☆", color = Gold)
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (language == AppLanguage.EN) "Favourite" else if (language == AppLanguage.AR) "مفضلة" else "دڵخواز", fontSize = 11.sp)
+                    }
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                        val combined = buildList {
+                            add(title)
+                            if (item.arabic.isNotBlank()) add(item.arabic)
+                            if (item.sorani.isNotBlank()) add(item.sorani)
+                            if (item.badini.isNotBlank() && item.badini != item.sorani) add(item.badini)
+                        }.joinToString("\n\n")
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall supplication", combined))
+                        Toast.makeText(context, if (language == AppLanguage.EN) "Text copied" else if (language == AppLanguage.AR) "تم نسخ النص" else "دەقەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی", fontSize = 11.sp)
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
