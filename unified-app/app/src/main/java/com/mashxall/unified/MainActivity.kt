@@ -3,6 +3,7 @@ package com.mashxall.unified
 import android.os.Bundle
 import android.content.Intent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -172,6 +173,7 @@ fun MashxallApp(startScreen: String? = null) {
             } ?: AppScreen.HOME.key
         )
     }
+    var navigationStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
@@ -181,6 +183,29 @@ fun MashxallApp(startScreen: String? = null) {
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
     val rootScreens = setOf("home", "quran", "library", "worship", "prayer")
     val isRoot = screen in rootScreens
+
+    fun navigateTo(target: String) {
+        if (target == screen) return
+        navigationStack = if (target in rootScreens) {
+            emptyList()
+        } else {
+            (navigationStack + screen).takeLast(32)
+        }
+        screen = target
+    }
+
+    fun navigateBack() {
+        if (navigationStack.isNotEmpty()) {
+            screen = navigationStack.last()
+            navigationStack = navigationStack.dropLast(1)
+        } else {
+            screen = if (screen in rootScreens) AppScreen.HOME.key else AppScreen.LIBRARY.key
+        }
+        audioStartsAtReciters = false
+    }
+
+    BackHandler(enabled = !isRoot) { navigateBack() }
+
     val background = if (dark) Ink else Color(0xFFF4F1E7)
     val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
     val cardColor = if (dark) Panel else Color.White
@@ -200,6 +225,7 @@ fun MashxallApp(startScreen: String? = null) {
                     contentWindowInsets = WindowInsets.statusBars,
                     bottomBar = {
                         if (isRoot) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
+                            navigationStack = emptyList()
                             screen = target
                             audioStartsAtReciters = false
                         }
@@ -209,12 +235,12 @@ fun MashxallApp(startScreen: String? = null) {
                         AppHeader(
                             language = language, foreground = foreground, isDark = dark,
                             onLanguage = { language = it; prefs.edit().putString("language", it.key).apply() },
-                            onBack = { screen = if (screen == "backup") "settings" else if (screen in rootScreens) "home" else "library" },
-                            onSettings = { screen = AppScreen.SETTINGS.key }, showBack = !isRoot
+                            onBack = { navigateBack() },
+                            onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot
                         )
                         Box(Modifier.fillMaxSize()) {
                             when (screen) {
-                                "home" -> HomeScreen(language, foreground, cardColor) { screen = it.key }
+                                "home" -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "quran" -> QuranScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
                                     onSurah = { s ->
@@ -225,7 +251,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     onTafsir = { s, a ->
                                         selectedSurah = s; selectedAyah = a
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
-                                        screen = "tafsir"
+                                        navigateTo("tafsir")
                                     },
                                     onBookmark = { s, a ->
                                         selectedSurah = s; selectedAyah = a
@@ -243,15 +269,15 @@ fun MashxallApp(startScreen: String? = null) {
                                         selectedAyah = a
                                         audioStartsAtReciters = true
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
-                                        screen = "audio"
+                                        navigateTo("audio")
                                     }
                                 )
-                                "library" -> LibraryScreen(language, foreground, cardColor) { screen = it.key }
-                                "worship" -> WorshipScreen(language, foreground, cardColor) { screen = it.key }
+                                "library" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = {
                                     selectedCity = it
                                     prefs.edit().putString("selected_city", it).apply()
-                                }, onQibla = { screen = "qibla" })
+                                }, onQibla = { navigateTo("qibla") })
                                 "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
                                     selectedSurah = s; selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
@@ -261,11 +287,12 @@ fun MashxallApp(startScreen: String? = null) {
                                 "names" -> NamesScreen(language, foreground, cardColor)
                                 "tasbih" -> TasbihScreen(language, foreground, cardColor)
                                 "audio" -> AudioScreen(language, foreground, cardColor, selectedSurah, selectedAyah, audioStartsAtReciters)
-                                "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; screen = "pdf" })
+                                "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "pdf" -> PdfReaderScreen(language, foreground, selectedPdf)
                                 "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
                                     selectedSurah = s; selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                    navigationStack = emptyList()
                                     screen = "quran"
                                 })
                                 "lexicon" -> LexiconScreen(language, foreground, cardColor)
@@ -275,9 +302,9 @@ fun MashxallApp(startScreen: String? = null) {
                                 "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
-                                }, onDataInfo = { screen = "library" }, onBackup = { screen = "backup" })
+                                }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor) { screen = it.key }
+                                else -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
                             }
                         }
                     }
