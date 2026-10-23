@@ -342,7 +342,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
-                                }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
+                                }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") }, onAudio = { navigateTo("audio") }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor, selectedCity) { navigateTo(it.key) }
                             }
