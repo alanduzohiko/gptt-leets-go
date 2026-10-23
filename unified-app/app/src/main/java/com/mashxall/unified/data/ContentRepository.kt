@@ -989,12 +989,19 @@ object ContentRepository {
             )
         }
         val salawatiItems = loadSalawatiAzkarItems(context, query)
-        val seenArabic = enrichedNoor.map { normalizeArabicKey(it.arabic) }
-            .filter { it.isNotBlank() }
-            .toMutableSet()
+        // The same Arabic remembrance can legitimately appear in multiple chapters
+        // (for example, a morning and an evening section). De-duplicate only the
+        // same Arabic text in the same normalized category and chapter, not by text
+        // alone, so we never silently discard a distinct source context.
+        fun identity(item: AzkarItem): String = listOf(
+            normalizeArabicKey(item.arabic),
+            item.categoryId.toString(),
+            normalizeArabicKey(item.titleCkb.ifBlank { item.titleAr.ifBlank { item.titleEn } })
+        ).joinToString("|")
+        val seenEntries = enrichedNoor.map(::identity).toMutableSet()
         val uniqueSalawati = salawatiItems.filter { item ->
-            val key = normalizeArabicKey(item.arabic)
-            if (key.isBlank()) true else seenArabic.add(key)
+            val key = identity(item)
+            key == "||" || seenEntries.add(key)
         }
         (enrichedNoor + uniqueSalawati).distinctBy { it.id }
     }
