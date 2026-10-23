@@ -79,6 +79,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -2240,53 +2241,93 @@ private fun restoreMashxallBackup(context: Context, root: org.json.JSONObject) {
 fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     var status by rememberSaveable { mutableStateOf("") }
+    var showExportPasswordDialog by remember { mutableStateOf(false) }
+    var showImportPasswordDialog by remember { mutableStateOf(false) }
+    var exportPassword by rememberSaveable { mutableStateOf("") }
+    var confirmExportPassword by rememberSaveable { mutableStateOf("") }
+    var importPassword by rememberSaveable { mutableStateOf("") }
+    var exportError by rememberSaveable { mutableStateOf("") }
+    var importError by rememberSaveable { mutableStateOf("") }
+    var pendingExportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
-        if (uri == null) {
-            status = if (language == AppLanguage.EN) "Backup cancelled." else if (language == AppLanguage.AR) "تم إلغاء النسخ الاحتياطي." else "پاشەکەوتکردن هەڵوەشایەوە."
+        val encrypted = pendingExportBytes
+        pendingExportBytes = null
+        if (uri == null || encrypted == null) {
+            encrypted?.fill(0)
+            status = when (language) {
+                AppLanguage.EN -> "Backup export cancelled."
+                AppLanguage.AR -> "تم إلغاء تصدير النسخة الاحتياطية."
+                AppLanguage.CKB -> "هەناردەکردنی پاشەکەوت هەڵوەشایەوە."
+            }
         } else {
             try {
-                val json = createMashxallBackup(context)
-                val stream = context.contentResolver.openOutputStream(uri) ?: error("Could not open the selected destination")
-                stream.bufferedWriter(Charsets.UTF_8).use { it.write(json.toString(2)) }
+                val output = context.contentResolver.openOutputStream(uri) ?: error("Could not open the selected destination")
+                output.use { it.write(encrypted) }
                 status = when (language) {
-                    AppLanguage.EN -> "Backup saved successfully."
-                    AppLanguage.AR -> "تم حفظ النسخة الاحتياطية بنجاح."
-                    AppLanguage.CKB -> "پاشەکەوت بە سەرکەوتوویی هەڵگیرا."
+                    AppLanguage.EN -> "Encrypted backup saved successfully."
+                    AppLanguage.AR -> "تم حفظ النسخة الاحتياطية المشفّرة بنجاح."
+                    AppLanguage.CKB -> "پاشەکەوتی نهێنیکراو بە سەرکەوتوویی هەڵگیرا."
                 }
                 Toast.makeText(context, status, Toast.LENGTH_LONG).show()
             } catch (_: Exception) {
                 status = when (language) {
-                    AppLanguage.EN -> "Could not save the backup. Choose another folder."
-                    AppLanguage.AR -> "تعذر حفظ النسخة الاحتياطية. اختر مجلدًا آخر."
-                    AppLanguage.CKB -> "نەتوانرا پاشەکەوت بگیرێت؛ فۆڵدەرێکی تر هەڵبژێرە."
+                    AppLanguage.EN -> "Could not save the encrypted backup. Choose another folder."
+                    AppLanguage.AR -> "تعذر حفظ النسخة المشفّرة. اختر مجلدًا آخر."
+                    AppLanguage.CKB -> "نەتوانرا پاشەکەوتی نهێنیکراو هەڵبگیرێت؛ فۆڵدەرێکی تر هەڵبژێرە."
                 }
                 Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+            } finally {
+                encrypted.fill(0)
             }
         }
     }
+
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             try {
-                val json = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
-                    org.json.JSONObject(it.readText())
+                val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                    val result = input.readBytes()
+                    require(result.size in 1..(16 * 1024 * 1024)) { "Backup file is empty or too large" }
+                    result
                 } ?: error("Could not read the selected file")
-                restoreMashxallBackup(context, json)
-                status = when (language) {
-                    AppLanguage.EN -> "Backup restored. Reopening saved data…"
-                    AppLanguage.AR -> "تمت الاستعادة. جارٍ إعادة فتح البيانات…"
-                    AppLanguage.CKB -> "پاشەکەوت گەڕێندرایەوە؛ داتاکان نوێ دەکرێنەوە…"
+                val envelope = org.json.JSONObject(String(bytes, Charsets.UTF_8))
+                when (envelope.optString("format")) {
+                    BackupCrypto.FORMAT -> {
+                        pendingImportBytes?.fill(0)
+                        pendingImportBytes = bytes
+                        importPassword = ""
+                        importError = ""
+                        showImportPasswordDialog = true
+                        status = ""
+                    }
+                    "mashxall-backup" -> {
+                        // Backwards compatibility for older, unencrypted exports.
+                        restoreMashxallBackup(context, envelope)
+                        bytes.fill(0)
+                        status = when (language) {
+                            AppLanguage.EN -> "Legacy unencrypted backup restored. New exports are encrypted."
+                            AppLanguage.AR -> "تمت استعادة نسخة قديمة غير مشفّرة. النسخ الجديدة تُشفّر تلقائيًا."
+                            AppLanguage.CKB -> "پاشەکەوتی کۆنی نهێنیکراو نەبوو گەڕێندرایەوە؛ پاشەکەوتی نوێ نهێنی دەکرێت."
+                        }
+                        Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+                        (context as? android.app.Activity)?.recreate()
+                    }
+                    else -> {
+                        bytes.fill(0)
+                        error("Not a recognized Mashxall backup file")
+                    }
                 }
-                Toast.makeText(context, status, Toast.LENGTH_LONG).show()
-                (context as? android.app.Activity)?.recreate()
             } catch (_: Exception) {
                 status = when (language) {
-                    AppLanguage.EN -> "Restore failed. Select a valid Mashxall backup file."
-                    AppLanguage.AR -> "فشلت الاستعادة. اختر ملف نسخة احتياطية صالحًا من مەشخەڵ."
-                    AppLanguage.CKB -> "گەڕاندنەوە سەرکەوتوو نەبوو؛ فایلی پاشەکەوتی دروستی مەشخەڵ هەڵبژێرە."
+                    AppLanguage.EN -> "Import failed. Select a valid Mashxall backup file."
+                    AppLanguage.AR -> "فشل الاستيراد. اختر ملف نسخة احتياطية صالحًا من مەشخەڵ."
+                    AppLanguage.CKB -> "هاوردەکردن سەرکەوتوو نەبوو؛ فایلی پاشەکەوتی دروستی مەشخەڵ هەڵبژێرە."
                 }
                 Toast.makeText(context, status, Toast.LENGTH_LONG).show()
             }
@@ -2304,9 +2345,9 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
         Spacer(Modifier.height(10.dp))
         Text(
             when (language) {
-                AppLanguage.EN -> "Export your personal settings to a JSON file, or restore them later on this or another Android phone."
-                AppLanguage.AR -> "صدّر إعداداتك الشخصية إلى ملف JSON، أو استعدها لاحقًا على هذا الهاتف أو هاتف Android آخر."
-                AppLanguage.CKB -> "ڕێکخستن و زانیارییە تایبەتییەکانت وەک فایلی JSON هەڵگرە و دواتر لە مۆبایلێکی تر بیگەڕێنەوە."
+                AppLanguage.EN -> "Export your personal settings to a password-protected encrypted file, or restore it later on this or another Android phone."
+                AppLanguage.AR -> "صدّر إعداداتك الشخصية إلى ملف مشفّر بكلمة مرور، أو استعده لاحقًا على هذا الهاتف أو هاتف Android آخر."
+                AppLanguage.CKB -> "زانیارییە تایبەتییەکانت بە وشەی نهێنی لە فایلێکی نهێنیکراودا هەڵگرە و دواتر لە هەر مۆبایلێکی Android بیگەڕێنەوە."
             }, color = foreground.copy(alpha = 0.72f), fontSize = 13.sp, lineHeight = 21.sp
         )
         Spacer(Modifier.height(16.dp))
@@ -2336,8 +2377,13 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
             }
         }
         Spacer(Modifier.height(12.dp))
-        Button(onClick = { exportLauncher.launch("Mashxall-Backup.json") }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (language == AppLanguage.EN) "Save backup file" else if (language == AppLanguage.AR) "حفظ ملف النسخة الاحتياطية" else "فایلی پاشەکەوت هەڵبگرە")
+        Button(onClick = {
+            exportPassword = ""
+            confirmExportPassword = ""
+            exportError = ""
+            showExportPasswordDialog = true
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (language == AppLanguage.EN) "Save encrypted backup" else if (language == AppLanguage.AR) "حفظ نسخة احتياطية مشفّرة" else "پاشەکەوتی نهێنیکراو هەڵبگرە")
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
@@ -2351,14 +2397,192 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
         Spacer(Modifier.height(12.dp))
         Text(
             when (language) {
-                AppLanguage.EN -> "Only personal settings and progress are backed up; the bundled Quran, tafsir, audio and books remain in the installed app."
-                AppLanguage.AR -> "تحتوي النسخة على الإعدادات والتقدم الشخصي فقط؛ أما المصحف والتفسير والصوتيات والكتب فتبقى ضمن التطبيق."
-                AppLanguage.CKB -> "پاشەکەوت تەنها ڕێکخستن و پێشکەوتنی تایبەتی دەگرێتەوە؛ قورئان، تەفسیر و کتێبەکان لە ناو ئەپەکەدا دەمێننەوە."
+                AppLanguage.EN -> "The backup is encrypted with your passphrase using authenticated encryption. Keep the passphrase safe; it cannot be recovered. The bundled Quran, tafsir, audio and books remain inside the installed app."
+                AppLanguage.AR -> "تُشفّر النسخة بكلمة المرور باستخدام تشفير موثّق. احتفظ بكلمة المرور؛ لا يمكن استرجاعها. المصحف والتفسير والصوتيات والكتب تبقى ضمن التطبيق."
+                AppLanguage.CKB -> "پاشەکەوتەکە بە وشەی نهێنیت و بە شێوەی نهێنیکردنی پشتڕاستکراو دەپارێزرێت؛ وشەی نهێنی لەبیر مەکە. قورئان و تەفسیر و دەنگ و کتێبەکان لە ناو ئەپەکەدا دەمێننەوە."
             }, color = foreground.copy(alpha = 0.5f), fontSize = 11.sp, lineHeight = 17.sp
         )
     }
-}
 
+    if (showExportPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showExportPasswordDialog = false
+                exportPassword = ""
+                confirmExportPassword = ""
+                exportError = ""
+            },
+            title = {
+                Text(
+                    when (language) { AppLanguage.EN -> "Protect backup"; AppLanguage.AR -> "حماية النسخة الاحتياطية"; AppLanguage.CKB -> "پاراستنی پاشەکەوت" },
+                    color = foreground, fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Choose a passphrase with at least 8 characters. You must enter the same passphrase when restoring this file."
+                            AppLanguage.AR -> "اختر كلمة مرور من 8 أحرف على الأقل. ستحتاج إلى كلمة المرور نفسها عند الاستعادة."
+                            AppLanguage.CKB -> "وشەیەکی نهێنی بە لانیکەم ٨ پیت هەڵبژێرە؛ بۆ گەڕاندنەوە هەمان وشە پێویستە."
+                        }, color = foreground.copy(alpha = 0.75f), fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = exportPassword,
+                        onValueChange = { exportPassword = it; exportError = "" },
+                        label = { Text(if (language == AppLanguage.EN) "Passphrase" else if (language == AppLanguage.AR) "كلمة المرور" else "وشەی نهێنی") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmExportPassword,
+                        onValueChange = { confirmExportPassword = it; exportError = "" },
+                        label = { Text(if (language == AppLanguage.EN) "Confirm passphrase" else if (language == AppLanguage.AR) "تأكيد كلمة المرور" else "دووبارە وشەی نهێنی") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (exportError.isNotBlank()) Text(exportError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    when {
+                        exportPassword.length < 8 -> exportError = when (language) {
+                            AppLanguage.EN -> "Use at least 8 characters."
+                            AppLanguage.AR -> "استخدم 8 أحرف على الأقل."
+                            AppLanguage.CKB -> "لانیکەم ٨ پیت بەکاربهێنە."
+                        }
+                        exportPassword != confirmExportPassword -> exportError = when (language) {
+                            AppLanguage.EN -> "The passphrases do not match."
+                            AppLanguage.AR -> "كلمتا المرور غير متطابقتين."
+                            AppLanguage.CKB -> "وشە نهێنییەکان یەک ناگرنەوە."
+                        }
+                        else -> try {
+                            pendingExportBytes?.fill(0)
+                            pendingExportBytes = BackupCrypto.encrypt(
+                                createMashxallBackup(context).toString(2),
+                                exportPassword.toCharArray()
+                            )
+                            showExportPasswordDialog = false
+                            exportPassword = ""
+                            confirmExportPassword = ""
+                            exportError = ""
+                            exportLauncher.launch("Mashxall-Backup.encrypted.json")
+                        } catch (_: Exception) {
+                            pendingExportBytes?.fill(0)
+                            pendingExportBytes = null
+                            exportError = when (language) {
+                                AppLanguage.EN -> "Could not encrypt the backup on this device."
+                                AppLanguage.AR -> "تعذر تشفير النسخة الاحتياطية على هذا الجهاز."
+                                AppLanguage.CKB -> "نەتوانرا پاشەکەوتەکە لەم ئامێرەدا نهێنی بکرێت."
+                            }
+                            showExportPasswordDialog = true
+                        }
+                    }
+                }) {
+                    Text(if (language == AppLanguage.EN) "Encrypt and continue" else if (language == AppLanguage.AR) "تشفير ومتابعة" else "نهێنی بکە و بەردەوام بە")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showExportPasswordDialog = false
+                    exportPassword = ""
+                    confirmExportPassword = ""
+                    exportError = ""
+                }) {
+                    Text(if (language == AppLanguage.EN) "Cancel" else if (language == AppLanguage.AR) "إلغاء" else "هەڵوەشاندنەوە")
+                }
+            }
+        )
+    }
+
+    if (showImportPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showImportPasswordDialog = false
+                importPassword = ""
+                importError = ""
+                pendingImportBytes?.fill(0)
+                pendingImportBytes = null
+            },
+            title = {
+                Text(
+                    when (language) { AppLanguage.EN -> "Unlock backup"; AppLanguage.AR -> "فتح النسخة الاحتياطية"; AppLanguage.CKB -> "کردنەوەی پاشەکەوت" },
+                    color = foreground, fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Enter the passphrase that was used when this backup was created."
+                            AppLanguage.AR -> "أدخل كلمة المرور التي استُخدمت عند إنشاء هذه النسخة."
+                            AppLanguage.CKB -> "ئەو وشە نهێنییە بنووسە کە کاتی دروستکردنی پاشەکەوتەکە بەکارهاتووە."
+                        }, color = foreground.copy(alpha = 0.75f), fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = importPassword,
+                        onValueChange = { importPassword = it; importError = "" },
+                        label = { Text(if (language == AppLanguage.EN) "Passphrase" else if (language == AppLanguage.AR) "كلمة المرور" else "وشەی نهێنی") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (importError.isNotBlank()) Text(importError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val encrypted = pendingImportBytes
+                    if (encrypted == null) {
+                        importError = if (language == AppLanguage.EN) "No backup file is selected." else if (language == AppLanguage.AR) "لم يتم اختيار ملف نسخة احتياطية." else "هیچ فایلی پاشەکەوت هەڵنەبژێردراوە."
+                    } else if (importPassword.length < 8) {
+                        importError = if (language == AppLanguage.EN) "Enter a passphrase of at least 8 characters." else if (language == AppLanguage.AR) "أدخل كلمة مرور من 8 أحرف على الأقل." else "وشەی نهێنییەک بە لانیکەم ٨ پیت بنووسە."
+                    } else {
+                        try {
+                            val plainText = BackupCrypto.decrypt(encrypted, importPassword.toCharArray())
+                            val backup = org.json.JSONObject(plainText)
+                            restoreMashxallBackup(context, backup)
+                            status = when (language) {
+                                AppLanguage.EN -> "Encrypted backup restored successfully."
+                                AppLanguage.AR -> "تمت استعادة النسخة الاحتياطية المشفّرة بنجاح."
+                                AppLanguage.CKB -> "پاشەکەوتی نهێنیکراو بە سەرکەوتوویی گەڕێندرایەوە."
+                            }
+                            encrypted.fill(0)
+                            pendingImportBytes = null
+                            importPassword = ""
+                            importError = ""
+                            showImportPasswordDialog = false
+                            Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+                            (context as? android.app.Activity)?.recreate()
+                        } catch (_: Exception) {
+                            importError = when (language) {
+                                AppLanguage.EN -> "Could not unlock this backup. Check the passphrase and try again."
+                                AppLanguage.AR -> "تعذر فتح النسخة. تحقق من كلمة المرور وحاول مرة أخرى."
+                                AppLanguage.CKB -> "نەتوانرا پاشەکەوتەکە بکرێتەوە؛ وشەی نهێنی بپشکنە و دووبارە هەوڵ بدەوە."
+                            }
+                        }
+                    }
+                }) {
+                    Text(if (language == AppLanguage.EN) "Decrypt and restore" else if (language == AppLanguage.AR) "فك التشفير والاستعادة" else "نهێنی لاببە و بیگەڕێنەوە")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showImportPasswordDialog = false
+                    importPassword = ""
+                    importError = ""
+                    pendingImportBytes?.fill(0)
+                    pendingImportBytes = null
+                }) {
+                    Text(if (language == AppLanguage.EN) "Cancel" else if (language == AppLanguage.AR) "إلغاء" else "هەڵوەشاندنەوە")
+                }
+            }
+        )
+    }
+}
 
 private fun validDownloadedPdf(file: File): Boolean {
     if (!file.isFile || file.length() < 100L) return false
