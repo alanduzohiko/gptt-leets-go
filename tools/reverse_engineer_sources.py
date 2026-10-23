@@ -322,6 +322,36 @@ def main() -> int:
                         )
                         print(item["context"][:2600], flush=True)
                     print("FOCUSED_NOOR_BOOK_DOWNLOAD_END", flush=True)
+                    print("NOOR_BOOK_BASE_URL_EXACT_BEGIN", flush=True)
+                    # The generated base URL is encoded in one long integer array.
+                    # Print the entire expression (not the per-line 300-character
+                    # context snippets) plus the string decoder and its integer constant.
+                    url_source = decompiled / "sources/p4/d.java"
+                    if url_source.exists():
+                        url_lines = url_source.read_text(encoding="utf-8", errors="replace").splitlines()
+                        for idx, source_line in enumerate(url_lines):
+                            if "f12392a" in source_line:
+                                print(f"BOOK_BASE_URL_SOURCE_LINE {idx + 1}: {source_line}", flush=True)
+                    decoder_source = decompiled / "sources/m5/l.java"
+                    if decoder_source.exists():
+                        decoder_lines = decoder_source.read_text(encoding="utf-8", errors="replace").splitlines()
+                        decoder_matches = [
+                            idx for idx, source_line in enumerate(decoder_lines)
+                            if re.search(r"\\bString\\s+l\\s*\\(\\s*int\\s*\\[\\s*\\]", source_line)
+                        ]
+                        for idx in decoder_matches[:4]:
+                            lo, hi = max(0, idx - 8), min(len(decoder_lines), idx + 55)
+                            print(
+                                f"BOOK_BASE_URL_STRING_DECODER lines={lo + 1}-{hi}",
+                                flush=True,
+                            )
+                            print("\\n".join(f"{i + 1}: {decoder_lines[i]}" for i in range(lo, hi)), flush=True)
+                    measurement_descriptor = decompiled / "sources/com/google/android/gms/dynamite/descriptors/com/google/android/gms/measurement/dynamite/ModuleDescriptor.java"
+                    if measurement_descriptor.exists():
+                        for idx, source_line in enumerate(measurement_descriptor.read_text(encoding="utf-8", errors="replace").splitlines()):
+                            if "MODULE_VERSION" in source_line:
+                                print(f"BOOK_BASE_URL_MODULE_VERSION {idx + 1}: {source_line}", flush=True)
+                    print("NOOR_BOOK_BASE_URL_EXACT_END", flush=True)
 
             app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
