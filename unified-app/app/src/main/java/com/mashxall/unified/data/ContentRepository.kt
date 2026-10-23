@@ -170,6 +170,14 @@ private data class MushafSvgMeta(
     val uncompressedLength: Int, val sha256: String
 )
 
+private fun readableHadithText(value: String): String {
+    val withoutHighlightMarkers = value.replace("<rr>", "").replace("</rr>", "")
+    return Html.fromHtml(withoutHighlightMarkers, Html.FROM_HTML_MODE_LEGACY)
+        .toString()
+        .replace('\u00a0', ' ')
+        .trim()
+}
+
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
 }
@@ -860,9 +868,9 @@ object ContentRepository {
                                 referenceEnglish = referenceEnglish,
                                 verseReference = verseReference,
                                 verseReferences = verseReferences,
-                                arabic = NoorHadithCipher.decrypt(c.string("arabic")),
-                                english = NoorHadithCipher.decrypt(c.string("english")),
-                                kurdish = c.string("kurdish")
+                                arabic = readableHadithText(NoorHadithCipher.decrypt(c.string("arabic"))),
+                                english = readableHadithText(NoorHadithCipher.decrypt(c.string("english"))),
+                                kurdish = readableHadithText(c.string("kurdish"))
                             )
                         )
                     }

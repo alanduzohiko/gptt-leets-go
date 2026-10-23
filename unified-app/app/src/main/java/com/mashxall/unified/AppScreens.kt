@@ -1687,7 +1687,9 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 val favorite = favoriteIds.contains(name.number.toString())
                 val description = when (language) {
                     AppLanguage.CKB -> name.ckb
-                    AppLanguage.AR -> name.arabic
+                    // The bundled names table has no separate Arabic meaning field.
+                    // Do not repeat the Arabic name itself as if it were a meaning.
+                    AppLanguage.AR -> ""
                     AppLanguage.EN -> name.english
                 }
                 Card(
@@ -1703,7 +1705,9 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name.arabic, color = Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                                Text(description, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                                if (description.isNotBlank()) {
+                                    Text(description, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
+                                }
                             }
                             IconButton(onClick = {
                                 val key = name.number.toString()
@@ -1806,6 +1810,27 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             selected?.zikr ?: "سُبْحَانَ اللّٰهِ • اَلْحَمْدُلِلّٰهِ • اَللّٰهُ أَكْبَرُ",
             color = Gold, textAlign = TextAlign.Center, fontSize = 18.sp, lineHeight = 29.sp
         )
+        selected?.targetCount?.takeIf { it > 0 }?.let { target ->
+            Spacer(Modifier.height(6.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Source target: $target repetitions"
+                    AppLanguage.AR -> "العدد المستهدف في المصدر: $target تكرارًا"
+                    AppLanguage.CKB -> "ژمارەی ئامانجی سەرچاوە: $target جار"
+                },
+                color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
+            )
+            if (count >= target) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Target reached"
+                        AppLanguage.AR -> "تم بلوغ العدد المستهدف"
+                        AppLanguage.CKB -> "گەیشتن بە ژمارەی ئامانج"
+                    },
+                    color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                )
+            }
+        }
         if (language == AppLanguage.CKB && !selected?.meaningCkb.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
             Text(selected?.meaningCkb.orEmpty(), color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
@@ -1998,7 +2023,17 @@ fun AudioScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
-                                Text(if (reciter.audioType == 0) "Verse-by-verse" else "Surah audio", color = Gold.copy(alpha = 0.85f), fontSize = 9.sp)
+                                Text(
+                    when {
+                        reciter.audioType == 0 && language == AppLanguage.EN -> "Verse-by-verse"
+                        reciter.audioType == 0 && language == AppLanguage.AR -> "آية بآية"
+                        reciter.audioType == 0 -> "ئایەت بە ئایەت"
+                        language == AppLanguage.EN -> "Surah audio"
+                        language == AppLanguage.AR -> "صوت السورة"
+                        else -> "دەنگی سوورەت"
+                    },
+                    color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
+                )
                                 if (reciter.audioType == 0) {
                                     TextButton(
                                         onClick = {
