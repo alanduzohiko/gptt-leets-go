@@ -50,6 +50,31 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
         detail = "" if db.get("integrity") == "ok" else f"database integrity is {db.get('integrity')!r}"
         record(f"table:{db_path}:{table_name}", passed, rows, f">={minimum_rows} rows", detail)
 
+    def require_columns(db_path: str, table_name: str, expected_columns: tuple[str, ...]) -> None:
+        db = databases.get(db_path)
+        if db is None:
+            record(f"columns:{db_path}:{table_name}", False, "database missing", sorted(expected_columns))
+            return
+        table = next((t for t in db.get("tables", []) if t.get("name") == table_name), None)
+        if table is None:
+            record(f"columns:{db_path}:{table_name}", False, "table missing", sorted(expected_columns))
+            return
+        actual = set(table.get("columns", []))
+        missing = sorted(set(expected_columns) - actual)
+        passed = db.get("integrity") == "ok" and not missing
+        detail = ""
+        if db.get("integrity") != "ok":
+            detail = f"database integrity is {db.get('integrity')!r}"
+        elif missing:
+            detail = "missing required columns: " + ", ".join(missing)
+        record(
+            f"columns:{db_path}:{table_name}",
+            passed,
+            sorted(actual),
+            sorted(expected_columns),
+            detail,
+        )
+
     noor = "content/noor_tafsir_1.2.2/base/assets/"
     salawati = "content/salawati_3.1.3/base/assets/database/"
     khairah = "content/khairah_1.2/base/assets/"
@@ -58,9 +83,22 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
     require_table(noor + "quran.db", "quran", 6236)
     require_table(noor + "quran.db", "surah_name", 114)
     require_table(noor + "quran.db", "audio", 80)
+    require_columns(
+        noor + "quran.db", "quran",
+        ("surah_id", "verse_id", "quran_arabic", "quran_withoutharkat", "page", "has_hadith", "note",
+         "translation_puxta", "translation_raman", "translation_asan", "translation_sanahi"),
+    )
+    require_columns(
+        noor + "quran.db", "surah_name",
+        ("surah_no", "name_arabic", "name_english", "surah_mean_english", "ayah_number", "place", "unique_title"),
+    )
     require_table(noor + "kurdish_transliteration.db", "quran", 6236)
     require_table(noor + "ayah_info.db", "page_data_line", 13000)
     require_table(noor + "ayah_info.db", "v2_tajweed_page_data_line", 12000)
+    require_columns(noor + "ayah_info.db", "page_data_line",
+        ("page_number", "line_number", "surah_id", "verse_id", "min_x", "max_x", "min_y", "max_y"))
+    require_columns(noor + "ayah_info.db", "v2_tajweed_page_data_line",
+        ("page_number", "glyph_id", "line_number", "surah_id", "verse_id", "min_x", "max_x", "min_y", "max_y"))
     require_asset(khairah + "mushaf/pages.bin")
     mushaf_index = generated.get("mushaf_svg_index.json")
     mushaf_pages = mushaf_index.get("page_count") if mushaf_index else None
@@ -93,11 +131,27 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
     require_table(noor + "db_hadith.db", "kitab", 427)
     require_table(noor + "db_hadith.db", "chapters", 6150)
     require_table(noor + "db_hadith_of_ayah.db", "hadith_on_ayah", 1141)
+    require_columns(noor + "db_hadith.db", "hadiths",
+        ("id", "sort", "book_id", "sort_in_book", "kitab_id", "chapter_id", "text", "text_ar", "text_en", "note", "footnote"))
+    require_columns(noor + "db_hadith.db", "book", ("id", "name", "name_ar", "name_en", "count", "type", "sort"))
+    require_columns(noor + "db_hadith.db", "kitab", ("id", "book_id", "kitab_sort", "title", "title_ar", "title_en"))
+    require_columns(noor + "db_hadith.db", "chapters", ("id", "kitab_id", "chapter_sort", "title", "title_ar", "title_en"))
+    require_columns(noor + "db_hadith.db", "articles",
+        ("id", "description", "description_text_ar", "description_text_en", "text", "text_ar", "text_en"))
+    require_columns(noor + "db_hadith_of_ayah.db", "hadith_on_ayah",
+        ("id", "reference", "english", "collection", "verse_reference", "arabic", "kurdish"))
 
     # Full word-by-word morphology and the independent lexicon.
     require_table(noor + "db_word_by_word.db", "quran_corpus", 77429)
     require_table(noor + "db_word_by_word.db", "word_type", 45)
     require_table(noor + "db_words_lexicon.db", "word_list", 620)
+    require_columns(noor + "db_word_by_word.db", "quran_corpus",
+        ("surah_id", "verse_id", "position", "irab", "arabic1", "root", "word_count",
+         "arabic2", "arabic3", "arabic4", "arabic5", "word_type_id1", "word_type_id2",
+         "word_type_id3", "word_type_id4", "word_type_id5"))
+    require_columns(noor + "db_word_by_word.db", "word_type", ("id", "tag", "english", "arabic", "kurdish", "color"))
+    require_columns(noor + "db_words_lexicon.db", "word_list",
+        ("id", "title", "content", "reference", "root", "reference_page", "title_no_diacritics"))
 
     # Prayer sources and the complete offline worship collections.
     require_table(noor + "prayertimes.db", "staticprayertimes", 28000)
@@ -108,6 +162,16 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
     require_table(noor + "prayertimes.db", "azkar_categories", 11)
     require_table(noor + "prayertimes.db", "azkar_chapters", 133)
     require_table(noor + "prayertimes.db", "azkar_items", 287)
+    require_columns(noor + "prayertimes.db", "staticprayertimes",
+        ("city", "date", "fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"))
+    require_columns(noor + "prayertimes.db", "cities", ("city", "lat", "lon"))
+    require_columns(noor + "prayertimes.db", "extra", ("city", "name", "c_order", "c_base", "correction", "has_static"))
+    require_columns(noor + "prayertimes.db", "allah_names",
+        ("_id", "arabic", "surah_ayah", "highlight_section", "sorani", "badini", "english", "farsi", "nu"))
+    require_columns(noor + "prayertimes.db", "azkar_categories", ("_id", "ckb", "ar", "en"))
+    require_columns(noor + "prayertimes.db", "azkar_chapters", ("_id", "category_id", "ckb", "ar", "en"))
+    require_columns(noor + "prayertimes.db", "azkar_items", ("_id", "chapter_id", "counter", "ckb", "ar", "en"))
+    require_columns(noor + "prayertimes.db", "tasbih", ("id", "zikr", "count", "time", "meaning"))
     require_table(salawati + "muslim_db_v2.5.1.db", "country", 252)
     require_table(salawati + "muslim_db_v2.5.1.db", "location", 166404)
     require_table(salawati + "muslim_db_v2.5.1.db", "prayer_time", 45000)
@@ -116,10 +180,21 @@ def verify(catalog: dict[str, Any]) -> dict[str, Any]:
     require_table(salawati + "muslim_db_v2.5.1.db", "azkar_item", 287)
     require_table(salawati + "muslim_db_v2.5.1.db", "name", 99)
     require_table(salawati + "muslim_db_v2.5.1.db", "name_translation", 594)
+    require_columns(salawati + "muslim_db_v2.5.1.db", "location",
+        ("_id", "country_id", "name", "latitude", "longitude", "has_fixed_prayer_time", "prayer_dependent_id"))
+    require_columns(salawati + "muslim_db_v2.5.1.db", "prayer_time",
+        ("_id", "location_id", "date", "fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"))
+    require_columns(salawati + "muslim_db_v2.5.1.db", "name_translation", ("_id", "name_id", "language", "name"))
+    require_columns(salawati + "muslim_db_v2.5.1.db", "azkar_item_translation", ("_id", "item_id", "language", "item_translation"))
 
     # Additional source catalogues.
     require_table(noor + "farmuda.db", "farmuda", 240)
+    require_columns(noor + "farmuda.db", "farmuda",
+        ("_id", "title", "ar_desc", "ku_desc", "badini_title", "badini", "fav_time"))
     require_table(noor + "tn_books.db", "book_data", 94)
+    require_columns(noor + "tn_books.db", "book_data",
+        ("id", "branch", "unique_text", "title", "writer", "description", "page_number", "url", "url_cover",
+         "fav_time", "sorter", "extra_text", "extra_number"))
 
     counts = catalog.get("counts", {})
     record("source_app_count", counts.get("source_apps") == 3, counts.get("source_apps"), 3)

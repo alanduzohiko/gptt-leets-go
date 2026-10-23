@@ -86,6 +86,44 @@ class AuditContentCoverageTests(unittest.TestCase):
         self.assertEqual(11, report["summary"]["hadith_articles_minimum"])
         self.assertEqual(594, report["summary"]["salawati_name_translation_minimum"])
 
+    def test_required_core_columns_pass_when_present(self):
+        quran_path = "content/noor_tafsir_1.2.2/base/assets/quran.db"
+        catalog = {
+            "counts": {},
+            "databases": [{
+                "asset_path": quran_path,
+                "integrity": "ok",
+                "tables": [{
+                    "name": "quran", "rows": 6236,
+                    "columns": [
+                        "surah_id", "verse_id", "quran_arabic", "quran_withoutharkat", "page", "has_hadith",
+                        "note", "translation_puxta", "translation_raman", "translation_asan", "translation_sanahi"
+                    ],
+                }],
+            }],
+        }
+        report = verify(catalog)
+        check = next(item for item in report["checks"] if item["name"] == f"columns:{quran_path}:quran")
+        self.assertTrue(check["passed"], check)
+
+    def test_missing_query_column_fails_even_when_row_count_and_integrity_pass(self):
+        quran_path = "content/noor_tafsir_1.2.2/base/assets/quran.db"
+        catalog = {
+            "counts": {},
+            "databases": [{
+                "asset_path": quran_path,
+                "integrity": "ok",
+                "tables": [{
+                    "name": "quran", "rows": 6236,
+                    "columns": ["surah_id", "verse_id", "quran_arabic"],
+                }],
+            }],
+        }
+        report = verify(catalog)
+        check = next(item for item in report["checks"] if item["name"] == f"columns:{quran_path}:quran")
+        self.assertFalse(check["passed"])
+        self.assertIn("translation_puxta", check["detail"])
+
     def test_database_with_failed_integrity_does_not_pass_by_row_count_alone(self):
         quran_path = "content/noor_tafsir_1.2.2/base/assets/quran.db"
         catalog = {
