@@ -309,7 +309,9 @@ fun MashxallApp(startScreen: String? = null) {
                                     language, foreground, cardColor, selectedCity,
                                     onOpen = { navigateTo(it.key) },
                                     onResumeReading = {
-                                        resumeMushafRequested = true
+                                        // First-time users should still see the surah list;
+                                        // resume only after a real Mushaf page was saved.
+                                        resumeMushafRequested = prefs.contains("last_mushaf_page")
                                         navigateTo(AppScreen.QURAN.key)
                                     }
                                 )
