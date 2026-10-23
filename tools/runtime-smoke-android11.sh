@@ -194,7 +194,7 @@ patterns = re.compile(r"فاتح|الفاتحة|الفاتِحَة|al[- ]?fatiha
 for node in nodes:
     if patterns.search(node.attrib.get("text", "").strip()):
         bounds = node.attrib.get("bounds", "")
-        match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
         if match:
             x1, y1, x2, y2 = map(int, match.groups())
             print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -204,7 +204,7 @@ for node in nodes:
 for node in nodes:
     if node.attrib.get("text", "").strip() == "1":
         bounds = node.attrib.get("bounds", "")
-        match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
         if match:
             x1, y1, x2, y2 = map(int, match.groups())
             print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -257,7 +257,7 @@ for node in root.iter("node"):
     if node.attrib.get("text", "").strip() not in {"1:1", "١:١"}:
         continue
     bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -275,6 +275,7 @@ sleep 7
 adb shell uiautomator dump /sdcard/mashxall-quran-verse-actions.xml > dist/runtime-test/uiautomator-quran-verse-actions.txt 2>&1 || true
 adb pull /sdcard/mashxall-quran-verse-actions.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
 if ! python3 - dist/runtime-test/window-quran.xml <<'PY'
+import re
 import sys
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -321,7 +322,7 @@ except Exception:
 for node in root.iter("node"):
     if not re.search(r"Exit|خروج|دەرچوون", node.attrib.get("text", ""), re.I):
         continue
-    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", node.attrib.get("bounds", ""))
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
