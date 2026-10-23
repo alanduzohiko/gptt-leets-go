@@ -45,6 +45,15 @@ data class AyahHadith(
     val english: String,
     val kurdish: String
 )
+data class HadithCollection(
+    val id: Int,
+    val name: String,
+    val nameArabic: String,
+    val nameEnglish: String,
+    val hadithCount: Int,
+    val kind: Int,
+    val sort: Int
+)
 data class HadithItem(
     val id: Int,
     val sort: Int,
@@ -675,21 +684,63 @@ object ContentRepository {
         }
     }
 
-    private fun hadithSearchFilter(query: String): String = if (query.isBlank()) "" else """
-        WHERE h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
-           OR b.name LIKE ? OR b.name_ar LIKE ? OR b.name_en LIKE ?
-           OR k.title LIKE ? OR k.title_ar LIKE ? OR k.title_en LIKE ?
-           OR ch.title LIKE ? OR ch.title_ar LIKE ? OR ch.title_en LIKE ?
-           OR h.note LIKE ? OR h.footnote LIKE ?
-    """.trimIndent()
+    suspend fun loadHadithCollections(context: Context): List<HadithCollection> = withContext(Dispatchers.IO) {
+        queryDb(context, HADITH_DB, emptyList()) { db ->
+            db.rawQuery(
+                "SELECT id,name,name_ar,name_en,count,type,sort FROM book ORDER BY sort,name",
+                null
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        HadithCollection(
+                            id = c.int("id"),
+                            name = c.string("name"),
+                            nameArabic = c.string("name_ar"),
+                            nameEnglish = c.string("name_en"),
+                            hadithCount = c.int("count"),
+                            kind = c.int("type"),
+                            sort = c.int("sort")
+                        )
+                    )
+                }
+            }
+        }
+    }
 
-    private fun hadithSearchArgs(query: String): Array<String> =
-        Array(14) { "%${query.trim()}%" }
+    private fun hadithSearchFilter(query: String, bookId: Int? = null): String {
+        val conditions = buildList {
+            if (bookId != null) add("h.book_id=?")
+            if (query.isNotBlank()) {
+                add(
+                    """
+                    (
+                        h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
+                        OR b.name LIKE ? OR b.name_ar LIKE ? OR b.name_en LIKE ?
+                        OR k.title LIKE ? OR k.title_ar LIKE ? OR k.title_en LIKE ?
+                        OR ch.title LIKE ? OR ch.title_ar LIKE ? OR ch.title_en LIKE ?
+                        OR h.note LIKE ? OR h.footnote LIKE ?
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+        return if (conditions.isEmpty()) "" else "WHERE " + conditions.joinToString(" AND ")
+    }
 
-    suspend fun loadHadithCount(context: Context, query: String = ""): Int = withContext(Dispatchers.IO) {
+    private fun hadithSearchArgs(query: String, bookId: Int? = null): Array<String> =
+        buildList {
+            if (bookId != null) add(bookId.toString())
+            if (query.isNotBlank()) repeat(14) { add("%${query.trim()}%") }
+        }.toTypedArray()
+
+    suspend fun loadHadithCount(
+        context: Context,
+        query: String = "",
+        bookId: Int? = null
+    ): Int = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, 0) { db ->
-            val filter = hadithSearchFilter(query)
-            val args = if (query.isBlank()) null else hadithSearchArgs(query)
+            val filter = hadithSearchFilter(query, bookId)
+            val args = hadithSearchArgs(query, bookId).takeIf { it.isNotEmpty() }
             db.rawQuery(
                 """
                 SELECT COUNT(DISTINCT h.id)
@@ -707,11 +758,12 @@ object ContentRepository {
         context: Context,
         query: String = "",
         offset: Int = 0,
-        limit: Int = 100
+        limit: Int = 100,
+        bookId: Int? = null
     ): List<HadithItem> = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, emptyList()) { db ->
-            val filter = hadithSearchFilter(query)
-            val baseArgs = if (query.isBlank()) emptyArray() else hadithSearchArgs(query)
+            val filter = hadithSearchFilter(query, bookId)
+            val baseArgs = hadithSearchArgs(query, bookId)
             val args = baseArgs + arrayOf(limit.coerceIn(1, 250).toString(), offset.coerceAtLeast(0).toString())
             val sql = """
                 SELECT h.id,h.sort,h.sort_in_book,h.text_ar,h.text,h.text_en,h.book_id,h.note,h.footnote,
