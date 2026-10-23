@@ -16,6 +16,7 @@ on:
       - "tools/audit_content_wiring.py"
       - "tests/test_audit_content_wiring.py"
       - "tools/reverse_engineer_hadith_decoder.py"
+      - "tools/audit_hadith_decoder.py"
       - ".github/workflows/build-unified-mashxall.yml"
   workflow_dispatch:
     inputs:
@@ -133,6 +134,14 @@ jobs:
             --out unified-app/app/src/main/assets \
             --catalog unified-app/app/src/main/assets/content_catalog.json
 
+      - name: Verify Noor's real encrypted Hadith rows decrypt using the recovered AES key
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python tools/audit_hadith_decoder.py \\
+            --database unified-app/app/src/main/assets/content/noor_tafsir_1.2.2/base/assets/db_hadith_of_ayah.db \\
+            --out dist/hadith-decoder-audit.json
+
       - name: Audit that every referenced content asset exists
         run: |
           set -euo pipefail
@@ -199,6 +208,7 @@ jobs:
             dist/content-catalog.json
             dist/content-wiring-audit.json
             dist/content-coverage-audit.json
+            dist/hadith-decoder-audit.json
             dist/BUILD-STATUS-AR.txt
             dist/reverse-engineering-report.json
           if-no-files-found: warn
