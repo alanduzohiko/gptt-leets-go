@@ -37,6 +37,10 @@ object PrayerAlarmScheduler {
             cancelAll(context)
             return
         }
+        // Always retire the previous locations' pending alarms before creating
+        // a fresh set. If the new city has no valid timetable, old-city alarms
+        // must not remain armed.
+        cancelAll(context)
         val today = startOfDay(Date(), 0)
         val tomorrow = startOfDay(Date(), 1)
         val todayTimes = resolveTimes(context, prefs, today) ?: return

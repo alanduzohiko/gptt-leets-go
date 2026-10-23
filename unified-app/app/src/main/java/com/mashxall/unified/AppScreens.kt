@@ -2695,7 +2695,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, selectedCity, calculationMethod, asrSchool) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
             PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
