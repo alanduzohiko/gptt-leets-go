@@ -5,8 +5,49 @@ set -euo pipefail
 mkdir -p dist/runtime-test
 
 adb wait-for-device
+
+# On slow Android 11 CI emulators, sys.boot_completed may become 1 before
+# PackageManager's Binder service is registered. Confirm that package queries
+# actually work before using adb install, and collect useful diagnostics if it
+# never becomes ready.
+package_ready=0
+for attempt in $(seq 1 60); do
+  if adb shell pm list packages >/dev/null 2>dist/runtime-test/package-manager-check.txt; then
+    package_ready=1
+    echo "PackageManager ready after $attempt check(s)." | tee dist/runtime-test/package-manager-ready.txt
+    break
+  fi
+  sleep 5
+done
+if [[ "$package_ready" -ne 1 ]]; then
+  echo "FAIL: PackageManager never became ready; app installation was not attempted." | tee dist/runtime-test/install.txt
+  adb shell getprop > dist/runtime-test/getprop.txt || true
+  adb shell service list > dist/runtime-test/services.txt 2>&1 || true
+  adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+  exit 1
+fi
+
 adb logcat -c
-adb install --no-streaming "$APK_PATH" | tee dist/runtime-test/install.txt
+install_success=0
+for attempt in 1 2 3; do
+  echo "Install attempt $attempt/3" | tee -a dist/runtime-test/install.txt
+  if adb install --no-streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
+    install_success=1
+    break
+  fi
+  if grep -q "Can't find service: package" dist/runtime-test/install.txt; then
+    echo "PackageManager transiently unavailable; waiting 15 seconds before retry." | tee -a dist/runtime-test/install.txt
+    sleep 15
+  else
+    break
+  fi
+done
+if [[ "$install_success" -ne 1 ]]; then
+  adb shell getprop > dist/runtime-test/getprop.txt || true
+  adb shell service list > dist/runtime-test/services.txt 2>&1 || true
+  adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+  exit 1
+fi
 
 check_screen() {
   local route="$1"
