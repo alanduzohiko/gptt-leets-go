@@ -155,7 +155,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -229,6 +229,17 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
+    LaunchedEffect(resumeLastMushaf) {
+        if (resumeLastMushaf) {
+            selected = prefs.getInt("last_surah", initialSurah).coerceIn(1, 114)
+            mushafPage = prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)
+            query = ""
+            showSurahList = false
+            openingMushaf = false
+            mushafMode = true
+            onResumeMushafHandled()
+        }
+    }
     LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList) {
         if (mushafMode || showSurahList) {
             loading = false
