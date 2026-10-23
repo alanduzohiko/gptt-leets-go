@@ -2614,9 +2614,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
-        PrayerTimesWidgetProvider.requestRefresh(context)
-    }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
         var loadedDate = ""
         while (true) {
