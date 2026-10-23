@@ -67,14 +67,14 @@ jobs:
             # Exercise data-backed screens, not just the launcher and the prayer UI.
             # Every entry starts the same installed APK directly at the requested route.
             check_screen() {
-              local route="$1"
-              local expected_title="$2"
-              local file="dist/runtime-test/window-${route}.xml"
+              route="$1"
+              expected_title="$2"
+              file="dist/runtime-test/window-${route}.xml"
               echo "=== Runtime screen smoke: ${route} ==="
               adb shell am force-stop com.mashxall.unified
               adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN "$route" | tee "dist/runtime-test/launch-${route}.txt"
               sleep 12
-              local pid
+              pid
               pid="$(adb shell pidof com.mashxall.unified | tr -d '\\r')"
               if [ -z "$pid" ]; then
                 echo "FAIL: app process died while opening route: $route"
