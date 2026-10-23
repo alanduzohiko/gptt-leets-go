@@ -1174,9 +1174,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Spacer(Modifier.height(3.dp))
             Text(
                 when (language) {
-                    AppLanguage.EN -> "$totalMatches narrations found • $offset loaded"
-                    AppLanguage.AR -> "عُثر على $totalMatches رواية • تم تحميل $offset"
-                    AppLanguage.CKB -> "$totalMatches فەرموودە دۆزرایەوە • $offset بارکراوە"
+                    AppLanguage.EN -> if (selectedMode == 1) "$totalMatches articles" else "$totalMatches narrations found • $offset loaded"
+                    AppLanguage.AR -> if (selectedMode == 1) "$totalMatches مقالة" else "عُثر على $totalMatches رواية • تم تحميل $offset"
+                    AppLanguage.CKB -> if (selectedMode == 1) "$totalMatches وتار" else "$totalMatches فەرموودە دۆزرایەوە • $offset بارکراوە"
                 }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
             )
             Spacer(Modifier.height(8.dp))
@@ -1265,13 +1265,25 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             Text(localizedBody, color = foreground, fontSize = 13.sp, lineHeight = 23.sp)
                             if (language != AppLanguage.CKB && article.bodyCkb.isNotBlank()) {
                                 TextButton(onClick = { showSorani = !showSorani }) {
-                                    Text(if (showSorani) "Hide Sorani" else "Read Sorani", fontSize = 11.sp)
+                                    Text(
+                                        if (language == AppLanguage.AR) {
+                                            if (showSorani) "إخفاء السورانية" else "عرض السورانية"
+                                        } else {
+                                            if (showSorani) "Hide Sorani" else "Read Sorani"
+                                        }, fontSize = 11.sp
+                                    )
                                 }
                                 if (showSorani) Text(article.bodyCkb, color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 21.sp)
                             }
                             if (language != AppLanguage.EN && article.bodyEnglish.isNotBlank()) {
                                 TextButton(onClick = { showEnglish = !showEnglish }) {
-                                    Text(if (showEnglish) "Hide English" else "English translation", fontSize = 11.sp)
+                                    Text(
+                                        if (language == AppLanguage.AR) {
+                                            if (showEnglish) "إخفاء الإنجليزية" else "الترجمة الإنجليزية"
+                                        } else {
+                                            if (showEnglish) "Hide English" else "English translation"
+                                        }, fontSize = 11.sp
+                                    )
                                 }
                                 if (showEnglish) Text(article.bodyEnglish, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 20.sp)
                             }
