@@ -641,8 +641,11 @@ private fun MushafPageViewer(
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
+    var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
+    var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
@@ -684,6 +687,12 @@ private fun MushafPageViewer(
             failed = bitmap == null
         }
         loading = false
+    }
+    LaunchedEffect(page, selectedVerse) {
+        val selected = selectedVerse
+        verseRects = if (selected == null) emptyList() else {
+            ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
+        }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -737,10 +746,7 @@ private fun MushafPageViewer(
             Box(Modifier.fillMaxSize().padding(5.dp), contentAlignment = Alignment.Center) {
                 when {
                     loading -> CircularProgressIndicator(color = Gold)
-                    bitmap != null -> Image(
-                        bitmap!!.asImageBitmap(),
-                        contentDescription = tr(language, "mushaf_view") + " " + page,
-                        contentScale = ContentScale.Fit,
+                    bitmap != null -> Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
@@ -750,50 +756,40 @@ private fun MushafPageViewer(
                                 translationY = offsetY
                             }
                             .transformable(transformState)
-                            .pointerInput(page, scale) {
-                                detectTapGestures(onDoubleTap = {
-                                    if (scale > 1.01f) {
-                                        scale = 1f
-                                        offsetX = 0f
-                                        offsetY = 0f
-                                    } else {
-                                        scale = 2f
+                            .pointerInput(page, scale, bitmap) {
+                                detectTapGestures(
+                                    onDoubleTap = {
+                                        if (scale > 1.01f) {
+                                            scale = 1f
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        } else {
+                                            scale = 2f
+                                        }
+                                    },
+                                    onTap = { tap ->
+                                        val fit = minOf(size.width / 1148f, size.height / 1641f)
+                                        if (fit > 0f) {
+                                            val left = (size.width - 1148f * fit) / 2f
+                                            val top = (size.height - 1641f * fit) / 2f
+                                            val x = (tap.x - left) / fit
+                                            val y = (tap.y - top) / fit
+                                            if (x in 0f..1148f && y in 0f..1641f) {
+                                                scope.launch {
+                                                    val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
+                                                    if (hit != null) selectedVerse = hit
+                                                }
+                                            }
+                                        }
                                     }
-                                })
-                            }
-                    )
-                    failed -> Text(tr(language, "mushaf_unavailable"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
-                }
-            }
-        }
-        if (pageVerses.isNotEmpty()) {
-            Spacer(Modifier.height(5.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
-                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
-                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
-                },
-                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
-                    AssistChip(
-                        onClick = { onVerseClick(verse.surah, verse.ayah) },
-                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
-                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
-                    )
-                }
-            }
-        }
-        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-le = ContentScale.Fit,
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap!!.asImageBitmap(),
+                            contentDescription = tr(language, "mushaf_view") + " " + page,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()
                         )
                         if (verseRects.isNotEmpty()) {
@@ -825,9 +821,9 @@ le = ContentScale.Fit,
             Spacer(Modifier.height(5.dp))
             Text(
                 when (language) {
-                    AppLanguage.EN -> "Tap the Mushaf text or choose a verse to highlight its original word bounds."
-                    AppLanguage.AR -> "اضغط على نص المصحف أو اختر آية لإظهار حدود كلماتها الأصلية."
-                    AppLanguage.CKB -> "لەسەر دەقی مصحەف دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنووری وشەکانی."
+                    AppLanguage.EN -> "Tap a word in the Mushaf or choose a verse to highlight its original bounds."
+                    AppLanguage.AR -> "اضغط على كلمة في المصحف أو اختر آية لإظهار حدودها الأصلية."
+                    AppLanguage.CKB -> "لەسەر وشەیەک دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنوورە ڕەسەنەکەی."
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
             )
