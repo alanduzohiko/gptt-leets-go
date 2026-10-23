@@ -424,7 +424,7 @@ for node in root.iter("node"):
     if node.attrib.get("text", "").strip() not in {"→", "←"}:
         continue
     bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
