@@ -136,10 +136,19 @@ jobs:
       - name: Audit that every referenced content asset exists
         run: |
           set -euo pipefail
+          mkdir -p dist
           python tools/audit_content_wiring.py \
             --catalog unified-app/app/src/main/assets/content_catalog.json \
             --source-root unified-app/app/src/main/java/com/mashxall/unified \
             --out dist/content-wiring-audit.json
+
+      - name: Verify required content coverage across the three source apps
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python tools/audit_content_coverage.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --out dist/content-coverage-audit.json
 
       - name: Prepare Android SDK
         uses: android-actions/setup-android@v3
@@ -171,14 +180,14 @@ jobs:
           cp "$APK" dist/Mashxall-Unified-debug.apk
           cp unified-app/app/src/main/assets/content_catalog.json dist/content-catalog.json
           cat > dist/BUILD-STATUS-AR.txt <<'EOF'
-          مەشخەڵ — تطبيق أندرويد جديد بثلاث لغات
-          ===========================================
-
-          هذا APK تجريبي مبني من مشروع Android Native مستقل (Kotlin + Jetpack Compose).
-          تم فحص الأرشيف والتوقيع واختبارات البناء، لكن هذا لا يثبت نجاح التشغيل على هاتف فعلي.
-          يجب تثبيت التطبيق وفتحه على Android 11، وتجربة المصحف والتفسير والأذكار والصوتيات ومواقيت الصلاة.
-          إذا أغلق التطبيق، أرفق سجل الانهيار قبل تغيير بيانات المصدر.
-          بعض ملفات تفسير خيرة تستخدم صفحات ثنائية مشفرة/مضغوطة مرتبطة بفهرس خاص؛ تم الاحتفاظ بها في الحزمة الأصلية وتحتاج إلى فك تنسيقها قبل عرض النص داخل الواجهة الجديدة.
+          مەشخەڵ — تطبيق أندرويد أصلي بثلاث لغات
+          ==========================================
+          
+          تحتوي الحزمة على محتوى نور وخيرة وصلواتي بعد التحقق من بصمات APK الأصلية وسلامة SQLite.
+          فحص المحتوى يؤكد الحد الأدنى من الآيات والأحاديث والتفاسير وتحليل الكلمات وكتب PDF والمواقع والأذكار حسب التقرير المرفق.
+          اجتاز البناء واختبارات الوحدة وفحص lint والتوقيع، لكن لم يُختبر التشغيل الفعلي بعد على هاتف realme X2 Pro / Android 11.
+          التنبيهات والأذان تحتاج أذونات المستخدم وإعدادات Android الملائمة.
+          يجب إجراء اختبار فعلي على الجهاز قبل اعتبار الإصدار نهائيًا أو نشره.
           EOF
 
       - name: Upload APK, extracted content catalog and verification report
@@ -189,6 +198,7 @@ jobs:
             dist/Mashxall-Unified-debug.apk
             dist/content-catalog.json
             dist/content-wiring-audit.json
+            dist/content-coverage-audit.json
             dist/BUILD-STATUS-AR.txt
             dist/reverse-engineering-report.json
           if-no-files-found: warn
