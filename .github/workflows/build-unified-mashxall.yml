@@ -18,6 +18,8 @@ on:
       - "tools/reverse_engineer_hadith_decoder.py"
       - "tools/audit_hadith_decoder.py"
       - "tools/audit_prayer_data.py"
+      - "tools/runtime-smoke-android11.sh"
+      - ".github/workflows/runtime-smoke-unified-android.yml"
       - ".github/workflows/build-unified-mashxall.yml"
   workflow_dispatch:
     inputs:
