@@ -44,18 +44,17 @@ jobs:
       - name: Prepare Android 11 emulator image
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0 emulator system-images;android-30;google_apis;x86_64"
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0 emulator system-images;android-30;default;x86_64"
 
       - name: Install and launch the data-enabled app in Android 11
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
-          disable-animations: true
-          emulator-wait-timeout: 600
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none
+          emulator-wait-timeout: 900
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 2048 -cores 2
           script: |
             set -euo pipefail
             adb wait-for-device
