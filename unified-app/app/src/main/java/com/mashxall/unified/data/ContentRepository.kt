@@ -671,6 +671,11 @@ object ContentRepository {
      * and maps each Quran verse to a range of page IDs. Verify every decoded
      * page before showing it; on any mismatch, return a clear empty result.
      */
+    private fun sha256Hex(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+
     private val khairahTafsirPageTextCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
             size > 48
