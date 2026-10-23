@@ -317,8 +317,34 @@ fi
 echo "PASS: exiting immersive Mushaf restores the Quran screen and app chrome."
 
 check_screen hadith 'فەرموودەکان|الأحاديث|Hadith'
-if ! grep -Eq '8202|٨٬٢٠٢|٨٢٠٢' dist/runtime-test/window-hadith.xml; then
-  echo "FAIL: expected source Hadith count was not visible."
+
+# The Hadith database is the largest text DB apart from Quran; on a cold
+# Android 11 start the immutable asset must be copied and SHA-256 verified
+# before its first SELECT. Do not confuse the initial "0 loaded" state with
+# missing records: wait until the real source count is rendered, then capture
+# DB errors if it never arrives.
+hadith_content_visible=0
+for attempt in $(seq 1 20); do
+  if grep -Eq '8202|٨٬٢٠٢|٨٢٠٢' dist/runtime-test/window-hadith.xml; then
+    hadith_content_visible=1
+    echo "PASS: source Hadith count became visible after cold-start poll $attempt."
+    break
+  fi
+  if [[ "$attempt" -lt 20 ]]; then
+    echo "Waiting for first Hadith database open/query ($attempt/20)…"
+    sleep 3
+    adb shell uiautomator dump /sdcard/mashxall-hadith-content-wait.xml > "dist/runtime-test/uiautomator-hadith-content-wait-$attempt.txt" 2>&1 || true
+    adb pull /sdcard/mashxall-hadith-content-wait.xml dist/runtime-test/window-hadith.xml >/dev/null 2>&1 || true
+  fi
+done
+if [[ "$hadith_content_visible" -ne 1 ]]; then
+  echo "FAIL: 8,202 source Hadith records were not shown after up to 60 seconds."
+  timeout --foreground 20s "$ADB_BIN" logcat -d -v threadtime > dist/runtime-test/logcat-hadith-data-failure.txt || true
+  echo "=== Relevant Mashxall Hadith/database errors ==="
+  grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|SQLite|Unable to open|db_hadith\.db|no such column|no such table|database integrity mismatch' \
+    dist/runtime-test/logcat-hadith-data-failure.txt | tail -n 120 || true
+  echo "=== Cached content database files ==="
+  timeout --foreground 15s "$ADB_BIN" shell run-as com.mashxall.unified find files/content-databases -maxdepth 1 -type f -print 2>&1 | head -n 80 || true
   cat dist/runtime-test/window-hadith.xml
   exit 1
 fi
