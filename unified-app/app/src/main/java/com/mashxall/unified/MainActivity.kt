@@ -109,10 +109,24 @@ import java.util.Locale
 private val Ink = Color(0xFF071E1A)
 private val DeepGreen = Color(0xFF103D32)
 private val Emerald = Color(0xFF19725A)
-private val Gold = Color(0xFFC9A44C)
 private val PaleGold = Color(0xFFF4E5B4)
 private val SoftText = Color(0xFFB9CDC5)
 private val Panel = Color(0xFF102B25)
+
+internal object MashxallAppearance {
+    var accent by mutableStateOf(Color(0xFFC9A44C))
+
+    fun colorFor(key: String): Color = when (key) {
+        "emerald" -> Color(0xFF38B58A)
+        "sapphire" -> Color(0xFF6A9FE8)
+        "violet" -> Color(0xFFAD92DD)
+        "rose" -> Color(0xFFE28EAB)
+        "turquoise" -> Color(0xFF4CB9C8)
+        else -> Color(0xFFC9A44C)
+    }
+}
+
+private val Gold: Color get() = MashxallAppearance.accent
 
 enum class AppLanguage(val key: String, val label: String) {
     CKB("ckb", "کوردی"), AR("ar", "العربية"), EN("en", "English");
@@ -132,7 +146,7 @@ private data class HomeModule(
     val icon: ImageVector, val color: Color
 )
 
-private val homeModules = listOf(
+private val homeModules: List<HomeModule> get() = listOf(
     HomeModule(AppScreen.QURAN, "quran", "quran_sub", Icons.Outlined.MenuBook, Gold),
     HomeModule(AppScreen.BOOKMARKS, "bookmarks", "bookmarks_sub", Icons.Outlined.BookmarkBorder, Color(0xFFE0B86C)),
     HomeModule(AppScreen.TAFSIR, "tafsir", "tafsir_sub", Icons.Outlined.AutoStories, Color(0xFF80C6B1)),
@@ -188,6 +202,8 @@ fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
+    var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
+    SideEffect { MashxallAppearance.accent = MashxallAppearance.colorFor(accentPalette) }
     var screen by rememberSaveable {
         mutableStateOf(
             startScreen?.takeIf { candidate ->
@@ -345,7 +361,13 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
+                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette,
+                                    onAccent = {
+                                        accentPalette = it
+                                        MashxallAppearance.accent = MashxallAppearance.colorFor(it)
+                                        prefs.edit().putString("accent_palette", it).apply()
+                                    },
+                                    onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
                                 }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") }, onAudio = { audioStartsAtReciters = true; navigateTo("audio") }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
@@ -825,6 +847,8 @@ private fun SettingsScreen(
     foreground: Color,
     cardColor: Color,
     dark: Boolean,
+    accentPalette: String,
+    onAccent: (String) -> Unit,
     onDark: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
     onDataInfo: () -> Unit,
@@ -864,6 +888,43 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) { AppLanguage.EN -> "ACCENT COLOUR"; AppLanguage.AR -> "لون التمييز"; AppLanguage.CKB -> "ڕەنگی جیاکەرەوە" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "This changes the actual highlight, icon, button and reading-action colour across the app."
+                AppLanguage.AR -> "يغيّر لون الإبراز والأيقونات والأزرار وإجراءات القراءة في التطبيق."
+                AppLanguage.CKB -> "ڕەنگی دەستنیشانکردن، ئایکۆن، دوگمە و کرداری خوێندنەوە لە هەموو ئەپەکەدا دەگۆڕێت."
+            }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp, lineHeight = 17.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            items(listOf("gold", "emerald", "sapphire", "violet", "rose", "turquoise")) { palette ->
+                val label = when (language) {
+                    AppLanguage.EN -> when (palette) {
+                        "emerald" -> "Emerald"; "sapphire" -> "Blue"; "violet" -> "Violet"; "rose" -> "Rose"; "turquoise" -> "Teal"; else -> "Gold"
+                    }
+                    AppLanguage.AR -> when (palette) {
+                        "emerald" -> "زمردي"; "sapphire" -> "أزرق"; "violet" -> "بنفسجي"; "rose" -> "وردي"; "turquoise" -> "فيروزي"; else -> "ذهبي"
+                    }
+                    AppLanguage.CKB -> when (palette) {
+                        "emerald" -> "زەمرەدی"; "sapphire" -> "شین"; "violet" -> "مۆر"; "rose" -> "پەمەیی"; "turquoise" -> "فیرۆزەیی"; else -> "زێڕین"
+                    }
+                }
+                FilterChip(
+                    selected = accentPalette == palette,
+                    onClick = { onAccent(palette) },
+                    label = { Text(label, fontSize = 11.sp) },
+                    leadingIcon = {
+                        Box(Modifier.size(11.dp).clip(CircleShape).background(MashxallAppearance.colorFor(palette)))
+                    }
+                )
+            }
+        }
+        Spacer(Modifier.height(18.dp))
 
         Text(
             when (language) { AppLanguage.EN -> "APPEARANCE"; AppLanguage.AR -> "المظهر"; AppLanguage.CKB -> "ڕووکار" },
