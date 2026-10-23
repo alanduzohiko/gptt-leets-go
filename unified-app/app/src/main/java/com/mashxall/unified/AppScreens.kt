@@ -129,7 +129,7 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -149,6 +149,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(mushafMode) { onImmersiveMushaf(mushafMode) }
+    DisposableEffect(Unit) {
+        onDispose { onImmersiveMushaf(false) }
+    }
+    androidx.activity.compose.BackHandler(enabled = mushafMode) {
+        mushafMode = false
+    }
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
@@ -289,6 +296,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     mushafPage = requested.coerceIn(1, 604)
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
                 },
+                onExitFullscreen = { mushafMode = false },
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -618,6 +626,7 @@ private fun MushafPageViewer(
     foreground: Color,
     page: Int,
     onPageChange: (Int) -> Unit,
+    onExitFullscreen: () -> Unit,
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -663,6 +672,15 @@ private fun MushafPageViewer(
             }
             OutlinedButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
                 Text(tr(language, "next"), fontSize = 11.sp)
+            }
+            OutlinedButton(onClick = onExitFullscreen) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Exit"
+                        AppLanguage.AR -> "خروج"
+                        AppLanguage.CKB -> "دەرچوون"
+                    }, fontSize = 10.sp
+                )
             }
         }
         Spacer(Modifier.height(7.dp))

@@ -5,6 +5,11 @@ import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -180,9 +185,23 @@ fun MashxallApp(startScreen: String? = null) {
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
     var selectedPdf by rememberSaveable { mutableStateOf("") }
+    var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
     val rootScreens = setOf("home", "quran", "library", "worship", "prayer")
     val isRoot = screen in rootScreens
+    val activity = context as? ComponentActivity
+    val window = activity?.window
+    SideEffect {
+        window?.let { target ->
+            val controller = WindowInsetsControllerCompat(target, target.decorView)
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (immersiveMushaf) controller.hide(WindowInsetsCompat.Type.systemBars())
+            else controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+    DisposableEffect(window) {
+        onDispose { window?.let { WindowInsetsControllerCompat(it, it.decorView).show(WindowInsetsCompat.Type.systemBars()) } }
+    }
 
     fun navigateTo(target: String) {
         if (target == screen) return
@@ -222,17 +241,17 @@ fun MashxallApp(startScreen: String? = null) {
             Surface(color = background, modifier = Modifier.fillMaxSize()) {
                 Scaffold(
                     containerColor = background,
-                    contentWindowInsets = WindowInsets.statusBars,
+                    contentWindowInsets = if (immersiveMushaf) WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) else WindowInsets.statusBars,
                     bottomBar = {
-                        if (isRoot) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
+                        if (isRoot && !immersiveMushaf) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
                             navigationStack = emptyList()
                             screen = target
                             audioStartsAtReciters = false
                         }
                     }
                 ) { padding ->
-                    Column(Modifier.fillMaxSize().padding(padding)) {
-                        AppHeader(
+                    Column(Modifier.fillMaxSize().padding(if (immersiveMushaf) PaddingValues(0.dp) else padding)) {
+                        if (!immersiveMushaf) AppHeader(
                             language = language, foreground = foreground, isDark = dark,
                             onLanguage = { language = it; prefs.edit().putString("language", it.key).apply() },
                             onBack = { navigateBack() },
@@ -270,7 +289,8 @@ fun MashxallApp(startScreen: String? = null) {
                                         audioStartsAtReciters = true
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo("audio")
-                                    }
+                                    },
+                                    onImmersiveMushaf = { immersiveMushaf = it }
                                 )
                                 "library" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
