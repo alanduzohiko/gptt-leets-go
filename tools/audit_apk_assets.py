@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sqlite3
 import zipfile
@@ -46,20 +47,18 @@ REQUIRED_OTHER = (
 )
 
 
-def _catalog_assets(catalog: dict[str, Any]) -> dict[str, int]:
-    declared: dict[str, int] = {}
+def _catalog_assets(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    declared: dict[str, dict[str, Any]] = {}
     for section in ("files", "generated_assets"):
         for item in catalog.get(section, []):
             if not isinstance(item, dict):
                 continue
             path = item.get("asset_path")
-            size = item.get("size_bytes")
             if isinstance(path, str) and path:
-                if isinstance(size, int) and size >= 0:
-                    declared[path] = size
-                else:
-                    # Unknown sizes are recorded with -1 and reported below.
-                    declared[path] = -1
+                declared[path] = {
+                    "size_bytes": item.get("size_bytes"),
+                    "sha256": item.get("sha256"),
+                }
     return declared
 
 
@@ -78,9 +77,13 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
 
     total_entries = 0
     matched_entries = 0
+    hash_verified_entries = 0
     size_mismatches: list[dict[str, Any]] = []
+    hash_mismatches: list[dict[str, Any]] = []
     missing: list[str] = []
     invalid_size_catalog: list[str] = []
+    invalid_hash_catalog: list[str] = []
+    asset_headers: dict[str, bytes] = {}
     sqlite_checks: list[dict[str, Any]] = []
     stored_asset_checks: list[dict[str, Any]] = []
 
@@ -91,14 +94,16 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
 
         info_by_name = {info.filename: info for info in archive.infolist()}
         total_entries = len(info_by_name)
-        for asset_path, expected_size in sorted(declared.items()):
+        for asset_path, metadata in sorted(declared.items()):
             apk_name = "assets/" + asset_path
             info = info_by_name.get(apk_name)
             if info is None:
                 missing.append(apk_name)
                 problems.append({"kind": "missing_packaged_asset", "asset_path": asset_path})
                 continue
-            if expected_size < 0:
+
+            expected_size = metadata.get("size_bytes")
+            if not isinstance(expected_size, int) or expected_size < 0:
                 invalid_size_catalog.append(asset_path)
                 problems.append({"kind": "asset_size_missing_from_catalog", "asset_path": asset_path})
             elif info.file_size != expected_size:
@@ -109,7 +114,43 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
                 }
                 size_mismatches.append(item)
                 problems.append({"kind": "asset_size_mismatch", **item})
-            else:
+
+            expected_hash = metadata.get("sha256")
+            if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+                invalid_hash_catalog.append(asset_path)
+                problems.append({"kind": "asset_sha256_missing_from_catalog", "asset_path": asset_path})
+
+            try:
+                digest = hashlib.sha256()
+                with archive.open(info, "r") as stream:
+                    header = stream.read(len(SQLITE_HEADER))
+                    asset_headers[asset_path] = header
+                    digest.update(header)
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                actual_hash = digest.hexdigest()
+            except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+                problems.append({"kind": "asset_hash_read_failed", "asset_path": asset_path, "error": str(exc)})
+                continue
+
+            hash_matches = isinstance(expected_hash, str) and len(expected_hash) == 64 and actual_hash == expected_hash.lower()
+            if isinstance(expected_hash, str) and len(expected_hash) == 64:
+                if not hash_matches:
+                    mismatch = {
+                        "asset_path": asset_path,
+                        "expected_sha256": expected_hash.lower(),
+                        "apk_sha256": actual_hash,
+                    }
+                    hash_mismatches.append(mismatch)
+                    problems.append({"kind": "asset_sha256_mismatch", **mismatch})
+                else:
+                    hash_verified_entries += 1
+
+            if (
+                isinstance(expected_size, int) and expected_size >= 0
+                and info.file_size == expected_size
+                and hash_matches
+            ):
                 matched_entries += 1
 
         for asset_path in REQUIRED_SQLITE:
@@ -118,8 +159,7 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
             if info is None:
                 continue
             try:
-                with archive.open(info, "r") as stream:
-                    header = stream.read(len(SQLITE_HEADER))
+                header = asset_headers.get(asset_path, b"")
                 passed = header == SQLITE_HEADER
                 check = {"asset_path": asset_path, "passed": passed, "apk_bytes": info.file_size}
                 sqlite_checks.append(check)
@@ -182,10 +222,13 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
         "catalog_counts": catalog.get("counts", {}),
         "catalog_declared_asset_count": len(declared),
         "apk_zip_entry_count": total_entries,
-        "assets_size_verified_count": matched_entries,
+        "assets_size_and_sha256_verified_count": matched_entries,
+        "asset_sha256_verified_count": hash_verified_entries,
         "missing_assets": missing,
         "size_mismatches": size_mismatches,
+        "hash_mismatches": hash_mismatches,
         "catalog_items_without_sizes": invalid_size_catalog,
+        "catalog_items_without_hashes": invalid_hash_catalog,
         "required_sqlite_header_checks": sqlite_checks,
         "random_access_storage_checks": stored_asset_checks,
         "problem_count": len(problems),
@@ -208,9 +251,11 @@ def main() -> int:
         "apk_size_bytes": report["apk_size_bytes"],
         "catalog_declared_asset_count": report["catalog_declared_asset_count"],
         "apk_zip_entry_count": report["apk_zip_entry_count"],
-        "assets_size_verified_count": report["assets_size_verified_count"],
+        "assets_size_and_sha256_verified_count": report["assets_size_and_sha256_verified_count"],
+        "asset_sha256_verified_count": report["asset_sha256_verified_count"],
         "missing_asset_count": len(report["missing_assets"]),
         "size_mismatch_count": len(report["size_mismatches"]),
+        "hash_mismatch_count": len(report["hash_mismatches"]),
         "problem_count": report["problem_count"],
         "report": str(args.out),
     }, ensure_ascii=False, indent=2))

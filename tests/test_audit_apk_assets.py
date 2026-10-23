@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -15,10 +16,11 @@ class AuditApkAssetsTests(unittest.TestCase):
         self.apk = self.root / "app.apk"
         self.catalog_path = self.root / "catalog.json"
 
-    def create_fixture(self, omit=None, corrupt_size=None, corrupt_sqlite=None):
+    def create_fixture(self, omit=None, corrupt_size=None, corrupt_sqlite=None, corrupt_hash=None):
         omit = set(omit or ())
         corrupt_size = corrupt_size or {}
         corrupt_sqlite = set(corrupt_sqlite or ())
+        corrupt_hash = set(corrupt_hash or ())
         declared = []
         assets = {}
         for path in REQUIRED_SQLITE:
@@ -26,7 +28,7 @@ class AuditApkAssetsTests(unittest.TestCase):
             if path in corrupt_sqlite:
                 payload = b"not-sqlite-data:" + path.encode("utf-8")
             assets[path] = payload
-            declared.append({"asset_path": path, "size_bytes": len(payload)})
+            declared.append({"asset_path": path, "size_bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()})
         for path in REQUIRED_OTHER:
             if path == "assets/content_catalog.json":
                 continue
@@ -38,7 +40,10 @@ class AuditApkAssetsTests(unittest.TestCase):
             else:
                 payload = b"uncompressed-test-asset-data"
             assets[path] = payload
-            declared.append({"asset_path": path, "size_bytes": len(payload)})
+            declared.append({"asset_path": path, "size_bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()})
+        for item in declared:
+            if item["asset_path"] in corrupt_hash:
+                item["sha256"] = "f" * 64
         catalog = {"bundle_sha256": "source-bundle-fixture", "counts": {"source_apps": 3}, "files": declared, "generated_assets": []}
         self.catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
         with zipfile.ZipFile(self.apk, "w") as archive:
@@ -65,6 +70,7 @@ class AuditApkAssetsTests(unittest.TestCase):
         self.assertTrue(report["ok"], report["problems"])
         self.assertEqual([], report["missing_assets"])
         self.assertEqual([], report["size_mismatches"])
+        self.assertEqual([], report["hash_mismatches"])
         self.assertEqual(len(REQUIRED_SQLITE), len(report["required_sqlite_header_checks"]))
         self.assertTrue(all(check["passed"] for check in report["required_sqlite_header_checks"]))
         self.assertTrue(all(check["passed"] for check in report["random_access_storage_checks"]))
@@ -80,6 +86,15 @@ class AuditApkAssetsTests(unittest.TestCase):
         report = audit(self.apk, self.catalog_path)
         self.assertFalse(report["ok"])
         self.assertTrue(any(item["kind"] == "asset_size_mismatch" and item["asset_path"] == REQUIRED_SQLITE[0] for item in report["problems"]))
+
+    def test_same_size_wrong_asset_bytes_fails_sha256_verification(self):
+        self.create_fixture(corrupt_hash={REQUIRED_SQLITE[0]})
+        report = audit(self.apk, self.catalog_path)
+        self.assertFalse(report["ok"])
+        self.assertTrue(any(
+            item["kind"] == "asset_sha256_mismatch" and item["asset_path"] == REQUIRED_SQLITE[0]
+            for item in report["problems"]
+        ))
 
     def test_invalid_sqlite_header_fails(self):
         self.create_fixture(corrupt_sqlite={REQUIRED_SQLITE[0]})
