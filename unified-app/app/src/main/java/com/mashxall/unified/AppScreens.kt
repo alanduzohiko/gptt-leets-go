@@ -3993,12 +3993,28 @@ fun WordAnalysisScreen(
     var selected by remember { mutableStateOf(false) }
     var selectedPart by remember { mutableStateOf<WordPart?>(null) }
     var selectedWord by remember { mutableStateOf<WordItem?>(null) }
-    LaunchedEffect(initialSurah, initialAyah) {
-        if (selected) {
-            loading = true
-            items = ContentRepository.loadWordAnalysis(context, initialSurah, initialAyah)
-            verseContext = ContentRepository.loadAyahs(context, initialSurah, language.key, translationKey = "none").firstOrNull { it.number == initialAyah }
-            loading = false
+    val scope = rememberCoroutineScope()
+    fun loadAnalysis(surah: Int, ayah: Int) {
+        selected = true
+        loading = true
+        items = emptyList()
+        verseContext = null
+        selectedPart = null
+        selectedWord = null
+        onLoad(surah, ayah)
+        scope.launch {
+            try {
+                val loadedItems = ContentRepository.loadWordAnalysis(context, surah, ayah)
+                val loadedVerse = ContentRepository.loadAyahs(context, surah, language.key, translationKey = "none")
+                    .firstOrNull { it.number == ayah }
+                items = loadedItems
+                verseContext = loadedVerse
+            } catch (_: Exception) {
+                items = emptyList()
+                verseContext = null
+            } finally {
+                loading = false
+            }
         }
     }
     Column(Modifier.fillMaxSize()) {
@@ -4014,8 +4030,7 @@ fun WordAnalysisScreen(
                     val a = ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
                     surahText = s.toString()
                     ayahText = a.toString()
-                    selected = true
-                    onLoad(s, a)
+                    loadAnalysis(s, a)
                 }) { Text("→") }
             }
         }
