@@ -383,6 +383,47 @@ def main() -> int:
                         """
                     ).fetchall()
                 item["salawati_location_rule_probe"] = detail
+            if path.endswith("/farmuda.db"):
+                db_path = out / Path(path)
+                detail = {}
+                with sqlite3.connect(db_path) as connection:
+                    detail["favorite_time_values"] = connection.execute(
+                        "SELECT fav_time,COUNT(*) FROM farmuda GROUP BY fav_time ORDER BY fav_time"
+                    ).fetchall()
+                    detail["records_sample"] = connection.execute(
+                        "SELECT _id,title,fav_time FROM farmuda ORDER BY _id LIMIT 25"
+                    ).fetchall()
+                    detail["language_presence"] = connection.execute(
+                        """
+                        SELECT COUNT(*),
+                               SUM(CASE WHEN COALESCE(ku_desc,'')<>'' THEN 1 ELSE 0 END),
+                               SUM(CASE WHEN COALESCE(badini,'')<>'' THEN 1 ELSE 0 END),
+                               SUM(CASE WHEN COALESCE(ar_desc,'')<>'' THEN 1 ELSE 0 END)
+                        FROM farmuda
+                        """
+                    ).fetchone()
+                item["farmuda_metadata_probe"] = detail
+            if path.endswith("/tn_books.db"):
+                db_path = out / Path(path)
+                detail = {}
+                with sqlite3.connect(db_path) as connection:
+                    detail["coverage"] = connection.execute(
+                        """
+                        SELECT COUNT(*),
+                               SUM(CASE WHEN COALESCE(url_cover,'')<>'' THEN 1 ELSE 0 END),
+                               SUM(CASE WHEN COALESCE(branch,'')<>'' THEN 1 ELSE 0 END),
+                               SUM(CASE WHEN COALESCE(unique_text,'')<>'' THEN 1 ELSE 0 END),
+                               SUM(CASE WHEN COALESCE(extra_text,'')<>'' THEN 1 ELSE 0 END)
+                        FROM book_data
+                        """
+                    ).fetchone()
+                    detail["book_color_values"] = connection.execute(
+                        "SELECT book_color,COUNT(*) FROM book_data GROUP BY book_color ORDER BY COUNT(*) DESC LIMIT 20"
+                    ).fetchall()
+                    detail["book_samples"] = connection.execute(
+                        "SELECT id,title,writer,branch,unique_text,page_number,url,url_cover,book_color,text_color,extra_text,extra_number,fav_time FROM book_data ORDER BY sorter,title LIMIT 30"
+                    ).fetchall()
+                item["book_catalog_probe"] = detail
             schema_report.append(item)
         print("MASHXALL_DB_SCHEMA_REPORT_BEGIN")
         print(json.dumps(schema_report, ensure_ascii=False, separators=(",", ":")))
