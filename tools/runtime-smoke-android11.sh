@@ -61,6 +61,14 @@ if [[ "$install_success" -ne 1 ]]; then
   exit 1
 fi
 
+# The app now asks for location on first use. Grant runtime permission and
+# enable the emulator provider before automation, so the OS dialog does not
+# cover the screen being tested. This does not replace the user's real-phone
+# permission/GPS verification.
+adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION || true
+adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION || true
+adb shell settings put secure location_mode 3 || true
+
 check_screen() {
   local route="$1"
   local expected_title="$2"
