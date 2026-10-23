@@ -54,6 +54,15 @@ data class HadithCollection(
     val kind: Int,
     val sort: Int
 )
+data class HadithArticle(
+    val id: Int,
+    val titleCkb: String,
+    val titleArabic: String,
+    val titleEnglish: String,
+    val bodyCkb: String,
+    val bodyArabic: String,
+    val bodyEnglish: String
+)
 data class HadithItem(
     val id: Int,
     val sort: Int,
@@ -785,6 +794,43 @@ object ContentRepository {
                                 arabic = NoorHadithCipher.decrypt(c.string("arabic")),
                                 english = NoorHadithCipher.decrypt(c.string("english")),
                                 kurdish = c.string("kurdish")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun loadHadithArticles(context: Context, query: String = ""): List<HadithArticle> = withContext(Dispatchers.IO) {
+        queryDb(context, HADITH_DB, emptyList()) { db ->
+            val filter = if (query.isBlank()) "" else """
+                WHERE description LIKE ? OR description_text_ar LIKE ? OR description_text_en LIKE ?
+                   OR text LIKE ? OR text_ar LIKE ? OR text_en LIKE ?
+            """.trimIndent()
+            val term = "%${query.trim()}%"
+            val args = if (query.isBlank()) null else arrayOf(term, term, term, term, term, term)
+            db.rawQuery(
+                """
+                SELECT id,description,description_text_ar,description_text_en,text,text_ar,text_en
+                FROM articles
+                $filter
+                ORDER BY id
+                """.trimIndent(), args
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        fun plain(html: String): String = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
+                            .toString().replace('\u00a0', ' ').trim()
+                        add(
+                            HadithArticle(
+                                id = c.int("id"),
+                                titleCkb = c.string("description"),
+                                titleArabic = c.string("description_text_ar"),
+                                titleEnglish = c.string("description_text_en"),
+                                bodyCkb = plain(c.string("text")),
+                                bodyArabic = plain(c.string("text_ar")),
+                                bodyEnglish = plain(c.string("text_en"))
                             )
                         )
                     }
