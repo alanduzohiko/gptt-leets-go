@@ -74,7 +74,6 @@ jobs:
               adb shell am force-stop com.mashxall.unified
               adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN "$route" | tee "dist/runtime-test/launch-${route}.txt"
               sleep 12
-              pid
               pid="$(adb shell pidof com.mashxall.unified | tr -d '\\r')"
               if [ -z "$pid" ]; then
                 echo "FAIL: app process died while opening route: $route"
