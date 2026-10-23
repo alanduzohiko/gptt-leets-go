@@ -2831,7 +2831,8 @@ fun AudioScreen(
     cardColor: Color,
     initialSurah: Int = 1,
     initialAyah: Int = 1,
-    focusReciters: Boolean = false
+    focusReciters: Boolean = false,
+    autoPlayRequested: Boolean = false
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
@@ -2856,9 +2857,9 @@ fun AudioScreen(
         reciters = ContentRepository.loadReciters(context)
         loading = false
     }
-    LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId) {
+    LaunchedEffect(reciters, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
-        if (focusReciters && preferred != null) {
+        if (autoPlayRequested && focusReciters && preferred != null) {
             val url = ContentRepository.reciterSampleUrl(
                 preferred,
                 initialSurah.coerceIn(1, 114),
