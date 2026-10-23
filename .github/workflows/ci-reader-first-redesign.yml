@@ -35,7 +35,7 @@ jobs:
       - name: Prepare Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+          packages: "platform-tools platforms;android-30 platforms;android-35 build-tools;35.0.0 emulator system-images;android-30;default;x86_64"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -45,5 +45,39 @@ jobs:
       - name: Validate Android 11 runtime test script syntax
         run: bash -n tools/runtime-smoke-android11.sh
 
-      - name: Run unit tests, lint, and a source-only debug build
+      - name: Run unit tests, lint, and a debug APK build
         run: gradle --no-daemon --project-dir unified-app testDebugUnitTest lintDebug assembleDebug
+
+      - name: Verify APK signature and archive integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="unified-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          unzip -t "$APK" | tail -n 2
+          sha256sum "$APK" | tee apk-sha256.txt
+          cp "$APK" Mashxall-Redesign-debug.apk
+
+      - name: Install and exercise redesigned screens on Android 11
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
+          script: APK_PATH="unified-app/app/build/outputs/apk/debug/app-debug.apk" bash tools/runtime-smoke-android11.sh
+
+      - name: Upload APK and Android 11 runtime results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-reader-first-redesign-\${{ github.run_number }}
+          path: |
+            Mashxall-Redesign-debug.apk
+            apk-sha256.txt
+            dist/runtime-test/
+          if-no-files-found: warn
+          retention-days: 14
