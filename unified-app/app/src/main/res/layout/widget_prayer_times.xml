@@ -66,17 +66,17 @@
 
         <TextView
             android:id="@+id/widget_time_fajr"
-            style="@style/Widget.Mashxall.TimeCell"
+            style="@style/MashxallWidgetTimeCell"
             android:text="Fajr&#10;--:--" />
 
         <TextView
             android:id="@+id/widget_time_sunrise"
-            style="@style/Widget.Mashxall.TimeCell"
+            style="@style/MashxallWidgetTimeCell"
             android:text="Sunrise&#10;--:--" />
 
         <TextView
             android:id="@+id/widget_time_dhuhr"
-            style="@style/Widget.Mashxall.TimeCell"
+            style="@style/MashxallWidgetTimeCell"
             android:text="Dhuhr&#10;--:--" />
     </LinearLayout>
 
@@ -88,17 +88,17 @@
 
         <TextView
             android:id="@+id/widget_time_asr"
-            style="@style/Widget.Mashxall.TimeCell"
+            style="@style/MashxallWidgetTimeCell"
             android:text="Asr&#10;--:--" />
 
         <TextView
             android:id="@+id/widget_time_maghrib"
-            style="@style/Widget.Mashxall.TimeCell"
+            style="@style/MashxallWidgetTimeCell"
             android:text="Maghrib&#10;--:--" />
 
         <TextView
             android:id="@+id/widget_time_isha"
-            style="@style/Widget.Mashxall.TimeCell"
+            style="@style/MashxallWidgetTimeCell"
             android:text="Isha&#10;--:--" />
     </LinearLayout>
 </LinearLayout>
