@@ -190,6 +190,39 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         },
                         color = Gold, fontSize = 12.sp
                     )
+                    if (query.isBlank() && currentSurah != null) {
+                        val placeLabel = when {
+                            currentSurah.place.contains("meccan", ignoreCase = true) ||
+                                currentSurah.place.contains("makki", ignoreCase = true) -> when (language) {
+                                    AppLanguage.EN -> "Meccan"
+                                    AppLanguage.AR -> "مكية"
+                                    AppLanguage.CKB -> "مەککی"
+                                }
+                            currentSurah.place.contains("medinan", ignoreCase = true) ||
+                                currentSurah.place.contains("madani", ignoreCase = true) -> when (language) {
+                                    AppLanguage.EN -> "Medinan"
+                                    AppLanguage.AR -> "مدنية"
+                                    AppLanguage.CKB -> "مەدەنی"
+                                }
+                            else -> currentSurah.place
+                        }
+                        val metadata = listOf(
+                            currentSurah.englishName,
+                            currentSurah.ayahCount.toString() + " " + when (language) {
+                                AppLanguage.EN -> "verses"
+                                AppLanguage.AR -> "آية"
+                                AppLanguage.CKB -> "ئایەت"
+                            },
+                            placeLabel
+                        ).filter { it.isNotBlank() }.joinToString(" • ")
+                        if (metadata.isNotBlank()) {
+                            Text(metadata, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, maxLines = 1)
+                        }
+                        val meaning = currentSurah.uniqueTitle.ifBlank { currentSurah.meaningEnglish }
+                        if (meaning.isNotBlank()) {
+                            Text(meaning, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, maxLines = 1)
+                        }
+                    }
                 }
                 OutlinedButton(onClick = { chooseSurah = true }) { Text(tr(language, "choose_surah"), fontSize = 11.sp) }
             }
@@ -496,10 +529,48 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         text = {
             LazyColumn(Modifier.height(420.dp)) {
                 items(surahs, key = { it.number }) { item ->
-                    Row(Modifier.fillMaxWidth().clickable { selected = item.number; onSurah(item.number); chooseSurah = false }.padding(vertical = 9.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable { selected = item.number; onSurah(item.number); chooseSurah = false }
+                            .padding(vertical = 9.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(item.number.toString(), color = Gold, modifier = Modifier.width(32.dp))
-                        Text(item.arabicName, color = foreground, modifier = Modifier.weight(1f))
-                        Text(item.englishName, color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
+                        Column(Modifier.weight(1f)) {
+                            Text(item.arabicName, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            val placeLabel = when {
+                                item.place.contains("meccan", ignoreCase = true) ||
+                                    item.place.contains("makki", ignoreCase = true) -> when (language) {
+                                        AppLanguage.EN -> "Meccan"
+                                        AppLanguage.AR -> "مكية"
+                                        AppLanguage.CKB -> "مەککی"
+                                    }
+                                item.place.contains("medinan", ignoreCase = true) ||
+                                    item.place.contains("madani", ignoreCase = true) -> when (language) {
+                                        AppLanguage.EN -> "Medinan"
+                                        AppLanguage.AR -> "مدنية"
+                                        AppLanguage.CKB -> "مەدەنی"
+                                    }
+                                else -> item.place
+                            }
+                            Text(
+                                listOf(
+                                    item.englishName,
+                                    item.ayahCount.toString() + " " + when (language) {
+                                        AppLanguage.EN -> "verses"
+                                        AppLanguage.AR -> "آية"
+                                        AppLanguage.CKB -> "ئایەت"
+                                    },
+                                    placeLabel
+                                ).filter { it.isNotBlank() }.joinToString(" • "),
+                                color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, maxLines = 1
+                            )
+                            val meaning = item.uniqueTitle.ifBlank { item.meaningEnglish }
+                            if (meaning.isNotBlank()) {
+                                Text(meaning, color = foreground.copy(alpha = 0.46f), fontSize = 9.sp, maxLines = 1)
+                            }
+                        }
+                        if (item.number == selected) Text("✓", color = Gold, fontWeight = FontWeight.Bold)
                     }
                 }
             }
