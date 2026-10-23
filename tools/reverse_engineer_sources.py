@@ -130,10 +130,12 @@ def main() -> int:
             caps = {name: 0 for name in PATTERNS}
             book_signal = re.compile(
                 r"tn_books\.db|book_data|unique_text|url_cover|page_number|"
-                r"DownloadManager|download.{0,80}book|book.{0,80}download|"
-                r"https?://[^\s\"']{1,180}",
+                r"DownloadManager|\\.pdf\\b|pdf_url|book_url|"
+                r"download.{0,80}book|book.{0,80}download|"
+                r"book.{0,80}(?:url|uri|path|file)|(?:url|uri|path|file).{0,80}book",
                 re.I,
             )
+            book_url_signal = re.compile(r"https?://[^\\s\\\"']{1,180}", re.I)
             app_report["book_download_contexts"] = []
             context_rules = {
                 "hadith_of_ayah": (re.compile(r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I), 35),
@@ -152,13 +154,29 @@ def main() -> int:
                     stripped = " ".join(line.strip().split())
                     if not stripped:
                         continue
-                    # The source database has 94 book records but only two bundled
-                    # PDFs, so record the original app's actual download/open logic.
+                    # Keep book/PDF resolution research focused on app code. Third-party
+                    # dependencies contain many irrelevant URLs and can overwhelm the log.
                     book_contexts = app_report["book_download_contexts"]
-                    if len(book_contexts) < 60 and book_signal.search(stripped):
+                    app_code = relative_file.startswith("sources/") and not relative_file.startswith((
+                        "sources/androidx/", "sources/kotlin/", "sources/kotlinx/",
+                        "sources/okhttp3/", "sources/retrofit2/", "sources/org/"
+                    ))
+                    book_match = book_signal.search(stripped)
+                    url_match = app_code and book_url_signal.search(stripped) and re.search(
+                        r"book|pdf|download|file|unique_text|url_cover|tn_books",
+                        stripped,
+                        re.I,
+                    )
+                    if len(book_contexts) < 100 and app_code and (book_match or url_match):
                         context_start = max(0, line_no - 14)
                         context_end = min(len(lines), line_no + 27)
+                        priority = (
+                            0 if re.search(r"tn_books\\.db|book_data|unique_text|url_cover", stripped, re.I)
+                            else 1 if re.search(r"DownloadManager|\\.pdf\\b|pdf_url|book_url|download", stripped, re.I)
+                            else 2
+                        )
                         book_contexts.append({
+                            "priority": priority,
                             "file": relative_file,
                             "match_line": line_no,
                             "match": stripped[:260],
@@ -289,7 +307,11 @@ def main() -> int:
                                 print(window["source"][:18000], flush=True)
                     print("FOCUSED_NOOR_DECODER_END", flush=True)
                     print("FOCUSED_NOOR_BOOK_DOWNLOAD_BEGIN", flush=True)
-                    for item in app_report.get("book_download_contexts", [])[:24]:
+                    prioritized_book_contexts = sorted(
+                        app_report.get("book_download_contexts", []),
+                        key=lambda item: (item.get("priority", 9), item.get("file", ""), item.get("match_line", 0)),
+                    )
+                    for item in prioritized_book_contexts[:30]:
                         print(
                             f"BOOK_SOURCE file={item['file']} line={item['match_line']} match={item['match']}",
                             flush=True,
