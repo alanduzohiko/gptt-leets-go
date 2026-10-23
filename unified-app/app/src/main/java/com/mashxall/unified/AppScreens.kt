@@ -174,6 +174,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
+    var openingMushaf by remember { mutableStateOf(false) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
@@ -214,9 +215,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
     }
-    androidx.activity.compose.BackHandler(enabled = mushafMode) {
+    androidx.activity.compose.BackHandler(enabled = mushafMode || openingMushaf) {
         if (selectedAyahForSheet != null) selectedAyahForSheet = null
-        else {
+        else if (openingMushaf) {
+            openingMushaf = false
+            showSurahList = true
+        } else {
             mushafMode = false
             showSurahList = true
         }
@@ -459,10 +463,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 onSurah(item.number)
                                 query = ""
                                 showSurahList = false
+                                openingMushaf = true
                                 scope.launch {
-                                    val firstVerse = ContentRepository.loadAyahs(context, item.number, language.key, translationKey = "none").firstOrNull()
+                                    val firstVerse = runCatching {
+                                        ContentRepository.loadAyahs(context, item.number, language.key, translationKey = "none").firstOrNull()
+                                    }.getOrNull()
                                     mushafPage = (firstVerse?.page ?: 1).coerceIn(1, 604)
                                     prefs.edit().putInt("last_mushaf_page", mushafPage).putInt("last_surah", item.number).putInt("last_ayah_number", 1).apply()
+                                    openingMushaf = false
                                     mushafMode = true
                                 }
                             },
@@ -495,6 +503,22 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }
                     }
                 }
+            }
+        } else if (openingMushaf) {
+            Column(
+                Modifier.fillMaxSize().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(color = Gold)
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Opening the page-based Mushaf…"
+                        AppLanguage.AR -> "جارٍ فتح المصحف ذي الصفحات…"
+                        AppLanguage.CKB -> "مصحەفی پەڕەبەندی کراو دەکرێتەوە…"
+                    }, color = foreground, fontSize = 13.sp, textAlign = TextAlign.Center
+                )
             }
         } else if (verses.isEmpty()) {
             LoadingOrEmpty(loading, language, foreground)
