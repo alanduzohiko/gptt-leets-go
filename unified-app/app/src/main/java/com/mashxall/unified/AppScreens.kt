@@ -3651,7 +3651,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
         books = ContentRepository.loadBooks(context, query.trim())
         loading = false
     }
-    val visiblePdfs = if (query.isBlank()) pdfs else pdfs.filter { path ->
+    val visiblePdfs = if (favoritesOnly) emptyList() else if (query.isBlank()) pdfs else pdfs.filter { path ->
         path.substringAfterLast('/').contains(query.trim(), ignoreCase = true) ||
             path.substringBeforeLast('/').contains(query.trim(), ignoreCase = true)
     }

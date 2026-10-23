@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -46,11 +47,21 @@ REQUIRED_ASSETS = {
 }
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(4 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--catalog", required=True, type=Path)
+    parser.add_argument("--assets-root", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
+    assets_root = args.assets_root.resolve()
 
     try:
         catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
@@ -67,6 +78,32 @@ def main() -> int:
     file_by_path = {row.get("asset_path"): row for row in files}
     missing = []
     corrupt_metadata = []
+    extracted_file_failures = []
+    for row in files:
+        rel = Path(str(row.get("asset_path", "")))
+        target = (assets_root / rel).resolve()
+        if not rel.parts or rel.is_absolute() or assets_root not in target.parents:
+            extracted_file_failures.append({"asset_path": str(rel), "issue": "unsafe asset path"})
+            continue
+        if not target.is_file():
+            extracted_file_failures.append({"asset_path": str(rel), "issue": "extracted file is missing"})
+            continue
+        expected_size = int(row.get("size_bytes", 0))
+        expected_hash = str(row.get("sha256", ""))
+        actual_size = target.stat().st_size
+        if actual_size != expected_size:
+            extracted_file_failures.append({
+                "asset_path": str(rel), "issue": "size mismatch",
+                "expected_size_bytes": expected_size, "actual_size_bytes": actual_size,
+            })
+            continue
+        actual_hash = sha256_file(target)
+        if actual_hash != expected_hash:
+            extracted_file_failures.append({
+                "asset_path": str(rel), "issue": "SHA-256 mismatch",
+                "expected_sha256": expected_hash, "actual_sha256": actual_hash,
+            })
+
     for label, path in REQUIRED_ASSETS.items():
         row = file_by_path.get(path)
         if not row:
@@ -76,8 +113,15 @@ def main() -> int:
 
     generated = catalog.get("generated_assets", [])
     mushaf_index = next((row for row in generated if row.get("asset_path") == "mushaf_svg_index.json"), None)
+    generated_file_failures = []
     if not mushaf_index or int(mushaf_index.get("page_count", 0)) != 604:
         missing.append({"feature": "604-page SVG index", "asset_path": "mushaf_svg_index.json"})
+    else:
+        index_path = assets_root / "mushaf_svg_index.json"
+        if not index_path.is_file():
+            generated_file_failures.append({"asset_path": "mushaf_svg_index.json", "issue": "generated page index is missing"})
+        elif index_path.stat().st_size != int(mushaf_index.get("size_bytes", 0)) or sha256_file(index_path) != mushaf_index.get("sha256"):
+            generated_file_failures.append({"asset_path": "mushaf_svg_index.json", "issue": "generated page index size or SHA-256 mismatch"})
 
     databases = catalog.get("databases", [])
     audio = catalog.get("audio", [])
@@ -90,11 +134,13 @@ def main() -> int:
     if not fonts:
         missing.append({"feature": "Quran and UI font files", "asset_path": "(none)"})
 
-    if missing or corrupt_metadata:
+    if missing or corrupt_metadata or extracted_file_failures or generated_file_failures:
         report = {
             "status": "fail",
             "missing_required_assets": missing,
             "invalid_asset_metadata": corrupt_metadata,
+            "extracted_file_failures": extracted_file_failures,
+            "generated_file_failures": generated_file_failures,
         }
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -118,6 +164,8 @@ def main() -> int:
         "status": "pass",
         "source_apps": per_source,
         "required_feature_assets_verified": len(REQUIRED_ASSETS),
+        "extracted_file_payloads_verified": len(files),
+        "generated_file_payloads_verified": 1,
         "mushaf_pages": int(mushaf_index["page_count"]),
         "total_assets": len(files),
         "total_databases": len(databases),

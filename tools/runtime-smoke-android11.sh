@@ -482,13 +482,15 @@ read -r article_detail_x article_detail_y <<< "$article_detail_coords"
 adb shell input tap "$article_detail_x" "$article_detail_y"
 sleep 5
 adb shell uiautomator dump /sdcard/mashxall-hadith-article-detail.xml > dist/runtime-test/uiautomator-hadith-article-detail.txt 2>&1 || true
-adb pull /sdcard/mashxall-hadith-article-detail.xml dist/runtime-test/window-hadith-articles.xml >/dev/null 2>&1 || true
-if ! grep -Eq 'Copy article|نسخ المقالة|وتار کۆپی بکە' dist/runtime-test/window-hadith-articles.xml; then
+adb pull /sdcard/mashxall-hadith-article-detail.xml dist/runtime-test/window-hadith-article-detail.xml >/dev/null 2>&1 || true
+# Verify the full article body in the detail sheet before scrolling: long source
+# narrations naturally place the copy control below the first viewport.
+if ! grep -Eq 'سیفەتەکانی شکۆ و گەورەیی|صفات الجلال والعظمة|Attributes of Majesty and Greatness' dist/runtime-test/window-hadith-article-detail.xml; then
   echo "FAIL: tapping an article preview did not open the dedicated detail sheet."
-  cat dist/runtime-test/window-hadith-articles.xml
+  cat dist/runtime-test/window-hadith-article-detail.xml
   exit 1
 fi
-if ! python3 - dist/runtime-test/window-hadith-articles.xml <<'PY'
+if ! python3 - dist/runtime-test/window-hadith-article-detail.xml <<'PY'
 import sys
 import xml.etree.ElementTree as ET
 try:
@@ -501,10 +503,28 @@ if max((len(text) for text in texts), default=0) < 120:
 PY
 then
   echo "FAIL: the selected Hadith article detail did not render readable body text."
-  cat dist/runtime-test/window-hadith-articles.xml
+  cat dist/runtime-test/window-hadith-article-detail.xml
   exit 1
 fi
-echo "PASS: selecting an article opens its full details and copy action."
+hadith_copy_visible=0
+for attempt in $(seq 1 8); do
+  if grep -Eq 'Copy article|نسخ المقالة|وتار کۆپی بکە' dist/runtime-test/window-hadith-article-detail.xml; then
+    hadith_copy_visible=1
+    break
+  fi
+  adb shell input swipe 540 1500 540 420 400 || true
+  sleep 1
+  rm -f dist/runtime-test/window-hadith-article-detail.xml
+  adb shell rm -f /sdcard/mashxall-hadith-article-detail.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-hadith-article-detail.xml > "dist/runtime-test/uiautomator-hadith-article-scroll-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-hadith-article-detail.xml dist/runtime-test/window-hadith-article-detail.xml >/dev/null 2>&1 || true
+done
+if [[ "$hadith_copy_visible" -ne 1 ]]; then
+  echo "FAIL: the Hadith article detail opened but its copy action did not become visible after scrolling."
+  cat dist/runtime-test/window-hadith-article-detail.xml
+  exit 1
+fi
+echo "PASS: the Hadith article detail opens with readable body text and exposes its copy action after scrolling."
 
 check_screen books 'کتێبخانە|المكتبة|Book library'
 if ! grep -q '94' dist/runtime-test/window-books.xml; then
@@ -610,13 +630,31 @@ adb shell input tap "$farmuda_x" "$farmuda_y"
 sleep 5
 adb shell uiautomator dump /sdcard/mashxall-farmuda-detail.xml > dist/runtime-test/uiautomator-farmuda-detail.txt 2>&1 || true
 adb pull /sdcard/mashxall-farmuda-detail.xml dist/runtime-test/window-farmuda-detail.xml >/dev/null 2>&1 || true
-if ! grep -Eq 'Favourite|مفضلة|دڵخواز' dist/runtime-test/window-farmuda-detail.xml ||
-   ! grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-farmuda-detail.xml; then
-  echo "FAIL: opening a Farmuda entry did not expose its own favourite and copy controls."
+if ! grep -Eq 'SORANI KURDISH|الكردية السورانية|کوردی سۆرانی|ARABIC|النص العربي|دەقی عەرەبی' dist/runtime-test/window-farmuda-detail.xml; then
+  echo "FAIL: opening a Farmuda entry did not expose its source-language detail content."
   cat dist/runtime-test/window-farmuda-detail.xml
   exit 1
 fi
-echo "PASS: Farmuda entries open individual details with source text, favourites and copy actions."
+farmuda_actions_visible=0
+for attempt in $(seq 1 8); do
+  if grep -Eq 'Favourite|مفضلة|دڵخواز' dist/runtime-test/window-farmuda-detail.xml &&
+     grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-farmuda-detail.xml; then
+    farmuda_actions_visible=1
+    break
+  fi
+  adb shell input swipe 540 1500 540 420 400 || true
+  sleep 1
+  rm -f dist/runtime-test/window-farmuda-detail.xml
+  adb shell rm -f /sdcard/mashxall-farmuda-detail.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-farmuda-detail.xml > "dist/runtime-test/uiautomator-farmuda-scroll-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-farmuda-detail.xml dist/runtime-test/window-farmuda-detail.xml >/dev/null 2>&1 || true
+done
+if [[ "$farmuda_actions_visible" -ne 1 ]]; then
+  echo "FAIL: Farmuda detail did not expose favourite and copy controls after scrolling."
+  cat dist/runtime-test/window-farmuda-detail.xml
+  exit 1
+fi
+echo "PASS: Farmuda entry source text renders and its favourite/copy actions are accessible after scrolling."
 check_screen tafsir 'تەفسیرو وەرگێڕان|التفسير والترجمة|Tafsir & translation'
 check_screen azkar 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
 

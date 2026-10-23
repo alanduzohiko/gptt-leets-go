@@ -74,6 +74,7 @@ jobs:
           set -euo pipefail
           python tools/audit_source_coverage.py \
             --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --assets-root unified-app/app/src/main/assets \
             --out dist/runtime-test/source-coverage-audit.json
 
       - name: Audit actual Noor and Salawati prayer sources
