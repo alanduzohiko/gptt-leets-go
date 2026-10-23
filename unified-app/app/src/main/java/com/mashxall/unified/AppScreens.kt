@@ -1520,6 +1520,7 @@ fun AudioScreen(
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
+    val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -1538,7 +1539,7 @@ fun AudioScreen(
         loading = false
     }
     LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId) {
-        val preferred = reciters.firstOrNull { it.id == preferredReciterId }
+        val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
         if (focusReciters && preferred != null) {
             val url = ContentRepository.reciterSampleUrl(
                 preferred,
@@ -1620,14 +1621,14 @@ fun AudioScreen(
             }
             Text(
                 if (language == AppLanguage.EN) {
-                    if (preferredReciterId > 0) "Your preferred reciter will start automatically when you open this screen from a Quran verse."
-                    else "Streaming needs internet. Choose a reciter below; it will be remembered and the Quran play button can use it next time."
+                    if (preferredVerseReciter != null) "Your preferred verse-by-verse reciter will start automatically when you open this screen from a Quran verse."
+                    else "Streaming needs internet. Choose a verse-by-verse reciter below; it will be remembered and the Quran play button can use it next time."
                 } else if (language == AppLanguage.AR) {
-                    if (preferredReciterId > 0) "سيبدأ قارئك المفضّل تلقائيًا عند فتح هذه الشاشة من آية في القرآن."
-                    else "البث يحتاج إلى الإنترنت. اختر قارئًا أدناه؛ سيُحفظ اختيارك ليستخدمه زر تشغيل الآية لاحقًا."
+                    if (preferredVerseReciter != null) "سيبدأ قارئك المفضّل الذي يدعم تشغيل الآيات تلقائيًا عند فتح هذه الشاشة من آية في القرآن."
+                    else "البث يحتاج إلى الإنترنت. اختر قارئًا يدعم تشغيل الآيات أدناه؛ سيُحفظ اختيارك لزر تشغيل الآية لاحقًا."
                 } else {
-                    if (preferredReciterId > 0) "کاتێک لەم شاشەیە لە ئایەتێکی قورئانەوە بکەیتەوە، قورئان‌خوێنی دڵخوازت خۆکارانە دەست پێدەکات."
-                    else "بۆ پەخش ئینتەرنێت پێویستە. قورئان‌خوێنێک هەڵبژێرە؛ دواتر دوگمەی گوێگرتن لە ئایەت ئەوە بەکاردهێنێت."
+                    if (preferredVerseReciter != null) "کاتێک لەم شاشەیە لە ئایەتێکی قورئانەوە بکەیتەوە، قورئان‌خوێنی دڵخواز کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی دەکات خۆکارانە دەست پێدەکات."
+                    else "بۆ پەخش ئینتەرنێت پێویستە. قورئان‌خوێنێک هەڵبژێرە کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی بکات؛ دواتر دوگمەی گوێگرتن ئەوە بەکاردهێنێت."
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
             )
@@ -1668,29 +1669,33 @@ fun AudioScreen(
                                 Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
                                 Text(if (reciter.audioType == 0) "Verse-by-verse" else "Surah audio", color = Gold.copy(alpha = 0.85f), fontSize = 9.sp)
-                                TextButton(
-                                    onClick = {
-                                        preferredReciterId = reciter.id
-                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(25.dp)
-                                ) {
-                                    Text(
-                                        if (preferredReciterId == reciter.id) {
-                                            if (language == AppLanguage.EN) "★ Preferred reciter" else if (language == AppLanguage.AR) "★ القارئ المفضّل" else "★ قورئان‌خوێنی دڵخواز"
-                                        } else {
-                                            if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
+                                if (reciter.audioType == 0) {
+                                    TextButton(
+                                        onClick = {
+                                            preferredReciterId = reciter.id
+                                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
                                         },
-                                        color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
-                                        fontSize = 9.sp,
-                                        maxLines = 1
-                                    )
+                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(25.dp)
+                                    ) {
+                                        Text(
+                                            if (preferredReciterId == reciter.id) {
+                                                if (language == AppLanguage.EN) "★ Preferred reciter" else if (language == AppLanguage.AR) "★ القارئ المفضّل" else "★ قورئان‌خوێنی دڵخواز"
+                                            } else {
+                                                if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
+                                            },
+                                            color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
+                                            fontSize = 9.sp,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                             IconButton(onClick = {
-                                preferredReciterId = reciter.id
-                                prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                if (reciter.audioType == 0) {
+                                    preferredReciterId = reciter.id
+                                    prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                }
                                 if (playing == url) {
                                     AudioController.stop()
                                     playing = ""
