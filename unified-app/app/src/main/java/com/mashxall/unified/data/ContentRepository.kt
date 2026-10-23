@@ -140,6 +140,14 @@ private data class KhairahPageMeta(
     val length: Int, val byteCount: Int, val sha256: String
 )
 data class MushafPageVerse(val surah: Int, val ayah: Int)
+data class MushafPageRect(
+    val glyphId: Int,
+    val lineNumber: Int,
+    val minX: Float,
+    val maxX: Float,
+    val minY: Float,
+    val maxY: Float
+)
 
 private data class MushafSvgMeta(
     val page: Int, val offset: Int, val compressedLength: Int,
@@ -290,6 +298,90 @@ object ContentRepository {
                 }
             }
         }
+    }
+
+    /**
+     * Original Noor page geometry for a selected verse. This powers the same
+     * translucent verse highlight used by the source Mushaf reader. Coordinates
+     * are in the original page SVG coordinate space, not screen pixels.
+     */
+    suspend fun loadMushafVerseRects(
+        context: Context,
+        page: Int,
+        surah: Int,
+        ayah: Int
+    ): List<MushafPageRect> = withContext(Dispatchers.IO) {
+        val targetPage = page.coerceIn(1, 604)
+        fun readRects(table: String): List<MushafPageRect> {
+            val safeTable = if (table == "v2_tajweed_page_data_line") table else "page_data_line"
+            return queryDb(context, TAJWEED_DB, emptyList()) { db ->
+                db.rawQuery(
+                    """
+                    SELECT glyph_id,line_number,min_x,max_x,min_y,max_y
+                    FROM $safeTable
+                    WHERE page_number=? AND surah_id=? AND verse_id=?
+                    ORDER BY line_number,min_x
+                    """.trimIndent(),
+                    arrayOf(targetPage.toString(), surah.toString(), ayah.toString())
+                ).use { c ->
+                    buildList {
+                        while (c.moveToNext()) {
+                            val left = c.getFloat(c.getColumnIndexOrThrow("min_x"))
+                            val right = c.getFloat(c.getColumnIndexOrThrow("max_x"))
+                            val top = c.getFloat(c.getColumnIndexOrThrow("min_y"))
+                            val bottom = c.getFloat(c.getColumnIndexOrThrow("max_y"))
+                            if (right > left && bottom > top) {
+                                add(MushafPageRect(
+                                    c.getInt(c.getColumnIndexOrThrow("glyph_id")),
+                                    c.getInt(c.getColumnIndexOrThrow("line_number")),
+                                    left, right, top, bottom
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val baseRects = readRects("page_data_line")
+        if (baseRects.isNotEmpty()) baseRects else readRects("v2_tajweed_page_data_line")
+    }
+
+    /**
+     * Resolve a page touch against the original Tajweed word bounds first;
+     * fall back to the source line bounds for gaps or legacy pages.
+     */
+    suspend fun findMushafVerseAtPoint(
+        context: Context,
+        page: Int,
+        x: Float,
+        y: Float
+    ): MushafPageVerse? = withContext(Dispatchers.IO) {
+        val targetPage = page.coerceIn(1, 604)
+        fun findIn(table: String): MushafPageVerse? {
+            val safeTable = if (table == "v2_tajweed_page_data_line") table else "page_data_line"
+            return queryDb(context, TAJWEED_DB, null as MushafPageVerse?) { db ->
+                db.rawQuery(
+                    """
+                    SELECT surah_id,verse_id
+                    FROM $safeTable
+                    WHERE page_number=?
+                      AND min_x<=? AND max_x>=?
+                      AND min_y<=? AND max_y>=?
+                      AND surah_id BETWEEN 1 AND 114
+                      AND verse_id BETWEEN 1 AND 286
+                    ORDER BY ((max_x-min_x)*(max_y-min_y)) ASC,glyph_id ASC
+                    LIMIT 1
+                    """.trimIndent(),
+                    arrayOf(
+                        targetPage.toString(), x.toString(), x.toString(),
+                        y.toString(), y.toString()
+                    )
+                ).use { c ->
+                    if (c.moveToFirst()) MushafPageVerse(c.getInt(0), c.getInt(1)) else null
+                }
+            }
+        }
+        findIn("v2_tajweed_page_data_line") ?: findIn("page_data_line")
     }
 
     suspend fun loadMushafPageSvg(context: Context, page: Int): String? = withContext(Dispatchers.IO) {
