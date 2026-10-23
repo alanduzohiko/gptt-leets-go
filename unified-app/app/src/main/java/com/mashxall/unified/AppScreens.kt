@@ -75,6 +75,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -116,6 +118,14 @@ private val Gold = Color(0xFFC9A44C)
 private val DeepGreen = Color(0xFF103D32)
 private val MainText = Color(0xFFF6F2E6)
 private val CardDark = Color(0xFF102B25)
+private val MushafNightColorMatrix = ColorMatrix(
+    floatArrayOf(
+        -1f, 0f, 0f, 0f, 255f,
+        0f, -1f, 0f, 0f, 255f,
+        0f, 0f, -1f, 0f, 255f,
+        0f, 0f, 0f, 1f, 0f
+    )
+)
 
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
@@ -159,6 +169,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
+    var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
+    var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
             AppLanguage.EN -> "sahih"
@@ -371,6 +383,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 language = language,
                 foreground = foreground,
                 page = mushafPage,
+                darkMode = mushafDarkMode,
                 onPageChange = { requested ->
                     mushafPage = requested.coerceIn(1, 604)
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
@@ -905,6 +918,54 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }
                     }
                 }
+                item {
+                    Spacer(Modifier.height(9.dp))
+                    Divider(color = Gold.copy(alpha = 0.25f))
+                    Spacer(Modifier.height(9.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Night reading mode"
+                                    AppLanguage.AR -> "وضع القراءة الليلي"
+                                    AppLanguage.CKB -> "دۆخی خوێندنەوەی شەوانە"
+                                }, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Invert paper and ink on the page-based Mushaf"
+                                    AppLanguage.AR -> "عكس لون الورق والحبر داخل المصحف الرسومي"
+                                    AppLanguage.CKB -> "ڕەنگی کاغەز و مەرەکەب لە مصحەفی گرافیکیدا بگۆڕە"
+                                }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                            )
+                        }
+                        Switch(
+                            checked = mushafDarkMode,
+                            onCheckedChange = {
+                                mushafDarkMode = it
+                                prefs.edit().putBoolean("mushaf_dark_mode", it).apply()
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        when (language) { AppLanguage.EN -> "VERSE TEXT SIZE"; AppLanguage.AR -> "حجم خط الآية"; AppLanguage.CKB -> "قەبارەی دەقی ئایەت" },
+                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    Slider(
+                        value = verseTextScale,
+                        onValueChange = {
+                            verseTextScale = it
+                            prefs.edit().putFloat("quran_verse_text_scale", it).apply()
+                        },
+                        valueRange = 0.8f..1.6f,
+                        steps = 7
+                    )
+                    Text(
+                        String.format(Locale.US, "%.0f%%", verseTextScale * 100f),
+                        color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
+                    )
+                }
             }
         },
         confirmButton = {
@@ -954,7 +1015,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }, color = foreground, fontSize = 13.sp
                     )
                     else -> {
-                        Text(sheetVerse!!.arabic, color = foreground, fontSize = 27.sp, lineHeight = 48.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Text(sheetVerse!!.arabic, color = foreground, fontSize = (27f * verseTextScale).sp, lineHeight = (48f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                         if (sheetVerse!!.translation.isNotBlank()) {
                             Spacer(Modifier.height(9.dp))
                             Text(sheetVerse!!.translation, color = foreground.copy(alpha = 0.8f), fontSize = 15.sp, lineHeight = 25.sp)
@@ -1131,6 +1192,7 @@ private fun MushafPageViewer(
     language: AppLanguage,
     foreground: Color,
     page: Int,
+    darkMode: Boolean,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
@@ -1239,7 +1301,7 @@ private fun MushafPageViewer(
         Spacer(Modifier.height(7.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = if (darkMode) Color(0xFF141A18) else Color.White),
             shape = RoundedCornerShape(13.dp),
             border = BorderStroke(1.dp, Gold.copy(alpha = 0.25f))
         ) {
@@ -1293,6 +1355,7 @@ private fun MushafPageViewer(
                             bitmap!!.asImageBitmap(),
                             contentDescription = tr(language, "mushaf_view") + " " + page,
                             contentScale = ContentScale.Fit,
+                            colorFilter = if (darkMode) ColorFilter.colorMatrix(MushafNightColorMatrix) else null,
                             modifier = Modifier.fillMaxSize()
                         )
                         if (verseRects.isNotEmpty()) {
