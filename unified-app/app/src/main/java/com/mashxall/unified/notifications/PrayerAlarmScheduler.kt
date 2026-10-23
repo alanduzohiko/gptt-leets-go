@@ -77,7 +77,7 @@ object PrayerAlarmScheduler {
         }
         val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
         ContentRepository.loadPrayerTimes(context, cityName, date)?.let { return it }
-        val city = ContentRepository.loadCities(context).firstOrNull { it.name.equals(cityName, true) } ?: return null
+        val city = ContentRepository.findCityByName(context, cityName, prefs.getString("selected_city_country", "") ?: "") ?: return null
         return PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, school)
     }
 
