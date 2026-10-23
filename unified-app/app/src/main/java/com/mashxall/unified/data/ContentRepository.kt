@@ -671,6 +671,106 @@ object ContentRepository {
      * and maps each Quran verse to a range of page IDs. Verify every decoded
      * page before showing it; on any mismatch, return a clear empty result.
      */
+    private val khairahTafsirPageTextCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+            size > 48
+    }
+
+    private fun readAssetByteRange(
+        context: Context,
+        assetPath: String,
+        offset: Int,
+        length: Int
+    ): ByteArray? {
+        if (offset < 0 || length <= 0) return null
+        return try {
+            context.assets.open(assetPath).use { input ->
+                var remaining = offset.toLong()
+                while (remaining > 0L) {
+                    val skipped = input.skip(remaining)
+                    if (skipped > 0L) {
+                        remaining -= skipped
+                    } else {
+                        if (input.read() < 0) return null
+                        remaining--
+                    }
+                }
+                val bytes = ByteArray(length)
+                var readTotal = 0
+                while (readTotal < bytes.size) {
+                    val read = input.read(bytes, readTotal, bytes.size - readTotal)
+                    if (read < 0) return null
+                    readTotal += read
+                }
+                bytes
+            }
+        } catch (error: Exception) {
+            Log.w("MashxallData", "Could not read $assetPath range ($offset, $length)", error)
+            null
+        }
+    }
+
+    private fun decodeKhairahTafsirPage(
+        context: Context,
+        book: TafsirBook,
+        binaryPath: String,
+        meta: KhairahPageMeta
+    ): String {
+        val cacheKey = "${book.id}:${meta.id}:${meta.sha256}"
+        synchronized(khairahTafsirPageTextCache) {
+            khairahTafsirPageTextCache[cacheKey]?.let { return it }
+        }
+        if (meta.offset < 0 || meta.length <= 0) return ""
+        val compressed = readAssetByteRange(context, binaryPath, meta.offset, meta.length) ?: return ""
+        val raw = try {
+            val inflater = Inflater(true)
+            try {
+                InflaterInputStream(
+                    ByteArrayInputStream(compressed),
+                    inflater,
+                    16 * 1024
+                ).use { input -> input.readBytes() }
+            } finally {
+                inflater.end()
+            }
+        } catch (error: Exception) {
+            Log.w("MashxallData", "Could not inflate ${book.id} page ${meta.id}", error)
+            return ""
+        }
+        if (raw.size != meta.byteCount || sha256Hex(raw) != meta.sha256) {
+            Log.w("MashxallData", "Page integrity check failed for ${book.id}, page ${meta.id}")
+            return ""
+        }
+        val decoded = try {
+            val array = JSONArray(String(raw, Charsets.UTF_8))
+            val pageText = StringBuilder()
+            for (index in 0 until array.length()) {
+                val paragraph = array.optJSONObject(index) ?: continue
+                val sourceText = paragraph.optString("text", "")
+                if (sourceText.isBlank()) continue
+                val plain = Html.fromHtml(sourceText, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+                if (plain.isNotBlank()) {
+                    if (pageText.isNotEmpty()) pageText.append("\n\n")
+                    pageText.append(plain)
+                }
+            }
+            pageText.toString().trim()
+        } catch (error: Exception) {
+            Log.w("MashxallData", "Could not parse ${book.id} page ${meta.id}", error)
+            return ""
+        }
+        synchronized(khairahTafsirPageTextCache) {
+            khairahTafsirPageTextCache[cacheKey] = decoded
+        }
+        return decoded
+    }
+
+    /**
+     * Khairah indexes raw-DEFLATE page streams in SQLite. Read only the requested
+     * compressed byte ranges and cache a bounded number of already verified page
+     * texts. This avoids loading the entire, potentially large .bin asset every
+     * time a reader advances one verse.
+     */
     private fun loadKhairahTafsirPages(context: Context, book: TafsirBook, surah: Int, ayah: Int): String {
         val metas = queryDb(context, book.assetPath, emptyList<KhairahPageMeta>()) { db ->
             db.rawQuery(
@@ -695,72 +795,23 @@ object ContentRepository {
         }
         if (metas.isEmpty()) return ""
         val binaryPath = book.assetPath.substringBeforeLast('.') + ".bin"
-        val bytes = try {
-            context.assets.open(binaryPath).use { it.readBytes() }
-        } catch (error: Exception) {
-            Log.w("MashxallData", "Khairah page file unavailable: $binaryPath", error)
-            return ""
-        }
         val out = StringBuilder()
         for (meta in metas) {
-            if (meta.offset < 0 || meta.length <= 0 ||
-                meta.offset > bytes.size || meta.length > bytes.size - meta.offset) {
-                Log.w("MashxallData", "Invalid page boundary for ${book.id}, page ${meta.id}")
-                continue
-            }
-            val raw = try {
-                val inflater = Inflater(true)
-                try {
-                    InflaterInputStream(
-                        ByteArrayInputStream(bytes, meta.offset, meta.length),
-                        inflater,
-                        16 * 1024
-                    ).use { input -> input.readBytes() }
-                } finally {
-                    inflater.end()
+            val pageText = decodeKhairahTafsirPage(context, book, binaryPath, meta)
+            if (pageText.isBlank()) continue
+            if (out.isNotEmpty()) out.append("\n\n────────────────────\n\n")
+            val volumePage = buildString {
+                if (meta.volume.isNotBlank()) append("المجلد ").append(meta.volume)
+                if (meta.page.isNotBlank()) {
+                    if (isNotEmpty()) append(" • ")
+                    append("الصفحة ").append(meta.page)
                 }
-            } catch (error: Exception) {
-                Log.w("MashxallData", "Could not inflate ${book.id} page ${meta.id}", error)
-                continue
             }
-            if (raw.size != meta.byteCount || sha256Hex(raw) != meta.sha256) {
-                Log.w("MashxallData", "Page integrity check failed for ${book.id}, page ${meta.id}")
-                continue
-            }
-            try {
-                val array = JSONArray(String(raw, Charsets.UTF_8))
-                val pageText = StringBuilder()
-                for (i in 0 until array.length()) {
-                    val paragraph = array.optJSONObject(i) ?: continue
-                    val sourceText = paragraph.optString("text", "")
-                    if (sourceText.isBlank()) continue
-                    val plain = Html.fromHtml(sourceText, Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                    if (plain.isNotBlank()) {
-                        if (pageText.isNotEmpty()) pageText.append("\n\n")
-                        pageText.append(plain)
-                    }
-                }
-                if (pageText.isNotEmpty()) {
-                    if (out.isNotEmpty()) out.append("\n\n────────────────────\n\n")
-                    val volumePage = buildString {
-                        if (meta.volume.isNotBlank()) append("المجلد ").append(meta.volume)
-                        if (meta.page.isNotBlank()) {
-                            if (isNotEmpty()) append(" • ")
-                            append("الصفحة ").append(meta.page)
-                        }
-                    }
-                    if (volumePage.isNotBlank()) out.append("📖 ").append(volumePage).append("\n\n")
-                    out.append(pageText)
-                }
-            } catch (error: Exception) {
-                Log.w("MashxallData", "Could not parse Khairah page ${meta.id}", error)
-            }
+            if (volumePage.isNotBlank()) out.append("📖 ").append(volumePage).append("\n\n")
+            out.append(pageText)
         }
         return out.toString().trim()
     }
-
-    private fun sha256Hex(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     suspend fun loadHadithsForAyah(
         context: Context,
