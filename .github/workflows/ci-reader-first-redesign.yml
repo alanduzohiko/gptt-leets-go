@@ -1,0 +1,45 @@
+name: Validate reader-first Mashxall redesign
+
+on:
+  push:
+    branches:
+      - "redesign/**"
+    paths:
+      - "unified-app/**"
+      - "docs/redesign-spec-ar.md"
+      - ".github/workflows/ci-reader-first-redesign.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "unified-app/**"
+      - "docs/redesign-spec-ar.md"
+      - ".github/workflows/ci-reader-first-redesign.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: reader-first-redesign-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout redesign source
+        uses: actions/checkout@v4
+
+      - name: Prepare Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Run unit tests, lint, and a source-only debug build
+        run: gradle --no-daemon --project-dir unified-app testDebugUnitTest lintDebug assembleDebug
