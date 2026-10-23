@@ -189,7 +189,9 @@ check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy
 # The redesigned Quran entry is a surah list. Select Al-Fatiha, enter the
 # real page-based Mushaf, then tap verse 1:1 to prove that verse actions and
 # translations open inside the reader instead of a separate text-only screen.
-surah_coords="$(python3 - dist/runtime-test/window-quran.xml <<'PY'
+surah_coords=""
+for attempt in $(seq 1 20); do
+  surah_coords="$(python3 - dist/runtime-test/window-quran.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -219,6 +221,17 @@ for node in nodes:
             raise SystemExit(0)
 PY
 )"
+  if [[ -n "$surah_coords" ]]; then
+    echo "PASS: first-surah selection became available after poll $attempt."
+    break
+  fi
+  if [[ "$attempt" -lt 20 ]]; then
+    echo "Waiting for Quran source database and surah list ($attempt/20)…"
+    sleep 3
+    adb shell uiautomator dump /sdcard/mashxall-quran-list-wait.xml > "dist/runtime-test/uiautomator-quran-list-wait-$attempt.txt" 2>&1 || true
+    adb pull /sdcard/mashxall-quran-list-wait.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
+  fi
+done
 if [[ -z "$surah_coords" ]]; then
   echo "FAIL: the Quran screen did not show a selectable first surah."
   cat dist/runtime-test/window-quran.xml
