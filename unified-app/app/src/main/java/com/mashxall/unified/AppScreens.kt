@@ -1121,7 +1121,43 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Text(if (language == AppLanguage.EN) "Play" else if (language == AppLanguage.AR) "تشغيل" else "لێدان", fontSize = 10.sp)
                             }
                         }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                val shareText = buildList {
+                                    add((surah?.arabicName ?: "") + " • " + target.first + ":" + target.second)
+                                    add(sheetVerse!!.arabic)
+                                    if (sheetVerse!!.translation.isNotBlank()) add(sheetVerse!!.translation)
+                                    if (sheetTafsir.isNotBlank()) add(sheetTafsir)
+                                }.joinToString("\n\n")
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(
+                                        sendIntent,
+                                        when (language) {
+                                            AppLanguage.EN -> "Share Quran verse"
+                                            AppLanguage.AR -> "مشاركة الآية"
+                                            AppLanguage.CKB -> "ئایەت بڵاو بکەرەوە"
+                                        }
+                                    )
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.Share, null, modifier = Modifier.size(17.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Share verse, translation and selected tafsir"
+                                    AppLanguage.AR -> "مشاركة الآية والترجمة والتفسير المختار"
+                                    AppLanguage.CKB -> "بڵاوکردنەوەی ئایەت، وەرگێڕان و تەفسیر"
+                                }, fontSize = 11.sp
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             item {
                                 FilterChip(
