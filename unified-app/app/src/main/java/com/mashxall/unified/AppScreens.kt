@@ -2603,7 +2603,6 @@ private fun requestCurrentLocation(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 private data class PrayerCountdownTarget(
     val prayerKey: String,
     val timeText: String,
@@ -2632,6 +2631,7 @@ private fun formatPrayerCountdown(remainingMillis: Long): String {
     return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (String) -> Unit, onQibla: () -> Unit) {
     val context = LocalContext.current
