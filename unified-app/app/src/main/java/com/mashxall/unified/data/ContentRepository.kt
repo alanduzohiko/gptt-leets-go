@@ -1201,6 +1201,98 @@ object ContentRepository {
     /** Limited compatibility helper for callers that only need common city choices. */
     suspend fun loadCities(context: Context): List<City> = searchCities(context, "", limit = 250)
 
+    internal fun addMinutesToPrayerTime(value: String, offsetMinutes: Int): String {
+        if (offsetMinutes == 0) return value
+        val parts = value.trim().split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: return value
+        val minute = parts.getOrNull(1)?.take(2)?.toIntOrNull() ?: return value
+        if (hour !in 0..23 || minute !in 0..59) return value
+        val total = (hour * 60 + minute + offsetMinutes).mod(24 * 60)
+        return "%02d:%02d".format(Locale.US, total / 60, total % 60)
+    }
+
+    /**
+     * Noor's original extra table defines cities whose time comes from a
+     * reference city (c_base) plus six explicit minute offsets in prayer order:
+     * Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha. Used only when there is no
+     * direct timetable for the requested city in either source database.
+     */
+    private suspend fun loadNoorPrayerTimesWithCorrection(
+        context: Context,
+        requestedCity: String,
+        date: Date
+    ): PrayerRow? = withContext(Dispatchers.IO) {
+        val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
+        queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
+            val correction = db.rawQuery(
+                """
+                SELECT city,name,c_base,correction
+                FROM extra
+                WHERE lower(city)=lower(?) OR lower(name)=lower(?)
+                ORDER BY CASE WHEN lower(city)=lower(?) THEN 0 ELSE 1 END,c_order
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(requestedCity, requestedCity, requestedCity)
+            ).use { c ->
+                if (c.moveToFirst()) {
+                    arrayOf(c.string("city"), c.string("name"), c.string("c_base"), c.string("correction"))
+                } else null
+            } ?: return@queryDb null
+
+            val canonicalCity = correction[0].ifBlank { requestedCity }
+            val baseCity = correction[2].ifBlank { canonicalCity }
+            val minuteValues = correction[3]
+                .split(",")
+                .mapNotNull { it.trim().toIntOrNull() }
+                .take(6)
+            val minuteOffsets = List(6) { minuteValues.getOrElse(it) { 0 } }
+
+            val base = db.rawQuery(
+                """
+                SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha
+                FROM staticprayertimes
+                WHERE lower(city)=lower(?) AND date=?
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(baseCity, md)
+            ).use { c ->
+                if (c.moveToFirst()) PrayerRow(
+                    city = c.string("city"),
+                    date = c.string("date"),
+                    fajr = c.string("fajr"),
+                    sunrise = c.string("sunrise"),
+                    dhuhr = c.string("dhuhr"),
+                    asr = c.string("asr"),
+                    maghrib = c.string("maghrib"),
+                    isha = c.string("isha"),
+                    source = "noor-base:${c.string("city")}"
+                ) else null
+            } ?: return@queryDb null
+
+            base.copy(
+                city = canonicalCity,
+                fajr = addMinutesToPrayerTime(base.fajr, minuteOffsets[0]),
+                sunrise = addMinutesToPrayerTime(base.sunrise, minuteOffsets[1]),
+                dhuhr = addMinutesToPrayerTime(base.dhuhr, minuteOffsets[2]),
+                asr = addMinutesToPrayerTime(base.asr, minuteOffsets[3]),
+                maghrib = addMinutesToPrayerTime(base.maghrib, minuteOffsets[4]),
+                isha = addMinutesToPrayerTime(base.isha, minuteOffsets[5]),
+                source = buildString {
+                    append("noor-correction:")
+                    append(canonicalCity)
+                    append(" (")
+                    append(baseCity)
+                    if (minuteOffsets.any { it != 0 }) {
+                        append("; ")
+                        append(minuteOffsets.joinToString("/") { if (it > 0) "+$it" else it.toString() })
+                        append(" min")
+                    }
+                    append(")")
+                }
+            )
+        }
+    }
+
     private fun addMinutesToPrayerTime(value: String, offsetMinutes: Int): String {
         if (offsetMinutes == 0) return value
         val parts = value.trim().split(":")
@@ -1293,45 +1385,87 @@ object ContentRepository {
         }
     }
 
-    suspend fun loadPrayerTimes(context: Context, city: String, date: Date = Date()): PrayerRow? = withContext(Dispatchers.IO) {
+    suspend fun loadPrayerTimes(
+        context: Context,
+        city: String,
+        date: Date = Date(),
+        countryName: String = ""
+    ): PrayerRow? = withContext(Dispatchers.IO) {
         val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
-        val noor = queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
-            db.rawQuery(
-                "SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha FROM staticprayertimes WHERE lower(city)=lower(?) AND date=? LIMIT 1",
-                arrayOf(city, md)
-            ).use { c ->
-                if (c.moveToFirst()) PrayerRow(
-                    c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"),
-                    c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"),
-                    source = "noor:${c.string("city")}"
-                ) else null
-            }
-        }
-        if (noor != null) return@withContext noor
+        val country = countryName.trim()
+        val useNoorRegionalData = country.isBlank() ||
+            country.contains("iraq", ignoreCase = true) ||
+            country.contains("العراق", ignoreCase = true)
 
-        val salawati = queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
-            db.rawQuery(
-                """
-                SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                       l.latitude AS lat,l.longitude AS lon
-                FROM location l JOIN prayer_time pt ON pt.location_id=l._id
-                WHERE lower(l.name)=lower(?) AND pt.date=?
-                ORDER BY CASE WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN 0 ELSE 1 END
-                LIMIT 1
-                """.trimIndent(), arrayOf(city, md)
-            ).use { c ->
-                if (c.moveToFirst()) PrayerRow(
-                    c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"),
-                    c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"),
-                    source = "salawati:${c.string("city")}",
-                    latitude = c.double("lat"),
-                    longitude = c.double("lon")
-                ) else null
+        if (useNoorRegionalData) {
+            val noor = queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
+                db.rawQuery(
+                    "SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha FROM staticprayertimes WHERE lower(city)=lower(?) AND date=? LIMIT 1",
+                    arrayOf(city, md)
+                ).use { c ->
+                    if (c.moveToFirst()) PrayerRow(
+                        c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"),
+                        c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"),
+                        source = "noor:${c.string("city")}"
+                    ) else null
+                }
             }
+            if (noor != null) return@withContext noor
         }
-        if (salawati != null) return@withContext salawati
 
-        loadNoorPrayerTimesWithCorrection(context, city, date)
+        if (country.isNotBlank()) {
+            val salawatiExact = queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
+                db.rawQuery(
+                    """
+                    SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                           l.latitude AS lat,l.longitude AS lon,co.name AS country
+                    FROM location l
+                    JOIN country co ON co._id=l.country_id
+                    JOIN prayer_time pt ON pt.location_id=l._id
+                    WHERE lower(l.name)=lower(?) AND lower(co.name)=lower(?) AND pt.date=?
+                    ORDER BY CASE WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN 0 ELSE 1 END
+                    LIMIT 1
+                    """.trimIndent(), arrayOf(city, country, md)
+                ).use { c ->
+                    if (c.moveToFirst()) PrayerRow(
+                        city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
+                        sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
+                        maghrib=c.string("maghrib"), isha=c.string("isha"),
+                        source="salawati:${c.string("city")}, ${c.string("country")}",
+                        latitude=c.double("lat"), longitude=c.double("lon")
+                    ) else null
+                }
+            }
+            if (salawatiExact != null) return@withContext salawatiExact
+            if (!useNoorRegionalData) return@withContext null
+        } else {
+            val salawati = queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
+                db.rawQuery(
+                    """
+                    SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                           l.latitude AS lat,l.longitude AS lon,co.name AS country
+                    FROM location l
+                    JOIN country co ON co._id=l.country_id
+                    JOIN prayer_time pt ON pt.location_id=l._id
+                    WHERE lower(l.name)=lower(?) AND pt.date=?
+                    ORDER BY CASE WHEN lower(co.name) LIKE '%iraq%' OR lower(co.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
+                             CASE WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN 0 ELSE 1 END
+                    LIMIT 1
+                    """.trimIndent(), arrayOf(city, md)
+                ).use { c ->
+                    if (c.moveToFirst()) PrayerRow(
+                        city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
+                        sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
+                        maghrib=c.string("maghrib"), isha=c.string("isha"),
+                        source="salawati:${c.string("city")}, ${c.string("country")}",
+                        latitude=c.double("lat"), longitude=c.double("lon")
+                    ) else null
+                }
+            }
+            if (salawati != null) return@withContext salawati
+        }
+
+        if (useNoorRegionalData) loadNoorPrayerTimesWithCorrection(context, city, date) else null
     }
 
     private suspend fun loadSalawatiPrayerTimesForCity(
