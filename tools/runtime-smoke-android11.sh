@@ -93,6 +93,89 @@ if ! grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/
   exit 1
 fi
 
+# Exercise the 604-page Mushaf's immersive display, rather than only proving
+# that its verse-list screen opens.
+mushaf_coords="$(python3 - dist/runtime-test/window-quran.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    text = node.attrib.get("text", "")
+    if not re.search(r"Mushaf|مصح", text, re.I):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$mushaf_coords" ]]; then
+  echo "FAIL: Mushaf view toggle is not accessible in the Quran screen."
+  cat dist/runtime-test/window-quran.xml
+  exit 1
+fi
+read -r mushaf_x mushaf_y <<< "$mushaf_coords"
+adb shell input tap "$mushaf_x" "$mushaf_y"
+sleep 15
+adb shell uiautomator dump /sdcard/mashxall-mushaf-fullscreen.xml > dist/runtime-test/uiautomator-mushaf-fullscreen.txt || true
+adb pull /sdcard/mashxall-mushaf-fullscreen.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null || true
+if ! grep -Eq 'Mushaf|مصح' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   ! grep -Eq 'Exit|خروج|دەرچوون' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   ! grep -q '604' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: immersive Mushaf viewer controls or 604-page metadata are missing."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+  exit 1
+fi
+if grep -Eq 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: app Quran header is still visible; immersive mode did not hide app chrome."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  exit 1
+fi
+echo "PASS: immersive full-screen Mushaf controls and page range are visible."
+
+exit_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    text = node.attrib.get("text", "")
+    if not re.search(r"Exit|خروج|دەرچوون", text, re.I):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$exit_coords" ]]; then
+  echo "FAIL: fullscreen Mushaf exit control is not accessible."
+  exit 1
+fi
+read -r exit_x exit_y <<< "$exit_coords"
+adb shell input tap "$exit_x" "$exit_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-quran-restored.xml > dist/runtime-test/uiautomator-quran-restored.txt || true
+adb pull /sdcard/mashxall-quran-restored.xml dist/runtime-test/window-quran-restored.xml >/dev/null || true
+if ! grep -Eq 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran' dist/runtime-test/window-quran-restored.xml; then
+  echo "FAIL: exiting immersive Mushaf did not restore the Quran screen."
+  cat dist/runtime-test/window-quran-restored.xml
+  exit 1
+fi
+echo "PASS: exiting immersive Mushaf restores the Quran screen and app chrome."
+
 check_screen hadith 'فەرموودەکان|الأحاديث|Hadith'
 if ! grep -Eq '8202|٨٬٢٠٢|٨٢٠٢' dist/runtime-test/window-hadith.xml; then
   echo "FAIL: expected source Hadith count was not visible."
