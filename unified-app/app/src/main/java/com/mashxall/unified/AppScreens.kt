@@ -3191,7 +3191,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             AsrCalculationSchool.fromId(asrSchool)
                         )
                     }
-                    else -> ContentRepository.loadPrayerTimes(context, selectedCity, targetDate)
+                    else -> {
+                        ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
+                            ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                                PrayerTimeCalculator.calculate(
+                                    targetDate, city.latitude, city.longitude,
+                                    PrayerCalculationMethod.fromId(calculationMethod),
+                                    AsrCalculationSchool.fromId(asrSchool)
+                                )
+                            }
+                    }
                 }
                 loadedDate = requestedKey
                 loading = false
@@ -3225,7 +3234,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             AsrCalculationSchool.fromId(asrSchool)
                         )
                 }
-                else -> ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow)
+                else -> {
+                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                        ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                            PrayerTimeCalculator.calculate(
+                                tomorrow, city.latitude, city.longitude,
+                                PrayerCalculationMethod.fromId(calculationMethod),
+                                AsrCalculationSchool.fromId(asrSchool)
+                            )
+                        }
+                }
             }
         }
     }
