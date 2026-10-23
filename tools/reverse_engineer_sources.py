@@ -227,6 +227,7 @@ def main() -> int:
                     "string_and_crypto_helpers": "sources/m5/l.java",
                     "string_decoder_key_map": "sources/m5/f.java",
                     "hadith_models": "sources/m4/f.java",
+                    "book_download_manager": "sources/p4/d.java",
                 }
                 crypto_line = re.compile(
                     r"Cipher|SecretKey|IvParameter|Base64\.decode|doFinal|decrypt|encrypt|AES|PBKDF|"
@@ -245,6 +246,9 @@ def main() -> int:
                     if tag == "hadith_row_mapper":
                         # This class maps encrypted database text fields into the UI model.
                         windows = [(0, min(len(source_lines), 340))]
+                    elif tag == "book_download_manager":
+                        # Captures the exact PDF base URL and the original download helper.
+                        windows = [(0, min(len(source_lines), 500))]
                     elif tag == "string_and_crypto_helpers":
                         # Record the precise string transform invoked by the Hadith mapper;
                         # broad crypto matches often hit unrelated app/dependency helpers.
@@ -293,7 +297,7 @@ def main() -> int:
                 # string decoder can be reviewed without downloading the 230+ MB APK.
                 if os.environ.get("MASHXALL_RE_DUMP_FOCUSED") == "1":
                     print("FOCUSED_NOOR_DECODER_BEGIN", flush=True)
-                    for tag in ("hadith_row_mapper", "string_and_crypto_helpers", "string_decoder_key_map"):
+                    for tag in ("hadith_row_mapper", "string_and_crypto_helpers", "string_decoder_key_map", "book_download_manager"):
                         for window in focused.get(tag, {}).get("windows", [])[:3]:
                             if tag == "hadith_row_mapper":
                                 # Limit to the mapper's first region; output around the
