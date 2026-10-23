@@ -58,6 +58,7 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
@@ -317,6 +318,40 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }, modifier = Modifier.size(32.dp)) {
                                 Icon(Icons.Outlined.BookmarkBorder, null, tint = foreground.copy(alpha = 0.6f), modifier = Modifier.size(19.dp))
+                            }
+                            IconButton(onClick = {
+                                val surahTitle = surahs.firstOrNull { it.number == verse.surah }?.arabicName.orEmpty()
+                                val translationName = when (language) {
+                                    AppLanguage.CKB -> currentTranslation.ckb
+                                    AppLanguage.AR -> currentTranslation.arabic
+                                    AppLanguage.EN -> currentTranslation.english
+                                }
+                                val shareText = buildString {
+                                    append("سورة ").append(surahTitle).append(" • ").append(verse.surah).append(":").append(verse.number)
+                                    append("\n\n").append(verse.arabic)
+                                    if (verse.translation.isNotBlank()) append("\n\n").append(verse.translation)
+                                    if (translationName.isNotBlank()) append("\n— ").append(translationName)
+                                    append("\n\n").append("مەشخەڵ • Mashxall")
+                                }
+                                try {
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, "Qur'an ${verse.surah}:${verse.number}")
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    }
+                                    context.startActivity(Intent.createChooser(
+                                        shareIntent,
+                                        when (language) {
+                                            AppLanguage.EN -> "Share verse"
+                                            AppLanguage.AR -> "مشاركة الآية"
+                                            AppLanguage.CKB -> "ئایەت هاوبەش بکە"
+                                        }
+                                    ))
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                                }
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Outlined.Share, null, tint = Gold, modifier = Modifier.size(18.dp))
                             }
                         }
                         Spacer(Modifier.height(6.dp))
@@ -2141,11 +2176,23 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
 @Composable
 fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String) {
     val context = LocalContext.current
-    var pageIndex by rememberSaveable(assetPath) { mutableIntStateOf(0) }
+    val preferences = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    val pageProgressKey = remember(assetPath) {
+        "book_pdf_page_" + MessageDigest.getInstance("SHA-256")
+            .digest(assetPath.toByteArray(Charsets.UTF_8))
+            .take(8).joinToString("") { "%02x".format(it) }
+    }
+    var pageIndex by rememberSaveable(assetPath) {
+        mutableIntStateOf(preferences.getInt(pageProgressKey, 0).coerceAtLeast(0))
+    }
     var pageCount by remember(assetPath) { mutableIntStateOf(0) }
     var bitmap by remember(assetPath) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pageIndex, pageProgressKey) {
+        preferences.edit().putInt(pageProgressKey, pageIndex.coerceAtLeast(0)).apply()
+    }
 
     LaunchedEffect(assetPath, pageIndex) {
         if (assetPath.isBlank()) {
