@@ -3853,7 +3853,12 @@ private fun requestCurrentLocation(
     val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
         .filter { provider -> try { manager.isProviderEnabled(provider) } catch (_: Exception) { false } }
     if (providers.isEmpty()) {
-        onError("Turn on Location/GPS on your phone, then try again")
+        val openedSettings = runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+        onError(if (openedSettings) "LOCATION_SETTINGS_OPENED" else "LOCATION_SERVICES_OFF")
         return
     }
 
@@ -4023,7 +4028,19 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     val onLocationError: (String) -> Unit = { error ->
         locating = false
-        locationMessage = error
+        locationMessage = when (error) {
+            "LOCATION_SETTINGS_OPENED" -> when (language) {
+                AppLanguage.EN -> "Location settings opened. Turn on Location, return here, then retry."
+                AppLanguage.AR -> "فُتحت إعدادات الموقع. فعّل الموقع، ثم ارجع إلى التطبيق وأعد المحاولة."
+                AppLanguage.CKB -> "ڕێکخستنەکانی شوێن کرانەوە؛ شوێن چالاک بکە، بگەڕێوە و دووبارە هەوڵ بدەوە."
+            }
+            "LOCATION_SERVICES_OFF" -> when (language) {
+                AppLanguage.EN -> "Location services are off. Turn them on in Android settings, then retry."
+                AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android ثم أعد المحاولة."
+                AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە و دووبارە هەوڵ بدەوە."
+            }
+            else -> error
+        }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -4745,7 +4762,22 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             }
         }
     }
-    val onLocationError: (String) -> Unit = { error -> locating = false; locationMessage = error }
+    val onLocationError: (String) -> Unit = { error ->
+        locating = false
+        locationMessage = when (error) {
+            "LOCATION_SETTINGS_OPENED" -> when (language) {
+                AppLanguage.EN -> "Location settings opened. Turn on Location, return here, then retry."
+                AppLanguage.AR -> "فُتحت إعدادات الموقع. فعّل الموقع، ثم ارجع إلى التطبيق وأعد المحاولة."
+                AppLanguage.CKB -> "ڕێکخستنەکانی شوێن کرانەوە؛ شوێن چالاک بکە، بگەڕێوە و دووبارە هەوڵ بدەوە."
+            }
+            "LOCATION_SERVICES_OFF" -> when (language) {
+                AppLanguage.EN -> "Location services are off. Turn them on in Android settings, then retry."
+                AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android ثم أعد المحاولة."
+                AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە و دووبارە هەوڵ بدەوە."
+            }
+            else -> error
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
