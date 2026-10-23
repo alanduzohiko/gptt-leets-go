@@ -1,0 +1,112 @@
+name: Runtime smoke test for unified Mashxall
+
+on:
+  workflow_run:
+    workflows:
+      - Build the new unified Mashxall Android app
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  android-11-runtime-smoke:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the exact source commit that was built
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Download the APK from that exact successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mashxall-build-artifact" dist/runtime-test
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/mashxall-build-artifact"
+          APK="$(find "$RUNNER_TEMP/mashxall-build-artifact" -type f -name 'Mashxall-Unified-debug.apk' -print -quit)"
+          if [[ -z "$APK" || ! -s "$APK" ]]; then
+            echo "No non-empty unified Mashxall APK was found in the successful build artifact."
+            find "$RUNNER_TEMP/mashxall-build-artifact" -maxdepth 4 -type f -print || true
+            exit 1
+          fi
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo "Downloaded APK size: $(stat -c '%s' "$APK") bytes"
+          sha256sum "$APK" | tee dist/runtime-test/apk-sha256.txt
+
+      - name: Prepare Android 11 emulator image
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0 emulator system-images;android-30;google_apis;x86_64"
+
+      - name: Install and launch the data-enabled app in Android 11
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-wait-timeout: 600
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            adb logcat -c
+            adb install --no-streaming "$APK_PATH" | tee dist/runtime-test/install.txt
+            adb shell am force-stop com.mashxall.unified
+            adb shell am start -n com.mashxall.unified/.MainActivity --es com.mashxall.unified.OPEN_SCREEN prayer | tee dist/runtime-test/launch.txt
+
+            # Allow the activity and the bundled prayer data to load before asserting.
+            sleep 35
+            PID="$(adb shell pidof com.mashxall.unified | tr -d '\r')"
+            if [[ -z "$PID" ]]; then
+              adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+              echo "FAIL: app process did not remain alive after opening Prayer Times."
+              exit 1
+            fi
+
+            adb shell uiautomator dump /sdcard/mashxall-window.xml > dist/runtime-test/uiautomator-dump.txt
+            adb pull /sdcard/mashxall-window.xml dist/runtime-test/window.xml >/dev/null
+            adb logcat -d -v threadtime > dist/runtime-test/logcat.txt
+
+            if ! grep -Eq 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة' dist/runtime-test/window.xml; then
+              echo "FAIL: Prayer Times screen title was not found in the visible Android UI tree."
+              cat dist/runtime-test/window.xml
+              exit 1
+            fi
+            if ! grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window.xml; then
+              echo "FAIL: expected Fajr label was not found on the Prayer Times screen."
+              cat dist/runtime-test/window.xml
+              exit 1
+            fi
+            if grep -E 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' dist/runtime-test/logcat.txt; then
+              echo "FAIL: Android reported a fatal runtime error."
+              exit 1
+            fi
+
+            cat > dist/runtime-test/RESULT.txt <<'EOF'
+            PASS
+            APK installed on an Android 11 (API 30) emulator.
+            MainActivity launched directly into Prayer Times and remained running.
+            UI automation found the prayer-time title and Fajr label.
+            Full logcat, UI hierarchy, install result, and APK checksum are attached.
+            This is a CI emulator smoke test; it is not a substitute for testing device sensors/audio on the user's realme phone.
+            EOF
+            cat dist/runtime-test/RESULT.txt
+
+      - name: Upload emulator runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-android11-runtime-smoke-${{ github.event.workflow_run.run_number }}
+          path: dist/runtime-test/
+          if-no-files-found: warn
+          retention-days: 14
