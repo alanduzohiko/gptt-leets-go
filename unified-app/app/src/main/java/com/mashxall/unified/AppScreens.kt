@@ -128,9 +128,9 @@ private val MushafNightColorMatrix = ColorMatrix(
 )
 private val MushafSepiaColorMatrix = ColorMatrix(
     floatArrayOf(
-        0.393f, 0.769f, 0.189f, 0f, 0f,
-        0.349f, 0.686f, 0.168f, 0f, 0f,
-        0.272f, 0.534f, 0.131f, 0f, 0f,
+        0.28106f, 0.55178f, 0.10716f, 0f, 15f,
+        0.25714f, 0.50482f, 0.09804f, 0f, 8f,
+        0.20631f, 0.40503f, 0.07866f, 0f, 2f,
         0f, 0f, 0f, 1f, 0f
     )
 )
