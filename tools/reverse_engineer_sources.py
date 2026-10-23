@@ -337,7 +337,7 @@ def main() -> int:
                         decoder_lines = decoder_source.read_text(encoding="utf-8", errors="replace").splitlines()
                         decoder_matches = [
                             idx for idx, source_line in enumerate(decoder_lines)
-                            if re.search(r"\\bString\\s+l\\s*\\(\\s*int\\s*\\[\\s*\\]", source_line)
+                            if re.search(r"\bString\s+l\s*\(\s*int\s*\[\s*\]", source_line)
                         ]
                         for idx in decoder_matches[:4]:
                             lo, hi = max(0, idx - 8), min(len(decoder_lines), idx + 55)
