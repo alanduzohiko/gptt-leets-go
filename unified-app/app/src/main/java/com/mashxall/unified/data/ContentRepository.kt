@@ -1336,95 +1336,85 @@ object ContentRepository {
             if (noor != null) return@withContext noor
         }
 
-        if (country.isNotBlank()) {
-            val salawatiExact = queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
-                db.rawQuery(
-                    """
-                    SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                           l.latitude AS lat,l.longitude AS lon,co.name AS country
-                    FROM location l
-                    JOIN country co ON co._id=l.country_id
-                    JOIN prayer_time pt ON pt.location_id=l._id
-                    WHERE lower(l.name)=lower(?) AND lower(co.name)=lower(?) AND pt.date=?
-                    ORDER BY CASE WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN 0 ELSE 1 END
-                    LIMIT 1
-                    """.trimIndent(), arrayOf(city, country, md)
-                ).use { c ->
-                    if (c.moveToFirst()) PrayerRow(
-                        city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
-                        sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
-                        maghrib=c.string("maghrib"), isha=c.string("isha"),
-                        source="salawati:${c.string("city")}, ${c.string("country")}",
-                        latitude=c.double("lat"), longitude=c.double("lon")
-                    ) else null
-                }
-            }
-            if (salawatiExact != null) return@withContext salawatiExact
-            if (!useNoorRegionalData) return@withContext null
-        } else {
-            val salawati = queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
-                db.rawQuery(
-                    """
-                    SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                           l.latitude AS lat,l.longitude AS lon,co.name AS country
-                    FROM location l
-                    JOIN country co ON co._id=l.country_id
-                    JOIN prayer_time pt ON pt.location_id=l._id
-                    WHERE lower(l.name)=lower(?) AND pt.date=?
-                    ORDER BY CASE WHEN lower(co.name) LIKE '%iraq%' OR lower(co.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
-                             CASE WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN 0 ELSE 1 END
-                    LIMIT 1
-                    """.trimIndent(), arrayOf(city, md)
-                ).use { c ->
-                    if (c.moveToFirst()) PrayerRow(
-                        city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
-                        sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
-                        maghrib=c.string("maghrib"), isha=c.string("isha"),
-                        source="salawati:${c.string("city")}, ${c.string("country")}",
-                        latitude=c.double("lat"), longitude=c.double("lon")
-                    ) else null
-                }
-            }
-            if (salawati != null) return@withContext salawati
-        }
+        val salawati = loadSalawatiPrayerTimesForCity(context, city, country, date)
+        if (salawati != null) return@withContext salawati
+        if (country.isNotBlank() && !useNoorRegionalData) return@withContext null
 
         if (useNoorRegionalData) loadNoorPrayerTimesWithCorrection(context, city, date) else null
     }
 
+    /**
+     * Use Salawati's original city timetable. Several named localities explicitly
+     * reference a base city's prayer schedule via location.prayer_dependent_id.
+     * Resolve that relation instead of silently substituting solar estimates.
+     */
     private suspend fun loadSalawatiPrayerTimesForCity(
         context: Context,
-        city: City,
+        cityName: String,
+        countryName: String,
         date: Date
     ): PrayerRow? = withContext(Dispatchers.IO) {
-        if (city.country.isBlank()) return@withContext null
         val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
         queryDb(context, SALAWATI_DB, null as PrayerRow?) { db ->
             db.rawQuery(
                 """
-                SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                       l.latitude AS lat,l.longitude AS lon,country.name AS country
-                FROM location l
-                JOIN country ON country._id=l.country_id
-                JOIN prayer_time pt ON pt.location_id=l._id
-                WHERE lower(l.name)=lower(?) AND lower(country.name)=lower(?) AND pt.date=?
-                ORDER BY ABS(l.latitude-?) + ABS(l.longitude-?)
+                SELECT requested.name AS city,
+                       pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                       requested.latitude AS lat,requested.longitude AS lon,
+                       country.name AS country,
+                       COALESCE(requested.has_fixed_prayer_time,0) AS has_fixed,
+                       COALESCE(requested.prayer_dependent_id,0) AS dependent_id,
+                       COALESCE(base.name,'') AS base_city
+                FROM location requested
+                JOIN country ON country._id=requested.country_id
+                LEFT JOIN location base ON base._id=requested.prayer_dependent_id
+                LEFT JOIN prayer_time pt
+                  ON pt.location_id = CASE
+                       WHEN COALESCE(requested.has_fixed_prayer_time,0)=1 THEN requested._id
+                       WHEN COALESCE(requested.prayer_dependent_id,0)>0 THEN requested.prayer_dependent_id
+                       ELSE requested._id
+                     END
+                 AND pt.date=?
+                WHERE lower(requested.name)=lower(?)
+                  AND (?='' OR lower(country.name)=lower(?))
+                ORDER BY
+                    CASE WHEN COALESCE(requested.has_fixed_prayer_time,0)=1 THEN 0
+                         WHEN COALESCE(requested.prayer_dependent_id,0)>0 THEN 1
+                         ELSE 2 END,
+                    CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
+                    requested._id
                 LIMIT 1
                 """.trimIndent(),
-                arrayOf(city.name, city.country, md, city.latitude.toString(), city.longitude.toString())
+                arrayOf(md, cityName, countryName, countryName)
             ).use { c ->
-                if (c.moveToFirst()) PrayerRow(
+                if (!c.moveToFirst()) return@use null
+                val fajr = c.string("fajr")
+                val sunrise = c.string("sunrise")
+                val dhuhr = c.string("dhuhr")
+                val asr = c.string("asr")
+                val maghrib = c.string("maghrib")
+                val isha = c.string("isha")
+                if (fajr.isBlank() || dhuhr.isBlank() || isha.isBlank()) return@use null
+                val dependency = c.int("dependent_id")
+                val baseCity = c.string("base_city")
+                val source = if (dependency > 0 && baseCity.isNotBlank()) {
+                    "salawati-dependent:${c.string("city")} → $baseCity, ${c.string("country")}"
+                } else {
+                    "salawati:${c.string("city")}, ${c.string("country")}"
+                }
+                PrayerRow(
                     city = c.string("city"),
                     date = c.string("date"),
-                    fajr = c.string("fajr"),
-                    sunrise = c.string("sunrise"),
-                    dhuhr = c.string("dhuhr"),
-                    asr = c.string("asr"),
-                    maghrib = c.string("maghrib"),
-                    isha = c.string("isha"),
-                    source = "salawati:${c.string("city")}, ${c.string("country")}",
+                    fajr = fajr,
+                    sunrise = sunrise,
+                    dhuhr = dhuhr,
+                    asr = asr,
+                    maghrib = maghrib,
+                    isha = isha,
+                    source = source,
                     latitude = c.double("lat"),
                     longitude = c.double("lon")
-                ) else null
+                )
             }
         }
     }
@@ -1504,7 +1494,54 @@ object ContentRepository {
                 }
             }
         }
-        noorRows + salawatiRows
+        val dependentRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
+            db.rawQuery(
+                """
+                SELECT dep.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
+                       dep.latitude AS lat,dep.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name,
+                       COALESCE(base.name,'') AS base_city
+                FROM location dep
+                JOIN location base ON base._id=dep.prayer_dependent_id
+                JOIN prayer_time pt ON pt.location_id=base._id
+                LEFT JOIN country ON country._id=dep.country_id
+                WHERE pt.date=?
+                  AND dep.prayer_dependent_id IS NOT NULL
+                  AND COALESCE(dep.has_fixed_prayer_time,0)=0
+                  AND dep.latitude BETWEEN ? AND ?
+                  AND dep.longitude BETWEEN ? AND ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM prayer_time own_pt
+                      WHERE own_pt.location_id=dep._id AND own_pt.date=pt.date
+                  )
+                ORDER BY ((dep.latitude-?)*(dep.latitude-?)) + ((dep.longitude-?)*(dep.longitude-?))
+                LIMIT 120
+                """.trimIndent(),
+                arrayOf(
+                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
+                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
+                )
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        PrayerRow(
+                            city = c.string("city"),
+                            date = c.string("date"),
+                            fajr = c.string("fajr"),
+                            sunrise = c.string("sunrise"),
+                            dhuhr = c.string("dhuhr"),
+                            asr = c.string("asr"),
+                            maghrib = c.string("maghrib"),
+                            isha = c.string("isha"),
+                            source = "salawati-dependent:${c.string("city")} → ${c.string("base_city")}, ${c.string("country_name")}",
+                            latitude = c.double("lat"),
+                            longitude = c.double("lon")
+                        )
+                    )
+                }
+            }
+        }
+        noorRows + salawatiRows + dependentRows
     }
 
     suspend fun loadPrayerTimesAtLocation(
