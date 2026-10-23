@@ -142,7 +142,7 @@ jobs:
             --source-root unified-app/app/src/main/java/com/mashxall/unified \
             --out dist/content-wiring-audit.json
 
-      - name: Verify required content coverage across the three source apps
+      - name: Audit content coverage from Qur'an through prayer, books and worship data
         run: |
           set -euo pipefail
           mkdir -p dist
