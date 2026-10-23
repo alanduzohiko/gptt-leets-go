@@ -108,7 +108,7 @@ for node in root.iter("node"):
     if not re.search(r"Mushaf|مصح", text, re.I):
         continue
     bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -153,7 +153,7 @@ for node in root.iter("node"):
     if not re.search(r"Exit|خروج|دەرچوون", text, re.I):
         continue
     bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
