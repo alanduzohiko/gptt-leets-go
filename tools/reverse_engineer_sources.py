@@ -130,12 +130,12 @@ def main() -> int:
             caps = {name: 0 for name in PATTERNS}
             book_signal = re.compile(
                 r"tn_books\.db|book_data|unique_text|url_cover|page_number|"
-                r"DownloadManager|\\.pdf\\b|pdf_url|book_url|"
+                r"DownloadManager|\.pdf\b|pdf_url|book_url|"
                 r"download.{0,80}book|book.{0,80}download|"
                 r"book.{0,80}(?:url|uri|path|file)|(?:url|uri|path|file).{0,80}book",
                 re.I,
             )
-            book_url_signal = re.compile(r"https?://[^\\s\\\"']{1,180}", re.I)
+            book_url_signal = re.compile(r'''https?://[^\s"']{1,180}''', re.I)
             app_report["book_download_contexts"] = []
             context_rules = {
                 "hadith_of_ayah": (re.compile(r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I), 35),
@@ -171,8 +171,8 @@ def main() -> int:
                         context_start = max(0, line_no - 14)
                         context_end = min(len(lines), line_no + 27)
                         priority = (
-                            0 if re.search(r"tn_books\\.db|book_data|unique_text|url_cover", stripped, re.I)
-                            else 1 if re.search(r"DownloadManager|\\.pdf\\b|pdf_url|book_url|download", stripped, re.I)
+                            0 if re.search(r"tn_books\.db|book_data|unique_text|url_cover", stripped, re.I)
+                            else 1 if re.search(r"DownloadManager|\.pdf\b|pdf_url|book_url|download", stripped, re.I)
                             else 2
                         )
                         book_contexts.append({
