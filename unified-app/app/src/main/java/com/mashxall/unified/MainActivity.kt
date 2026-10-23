@@ -46,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Favorite
@@ -413,12 +414,14 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
     }
 }
 
-private fun formatPrayerTime12(raw: String, language: AppLanguage): String {
+private fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
     val match = Regex("""(\\d{1,2}):(\\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
         ?: return raw
     var hour = match.groupValues[1].toIntOrNull() ?: return raw
     val minute = match.groupValues[2]
     val suffix = match.groupValues.getOrNull(3).orEmpty().uppercase(Locale.ROOT)
+    val hour24 = if (suffix.isNotBlank()) (hour % 12) + if (suffix == "PM") 12 else 0 else hour % 24
+    if (use24Hour) return String.format(Locale.US, "%02d:%s", hour24, minute)
     val isPm = if (suffix.isNotBlank()) suffix == "PM" else hour >= 12
     if (suffix.isBlank()) hour %= 24
     val hour12 = when (hour % 12) { 0 -> 12; else -> hour % 12 }
@@ -445,14 +448,16 @@ private fun HomeScreen(
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
+    var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
 
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
+            use24Hour = prefs.getBoolean("time_format_24h", false)
             delay(60_000L)
         }
     }
-    LaunchedEffect(selectedCity, clockNow / 86_400_000L) {
+    LaunchedEffect(selectedCity, clockNow / 86_400_000L, prefs.getString("gps_latitude", ""), prefs.getString("gps_longitude", ""), prefs.getString("prayer_method", "mwl"), prefs.getString("asr_school", "shafi"), prefs.getString("selected_city_country", "")) {
         loadingTimes = true
         val date = Date(clockNow)
         val country = prefs.getString("selected_city_country", "") ?: ""
@@ -493,12 +498,12 @@ private fun HomeScreen(
     }
     val prayerEntries = prayerTimes?.let { times ->
         listOf(
-            Triple("fajr", tr(language, "fajr"), formatPrayerTime12(times.fajr, language)),
-            Triple("sunrise", tr(language, "sunrise"), formatPrayerTime12(times.sunrise, language)),
-            Triple("dhuhr", tr(language, "dhuhr"), formatPrayerTime12(times.dhuhr, language)),
-            Triple("asr", tr(language, "asr"), formatPrayerTime12(times.asr, language)),
-            Triple("maghrib", tr(language, "maghrib"), formatPrayerTime12(times.maghrib, language)),
-            Triple("isha", tr(language, "isha"), formatPrayerTime12(times.isha, language))
+            Triple("fajr", tr(language, "fajr"), formatPrayerTime(times.fajr, language, use24Hour)),
+            Triple("sunrise", tr(language, "sunrise"), formatPrayerTime(times.sunrise, language, use24Hour)),
+            Triple("dhuhr", tr(language, "dhuhr"), formatPrayerTime(times.dhuhr, language, use24Hour)),
+            Triple("asr", tr(language, "asr"), formatPrayerTime(times.asr, language, use24Hour)),
+            Triple("maghrib", tr(language, "maghrib"), formatPrayerTime(times.maghrib, language, use24Hour)),
+            Triple("isha", tr(language, "isha"), formatPrayerTime(times.isha, language, use24Hour))
         )
     }.orEmpty()
 
