@@ -1132,6 +1132,8 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
+    var selectedMode by rememberSaveable { mutableIntStateOf(0) }
+    var articles by remember { mutableStateOf<List<HadithArticle>>(emptyList()) }
     var collections by remember { mutableStateOf<List<HadithCollection>>(emptyList()) }
     var selectedCollectionId by rememberSaveable { mutableIntStateOf(0) }
     var hadithItems by remember { mutableStateOf<List<HadithItem>>(emptyList()) }
@@ -1144,16 +1146,25 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     LaunchedEffect(Unit) {
         collections = ContentRepository.loadHadithCollections(context)
     }
-    LaunchedEffect(query, selectedCollectionId) {
+    LaunchedEffect(query, selectedCollectionId, selectedMode) {
         loading = true
         loadingMore = false
         offset = 0
         hasMore = true
-        val bookFilter = selectedCollectionId.takeIf { it > 0 }
-        totalMatches = ContentRepository.loadHadithCount(context, query.trim(), bookFilter)
-        hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100, bookId = bookFilter)
-        offset = hadithItems.size
-        hasMore = hadithItems.size == 100 && offset < totalMatches
+        if (selectedMode == 1) {
+            articles = ContentRepository.loadHadithArticles(context, query.trim())
+            hadithItems = emptyList()
+            totalMatches = articles.size
+            offset = articles.size
+            hasMore = false
+        } else {
+            val bookFilter = selectedCollectionId.takeIf { it > 0 }
+            totalMatches = ContentRepository.loadHadithCount(context, query.trim(), bookFilter)
+            hadithItems = ContentRepository.loadHadiths(context, query.trim(), offset = 0, limit = 100, bookId = bookFilter)
+            articles = emptyList()
+            offset = hadithItems.size
+            hasMore = hadithItems.size == 100 && offset < totalMatches
+        }
         loading = false
         listState.scrollToItem(0)
     }
@@ -1168,10 +1179,22 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.CKB -> "$totalMatches فەرموودە دۆزرایەوە • $offset بارکراوە"
                 }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
             )
-            Spacer(Modifier.height(10.dp))
-            SearchBox(query, { query = it }, tr(language, "search_hadith"))
             Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FilterChip(
+                    selected = selectedMode == 0,
+                    onClick = { selectedMode = 0 },
+                    label = { Text(if (language == AppLanguage.EN) "Narrations" else if (language == AppLanguage.AR) "الأحاديث" else "فەرموودە", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = selectedMode == 1,
+                    onClick = { selectedMode = 1 },
+                    label = { Text(if (language == AppLanguage.EN) "Articles (11)" else if (language == AppLanguage.AR) "المقالات (11)" else "وتارەکان (11)", fontSize = 11.sp) }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            SearchBox(query, { query = it }, tr(language, "search_hadith"))
+            if (selectedMode == 0) LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 item(key = "all-hadith-collections") {
                     FilterChip(
                         selected = selectedCollectionId == 0,
@@ -1201,7 +1224,62 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
             }
         }
-        if (hadithItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
+        if (selectedMode == 1) {
+            if (articles.isEmpty()) LoadingOrEmpty(loading, language, foreground, tr(language, "not_found"))
+            else LazyColumn(
+                contentPadding = PaddingValues(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(articles, key = { "hadith-article-" + it.id }) { article ->
+                    var showSorani by rememberSaveable(article.id) { mutableStateOf(language != AppLanguage.CKB) }
+                    var showEnglish by rememberSaveable(article.id) { mutableStateOf(language == AppLanguage.EN) }
+                    val localizedTitle = when (language) {
+                        AppLanguage.CKB -> article.titleCkb.ifBlank { article.titleArabic }
+                        AppLanguage.AR -> article.titleArabic.ifBlank { article.titleCkb }
+                        AppLanguage.EN -> article.titleEnglish.ifBlank { article.titleCkb }
+                    }
+                    val localizedBody = when (language) {
+                        AppLanguage.CKB -> article.bodyCkb.ifBlank { article.bodyArabic }
+                        AppLanguage.AR -> article.bodyArabic.ifBlank { article.bodyCkb }
+                        AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
+                    }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.2f))
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(34.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                    Text(article.id.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text(localizedTitle, color = Gold, fontSize = 15.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp, modifier = Modifier.weight(1f))
+                                IconButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall article", localizedTitle + "\n\n" + localizedBody))
+                                    Toast.makeText(context, if (language == AppLanguage.EN) "Article copied" else if (language == AppLanguage.AR) "تم نسخ المقالة" else "وتارەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
+                                }) { Icon(Icons.Outlined.ContentCopy, null, tint = Gold, modifier = Modifier.size(18.dp)) }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text(localizedBody, color = foreground, fontSize = 13.sp, lineHeight = 23.sp)
+                            if (language != AppLanguage.CKB && article.bodyCkb.isNotBlank()) {
+                                TextButton(onClick = { showSorani = !showSorani }) {
+                                    Text(if (showSorani) "Hide Sorani" else "Read Sorani", fontSize = 11.sp)
+                                }
+                                if (showSorani) Text(article.bodyCkb, color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 21.sp)
+                            }
+                            if (language != AppLanguage.EN && article.bodyEnglish.isNotBlank()) {
+                                TextButton(onClick = { showEnglish = !showEnglish }) {
+                                    Text(if (showEnglish) "Hide English" else "English translation", fontSize = 11.sp)
+                                }
+                                if (showEnglish) Text(article.bodyEnglish, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 20.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (hadithItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
             state = listState,
             contentPadding = PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
