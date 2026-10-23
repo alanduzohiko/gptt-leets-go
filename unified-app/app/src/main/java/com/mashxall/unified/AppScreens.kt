@@ -1595,6 +1595,8 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var collections by remember { mutableStateOf<List<HadithCollection>>(emptyList()) }
     var selectedCollectionId by rememberSaveable { mutableIntStateOf(0) }
     var hadithItems by remember { mutableStateOf<List<HadithItem>>(emptyList()) }
+    var selectedArticleForDetails by remember { mutableStateOf<HadithArticle?>(null) }
+    var selectedHadithForDetails by remember { mutableStateOf<HadithItem?>(null) }
     var totalMatches by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var loadingMore by remember { mutableStateOf(false) }
@@ -1707,9 +1709,6 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(articles, key = { "hadith-article-" + it.id }) { article ->
-                    var showSorani by rememberSaveable(article.id) { mutableStateOf(language != AppLanguage.CKB) }
-                    var showEnglish by rememberSaveable(article.id) { mutableStateOf(language == AppLanguage.EN) }
-                    var showAuthorDetail by rememberSaveable(article.id) { mutableStateOf(false) }
                     val localizedAuthor = when (language) {
                         AppLanguage.CKB -> article.authorCkb.ifBlank { article.authorArabic }
                         AppLanguage.AR -> article.authorArabic.ifBlank { article.authorCkb }
@@ -1726,72 +1725,37 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
                     }
                     Card(
+                        modifier = Modifier.fillMaxWidth().clickable { selectedArticleForDetails = article },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.2f))
+                        border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.22f))
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(34.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
                                     Text(article.id.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Text(localizedTitle, color = Gold, fontSize = 15.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp, modifier = Modifier.weight(1f))
-                                IconButton(onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall article", localizedTitle + "\n\n" + localizedBody))
-                                    Toast.makeText(context, if (language == AppLanguage.EN) "Article copied" else if (language == AppLanguage.AR) "تم نسخ المقالة" else "وتارەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
-                                }) { Icon(Icons.Outlined.ContentCopy, null, tint = Gold, modifier = Modifier.size(18.dp)) }
+                                Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
                             }
                             if (localizedAuthor.isNotBlank()) {
                                 Spacer(Modifier.height(5.dp))
                                 Text(
-                                    when (language) {
-                                        AppLanguage.EN -> "Author: $localizedAuthor"
-                                        AppLanguage.AR -> "المؤلف: $localizedAuthor"
-                                        AppLanguage.CKB -> "نووسەر: $localizedAuthor"
-                                    },
-                                    color = foreground.copy(alpha = 0.57f), fontSize = 10.sp
+                                    when (language) { AppLanguage.EN -> "Author: " + localizedAuthor; AppLanguage.AR -> "المؤلف: " + localizedAuthor; AppLanguage.CKB -> "نووسەر: " + localizedAuthor },
+                                    color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
                                 )
                             }
-                            Spacer(Modifier.height(12.dp))
-                            Text(localizedBody, color = foreground, fontSize = 13.sp, lineHeight = 23.sp)
-                            if (article.authorDetail.isNotBlank()) {
-                                TextButton(onClick = { showAuthorDetail = !showAuthorDetail }) {
-                                    Text(
-                                        when (language) {
-                                            AppLanguage.EN -> if (showAuthorDetail) "Hide author details" else "Author details"
-                                            AppLanguage.AR -> if (showAuthorDetail) "إخفاء معلومات المؤلف" else "معلومات المؤلف"
-                                            AppLanguage.CKB -> if (showAuthorDetail) "زانیاری نووسەر بشارەوە" else "زانیاری نووسەر"
-                                        }, fontSize = 10.sp
-                                    )
-                                }
-                                if (showAuthorDetail) Text(article.authorDetail, color = foreground.copy(alpha = 0.7f), fontSize = 11.sp, lineHeight = 18.sp)
-                            }
-                            if (language != AppLanguage.CKB && article.bodyCkb.isNotBlank()) {
-                                TextButton(onClick = { showSorani = !showSorani }) {
-                                    Text(
-                                        if (language == AppLanguage.AR) {
-                                            if (showSorani) "إخفاء السورانية" else "عرض السورانية"
-                                        } else {
-                                            if (showSorani) "Hide Sorani" else "Read Sorani"
-                                        }, fontSize = 11.sp
-                                    )
-                                }
-                                if (showSorani) Text(article.bodyCkb, color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 21.sp)
-                            }
-                            if (language != AppLanguage.EN && article.bodyEnglish.isNotBlank()) {
-                                TextButton(onClick = { showEnglish = !showEnglish }) {
-                                    Text(
-                                        if (language == AppLanguage.AR) {
-                                            if (showEnglish) "إخفاء الإنجليزية" else "الترجمة الإنجليزية"
-                                        } else {
-                                            if (showEnglish) "Hide English" else "English translation"
-                                        }, fontSize = 11.sp
-                                    )
-                                }
-                                if (showEnglish) Text(article.bodyEnglish, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 20.sp)
-                            }
+                            Spacer(Modifier.height(9.dp))
+                            Text(
+                                localizedBody.replace("<rr>", "").replace("</rr>", "").take(190).let { if (localizedBody.length > 190) it.trimEnd() + "…" else it },
+                                color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 20.sp, maxLines = 4
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                when (language) { AppLanguage.EN -> "Read article & translations"; AppLanguage.AR -> "قراءة المقال والترجمات"; AppLanguage.CKB -> "وتار و وەرگێڕانەکان بخوێنەوە" },
+                                color = Gold, fontWeight = FontWeight.SemiBold, fontSize = 11.sp
+                            )
                         }
                     }
                 }
@@ -1825,18 +1789,21 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.AR -> hadith.arabic
                     AppLanguage.EN -> hadith.english
                 }
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                    Column(Modifier.padding(15.dp)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { selectedHadithForDetails = hadith },
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(19.dp),
+                    border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
+                ) {
+                    Column(Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(collection.ifBlank { "Hadith #${hadith.id}" }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(chapter.ifBlank { kitab.ifBlank { collection.ifBlank { if (language == AppLanguage.EN) "Hadith topic" else if (language == AppLanguage.AR) "موضوع الحديث" else "بابەتی فەرموودە" } } },
+                                    color = Gold, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 20.sp)
                                 if (kitab.isNotBlank()) Text(kitab, color = foreground.copy(alpha = 0.72f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                if (chapter.isNotBlank()) Text(chapter, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp)
                                 Text(
-                                    if (language == AppLanguage.EN) "No. $numberInBook • ID ${hadith.id}"
-                                    else if (language == AppLanguage.AR) "رقم $numberInBook • المعرّف ${hadith.id}"
-                                    else "ژمارە $numberInBook • ناسنامە ${hadith.id}",
-                                    color = foreground.copy(alpha = 0.42f), fontSize = 9.sp
+                                    collection + " • " + (if (language == AppLanguage.EN) "No. " else if (language == AppLanguage.AR) "رقم " else "ژمارە ") + numberInBook,
+                                    color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
                                 )
                             }
                             TextButton(
@@ -1849,54 +1816,26 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             ) {
                                 Text(if (favoriteHadithIds.contains(hadith.id)) "★" else "☆", color = Gold, fontSize = 22.sp)
                             }
-                            IconButton(onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val textToCopy = buildString {
-                                    append(collection).append("\n")
-                                    if (kitab.isNotBlank()) append(kitab).append("\n")
-                                    if (chapter.isNotBlank()) append(chapter).append("\n")
-                                    append(hadith.arabic).append("\n\n")
-                                    if (hadith.sorani.isNotBlank()) append(hadith.sorani).append("\n\n")
-                                    if (hadith.english.isNotBlank()) append(hadith.english).append("\n\n")
-                                    append("Reference: ").append(numberInBook)
-                                }
-                                clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", textToCopy))
-                                Toast.makeText(context, if (language == AppLanguage.EN) "Hadith copied" else if (language == AppLanguage.AR) "تم نسخ الحديث" else "فەرموودەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(Icons.Outlined.ContentCopy, null, tint = Gold, modifier = Modifier.size(18.dp))
-                            }
                         }
-                        Spacer(Modifier.height(7.dp))
-                        Text(hadith.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            hadith.arabic.replace("<rr>", "").replace("</rr>", "").take(155).let { if (hadith.arabic.length > 155) it.trimEnd() + "…" else it },
+                            color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
+                        )
                         if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(translatedText.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.82f), fontSize = 13.sp, lineHeight = 21.sp)
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                translatedText.replace("<rr>", "").replace("</rr>", "").take(115).let { if (translatedText.length > 115) it.trimEnd() + "…" else it },
+                                color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 19.sp, maxLines = 3
+                            )
                         }
-                        if (language != AppLanguage.EN && hadith.english.isNotBlank()) {
-                            TextButton(onClick = { showEnglish = !showEnglish }) {
-                                Text(if (showEnglish) {
-                                    if (language == AppLanguage.AR) "إخفاء الإنجليزية" else "English: hide"
-                                } else {
-                                    if (language == AppLanguage.AR) "عرض الإنجليزية" else "English translation"
-                                }, fontSize = 11.sp)
-                            }
-                            if (showEnglish) Text(hadith.english.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
-                        }
-                        if (hadith.note.isNotBlank() || hadith.footnote.isNotBlank()) {
-                            TextButton(onClick = { showNotes = !showNotes }) {
-                                Text(if (showNotes) {
-                                    if (language == AppLanguage.EN) "Hide notes" else if (language == AppLanguage.AR) "إخفاء الملاحظات" else "تێبینی بشارەوە"
-                                } else {
-                                    if (language == AppLanguage.EN) "Notes and footnotes" else if (language == AppLanguage.AR) "الملاحظات والحواشي" else "تێبینی و پەراوێز"
-                                }, fontSize = 11.sp)
-                            }
-                            if (showNotes) {
-                                if (hadith.note.isNotBlank()) Text(hadith.note.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
-                                if (hadith.footnote.isNotBlank()) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(hadith.footnote.replace("<rr>", "").replace("</rr>", ""), color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 18.sp)
-                                }
-                            }
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                when (language) { AppLanguage.EN -> "View full narration"; AppLanguage.AR -> "عرض الحديث كاملًا"; AppLanguage.CKB -> "فەرموودەکە بە تەواوی ببینە" },
+                                color = Gold, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, modifier = Modifier.weight(1f)
+                            )
+                            Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
                         }
                     }
                 }
