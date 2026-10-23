@@ -781,6 +781,296 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         confirmButton = { TextButton(onClick = { chooseTranslation = false }) { Text(tr(language, "back")) } }
     )
 
+
+    if (showReaderSettings) AlertDialog(
+        onDismissRequest = { showReaderSettings = false },
+        title = {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Quran reader settings"
+                    AppLanguage.AR -> "إعدادات قارئ القرآن"
+                    AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان"
+                }, color = foreground, fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 470.dp)) {
+                item {
+                    Text(
+                        when (language) { AppLanguage.EN -> "DEFAULT TRANSLATION"; AppLanguage.AR -> "الترجمة الافتراضية"; AppLanguage.CKB -> "وەرگێڕانی بنەڕەت" },
+                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+                items(ContentRepository.quranTranslations, key = { "reader-translation-" + it.id }) { choice ->
+                    val label = when (language) {
+                        AppLanguage.CKB -> choice.ckb
+                        AppLanguage.AR -> choice.arabic
+                        AppLanguage.EN -> choice.english
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            translationKey = choice.id
+                            prefs.edit().putString("quran_translation", choice.id).apply()
+                        }.padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = translationKey == choice.id, onClick = {
+                            translationKey = choice.id
+                            prefs.edit().putString("quran_translation", choice.id).apply()
+                        })
+                        Spacer(Modifier.width(5.dp))
+                        Text(label, color = foreground, fontSize = 12.sp)
+                    }
+                }
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Divider(color = Gold.copy(alpha = 0.25f))
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        when (language) { AppLanguage.EN -> "DEFAULT TAFSIR"; AppLanguage.AR -> "التفسير الافتراضي"; AppLanguage.CKB -> "تەفسیرى بنەڕەت" },
+                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+                items(ContentRepository.tafsirBooks, key = { "reader-tafsir-" + it.id }) { book ->
+                    val label = when (language) {
+                        AppLanguage.CKB -> book.labelCkb
+                        AppLanguage.AR -> book.labelAr
+                        AppLanguage.EN -> book.labelEn
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            selectedTafsirBook = book.id
+                            prefs.edit().putString("quran_tafsir_book", book.id).apply()
+                        }.padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedTafsirBook == book.id, onClick = {
+                            selectedTafsirBook = book.id
+                            prefs.edit().putString("quran_tafsir_book", book.id).apply()
+                        })
+                        Spacer(Modifier.width(5.dp))
+                        Text(label, color = foreground, fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { showReaderSettings = false }) {
+                Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+            }
+        }
+    )
+
+    if (selectedAyahForSheet != null) {
+        ModalBottomSheet(
+            onDismissRequest = { selectedAyahForSheet = null },
+            containerColor = cardColor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 19.dp, vertical = 8.dp)
+            ) {
+                val target = selectedAyahForSheet!!
+                val surah = surahs.firstOrNull { it.number == target.first }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            (surah?.arabicName ?: "") + " • " + target.first + ":" + target.second,
+                            color = Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Verse actions & study"
+                                AppLanguage.AR -> "إجراءات الآية ودراستها"
+                                AppLanguage.CKB -> "کردار و خوێندنەوەی ئایەت"
+                            }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
+                        )
+                    }
+                    TextButton(onClick = { showReaderSettings = true }) { Text("⚙", color = Gold, fontSize = 22.sp) }
+                }
+                Spacer(Modifier.height(11.dp))
+                when {
+                    sheetLoading -> Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Gold)
+                    }
+                    sheetVerse == null -> Text(
+                        when (language) {
+                            AppLanguage.EN -> "Verse text is unavailable for this selection."
+                            AppLanguage.AR -> "نص الآية غير متاح لهذا الاختيار."
+                            AppLanguage.CKB -> "دەقی ئایەت بۆ ئەم هەڵبژاردنە بەردەست نییە."
+                        }, color = foreground, fontSize = 13.sp
+                    )
+                    else -> {
+                        Text(sheetVerse!!.arabic, color = foreground, fontSize = 27.sp, lineHeight = 48.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        if (sheetVerse!!.translation.isNotBlank()) {
+                            Spacer(Modifier.height(9.dp))
+                            Text(sheetVerse!!.translation, color = foreground.copy(alpha = 0.8f), fontSize = 15.sp, lineHeight = 25.sp)
+                            Text(
+                                when (language) { AppLanguage.EN -> currentTranslation.english; AppLanguage.AR -> currentTranslation.arabic; AppLanguage.CKB -> currentTranslation.ckb },
+                                color = Gold.copy(alpha = 0.9f), fontSize = 10.sp
+                            )
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                    clipboard?.setPrimaryClip(ClipData.newPlainText("Quran verse", sheetVerse!!.arabic + "\n\n" + sheetVerse!!.translation))
+                                    Toast.makeText(context, if (language == AppLanguage.EN) "Verse copied" else if (language == AppLanguage.AR) "تم نسخ الآية" else "ئایەتەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text(if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی", fontSize = 10.sp)
+                            }
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    onBookmark(target.first, target.second)
+                                    Toast.makeText(context, if (language == AppLanguage.EN) "Verse saved" else if (language == AppLanguage.AR) "تم حفظ الآية" else "ئایەت پاشەکەوت کرا", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Icon(Icons.Outlined.BookmarkBorder, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text(if (language == AppLanguage.EN) "Save" else if (language == AppLanguage.AR) "حفظ" else "پاشەکەوت", fontSize = 10.sp)
+                            }
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    if (sheetAudioPlaying) {
+                                        AudioController.stop()
+                                        sheetAudioPlaying = false
+                                    } else {
+                                        scope.launch {
+                                            val reciters = ContentRepository.loadReciters(context)
+                                            val savedId = prefs.getInt("preferred_reciter_id", -1)
+                                            val chosen = reciters.firstOrNull { it.id == savedId && it.audioType == 0 }
+                                                ?: reciters.firstOrNull { it.audioType == 0 }
+                                            if (chosen == null) {
+                                                Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                val url = ContentRepository.reciterSampleUrl(chosen, target.first, target.second)
+                                                sheetAudioPlaying = true
+                                                AudioController.playRemote(context, url) { isPlaying -> sheetAudioPlaying = isPlaying }
+                                            }
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(if (sheetAudioPlaying) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text(if (language == AppLanguage.EN) "Play" else if (language == AppLanguage.AR) "تشغيل" else "لێدان", fontSize = 10.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            item {
+                                FilterChip(
+                                    selected = false, onClick = { showReaderSettings = true },
+                                    label = { Text(if (language == AppLanguage.EN) "Translation / tafsir" else if (language == AppLanguage.AR) "الترجمة / التفسير" else "وەرگێڕان / تەفسیر", fontSize = 10.sp) }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = showSheetHadith, onClick = { showSheetHadith = !showSheetHadith },
+                                    label = { Text(
+                                        (if (language == AppLanguage.EN) "Related Hadith (" else if (language == AppLanguage.AR) "الأحاديث المرتبطة (" else "فەرموودەی پەیوەندیدار (") + sheetRelatedHadith.size + ")",
+                                        fontSize = 10.sp
+                                    ) }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = showSheetWordStudy, onClick = {
+                                        showSheetWordStudy = !showSheetWordStudy
+                                        if (showSheetWordStudy && sheetWords.isEmpty()) {
+                                            sheetWordLoading = true
+                                            scope.launch {
+                                                sheetWords = ContentRepository.loadWordAnalysis(context, target.first, target.second)
+                                                sheetWordLoading = false
+                                            }
+                                        }
+                                    },
+                                    label = { Text(if (language == AppLanguage.EN) "Word study" else if (language == AppLanguage.AR) "تحليل الكلمات" else "شیکردنەوەی وشە", fontSize = 10.sp) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(11.dp))
+                        Card(colors = CardDefaults.cardColors(containerColor = foreground.copy(alpha = 0.035f)), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.padding(13.dp)) {
+                                Text(
+                                    ContentRepository.tafsirBooks.firstOrNull { it.id == selectedTafsirBook }?.let { book ->
+                                        when (language) { AppLanguage.EN -> book.labelEn; AppLanguage.AR -> book.labelAr; AppLanguage.CKB -> book.labelCkb }
+                                    }.orEmpty(),
+                                    color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                if (sheetTafsir.isBlank()) Text(
+                                    when (language) { AppLanguage.EN -> "No tafsir text is available for this verse in the selected source."; AppLanguage.AR -> "لا يتوفر تفسير لهذه الآية في المصدر المختار."; AppLanguage.CKB -> "لە سەرچاوەی هەڵبژێردراودا تەفسیر بۆ ئەم ئایەتە نییە." },
+                                    color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, lineHeight = 19.sp
+                                ) else Text(sheetTafsir.replace("<br>", "\n").replace("<br/>", "\n"), color = foreground, fontSize = 13.sp, lineHeight = 22.sp)
+                            }
+                        }
+                        if (showSheetHadith) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                when (language) { AppLanguage.EN -> "RELATED HADITH"; AppLanguage.AR -> "الأحاديث المرتبطة"; AppLanguage.CKB -> "فەرموودە پەیوەندیدارەکان" },
+                                color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(7.dp))
+                            if (sheetRelatedHadith.isEmpty()) Text(
+                                when (language) { AppLanguage.EN -> "No linked narration is available for this verse."; AppLanguage.AR -> "لا توجد رواية مرتبطة بهذه الآية."; AppLanguage.CKB -> "فەرموودەی پەیوەندیدار بۆ ئەم ئایەتە بەردەست نییە." },
+                                color = foreground.copy(alpha = 0.65f), fontSize = 12.sp
+                            ) else sheetRelatedHadith.forEach { narration ->
+                                Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                                    Text(
+                                        when (language) { AppLanguage.EN -> narration.collectionEnglish; AppLanguage.AR -> narration.collectionArabic; AppLanguage.CKB -> narration.collectionSorani.ifBlank { narration.collectionArabic } },
+                                        color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(narration.arabic, color = foreground, fontSize = 18.sp, lineHeight = 30.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                    val translated = when (language) { AppLanguage.EN -> narration.english; AppLanguage.AR -> ""; AppLanguage.CKB -> narration.kurdish }
+                                    if (translated.isNotBlank()) {
+                                        Spacer(Modifier.height(5.dp))
+                                        Text(translated, color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 20.sp)
+                                    }
+                                    if (narration.reference.isNotBlank()) Text(narration.reference, color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
+                                    Divider(color = Gold.copy(alpha = 0.18f), modifier = Modifier.padding(top = 8.dp))
+                                }
+                            }
+                        }
+                        if (showSheetWordStudy) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                when (language) { AppLanguage.EN -> "WORD-BY-WORD STUDY"; AppLanguage.AR -> "دراسة كلمة بكلمة"; AppLanguage.CKB -> "خوێندنەوەی وشە بە وشە" },
+                                color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(7.dp))
+                            when {
+                                sheetWordLoading -> CircularProgressIndicator(color = Gold, modifier = Modifier.size(20.dp))
+                                sheetWords.isEmpty() -> Text(tr(language, "not_found"), color = foreground.copy(alpha = 0.65f), fontSize = 12.sp)
+                                else -> sheetWords.forEach { word ->
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                        Text(word.parts.joinToString("  ") { it.glyphText }, color = foreground, fontSize = 21.sp, lineHeight = 33.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                                        if (word.root.isNotBlank()) Text(
+                                            (if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + word.root,
+                                            color = Gold, fontSize = 11.sp
+                                        )
+                                        if (word.grammar.isNotBlank()) Text(word.grammar, color = foreground.copy(alpha = 0.72f), fontSize = 11.sp, lineHeight = 18.sp)
+                                    }
+                                    Divider(color = Gold.copy(alpha = 0.15f))
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(28.dp))
+            }
+        }
+    }
+
+
 }
 
 @Composable
