@@ -51,12 +51,13 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
     }
 
     private suspend fun updateOne(context: Context, manager: AppWidgetManager, widgetId: Int) {
-        manager.updateAppWidget(widgetId, render(context, null, Companion.locationFallback("ckb"), ""))
+        manager.updateAppWidget(widgetId, render(context, widgetId, null, Companion.locationFallback("ckb"), ""))
         val loaded = runCatching { loadTodayAndTomorrow(context) }.getOrNull()
         val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
             .getString("language", "ckb") ?: "ckb"
         val views = render(
             context,
+            widgetId,
             loaded?.today,
             loaded?.locationLabel ?: Companion.locationFallback(language),
             loaded?.nextPrayerLabel(language).orEmpty()
@@ -64,7 +65,7 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         manager.updateAppWidget(widgetId, views)
     }
 
-    private fun render(context: Context, row: PrayerRow?, locationLabel: String, nextPrayer: String): RemoteViews {
+    private fun render(context: Context, widgetId: Int, row: PrayerRow?, locationLabel: String, nextPrayer: String): RemoteViews {
         val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
             .getString("language", "ckb") ?: "ckb"
         val views = RemoteViews(context.packageName, R.layout.widget_prayer_times)
@@ -211,4 +212,13 @@ private fun prayerLabel(language: String, key: String): String = when (key) {
     "asr" -> when (language) { "en" -> "Asr"; "ar" -> "العصر"; else -> "عەسر" }
     "maghrib" -> when (language) { "en" -> "Maghrib"; "ar" -> "المغرب"; else -> "مەغریب" }
     else -> when (language) { "en" -> "Isha"; "ar" -> "العشاء"; else -> "عیشا" }
+}
+
+private fun parseTime(value: String): LocalTime? {
+    val parts = value.trim().split(":")
+    if (parts.size < 2) return null
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].take(2).toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    return runCatching { LocalTime.of(hour, minute) }.getOrNull()
 }

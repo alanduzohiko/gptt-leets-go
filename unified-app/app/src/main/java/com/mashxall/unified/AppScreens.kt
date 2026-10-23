@@ -174,6 +174,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
     }
     val currentSurah = surahs.firstOrNull { it.number == selected }
+    val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
+        ?: ContentRepository.quranTranslations.first()
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -194,8 +196,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Spacer(Modifier.height(8.dp))
             SearchBox(query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(7.dp))
-            val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
-                ?: ContentRepository.quranTranslations.first()
             val currentTranslationLabel = when (language) {
                 AppLanguage.CKB -> currentTranslation.ckb
                 AppLanguage.AR -> currentTranslation.arabic
