@@ -128,6 +128,13 @@ def main() -> int:
                 "jadx_tail": tool_output,
             }
             caps = {name: 0 for name in PATTERNS}
+            book_signal = re.compile(
+                r"tn_books\\.db|book_data|unique_text|url_cover|page_number|"
+                r"DownloadManager|download.{0,80}book|book.{0,80}download|"
+                r"https?://[^\\s\"']*(?:book|pdf|download)[^\\s\"']*",
+                re.I,
+            )
+            app_report["book_download_contexts"] = []
             context_rules = {
                 "hadith_of_ayah": (re.compile(r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I), 35),
                 "cryptography": (re.compile(r"Cipher|SecretKeySpec|IvParameterSpec|Base64\.decode|PBKDF2|AES|decrypt|encrypt|doFinal", re.I), 30),
@@ -145,6 +152,22 @@ def main() -> int:
                     stripped = " ".join(line.strip().split())
                     if not stripped:
                         continue
+                    # The source database has 94 book records but only two bundled
+                    # PDFs, so record the original app's actual download/open logic.
+                    book_contexts = app_report["book_download_contexts"]
+                    if len(book_contexts) < 60 and book_signal.search(stripped):
+                        context_start = max(0, line_no - 14)
+                        context_end = min(len(lines), line_no + 27)
+                        book_contexts.append({
+                            "file": relative_file,
+                            "match_line": line_no,
+                            "match": stripped[:260],
+                            "context_start_line": context_start + 1,
+                            "context": "\\n".join(
+                                f"{idx + 1}: {item.rstrip()[:280]}"
+                                for idx, item in enumerate(lines[context_start:context_end], context_start)
+                            ),
+                        })
                     for label, pattern in PATTERNS.items():
                         if caps[label] >= 100 or not pattern.search(stripped):
                             continue
@@ -265,6 +288,14 @@ def main() -> int:
                                 print(f"TARGET {tag} lines={window['start_line']}-{window['end_line']}", flush=True)
                                 print(window["source"][:18000], flush=True)
                     print("FOCUSED_NOOR_DECODER_END", flush=True)
+                    print("FOCUSED_NOOR_BOOK_DOWNLOAD_BEGIN", flush=True)
+                    for item in app_report.get("book_download_contexts", [])[:24]:
+                        print(
+                            f"BOOK_SOURCE file={item['file']} line={item['match_line']} match={item['match']}",
+                            flush=True,
+                        )
+                        print(item["context"][:2600], flush=True)
+                    print("FOCUSED_NOOR_BOOK_DOWNLOAD_END", flush=True)
 
             app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
