@@ -1920,7 +1920,11 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                                 Spacer(Modifier.height(6.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Text(
-                                        item.pages.toString() + " • " + tr(language, "pages"),
+                                        item.pages.toString() + " • " + when (language) {
+                                            AppLanguage.EN -> "pages"
+                                            AppLanguage.AR -> "صفحة"
+                                            AppLanguage.CKB -> "پەڕە"
+                                        },
                                         color = foreground.copy(alpha = 0.52f), fontSize = 10.sp
                                     )
                                     if (item.branch.isNotBlank() && item.branch != "0") {
