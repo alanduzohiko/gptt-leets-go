@@ -240,6 +240,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             onResumeMushafHandled()
         }
     }
+    // Do not let a restored or legacy state expose the old text-only reader.
+    // Quran entry is the surah list; an explicitly selected/resumed surah opens
+    // the graphic Mushaf page viewer.
+    LaunchedEffect(showSurahList, mushafMode, openingMushaf, resumeLastMushaf) {
+        if (!showSurahList && !mushafMode && !openingMushaf && !resumeLastMushaf) {
+            showSurahList = true
+        }
+    }
     LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList) {
         if (mushafMode || showSurahList) {
             loading = false
