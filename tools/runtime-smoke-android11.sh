@@ -429,7 +429,60 @@ then
   cat dist/runtime-test/window-hadith-articles.xml
   exit 1
 fi
-echo "PASS: original Hadith articles and body text render in the second Hadith tab."
+echo "PASS: original Hadith article cards show a separate title and readable preview."
+
+article_detail_coords="$(python3 - dist/runtime-test/window-hadith-articles.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"سیفەتەکانی شکۆ و گەورەیی|صفات الجلال والعظمة|Attributes of Majesty and Greatness", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$article_detail_coords" ]]; then
+  echo "FAIL: source Hadith article title could not be tapped to open its details."
+  cat dist/runtime-test/window-hadith-articles.xml
+  exit 1
+fi
+read -r article_detail_x article_detail_y <<< "$article_detail_coords"
+adb shell input tap "$article_detail_x" "$article_detail_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-hadith-article-detail.xml > dist/runtime-test/uiautomator-hadith-article-detail.txt 2>&1 || true
+adb pull /sdcard/mashxall-hadith-article-detail.xml dist/runtime-test/window-hadith-articles.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Copy article|نسخ المقالة|وتار کۆپی بکە' dist/runtime-test/window-hadith-articles.xml; then
+  echo "FAIL: tapping an article preview did not open the dedicated detail sheet."
+  cat dist/runtime-test/window-hadith-articles.xml
+  exit 1
+fi
+if ! python3 - dist/runtime-test/window-hadith-articles.xml <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(1)
+texts = [node.attrib.get("text", "").strip() for node in root.iter("node")]
+if max((len(text) for text in texts), default=0) < 120:
+    raise SystemExit(1)
+PY
+then
+  echo "FAIL: the selected Hadith article detail did not render readable body text."
+  cat dist/runtime-test/window-hadith-articles.xml
+  exit 1
+fi
+echo "PASS: selecting an article opens its full details and copy action."
 
 check_screen books 'کتێبخانە|المكتبة|Book library'
 if ! grep -q '94' dist/runtime-test/window-books.xml; then
@@ -504,6 +557,84 @@ fi
 check_screen farmuda 'فەرموودە و دوعاکان|المأثورات والأدعية|Supplications & sayings'
 check_screen tafsir 'تەفسیرو وەرگێڕان|التفسير والترجمة|Tafsir & translation'
 check_screen azkar 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
+
+# The redesigned Adhkar route opens topic cards first. Open a real source category,
+# then open an individual remembrance and assert that its dedicated details sheet
+# shows the full Arabic text rather than stuffing every dhikr into the category list.
+azkar_category_coords=""
+for attempt in $(seq 1 8); do
+  azkar_category_coords="$(python3 - dist/runtime-test/window-azkar.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"entries.*tap to open|ذكرًا.*اضغط للفتح|زیکر.*بۆ کردنەوە دەست لێبدە", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -n "$azkar_category_coords" ]]; then break; fi
+  sleep 3
+  adb shell uiautomator dump /sdcard/mashxall-azkar-category.xml > "dist/runtime-test/uiautomator-azkar-category-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-azkar-category.xml dist/runtime-test/window-azkar.xml >/dev/null 2>&1 || true
+done
+if [[ -z "$azkar_category_coords" ]]; then
+  echo "FAIL: source Adhkar categories did not render as separate selectable cards."
+  cat dist/runtime-test/window-azkar.xml
+  exit 1
+fi
+read -r azkar_category_x azkar_category_y <<< "$azkar_category_coords"
+adb shell input tap "$azkar_category_x" "$azkar_category_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-azkar-items.xml > dist/runtime-test/uiautomator-azkar-items.txt 2>&1 || true
+adb pull /sdcard/mashxall-azkar-items.xml dist/runtime-test/window-azkar-items.xml >/dev/null 2>&1 || true
+
+azkar_item_coords="$(python3 - dist/runtime-test/window-azkar-items.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Open remembrance|فتح الذكر|زیکرەکە بکەرەوە", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$azkar_item_coords" ]]; then
+  echo "FAIL: Adhkar category opened but individual remembrance cards were not available."
+  cat dist/runtime-test/window-azkar-items.xml
+  exit 1
+fi
+read -r azkar_item_x azkar_item_y <<< "$azkar_item_coords"
+adb shell input tap "$azkar_item_x" "$azkar_item_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-azkar-detail.xml > dist/runtime-test/uiautomator-azkar-detail.txt 2>&1 || true
+adb pull /sdcard/mashxall-azkar-detail.xml dist/runtime-test/window-azkar.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Repetitions|عدد التكرارات|ژمارەی دووبارەکردنەوە' dist/runtime-test/window-azkar.xml; then
+  echo "FAIL: tapping an Adhkar item did not open its dedicated detail and repetition counter."
+  cat dist/runtime-test/window-azkar.xml
+  exit 1
+fi
+echo "PASS: Adhkar categories open a list, and an individual remembrance opens its own detail sheet."
 check_screen names 'ناوە پیرۆزەکان|أسماء الله الحسنى|Names of Allah'
 check_screen tasbih 'تەسبیح|المسبحة|Digital tasbih'
 check_screen audio 'دەنگ و تلاوەت|التلاوات والصوتيات|Recitations & audio'
