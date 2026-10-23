@@ -1516,8 +1516,11 @@ fun AudioScreen(
     focusReciters: Boolean = false
 ) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
+    var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
+    var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
@@ -1533,6 +1536,24 @@ fun AudioScreen(
         audio = ContentRepository.loadAudioItems(context)
         reciters = ContentRepository.loadReciters(context)
         loading = false
+    }
+    LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId) {
+        val preferred = reciters.firstOrNull { it.id == preferredReciterId }
+        if (focusReciters && preferred != null) {
+            val url = ContentRepository.reciterSampleUrl(
+                preferred,
+                initialSurah.coerceIn(1, 114),
+                initialAyah.coerceAtLeast(1)
+            )
+            val key = "$url|${initialSurah}|${initialAyah}"
+            if (autoPlayKey != key) {
+                autoPlayKey = key
+                playing = url
+                AudioController.playRemote(context, url) { state ->
+                    if (!state) playing = ""
+                }
+            }
+        }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(tr(language, "audio"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -1598,9 +1619,16 @@ fun AudioScreen(
                 (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
             }
             Text(
-                if (language == AppLanguage.EN) "Streaming requires an internet connection. Pick a verse to audition a reciter."
-                else if (language == AppLanguage.AR) "يحتاج البث إلى اتصال بالإنترنت. اختر آية لتجربة القارئ."
-                else "بۆ گوێگرتن پێویستە ئینتەرنێتت هەبێت؛ ئایەتێک هەڵبژێرە بۆ تاقیکردنەوەی دەنگ.",
+                if (language == AppLanguage.EN) {
+                    if (preferredReciterId > 0) "Your preferred reciter will start automatically when you open this screen from a Quran verse."
+                    else "Streaming needs internet. Choose a reciter below; it will be remembered and the Quran play button can use it next time."
+                } else if (language == AppLanguage.AR) {
+                    if (preferredReciterId > 0) "سيبدأ قارئك المفضّل تلقائيًا عند فتح هذه الشاشة من آية في القرآن."
+                    else "البث يحتاج إلى الإنترنت. اختر قارئًا أدناه؛ سيُحفظ اختيارك ليستخدمه زر تشغيل الآية لاحقًا."
+                } else {
+                    if (preferredReciterId > 0) "کاتێک لەم شاشەیە لە ئایەتێکی قورئانەوە بکەیتەوە، قورئان‌خوێنی دڵخوازت خۆکارانە دەست پێدەکات."
+                    else "بۆ پەخش ئینتەرنێت پێویستە. قورئان‌خوێنێک هەڵبژێرە؛ دواتر دوگمەی گوێگرتن لە ئایەت ئەوە بەکاردهێنێت."
+                },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
             )
             Spacer(Modifier.height(7.dp))
@@ -1640,13 +1668,35 @@ fun AudioScreen(
                                 Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
                                 Text(if (reciter.audioType == 0) "Verse-by-verse" else "Surah audio", color = Gold.copy(alpha = 0.85f), fontSize = 9.sp)
+                                TextButton(
+                                    onClick = {
+                                        preferredReciterId = reciter.id
+                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(25.dp)
+                                ) {
+                                    Text(
+                                        if (preferredReciterId == reciter.id) {
+                                            if (language == AppLanguage.EN) "★ Preferred reciter" else if (language == AppLanguage.AR) "★ القارئ المفضّل" else "★ قورئان‌خوێنی دڵخواز"
+                                        } else {
+                                            if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
+                                        },
+                                        color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
+                                        fontSize = 9.sp,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                             IconButton(onClick = {
+                                preferredReciterId = reciter.id
+                                prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
                                 if (playing == url) {
                                     AudioController.stop()
                                     playing = ""
                                 } else {
                                     playing = url
+                                    autoPlayKey = "$url|${initialSurah}|${initialAyah}"
                                     AudioController.playRemote(context, url) { state -> if (!state) playing = "" }
                                 }
                             }) {
