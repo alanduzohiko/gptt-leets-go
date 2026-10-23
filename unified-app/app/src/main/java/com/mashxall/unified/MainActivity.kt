@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -164,6 +165,12 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = android.graphics.Color.rgb(7, 30, 26)
         setContent { MashxallApp(startScreen = intent.getStringExtra(EXTRA_OPEN_SCREEN)) }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        setContent { MashxallApp(startScreen = intent.getStringExtra(EXTRA_OPEN_SCREEN)) }
+    }
 }
 
 @Composable
@@ -179,6 +186,15 @@ fun MashxallApp(startScreen: String? = null) {
         )
     }
     var navigationStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(startScreen) {
+        val requested = startScreen?.takeIf { candidate ->
+            AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
+        }
+        if (requested != null) {
+            screen = requested
+            navigationStack = emptyList()
+        }
+    }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
