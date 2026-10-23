@@ -3659,7 +3659,13 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "books"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Book library"
+                    AppLanguage.AR -> "مكتبة الكتب"
+                    AppLanguage.CKB -> "کتێبخانەی کتێب"
+                }, color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold
+            )
             Spacer(Modifier.height(4.dp))
             Text(
                 when (language) {
