@@ -18,6 +18,8 @@ on:
       - "tools/reverse_engineer_hadith_decoder.py"
       - "tools/audit_hadith_decoder.py"
       - "tools/audit_prayer_data.py"
+      - "tools/audit_apk_assets.py"
+      - "tests/test_audit_apk_assets.py"
       - "tools/runtime-smoke-android11.sh"
       - ".github/workflows/runtime-smoke-unified-android.yml"
       - ".github/workflows/build-unified-mashxall.yml"
@@ -73,6 +75,9 @@ jobs:
             exit 1
           fi
           echo "MASHXALL_SOURCE_BUNDLE=$SOURCE" >> "$GITHUB_ENV"
+
+      - name: Test APK asset packaging auditor
+        run: python -m unittest discover -s tests -p 'test_audit_apk_assets.py'
 
       - name: Download JADX static analyzer
         shell: bash
@@ -198,6 +203,10 @@ jobs:
           unzip -t "$APK" | tail -n 2
           sha256sum "$APK"
           mkdir -p dist
+          python tools/audit_apk_assets.py \
+            --apk "$APK" \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --out dist/apk-asset-audit.json
           cp "$APK" dist/Mashxall-Unified-debug.apk
           cp unified-app/app/src/main/assets/content_catalog.json dist/content-catalog.json
           cat > dist/BUILD-STATUS-AR.txt <<'EOF'
@@ -222,6 +231,7 @@ jobs:
             dist/content-coverage-audit.json
             dist/hadith-decoder-audit.json
             dist/prayer-data-audit.json
+            dist/apk-asset-audit.json
             dist/BUILD-STATUS-AR.txt
             dist/reverse-engineering-report.json
           if-no-files-found: warn

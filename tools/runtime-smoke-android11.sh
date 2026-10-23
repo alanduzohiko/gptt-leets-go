@@ -167,6 +167,13 @@ fi
 check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
 if ! grep -Eq 'بِسْم|بسم|ٱلْحَمْد|الحمد' dist/runtime-test/window-quran.xml; then
   echo "FAIL: expected Quran verse text is missing from the rendered Quran screen."
+  echo "Capturing the Android logcat because the Quran route opened but the verse query returned no visible content."
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-quran-data-failure.txt || true
+  echo "=== Relevant Mashxall database errors ==="
+  grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|SQLite|Unable to open|quran\.db|no such column|no such table' \
+    dist/runtime-test/logcat-quran-data-failure.txt | tail -n 100 || true
+  echo "=== APK content asset inventory (selected paths) ==="
+  adb shell run-as com.mashxall.unified find files/content-databases -maxdepth 1 -type f -printf '%f %s bytes\\n' 2>&1 | head -n 50 || true
   cat dist/runtime-test/window-quran.xml
   exit 1
 fi
