@@ -690,9 +690,61 @@ check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
 check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
-check_screen home 'دڵت ڕووناک بکە|أضئ قلبك بالمعرفة|Let knowledge light your heart'
-check_screen library 'کتێبخانەی ئیسلامی|المكتبة الإسلامية|Islamic library'
-check_screen worship 'زیکر و دوعاکان|الأذكار والأدعية|Adhkar & duas'
+check_screen home 'کاتەکانی نوێژ|مواقيت الصلاة|Prayer times'
+
+# Verify the new home hierarchy: live prayer times first, a resume-last-Mushaf
+# action, and quick access beneath it. Tapping "Continue reading" must re-open
+# the saved page-based Mushaf, not the old text-only verse list.
+if ! grep -Eq 'بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading' dist/runtime-test/window-home.xml; then
+  echo "FAIL: home does not show the continue-reading shortcut."
+  cat dist/runtime-test/window-home.xml
+  exit 1
+fi
+if ! grep -Eq 'دەستگەیشتنی خێرا|وصول سريع|Quick access' dist/runtime-test/window-home.xml; then
+  echo "FAIL: quick access was removed from the home screen."
+  cat dist/runtime-test/window-home.xml
+  exit 1
+fi
+resume_coords="$(python3 - dist/runtime-test/window-home.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$resume_coords" ]]; then
+  echo "FAIL: Continue reading shortcut has no tappable UI bounds."
+  cat dist/runtime-test/window-home.xml
+  exit 1
+fi
+read -r resume_x resume_y <<< "$resume_coords"
+adb shell input tap "$resume_x" "$resume_y"
+sleep 7
+adb shell uiautomator dump /sdcard/mashxall-home-resume.xml > dist/runtime-test/uiautomator-home-resume.txt 2>&1 || true
+adb pull /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.xml ||
+   ! grep -q '604' dist/runtime-test/window-home-resume.xml; then
+  echo "FAIL: Continue reading did not resume the saved 604-page graphic Mushaf."
+  cat dist/runtime-test/window-home-resume.xml
+  exit 1
+fi
+echo "PASS: home prayer-times card, continue-reading resume, and quick access are visible and usable."
+
+check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
+check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
 assert_visible_body_text() {
