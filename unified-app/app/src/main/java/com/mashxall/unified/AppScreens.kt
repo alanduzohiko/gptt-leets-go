@@ -2097,9 +2097,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             .putString("gps_longitude", fix.longitude.toString())
             .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
             .apply()
-        cities.minByOrNull { city ->
-            PrayerTimeCalculator.distanceKm(fix.latitude, fix.longitude, city.latitude, city.longitude)
-        }?.let { onCity(it.name) }
         locationMessage = if (fix.hasAccuracy()) {
             val acc = fix.accuracy.toInt().toString()
             when (language) {
@@ -2167,8 +2164,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
+    LaunchedEffect(citySearch) {
+        delay(250L)
+        cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
+    }
     LaunchedEffect(Unit) {
-        cities = ContentRepository.loadCities(context)
         adhanAssets = ContentRepository.loadAudioItems(context).filter { item ->
             val name = (item.title + " " + item.assetPath).lowercase(Locale.ROOT)
             listOf("abdulbasit", "abdulmajid", "hijaz", "madina", "fajr", "majid", "mansur", "mecca", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan", "adhan", "athan", "azan").any { name.contains(it) }
@@ -2618,7 +2618,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         city = when {
             gpsLatitude != null && gpsLongitude != null -> City("GPS", gpsLatitude!!, gpsLongitude!!)
             manualLatitude != null && manualLongitude != null -> City(selectedCity, manualLatitude, manualLongitude, manualCountry)
-            else -> ContentRepository.loadCities(context).firstOrNull { it.name.equals(selectedCity, true) }
+            else -> ContentRepository.findCityByName(context, selectedCity, manualCountry)
         }
     }
     DisposableEffect(context) {
