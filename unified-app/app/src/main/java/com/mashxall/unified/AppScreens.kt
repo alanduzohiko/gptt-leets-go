@@ -114,7 +114,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.tan
 
-private val Gold = Color(0xFFC9A44C)
+private val Gold: Color get() = MashxallAppearance.accent
 private val DeepGreen = Color(0xFF103D32)
 private val MainText = Color(0xFFF6F2E6)
 private val CardDark = Color(0xFF102B25)
