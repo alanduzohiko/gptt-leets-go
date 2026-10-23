@@ -89,6 +89,11 @@ import java.security.MessageDigest
 import java.util.Date
 import java.util.Calendar
 import java.util.Locale
+import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -2412,6 +2417,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
@@ -2594,7 +2600,14 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         val displayDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
+        val displayLocalDate = Instant.ofEpochMilli(displayDate.time).atZone(ZoneId.systemDefault()).toLocalDate()
         val displayDateText = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(displayDate)
+        val datePickerState = key(dayOffset) {
+            rememberDatePickerState(
+                initialSelectedDateMillis = displayLocalDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                yearRange = (LocalDate.now().year - 1)..(LocalDate.now().year + 1)
+            )
+        }
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
@@ -2603,7 +2616,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 IconButton(onClick = { dayOffset = (dayOffset - 1).coerceAtLeast(-366) }, enabled = dayOffset > -366) {
                     Text("‹", color = Gold, fontSize = 22.sp)
                 }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier.weight(1f).clickable { showDatePicker = true },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
                         when (language) {
                             AppLanguage.EN -> if (dayOffset == 0) "Today" else if (dayOffset < 0) "Past date" else "Upcoming date"
@@ -2615,6 +2631,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 IconButton(onClick = { dayOffset = (dayOffset + 1).coerceAtMost(366) }, enabled = dayOffset < 366) {
                     Text("›", color = Gold, fontSize = 22.sp)
+                }
+                IconButton(onClick = { showDatePicker = true }) {
+                    Icon(Icons.Outlined.DateRange, contentDescription = if (language == AppLanguage.EN) "Choose date" else if (language == AppLanguage.AR) "اختيار التاريخ" else "بەروار هەڵبژێرە", tint = Gold)
                 }
                 if (dayOffset != 0) {
                     TextButton(onClick = { dayOffset = 0 }) {
@@ -2838,6 +2857,40 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         }
         Spacer(Modifier.height(10.dp))
+    }
+    if (showDatePicker) DatePickerDialog(
+        onDismissRequest = { showDatePicker = false },
+        confirmButton = {
+            TextButton(onClick = {
+                val selectedMillis = datePickerState.selectedDateMillis
+                if (selectedMillis != null) {
+                    val selectedDate = Instant.ofEpochMilli(selectedMillis).atZone(ZoneOffset.UTC).toLocalDate()
+                    dayOffset = ChronoUnit.DAYS.between(LocalDate.now(), selectedDate).toInt().coerceIn(-366, 366)
+                }
+                showDatePicker = false
+            }) {
+                Text(if (language == AppLanguage.EN) "Apply" else if (language == AppLanguage.AR) "تطبيق" else "جێبەجێکردن")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { showDatePicker = false }) {
+                Text(tr(language, "back"))
+            }
+        }
+    ) {
+        DatePicker(
+            state = datePickerState,
+            title = {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Choose prayer date"
+                        AppLanguage.AR -> "اختر تاريخ المواقيت"
+                        AppLanguage.CKB -> "بەرواری کاتەکانی نوێژ هەڵبژێرە"
+                    }, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp)
+                )
+            },
+            showModeToggle = true
+        )
     }
     if (chooseCity) AlertDialog(
         onDismissRequest = { chooseCity = false },
