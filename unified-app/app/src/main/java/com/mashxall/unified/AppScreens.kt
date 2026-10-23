@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.text.Html
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.app.AlarmManager
@@ -1579,6 +1580,11 @@ private fun tafsirLabel(book: TafsirBook, language: AppLanguage): String = when 
     AppLanguage.EN -> book.labelEn
 }
 
+
+private fun cleanHadithDisplayText(value: String): String =
+    Html.fromHtml(value.replace("<rr>", "").replace("</rr>", ""), Html.FROM_HTML_MODE_LEGACY)
+        .toString().replace('\u00a0', ' ').trim()
+
 @Composable
 fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
@@ -1819,13 +1825,13 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            hadith.arabic.replace("<rr>", "").replace("</rr>", "").take(155).let { if (hadith.arabic.length > 155) it.trimEnd() + "…" else it },
+                            cleanHadithDisplayText(hadith.arabic).take(155).let { if (cleanHadithDisplayText(hadith.arabic).length > 155) it.trimEnd() + "…" else it },
                             color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
                         )
                         if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                translatedText.replace("<rr>", "").replace("</rr>", "").take(115).let { if (translatedText.length > 115) it.trimEnd() + "…" else it },
+                                cleanHadithDisplayText(translatedText).take(115).let { if (cleanHadithDisplayText(translatedText).length > 115) it.trimEnd() + "…" else it },
                                 color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 19.sp, maxLines = 3
                             )
                         }
@@ -1871,6 +1877,159 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             }
         }
     }
+
+    selectedArticleForDetails?.let { article ->
+        val localizedTitle = when (language) {
+            AppLanguage.CKB -> article.titleCkb.ifBlank { article.titleArabic }
+            AppLanguage.AR -> article.titleArabic.ifBlank { article.titleCkb }
+            AppLanguage.EN -> article.titleEnglish.ifBlank { article.titleCkb }
+        }
+        val localizedAuthor = when (language) {
+            AppLanguage.CKB -> article.authorCkb.ifBlank { article.authorArabic }
+            AppLanguage.AR -> article.authorArabic.ifBlank { article.authorCkb }
+            AppLanguage.EN -> article.authorEnglish.ifBlank { article.authorCkb }
+        }
+        val localizedBody = when (language) {
+            AppLanguage.CKB -> article.bodyCkb.ifBlank { article.bodyArabic }
+            AppLanguage.AR -> article.bodyArabic.ifBlank { article.bodyCkb }
+            AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
+        }
+        ModalBottomSheet(
+            onDismissRequest = { selectedArticleForDetails = null },
+            containerColor = cardColor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(localizedTitle, color = Gold, fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 29.sp)
+                if (localizedAuthor.isNotBlank()) {
+                    Spacer(Modifier.height(7.dp))
+                    Text(
+                        when (language) { AppLanguage.EN -> "Author: " + localizedAuthor; AppLanguage.AR -> "المؤلف: " + localizedAuthor; AppLanguage.CKB -> "نووسەر: " + localizedAuthor },
+                        color = foreground.copy(alpha = 0.6f), fontSize = 11.sp
+                    )
+                }
+                Spacer(Modifier.height(15.dp))
+                Text(cleanHadithDisplayText(localizedBody), color = foreground, fontSize = 15.sp, lineHeight = 26.sp)
+                if (language != AppLanguage.CKB && article.bodyCkb.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "SORANI" else "السورانية", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(article.bodyCkb), color = foreground.copy(alpha = 0.82f), fontSize = 13.sp, lineHeight = 22.sp)
+                }
+                if (language != AppLanguage.EN && article.bodyEnglish.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("ENGLISH", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(article.bodyEnglish), color = foreground.copy(alpha = 0.78f), fontSize = 13.sp, lineHeight = 22.sp)
+                }
+                if (language != AppLanguage.AR && article.bodyArabic.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "ARABIC SOURCE" else "النص العربي", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(article.bodyArabic), color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                }
+                if (article.authorDetail.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(if (language == AppLanguage.EN) "AUTHOR DETAILS" else if (language == AppLanguage.AR) "معلومات المؤلف" else "زانیاری نووسەر", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(article.authorDetail), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 20.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith article", localizedTitle + "\n\n" + cleanHadithDisplayText(localizedBody)))
+                        Toast.makeText(context, if (language == AppLanguage.EN) "Article copied" else if (language == AppLanguage.AR) "تم نسخ المقالة" else "وتارەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, null)
+                    Spacer(Modifier.width(7.dp))
+                    Text(if (language == AppLanguage.EN) "Copy article" else if (language == AppLanguage.AR) "نسخ المقالة" else "وتار کۆپی بکە")
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    selectedHadithForDetails?.let { hadith ->
+        val collection = when (language) {
+            AppLanguage.EN -> hadith.bookNameEn.ifBlank { hadith.bookName }
+            AppLanguage.AR -> hadith.bookNameAr.ifBlank { hadith.bookName }
+            AppLanguage.CKB -> hadith.bookName
+        }
+        val kitab = when (language) {
+            AppLanguage.EN -> hadith.kitabNameEn.ifBlank { hadith.kitabName }
+            AppLanguage.AR -> hadith.kitabNameAr.ifBlank { hadith.kitabName }
+            AppLanguage.CKB -> hadith.kitabName
+        }
+        val chapter = when (language) {
+            AppLanguage.EN -> hadith.chapterNameEn.ifBlank { hadith.chapterName }
+            AppLanguage.AR -> hadith.chapterNameAr.ifBlank { hadith.chapterName }
+            AppLanguage.CKB -> hadith.chapterName
+        }
+        val numberInBook = hadith.sortInBook.ifBlank { hadith.sort.toString() }
+        ModalBottomSheet(
+            onDismissRequest = { selectedHadithForDetails = null },
+            containerColor = cardColor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(chapter.ifBlank { kitab.ifBlank { collection } }, color = Gold, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
+                Spacer(Modifier.height(5.dp))
+                Text(collection + " • " + (if (language == AppLanguage.EN) "No. " else if (language == AppLanguage.AR) "رقم " else "ژمارە ") + numberInBook, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp)
+                Spacer(Modifier.height(15.dp))
+                Text(cleanHadithDisplayText(hadith.arabic), color = foreground, fontSize = 22.sp, lineHeight = 38.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                if (hadith.sorani.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "SORANI TRANSLATION" else if (language == AppLanguage.AR) "الترجمة السورانية" else "وەرگێڕانی سۆرانی", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(cleanHadithDisplayText(hadith.sorani), color = foreground.copy(alpha = 0.85f), fontSize = 14.sp, lineHeight = 24.sp)
+                }
+                if (hadith.english.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(if (language == AppLanguage.EN) "ENGLISH TRANSLATION" else if (language == AppLanguage.AR) "الترجمة الإنجليزية" else "وەرگێڕانی ئینگلیزی", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(cleanHadithDisplayText(hadith.english), color = foreground.copy(alpha = 0.8f), fontSize = 13.sp, lineHeight = 22.sp)
+                }
+                if (hadith.note.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(if (language == AppLanguage.EN) "NOTE" else if (language == AppLanguage.AR) "الملاحظة" else "تێبینی", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(hadith.note), color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 21.sp)
+                }
+                if (hadith.footnote.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(if (language == AppLanguage.EN) "FOOTNOTE" else if (language == AppLanguage.AR) "الحاشية" else "پەراوێز", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(cleanHadithDisplayText(hadith.footnote), color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 19.sp)
+                }
+                Spacer(Modifier.height(15.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                        val nextSaved = if (favoriteHadithIds.contains(hadith.id)) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
+                        favoriteHadithIds = nextSaved
+                        favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
+                    }) {
+                        Text(if (favoriteHadithIds.contains(hadith.id)) "★" else "☆", color = Gold)
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (language == AppLanguage.EN) "Save" else if (language == AppLanguage.AR) "حفظ" else "پاشەکەوت", fontSize = 11.sp)
+                    }
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", collection + "\n" + chapter + "\n\n" + cleanHadithDisplayText(hadith.arabic) + "\n\n" + cleanHadithDisplayText(hadith.sorani) + "\n\n" + cleanHadithDisplayText(hadith.english) + "\n" + numberInBook))
+                        Toast.makeText(context, if (language == AppLanguage.EN) "Hadith copied" else if (language == AppLanguage.AR) "تم نسخ الحديث" else "فەرموودەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی", fontSize = 11.sp)
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
 }
 
 @Composable
