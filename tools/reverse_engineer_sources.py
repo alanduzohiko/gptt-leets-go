@@ -129,9 +129,9 @@ def main() -> int:
             }
             caps = {name: 0 for name in PATTERNS}
             book_signal = re.compile(
-                r"tn_books\\.db|book_data|unique_text|url_cover|page_number|"
+                r"tn_books\.db|book_data|unique_text|url_cover|page_number|"
                 r"DownloadManager|download.{0,80}book|book.{0,80}download|"
-                r"https?://[^\\s\"']*(?:book|pdf|download)[^\\s\"']*",
+                r"https?://[^\s\"']*(?:book|pdf|download)[^\s\"']*",
                 re.I,
             )
             app_report["book_download_contexts"] = []
