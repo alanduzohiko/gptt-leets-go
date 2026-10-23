@@ -27,8 +27,48 @@ check_screen() {
     exit 1
   fi
 
-  adb shell uiautomator dump /sdcard/mashxall-window.xml > "dist/runtime-test/uiautomator-${route}.txt"
-  adb pull /sdcard/mashxall-window.xml "$file" >/dev/null
+  # Android 11 emulators can occasionally raise an OS-level
+  # "Settings isn't responding" dialog under memory pressure. It is not
+  # the Mashxall window; choose Wait and re-inspect before evaluating UI.
+  local attempt
+  for attempt in 1 2 3; do
+    adb shell uiautomator dump /sdcard/mashxall-window.xml > "dist/runtime-test/uiautomator-${route}.txt" || true
+    adb pull /sdcard/mashxall-window.xml "$file" >/dev/null || true
+    if grep -Eqi "Settings isn't responding|Settings is not responding" "$file"; then
+      echo "WARNING: Android Settings ANR dialog covers route ${route}; waiting for system Settings."
+      local coords
+      coords="$(python3 - "$file" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    print("")
+    raise SystemExit(0)
+for node in root.iter("node"):
+    label = node.attrib.get("text", "").strip().lower()
+    if label == "wait":
+        bounds = node.attrib.get("bounds", "")
+        m = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+        if m:
+            x1, y1, x2, y2 = map(int, m.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+print("")
+PY
+)"
+      if [[ -n "$coords" ]]; then
+        read -r tap_x tap_y <<< "$coords"
+        adb shell input tap "$tap_x" "$tap_y" || true
+      else
+        adb shell input keyevent 4 || true
+      fi
+      sleep 6
+      continue
+    fi
+    break
+  done
   if ! grep -Eq "$expected_title" "$file"; then
     echo "FAIL: expected title not visible for route: $route"
     cat "$file"

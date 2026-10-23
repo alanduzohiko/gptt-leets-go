@@ -54,7 +54,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-wait-timeout: 900
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 2048 -cores 2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
           script: bash tools/runtime-smoke-android11.sh
       - name: Upload emulator runtime diagnostics
         if: always()
