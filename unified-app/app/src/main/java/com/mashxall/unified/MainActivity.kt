@@ -93,7 +93,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mashxall.unified.data.ContentRepository
+import com.mashxall.unified.data.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val Ink = Color(0xFF071E1A)
 private val DeepGreen = Color(0xFF103D32)
@@ -128,8 +131,7 @@ private val homeModules = listOf(
     HomeModule(AppScreen.HADITH, "hadith", "hadith_sub", Icons.Outlined.LibraryBooks, Color(0xFFA99AE8)),
     HomeModule(AppScreen.AZKAR, "azkar", "azkar_sub", Icons.Outlined.Spa, Color(0xFF9CCB7B)),
     HomeModule(AppScreen.PRAYER, "prayer", "prayer_sub", Icons.Outlined.Schedule, Color(0xFF82B7E8)),
-    HomeModule(AppScreen.AUDIO, "audio", "audio_sub", Icons.Outlined.GraphicEq, Color(0xFFE6A879)),
-    HomeModule(AppScreen.NAMES, "names", "names_sub", Icons.Outlined.Favorite, Color(0xFFE39FB2)),
+        HomeModule(AppScreen.NAMES, "names", "names_sub", Icons.Outlined.Favorite, Color(0xFFE39FB2)),
     HomeModule(AppScreen.QIBLA, "qibla", "qibla_sub", Icons.Outlined.Explore, Color(0xFF85C4C6)),
     HomeModule(AppScreen.BOOKS, "books", "books_sub", Icons.Outlined.LibraryBooks, Color(0xFFE1C36D)),
     HomeModule(AppScreen.LEXICON, "lexicon", "lexicon_sub", Icons.Outlined.Search, Color(0xFFB3A2F0)),
@@ -275,7 +277,7 @@ fun MashxallApp(startScreen: String? = null) {
                         )
                         Box(Modifier.fillMaxSize()) {
                             when (screen) {
-                                "home" -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                "home" -> HomeScreen(language, foreground, cardColor, selectedCity) { navigateTo(it.key) }
                                 "quran" -> QuranScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
                                     onSurah = { s ->
@@ -340,7 +342,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     prefs.edit().putString("language", it.key).apply()
                                 }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                else -> HomeScreen(language, foreground, cardColor, selectedCity) { navigateTo(it.key) }
                             }
                         }
                     }
@@ -410,39 +412,200 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
     }
 }
 
+private fun formatPrayerTime12(raw: String, language: AppLanguage): String {
+    val match = Regex("""(\\d{1,2}):(\\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
+        ?: return raw
+    var hour = match.groupValues[1].toIntOrNull() ?: return raw
+    val minute = match.groupValues[2]
+    val suffix = match.groupValues.getOrNull(3).orEmpty().uppercase(Locale.ROOT)
+    val isPm = if (suffix.isNotBlank()) suffix == "PM" else hour >= 12
+    if (suffix.isBlank()) hour %= 24
+    val hour12 = when (hour % 12) { 0 -> 12; else -> hour % 12 }
+    val marker = if (language == AppLanguage.AR) {
+        if (isPm) "مساءً" else "صباحًا"
+    } else if (language == AppLanguage.CKB) {
+        if (isPm) "د.ن" else "پ.ن"
+    } else {
+        if (isPm) "PM" else "AM"
+    }
+    return String.format(Locale.US, "%d:%s %s", hour12, minute, marker)
+}
+
 @Composable
-private fun HomeScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
-    val transition = rememberInfiniteTransition(label = "homeGlow")
-    val shimmer by transition.animateFloat(
-        initialValue = 0.12f, targetValue = 0.38f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
-        label = "glow"
-    )
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Card(Modifier.fillMaxWidth().animateContentSize().graphicsLayer { scaleX = 1f + shimmer * 0.018f; scaleY = 1f + shimmer * 0.018f }, shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = DeepGreen)) {
-            Box(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF155744), Ink))).padding(22.dp)) {
+private fun HomeScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    selectedCity: String,
+    onOpen: (AppScreen) -> Unit
+) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
+    var loadingTimes by remember { mutableStateOf(true) }
+    var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            clockNow = System.currentTimeMillis()
+            delay(60_000L)
+        }
+    }
+    LaunchedEffect(selectedCity, clockNow / 86_400_000L) {
+        loadingTimes = true
+        val date = Date(clockNow)
+        val country = prefs.getString("selected_city_country", "") ?: ""
+        val gpsLat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val gpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl") ?: "mwl")
+        val asr = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi") ?: "shafi")
+        prayerTimes = runCatching {
+            when {
+                gpsLat != null && gpsLon != null ->
+                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLat, gpsLon, date, method, asr)
+                else -> ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
+                    ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
+                        PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, asr)
+                    }
+            }
+        }.getOrNull()
+        loadingTimes = false
+    }
+
+    val hour = SimpleDateFormat("H", Locale.US).format(Date(clockNow)).toIntOrNull() ?: 12
+    val greeting = when {
+        hour < 12 -> when (language) {
+            AppLanguage.EN -> "Good morning"
+            AppLanguage.AR -> "صباح الخير"
+            AppLanguage.CKB -> "بەیانی باش"
+        }
+        hour < 17 -> when (language) {
+            AppLanguage.EN -> "Peaceful afternoon"
+            AppLanguage.AR -> "طاب نهارك"
+            AppLanguage.CKB -> "نیوەڕۆت باش"
+        }
+        else -> when (language) {
+            AppLanguage.EN -> "Peaceful evening"
+            AppLanguage.AR -> "مساء الخير"
+            AppLanguage.CKB -> "ئێوارەت باش"
+        }
+    }
+    val prayerEntries = prayerTimes?.let { times ->
+        listOf(
+            Triple("fajr", tr(language, "fajr"), formatPrayerTime12(times.fajr, language)),
+            Triple("sunrise", tr(language, "sunrise"), formatPrayerTime12(times.sunrise, language)),
+            Triple("dhuhr", tr(language, "dhuhr"), formatPrayerTime12(times.dhuhr, language)),
+            Triple("asr", tr(language, "asr"), formatPrayerTime12(times.asr, language)),
+            Triple("maghrib", tr(language, "maghrib"), formatPrayerTime12(times.maghrib, language)),
+            Triple("isha", tr(language, "isha"), formatPrayerTime12(times.isha, language))
+        )
+    }.orEmpty()
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth().animateContentSize(),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = DeepGreen)
+        ) {
+            Box(
+                Modifier.fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF155744), Ink)))
+                    .padding(20.dp)
+            ) {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(Gold).alpha(0.6f + shimmer))
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(Gold))
                         Spacer(Modifier.width(8.dp))
-                        Text(tr(language, "featured"), color = PaleGold, fontSize = 11.sp, letterSpacing = 1.sp)
+                        Text(greeting, color = PaleGold, fontSize = 11.sp, letterSpacing = 0.5.sp)
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(tr(language, "home_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 34.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text(tr(language, "welcome"), color = SoftText, fontSize = 14.sp, lineHeight = 22.sp)
-                    Spacer(Modifier.height(18.dp))
-                    Surface(color = Gold.copy(alpha = 0.16f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f)), modifier = Modifier.clickable { onOpen(AppScreen.QURAN) }) {
-                        Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(tr(language, "welcome"), color = SoftText, fontSize = 13.sp, lineHeight = 21.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Surface(
+                        color = Gold.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.38f)),
+                        modifier = Modifier.clickable { onOpen(AppScreen.QURAN) }
+                    ) {
+                        Row(Modifier.padding(horizontal = 13.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = PaleGold)
                             Spacer(Modifier.width(8.dp))
-                            Text(tr(language, "continue_reading"), color = PaleGold, fontWeight = FontWeight.SemiBold)
+                            Text(tr(language, "continue_reading"), color = PaleGold, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
                     }
                 }
-                Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Gold.copy(alpha = 0.16f), modifier = Modifier.align(Alignment.BottomEnd).size(90.dp))
+                Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Gold.copy(alpha = 0.10f), modifier = Modifier.align(Alignment.BottomEnd).size(88.dp))
             }
         }
+
+        Spacer(Modifier.height(18.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { onOpen(AppScreen.PRAYER) },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.35f))
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
+                    }
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) { AppLanguage.EN -> "Prayer times"; AppLanguage.AR -> "مواقيت الصلاة"; AppLanguage.CKB -> "کاتەکانی نوێژ" },
+                            color = foreground, fontWeight = FontWeight.Bold, fontSize = 17.sp
+                        )
+                        Text(
+                            selectedCity + if (prayerTimes?.source?.isNotBlank() == true) " • " + prayerTimes!!.source else "",
+                            color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, maxLines = 1
+                        )
+                    }
+                    Icon(Icons.Outlined.Explore, contentDescription = null, tint = Gold)
+                }
+                Spacer(Modifier.height(14.dp))
+                when {
+                    loadingTimes -> Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
+                    }
+                    prayerEntries.isEmpty() -> Text(
+                        when (language) {
+                            AppLanguage.EN -> "Choose your city or allow location access to load prayer times."
+                            AppLanguage.AR -> "اختر مدينتك أو اسمح بالوصول إلى الموقع لعرض المواقيت."
+                            AppLanguage.CKB -> "شارەکەت هەڵبژێرە یان مۆڵەتی شوێن بدە بۆ پیشاندانی کاتەکان."
+                        }, color = foreground.copy(alpha = 0.68f), fontSize = 12.sp, lineHeight = 19.sp
+                    )
+                    else -> prayerEntries.chunked(3).forEach { trio ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            trio.forEach { (key, label, time) ->
+                                Column(
+                                    Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                                        .background(if (key == "maghrib") Gold.copy(alpha = 0.09f) else foreground.copy(alpha = 0.035f))
+                                        .padding(horizontal = 8.dp, vertical = 11.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(label, color = foreground.copy(alpha = 0.65f), fontSize = 10.sp, maxLines = 1)
+                                    Spacer(Modifier.height(5.dp))
+                                    Text(time, color = if (key == "maghrib") Gold else foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
+                            }
+                        }
+                        if (trio.firstOrNull()?.first == "fajr") Spacer(Modifier.height(8.dp))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Open prayer settings and location"
+                        AppLanguage.AR -> "إعدادات الصلاة والموقع"
+                        AppLanguage.CKB -> "ڕێکخستن و شوێنی نوێژ"
+                    }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
         Spacer(Modifier.height(22.dp))
         Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(12.dp))
@@ -477,6 +640,7 @@ private fun HomeScreen(language: AppLanguage, foreground: Color, cardColor: Colo
                         }
                     }
                 }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
         Spacer(Modifier.height(8.dp))
