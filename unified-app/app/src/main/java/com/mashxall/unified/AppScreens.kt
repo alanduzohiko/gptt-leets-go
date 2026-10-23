@@ -82,6 +82,8 @@ import com.mashxall.unified.data.*
 import com.mashxall.unified.notifications.PrayerAlarmScheduler
 import com.caverock.androidsvg.SVG
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.security.MessageDigest
 import java.util.Date
@@ -1769,6 +1771,87 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
     }
 }
 
+
+private fun validDownloadedPdf(file: File): Boolean {
+    if (!file.isFile || file.length() < 100L) return false
+    return try {
+        file.inputStream().buffered().use { input ->
+            val header = ByteArray(5)
+            input.read(header) == header.size && String(header, Charsets.ISO_8859_1) == "%PDF-"
+        }
+    } catch (_: Exception) {
+        false
+    }
+}
+
+private fun localBookPdfFile(context: Context, book: BookItem): File {
+    val folder = File(context.filesDir, "downloaded-books").apply { mkdirs() }
+    val slug = book.uniqueText.trim().ifBlank { book.id.toString() }
+        .replace(Regex("[^A-Za-z0-9._-]+"), "_")
+        .trim('_')
+        .ifBlank { book.id.toString() }
+    return File(folder, "${book.id}_$slug.pdf")
+}
+
+private suspend fun downloadCatalogueBook(context: Context, book: BookItem): File = withContext(Dispatchers.IO) {
+    val target = localBookPdfFile(context, book)
+    if (validDownloadedPdf(target)) return@withContext target
+
+    val slug = book.uniqueText.trim()
+        .replace(Regex("[^A-Za-z0-9._-]+"), "_")
+        .trim('_')
+        .ifBlank { book.id.toString() }
+    val urls = buildList {
+        book.url.trim().takeIf { it.startsWith("https://", true) || it.startsWith("http://", true) }
+            ?.let(::add)
+        add("https://github.com/H4zh4n/TafseeriNoor/raw/files/books/$slug.pdf")
+        add("https://raw.githubusercontent.com/H4zh4n/TafseeriNoor/files/books/$slug.pdf")
+    }.distinct()
+
+    var lastFailure: Exception? = null
+    for (candidate in urls) {
+        val temporary = File(target.parentFile, target.name + ".part")
+        val connection = try {
+            (URL(candidate).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 20_000
+                readTimeout = 60_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "Mashxall-Android/1.0")
+                setRequestProperty("Accept", "application/pdf,application/octet-stream;q=0.9,*/*;q=0.5")
+            }
+        } catch (error: Exception) {
+            lastFailure = error
+            continue
+        }
+        try {
+            val status = connection.responseCode
+            if (status !in 200..299) throw java.io.IOException("Book server returned HTTP $status")
+            connection.inputStream.use { input ->
+                temporary.outputStream().buffered().use { output -> input.copyTo(output, 128 * 1024) }
+            }
+            if (!validDownloadedPdf(temporary)) {
+                throw java.io.IOException("The returned file was not a valid PDF")
+            }
+            if (!temporary.renameTo(target)) {
+                temporary.copyTo(target, overwrite = true)
+                temporary.delete()
+            }
+            if (!validDownloadedPdf(target)) throw java.io.IOException("Downloaded PDF failed integrity validation")
+            return@withContext target
+        } catch (error: Exception) {
+            lastFailure = error
+            temporary.delete()
+        } finally {
+            connection.disconnect()
+        }
+    }
+    throw java.io.IOException(
+        "This book could not be downloaded. The source may have moved or the server may be unavailable.",
+        lastFailure
+    )
+}
+
 @Composable
 fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPdf: (String) -> Unit) {
     val context = LocalContext.current
@@ -1781,8 +1864,19 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
     var favoriteIds by remember {
         mutableStateOf(favoritePrefs.getStringSet("book_ids", emptySet()).orEmpty().toSet())
     }
+    val bookScope = rememberCoroutineScope()
+    var downloadingIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var downloadedPaths by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
 
     LaunchedEffect(Unit) { pdfs = ContentRepository.loadPdfPaths(context) }
+    LaunchedEffect(books) {
+        if (books.isNotEmpty()) {
+            downloadedPaths = downloadedPaths + books.mapNotNull { item ->
+                val file = localBookPdfFile(context, item)
+                if (validDownloadedPdf(file)) item.id to file.absolutePath else null
+            }.toMap()
+        }
+    }
     LaunchedEffect(query) {
         loading = true
         books = ContentRepository.loadBooks(context, query.trim())
@@ -1800,9 +1894,9 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
             Spacer(Modifier.height(4.dp))
             Text(
                 when (language) {
-                    AppLanguage.EN -> "${books.size} catalogue records • ${pdfs.size} bundled PDF files • ${favoriteIds.size} favourites"
-                    AppLanguage.AR -> "${books.size} سجلًا في الفهرس • ${pdfs.size} ملف PDF • ${favoriteIds.size} مفضلة"
-                    AppLanguage.CKB -> "${books.size} تۆماری فهرست • ${pdfs.size} فایلی PDF • ${favoriteIds.size} دڵخواز"
+                    AppLanguage.EN -> "${books.size} catalogue records • ${pdfs.size} bundled PDFs • ${downloadedPaths.size} downloaded • ${favoriteIds.size} favourites"
+                    AppLanguage.AR -> "${books.size} سجلًا • ${pdfs.size} PDF مرفق • ${downloadedPaths.size} منزّل • ${favoriteIds.size} مفضلة"
+                    AppLanguage.CKB -> "${books.size} تۆمار • ${pdfs.size} PDFی ناوخۆیی • ${downloadedPaths.size} داگیراو • ${favoriteIds.size} دڵخواز"
                 }, color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
             )
             Spacer(Modifier.height(10.dp))
@@ -1961,6 +2055,64 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                                 }, color = foreground.copy(alpha = 0.43f), fontSize = 9.sp
                             )
                         }
+                        Spacer(Modifier.height(8.dp))
+                        val localPdfPath = downloadedPaths[item.id]
+                        Button(
+                            enabled = item.id !in downloadingIds,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                if (localPdfPath != null && validDownloadedPdf(File(localPdfPath))) {
+                                    onOpenPdf(localPdfPath)
+                                } else {
+                                    downloadingIds = downloadingIds + item.id
+                                    bookScope.launch {
+                                        try {
+                                            val downloaded = downloadCatalogueBook(context, item)
+                                            downloadedPaths = downloadedPaths + (item.id to downloaded.absolutePath)
+                                            Toast.makeText(
+                                                context,
+                                                when (language) {
+                                                    AppLanguage.EN -> "Book downloaded and saved offline"
+                                                    AppLanguage.AR -> "تم تنزيل الكتاب وحفظه للقراءة دون إنترنت"
+                                                    AppLanguage.CKB -> "کتێبەکە داگیرا و بۆ خوێندنەوەی بێ ئینتەرنێت پاشەکەوت کرا"
+                                                }, Toast.LENGTH_LONG
+                                            ).show()
+                                            onOpenPdf(downloaded.absolutePath)
+                                        } catch (_: Exception) {
+                                            Toast.makeText(
+                                                context,
+                                                when (language) {
+                                                    AppLanguage.EN -> "Download failed: check internet or try again later."
+                                                    AppLanguage.AR -> "فشل التنزيل؛ تحقق من الإنترنت أو حاول لاحقًا."
+                                                    AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە."
+                                                }, Toast.LENGTH_LONG
+                                            ).show()
+                                        } finally {
+                                            downloadingIds = downloadingIds - item.id
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            if (item.id in downloadingIds) {
+                                CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (language == AppLanguage.EN) "Downloading PDF…" else if (language == AppLanguage.AR) "جارٍ تنزيل PDF…" else "PDF دادەگیرێت…")
+                            } else {
+                                Icon(
+                                    if (localPdfPath != null) Icons.Outlined.MenuBook else Icons.Outlined.ChevronRight,
+                                    null, modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> if (localPdfPath != null) "Open offline PDF" else "Download PDF and open"
+                                        AppLanguage.AR -> if (localPdfPath != null) "فتح PDF دون إنترنت" else "تنزيل PDF وفتحه"
+                                        AppLanguage.CKB -> if (localPdfPath != null) "PDF بکەرەوە (بێ ئینتەرنێت)" else "PDF دابگرە و بیکەرەوە"
+                                    }
+                                )
+                            }
+                        }
                         if (item.url.startsWith("http", ignoreCase = true)) {
                             TextButton(onClick = {
                                 try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) }
@@ -2002,10 +2154,16 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                     val digest = MessageDigest.getInstance("SHA-256")
                         .digest(assetPath.toByteArray(Charsets.UTF_8))
                         .take(10).joinToString("") { "%02x".format(it) }
-                    val localPdf = File(context.cacheDir, "mashxall-$digest.pdf")
-                    if (!localPdf.exists() || localPdf.length() == 0L) {
-                        context.assets.open(assetPath).use { input ->
-                            localPdf.outputStream().use { output -> input.copyTo(output, 128 * 1024) }
+                    val requestedFile = File(assetPath)
+                    val localPdf = if (requestedFile.isAbsolute && validDownloadedPdf(requestedFile)) {
+                        requestedFile
+                    } else {
+                        File(context.cacheDir, "mashxall-$digest.pdf").also { cached ->
+                            if (!cached.exists() || cached.length() == 0L) {
+                                context.assets.open(assetPath).use { input ->
+                                    cached.outputStream().use { output -> input.copyTo(output, 128 * 1024) }
+                                }
+                            }
                         }
                     }
                     ParcelFileDescriptor.open(localPdf, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
