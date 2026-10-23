@@ -393,7 +393,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     navigateTo("audio")
                                 }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor, selectedCity) { navigateTo(it.key) }
+                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { navigateTo(it.key) })
                             }
                         }
                     }
