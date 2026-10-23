@@ -99,7 +99,22 @@ data class PrayerRow(
     val source: String = "timetable", val latitude: Double? = null, val longitude: Double? = null
 )
 data class TafsirBook(val id: String, val labelCkb: String, val labelAr: String, val labelEn: String, val assetPath: String, val language: String)
-data class BookItem(val id: Int, val title: String, val writer: String, val description: String, val pages: Int, val url: String)
+data class BookItem(
+    val id: Int,
+    val title: String,
+    val writer: String,
+    val description: String,
+    val pages: Int,
+    val url: String,
+    val branch: String = "",
+    val uniqueText: String = "",
+    val coverUrl: String = "",
+    val bookColor: String = "",
+    val textColor: String = "",
+    val extraText: String = "",
+    val extraNumber: Int = 0,
+    val sourceFavoriteTime: String = ""
+)
 data class LexiconItem(val title: String, val content: String, val reference: String, val root: String)
 data class WordPart(
     val glyphText: String,
@@ -1615,9 +1630,45 @@ object ContentRepository {
 
     suspend fun loadBooks(context: Context, query: String = ""): List<BookItem> = withContext(Dispatchers.IO) {
         queryDb(context, BOOKS_DB, emptyList()) { db ->
-            val like = if (query.isBlank()) "%" else "%$query%"
-            db.rawQuery("SELECT id,title,writer,description,page_number,url FROM book_data WHERE title LIKE ? OR writer LIKE ? OR description LIKE ? ORDER BY sorter,title", arrayOf(like, like, like)).use { c ->
-                buildList { while (c.moveToNext()) add(BookItem(c.int("id"), c.string("title"), c.string("writer"), c.string("description"), c.int("page_number"), c.string("url"))) }
+            val like = if (query.isBlank()) "%" else "%${query.trim()}%"
+            db.rawQuery(
+                """
+                SELECT id,title,writer,description,page_number,url,
+                       COALESCE(branch,'') AS branch,
+                       COALESCE(unique_text,'') AS unique_text,
+                       COALESCE(url_cover,'') AS url_cover,
+                       COALESCE(book_color,'') AS book_color,
+                       COALESCE(text_color,'') AS text_color,
+                       COALESCE(extra_text,'') AS extra_text,
+                       COALESCE(extra_number,0) AS extra_number,
+                       COALESCE(fav_time,'') AS fav_time
+                FROM book_data
+                WHERE title LIKE ? OR writer LIKE ? OR description LIKE ?
+                   OR unique_text LIKE ? OR extra_text LIKE ? OR branch LIKE ?
+                ORDER BY sorter,title
+                """.trimIndent(),
+                arrayOf(like, like, like, like, like, like)
+            ).use { c ->
+                buildList {
+                    while (c.moveToNext()) add(
+                        BookItem(
+                            id = c.int("id"),
+                            title = c.string("title"),
+                            writer = c.string("writer"),
+                            description = c.string("description"),
+                            pages = c.int("page_number"),
+                            url = c.string("url"),
+                            branch = c.string("branch"),
+                            uniqueText = c.string("unique_text"),
+                            coverUrl = c.string("url_cover"),
+                            bookColor = c.string("book_color"),
+                            textColor = c.string("text_color"),
+                            extraText = c.string("extra_text"),
+                            extraNumber = c.int("extra_number"),
+                            sourceFavoriteTime = c.string("fav_time")
+                        )
+                    )
+                }
             }
         }
     }

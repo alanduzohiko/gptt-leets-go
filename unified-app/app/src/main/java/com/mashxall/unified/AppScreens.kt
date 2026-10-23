@@ -27,6 +27,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
+import coil.compose.SubcomposeAsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -45,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -1581,7 +1583,8 @@ private val MASHXALL_BACKUP_PREFS = listOf(
     "mashxall_preferences",
     "mashxall_azkar_progress",
     "mashxall_azkar_favorites",
-    "mashxall_farmuda_favorites"
+    "mashxall_farmuda_favorites",
+    "mashxall_book_favorites"
 )
 
 private fun createMashxallBackup(context: Context): org.json.JSONObject {
@@ -1769,13 +1772,17 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
 @Composable
 fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPdf: (String) -> Unit) {
     val context = LocalContext.current
+    val favoritePrefs = remember { context.getSharedPreferences("mashxall_book_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
     var books by remember { mutableStateOf<List<BookItem>>(emptyList()) }
     var pdfs by remember { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        pdfs = ContentRepository.loadPdfPaths(context)
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var favoriteIds by remember {
+        mutableStateOf(favoritePrefs.getStringSet("book_ids", emptySet()).orEmpty().toSet())
     }
+
+    LaunchedEffect(Unit) { pdfs = ContentRepository.loadPdfPaths(context) }
     LaunchedEffect(query) {
         loading = true
         books = ContentRepository.loadBooks(context, query.trim())
@@ -1785,39 +1792,188 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
         path.substringAfterLast('/').contains(query.trim(), ignoreCase = true) ||
             path.substringBeforeLast('/').contains(query.trim(), ignoreCase = true)
     }
+    val visibleBooks = books.filter { !favoritesOnly || favoriteIds.contains(it.id.toString()) }
+
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(tr(language, "books"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp)); SearchBox(query, { query = it }, tr(language, "search"))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${books.size} catalogue records • ${pdfs.size} bundled PDF files • ${favoriteIds.size} favourites"
+                    AppLanguage.AR -> "${books.size} سجلًا في الفهرس • ${pdfs.size} ملف PDF • ${favoriteIds.size} مفضلة"
+                    AppLanguage.CKB -> "${books.size} تۆماری فهرست • ${pdfs.size} فایلی PDF • ${favoriteIds.size} دڵخواز"
+                }, color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            SearchBox(query, { query = it }, tr(language, "search"))
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FilterChip(
+                    selected = !favoritesOnly,
+                    onClick = { favoritesOnly = false },
+                    label = { Text(if (language == AppLanguage.EN) "All books" else if (language == AppLanguage.AR) "كل الكتب" else "هەموو کتێبەکان", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = favoritesOnly,
+                    onClick = { favoritesOnly = true },
+                    label = { Text(if (language == AppLanguage.EN) "Favourites" else if (language == AppLanguage.AR) "المفضلة" else "دڵخوازەکان", fontSize = 11.sp) }
+                )
+            }
         }
-        if (books.isEmpty() && visiblePdfs.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        if (visibleBooks.isEmpty() && visiblePdfs.isEmpty()) {
+            LoadingOrEmpty(
+                loading, language, foreground,
+                if (favoritesOnly && favoriteIds.isEmpty()) {
+                    if (language == AppLanguage.EN) "No book favourites yet. Tap the star on a catalogue record to save it."
+                    else if (language == AppLanguage.AR) "لا توجد كتب مفضلة بعد. اضغط النجمة لحفظ كتاب."
+                    else "هێشتا کتێبی دڵخواز نییە؛ ئەستێرەکە دابگرە بۆ پاشەکەوتکردن."
+                } else tr(language, "not_found")
+            )
+        } else LazyColumn(
+            contentPadding = PaddingValues(14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
             if (visiblePdfs.isNotEmpty()) {
-                item { Text("PDF • " + visiblePdfs.size, color = Gold, fontWeight = FontWeight.Bold) }
+                item(key = "pdf-section-heading") {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "OFFLINE PDF LIBRARY • ${visiblePdfs.size}"
+                            AppLanguage.AR -> "مكتبة PDF دون إنترنت • ${visiblePdfs.size}"
+                            AppLanguage.CKB -> "کتێبخانەی PDF بەبێ ئینتەرنێت • ${visiblePdfs.size}"
+                        }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                    )
+                }
                 items(visiblePdfs, key = { it }) { path ->
-                    Card(Modifier.clickable { onOpenPdf(path) }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp)) {
+                    Card(
+                        Modifier.clickable { onOpenPdf(path) },
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(15.dp)
+                    ) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.MenuBook, null, tint = Gold)
+                            Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(28.dp))
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(path.substringAfterLast('/'), color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                Text(path.substringBeforeLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 9.sp)
+                                Text(path.substringBeforeLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 9.sp, maxLines = 2)
                             }
+                            Icon(Icons.Outlined.ChevronRight, null, tint = foreground.copy(alpha = 0.45f))
                         }
                     }
                 }
             }
-            if (books.isNotEmpty()) item { Text(tr(language, "books"), color = Gold, fontWeight = FontWeight.Bold) }
-            items(books, key = { "book-" + it.id }) { item ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(item.title, color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        if (item.writer.isNotBlank()) Text(item.writer, color = Gold, fontSize = 11.sp)
-                        if (item.description.isNotBlank()) Text(item.description.take(320), color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
-                        Text(item.pages.toString() + " • " + tr(language, "book_online"), color = foreground.copy(alpha = 0.45f), fontSize = 10.sp)
-                        if (item.url.startsWith("http")) TextButton(onClick = {
-                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) }
-                            catch (_: Exception) { Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show() }
-                        }) { Text(if (language == AppLanguage.EN) "Open external link" else if (language == AppLanguage.AR) "فتح الرابط" else "کردنەوەی بەستەر") }
+            if (visibleBooks.isNotEmpty()) {
+                item(key = "catalogue-section-heading") {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "BOOK CATALOGUE • ${visibleBooks.size}"
+                            AppLanguage.AR -> "فهرس الكتب • ${visibleBooks.size}"
+                            AppLanguage.CKB -> "فهرستی کتێبەکان • ${visibleBooks.size}"
+                        }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                    )
+                }
+            }
+            items(visibleBooks, key = { "book-" + it.id }) { item ->
+                val favorite = favoriteIds.contains(item.id.toString())
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.17f))
+                ) {
+                    Column(Modifier.padding(13.dp)) {
+                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (item.coverUrl.startsWith("http", ignoreCase = true)) {
+                                SubcomposeAsyncImage(
+                                    model = item.coverUrl,
+                                    contentDescription = item.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(width = 78.dp, height = 108.dp).clip(RoundedCornerShape(10.dp)),
+                                    loading = {
+                                        Box(Modifier.fillMaxSize().background(DeepGreen.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator(color = Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        }
+                                    },
+                                    error = {
+                                        Box(Modifier.fillMaxSize().background(DeepGreen.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(34.dp))
+                                        }
+                                    }
+                                )
+                            } else {
+                                Box(
+                                    Modifier.size(width = 78.dp, height = 108.dp).clip(RoundedCornerShape(10.dp)).background(DeepGreen),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(36.dp))
+                                }
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(item.title, color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
+                                if (item.uniqueText.isNotBlank()) {
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(item.uniqueText, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp)
+                                }
+                                if (item.writer.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(item.writer, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text(
+                                        item.pages.toString() + " • " + when (language) {
+                                            AppLanguage.EN -> "pages"
+                                            AppLanguage.AR -> "صفحة"
+                                            AppLanguage.CKB -> "پەڕە"
+                                        },
+                                        color = foreground.copy(alpha = 0.52f), fontSize = 10.sp
+                                    )
+                                    if (item.branch.isNotBlank() && item.branch != "0") {
+                                        Text("•", color = foreground.copy(alpha = 0.35f), fontSize = 10.sp)
+                                        Text(item.branch, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp, maxLines = 1)
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    IconButton(
+                                        onClick = {
+                                            val key = item.id.toString()
+                                            favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
+                                            favoritePrefs.edit().putStringSet("book_ids", favoriteIds).apply()
+                                        },
+                                        modifier = Modifier.size(30.dp)
+                                    ) { Text(if (favorite) "★" else "☆", color = Gold, fontSize = 21.sp) }
+                                }
+                            }
+                        }
+                        if (item.description.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(item.description, color = foreground.copy(alpha = 0.73f), fontSize = 11.sp, lineHeight = 17.sp, maxLines = 7)
+                        }
+                        if (item.extraText.isNotBlank()) {
+                            Spacer(Modifier.height(7.dp))
+                            Text(item.extraText, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp, maxLines = 3)
+                        }
+                        if (item.extraNumber > 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Source catalogue code: ${item.extraNumber}"
+                                    AppLanguage.AR -> "رقم إضافي في الفهرس: ${item.extraNumber}"
+                                    AppLanguage.CKB -> "ژمارەی زیادەی فهرست: ${item.extraNumber}"
+                                }, color = foreground.copy(alpha = 0.43f), fontSize = 9.sp
+                            )
+                        }
+                        if (item.url.startsWith("http", ignoreCase = true)) {
+                            TextButton(onClick = {
+                                try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) }
+                                catch (_: Exception) { Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show() }
+                            }) {
+                                Text(
+                                    if (language == AppLanguage.EN) "Open source book link"
+                                    else if (language == AppLanguage.AR) "فتح رابط الكتاب"
+                                    else "بەستەری کتێب بکەرەوە",
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
                     }
                 }
             }
