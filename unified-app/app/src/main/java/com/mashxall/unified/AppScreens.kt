@@ -1268,25 +1268,93 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 @Composable
 fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val favoritePrefs = remember { context.getSharedPreferences("mashxall_name_favorites", Context.MODE_PRIVATE) }
     var names by remember { mutableStateOf<List<AllahName>>(emptyList()) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var favoriteIds by remember {
+        mutableStateOf(favoritePrefs.getStringSet("favorite_ids", emptySet()).orEmpty().toSet())
+    }
+
     LaunchedEffect(Unit) { names = ContentRepository.loadNames(context) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(tr(language, "names"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(5.dp))
-        Text(
-            when (language) {
-                AppLanguage.EN -> "${names.size} names with Quranic references and Kurdish descriptions"
-                AppLanguage.AR -> "${names.size} اسمًا مع مراجع قرآنية وشروح"
-                AppLanguage.CKB -> "${names.size} ناو لەگەڵ سەرچاوەی قورئان و ڕوونکردنەوە"
-            }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
-        )
-        Spacer(Modifier.height(8.dp))
-        if (names.isEmpty()) LoadingOrEmpty(false, language, foreground) else LazyColumn(
-            contentPadding = PaddingValues(vertical = 7.dp),
+    val normalizedQuery = query.trim()
+    val visibleNames = names.filter { item ->
+        val matchesFavorite = !favoritesOnly || favoriteIds.contains(item.number.toString())
+        val searchable = listOf(
+            item.arabic, item.ckb, item.badini, item.english,
+            item.surahAyah, item.highlightSection, item.farsi, item.extraText
+        ).joinToString(" ")
+        matchesFavorite && (normalizedQuery.isBlank() || searchable.contains(normalizedQuery, ignoreCase = true))
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(tr(language, "names"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${visibleNames.size} of ${names.size} names • ${favoriteIds.size} favourites"
+                    AppLanguage.AR -> "${visibleNames.size} من ${names.size} اسمًا • ${favoriteIds.size} مفضلة"
+                    AppLanguage.CKB -> "${visibleNames.size} لە ${names.size} ناو • ${favoriteIds.size} دڵخواز"
+                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            )
+            Spacer(Modifier.height(9.dp))
+            SearchBox(
+                query, { query = it },
+                when (language) {
+                    AppLanguage.EN -> "Search Arabic, Kurdish, English, or references…"
+                    AppLanguage.AR -> "ابحث بالعربية أو الكردية أو الإنجليزية أو المراجع…"
+                    AppLanguage.CKB -> "بە عەرەبی، کوردی، ئینگلیزی یان سەرچاوە بگەڕێ…"
+                }
+            )
+            Spacer(Modifier.height(7.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FilterChip(
+                    selected = !favoritesOnly,
+                    onClick = { favoritesOnly = false },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "All names"
+                                AppLanguage.AR -> "كل الأسماء"
+                                AppLanguage.CKB -> "هەموو ناوەکان"
+                            }, fontSize = 11.sp
+                        )
+                    }
+                )
+                FilterChip(
+                    selected = favoritesOnly,
+                    onClick = { favoritesOnly = true },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Favourites"
+                                AppLanguage.AR -> "المفضلة"
+                                AppLanguage.CKB -> "دڵخوازەکان"
+                            }, fontSize = 11.sp
+                        )
+                    }
+                )
+            }
+        }
+        if (visibleNames.isEmpty()) {
+            LoadingOrEmpty(
+                names.isEmpty(), language, foreground,
+                if (favoritesOnly && favoriteIds.isEmpty()) {
+                    when (language) {
+                        AppLanguage.EN -> "No favourite names yet. Tap the star to save a name."
+                        AppLanguage.AR -> "لا توجد أسماء مفضلة بعد. اضغط النجمة لحفظ الاسم."
+                        AppLanguage.CKB -> "هێشتا ناوی دڵخواز نییە؛ ئەستێرەکە دابگرە بۆ پاشەکەوتکردن."
+                    }
+                } else tr(language, "not_found")
+            )
+        } else LazyColumn(
+            contentPadding = PaddingValues(vertical = 7.dp, horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            items(names, key = { it.number }) { name ->
+            items(visibleNames, key = { it.number }) { name ->
                 var expanded by rememberSaveable(name.number) { mutableStateOf(false) }
+                val favorite = favoriteIds.contains(name.number.toString())
                 val description = when (language) {
                     AppLanguage.CKB -> name.ckb
                     AppLanguage.AR -> name.arabic
@@ -1307,6 +1375,13 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 Text(name.arabic, color = Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                                 Text(description, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
                             }
+                            IconButton(onClick = {
+                                val key = name.number.toString()
+                                favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
+                                favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
+                            }) {
+                                Text(if (favorite) "★" else "☆", color = Gold, fontSize = 23.sp)
+                            }
                             Text(if (expanded) "−" else "+", color = Gold, fontSize = 22.sp)
                         }
                         if (expanded) {
@@ -1314,18 +1389,6 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             if (name.highlightSection.isNotBlank()) {
                                 Text(name.highlightSection, color = foreground, fontSize = 19.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                                 Spacer(Modifier.height(6.dp))
-                            }
-                            if (language == AppLanguage.CKB && name.badini.isNotBlank()) {
-                                Text("بادینی: " + name.badini, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
-                                Spacer(Modifier.height(4.dp))
-                            }
-                            if (language == AppLanguage.EN && name.ckb.isNotBlank()) {
-                                Text("Sorani: " + name.ckb, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
-                                Spacer(Modifier.height(4.dp))
-                            }
-                            if (language == AppLanguage.AR && name.english.isNotBlank()) {
-                                Text("English: " + name.english, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
-                                Spacer(Modifier.height(4.dp))
                             }
                             if (name.surahAyah.isNotBlank()) {
                                 Text(
@@ -1335,10 +1398,38 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                         AppLanguage.CKB -> "سەرچاوەی قورئان: ${name.surahAyah}"
                                     }, color = Gold, fontSize = 11.sp
                                 )
+                                Spacer(Modifier.height(6.dp))
                             }
-                            if (language == AppLanguage.EN && name.farsi.isNotBlank()) {
-                                Spacer(Modifier.height(4.dp))
-                                Text("Persian: " + name.farsi, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 17.sp)
+                            if (language != AppLanguage.CKB && name.ckb.isNotBlank()) {
+                                Text("کوردی سۆرانی: " + name.ckb, color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 19.sp)
+                                Spacer(Modifier.height(5.dp))
+                            }
+                            if (language != AppLanguage.EN && name.english.isNotBlank()) {
+                                Text("English: " + name.english, color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 19.sp)
+                                Spacer(Modifier.height(5.dp))
+                            }
+                            if (language == AppLanguage.CKB && name.badini.isNotBlank()) {
+                                Text("بادینی: " + name.badini, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
+                                Spacer(Modifier.height(5.dp))
+                            }
+                            if (name.farsi.isNotBlank()) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Persian: " + name.farsi
+                                        AppLanguage.AR -> "الفارسية: " + name.farsi
+                                        AppLanguage.CKB -> "فارسی: " + name.farsi
+                                    }, color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
+                                )
+                                Spacer(Modifier.height(5.dp))
+                            }
+                            if (name.extraText.isNotBlank()) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Additional source note: " + name.extraText
+                                        AppLanguage.AR -> "معلومة إضافية من المصدر: " + name.extraText
+                                        AppLanguage.CKB -> "زانیاریی زیادەی سەرچاوە: " + name.extraText
+                                    }, color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
+                                )
                             }
                         }
                     }
@@ -1627,7 +1718,8 @@ private val MASHXALL_BACKUP_PREFS = listOf(
     "mashxall_azkar_progress",
     "mashxall_azkar_favorites",
     "mashxall_farmuda_favorites",
-    "mashxall_book_favorites"
+    "mashxall_book_favorites",
+    "mashxall_name_favorites"
 )
 
 private fun createMashxallBackup(context: Context): org.json.JSONObject {
