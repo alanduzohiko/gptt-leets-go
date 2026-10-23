@@ -104,7 +104,7 @@ def main() -> int:
                         r"v2_tajweed_page_data_line|page_data_line|ayah_info|"
                         r"glyph_id|glyphId|tajweed|Tajweed|rule.?id|rule.?color|"
                         r"page.?number|pageNumber|surah.?id|verse.?id|"
-                        r"getColumnIndex|getString\\(|getInt\\(|query\\(|"
+                        r"getColumnIndex|getString\(|getInt\(|query\(|"
                         r"Cursor|RecyclerView|Spannable|ForegroundColorSpan|"
                         r"setTextColor|TextView|Typeface|font|color",
                         re.I,
