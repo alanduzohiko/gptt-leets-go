@@ -325,6 +325,64 @@ def main() -> int:
                         ).fetchall()
                         detail[table_name] = {"stats": stats, "samples": samples}
                 item["geometry_probe"] = detail
+            if path.endswith("/prayertimes.db"):
+                db_path = out / Path(path)
+                detail = {}
+                with sqlite3.connect(db_path) as connection:
+                    detail["extra_rows"] = connection.execute(
+                        """
+                        SELECT id,Field1,c_order,city,name,c_base,correction,has_static
+                        FROM extra
+                        ORDER BY c_order,id
+                        LIMIT 40
+                        """
+                    ).fetchall()
+                    detail["correction_values"] = connection.execute(
+                        """
+                        SELECT correction,COUNT(*)
+                        FROM extra
+                        GROUP BY correction
+                        ORDER BY COUNT(*) DESC,correction
+                        LIMIT 50
+                        """
+                    ).fetchall()
+                    detail["static_flag_values"] = connection.execute(
+                        "SELECT has_static,COUNT(*) FROM extra GROUP BY has_static ORDER BY has_static"
+                    ).fetchall()
+                    detail["extra_name_city_mismatches"] = connection.execute(
+                        """
+                        SELECT e.id,e.city,e.name,e.c_base,e.correction,e.has_static,
+                               (SELECT COUNT(*) FROM staticprayertimes p WHERE lower(p.city)=lower(e.city)) AS city_rows,
+                               (SELECT COUNT(*) FROM staticprayertimes p WHERE lower(p.city)=lower(e.name)) AS name_rows
+                        FROM extra e
+                        WHERE COALESCE(e.city,'')<>'' OR COALESCE(e.name,'')<>''
+                        ORDER BY e.c_order,e.id
+                        LIMIT 80
+                        """
+                    ).fetchall()
+                item["prayer_city_correction_probe"] = detail
+            if path.endswith("/muslim_db_v2.5.1.db"):
+                db_path = out / Path(path)
+                detail = {}
+                with sqlite3.connect(db_path) as connection:
+                    detail["fixed_time_flags"] = connection.execute(
+                        "SELECT has_fixed_prayer_time,COUNT(*) FROM location GROUP BY has_fixed_prayer_time ORDER BY has_fixed_prayer_time"
+                    ).fetchall()
+                    detail["dependent_location_count"] = connection.execute(
+                        "SELECT COUNT(*) FROM location WHERE COALESCE(prayer_dependent_id,0)<>0"
+                    ).fetchone()[0]
+                    detail["dependent_samples"] = connection.execute(
+                        """
+                        SELECT child._id,child.name,child.latitude,child.longitude,child.country_id,
+                               child.has_fixed_prayer_time,child.prayer_dependent_id,
+                               parent.name,parent.latitude,parent.longitude
+                        FROM location child
+                        LEFT JOIN location parent ON parent._id=child.prayer_dependent_id
+                        WHERE COALESCE(child.prayer_dependent_id,0)<>0
+                        ORDER BY child._id LIMIT 30
+                        """
+                    ).fetchall()
+                item["salawati_location_rule_probe"] = detail
             schema_report.append(item)
         print("MASHXALL_DB_SCHEMA_REPORT_BEGIN")
         print(json.dumps(schema_report, ensure_ascii=False, separators=(",", ":")))
