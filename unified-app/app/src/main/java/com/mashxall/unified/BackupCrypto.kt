@@ -2,7 +2,6 @@ package com.mashxall.unified
 
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
-import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
