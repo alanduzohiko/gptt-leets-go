@@ -2241,11 +2241,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         PrayerCalculationMethod.fromId(calculationMethod),
                         AsrCalculationSchool.fromId(asrSchool)
                     )
-                    manualLatitude != null && manualLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
-                        context, manualLatitude!!, manualLongitude!!, targetDate,
-                        PrayerCalculationMethod.fromId(calculationMethod),
-                        AsrCalculationSchool.fromId(asrSchool)
-                    )
+                    manualLatitude != null && manualLongitude != null -> {
+                        val sourceCityTimes = ContentRepository.loadPrayerTimes(
+                            context, selectedCity, targetDate, manualCountry
+                        )
+                        sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
+                            context, manualLatitude!!, manualLongitude!!, targetDate,
+                            PrayerCalculationMethod.fromId(calculationMethod),
+                            AsrCalculationSchool.fromId(asrSchool)
+                        )
+                    }
                     else -> ContentRepository.loadPrayerTimes(context, selectedCity, targetDate)
                 }
                 loadedDate = requestedKey
