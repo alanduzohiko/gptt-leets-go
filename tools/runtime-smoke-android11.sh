@@ -555,7 +555,7 @@ if [[ -z "$search_field_coords" ]]; then
 fi
 read -r search_field_x search_field_y <<< "$search_field_coords"
 adb shell input tap "$search_field_x" "$search_field_y"
-adb shell input text '%D8%A7%D9%84%D8%AD%D9%85%D8%AF'
+adb shell input text 'الحمد'
 sleep 8
 adb shell uiautomator dump /sdcard/mashxall-quran-search-results.xml > dist/runtime-test/uiautomator-quran-search-results.txt 2>&1 || true
 adb pull /sdcard/mashxall-quran-search-results.xml dist/runtime-test/window-quran-search-results.xml >/dev/null 2>&1 || true
