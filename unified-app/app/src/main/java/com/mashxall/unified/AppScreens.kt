@@ -267,6 +267,9 @@ fun QuranScreen(
     var verses by remember { mutableStateOf<List<Ayah>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var query by rememberSaveable { mutableStateOf("") }
+    var searchVersesMode by rememberSaveable { mutableStateOf(false) }
+    var searchingVerses by remember { mutableStateOf(false) }
+    var verseSearchResults by remember { mutableStateOf<List<Ayah>>(emptyList()) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var translationKey by rememberSaveable {
         mutableStateOf(prefs.getString("quran_translation", null) ?: when (language) {
@@ -348,6 +351,18 @@ fun QuranScreen(
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
+    LaunchedEffect(searchVersesMode, query, language, translationKey) {
+        if (!searchVersesMode || query.isBlank()) {
+            verseSearchResults = emptyList()
+            searchingVerses = false
+            return@LaunchedEffect
+        }
+        searchingVerses = true
+        verseSearchResults = runCatching {
+            ContentRepository.searchAyahs(context, query.trim(), language.key, translationKey)
+        }.getOrDefault(emptyList())
+        searchingVerses = false
+    }
     LaunchedEffect(initialSurah) { selected = initialSurah }
     LaunchedEffect(resumeLastMushaf) {
         if (resumeLastMushaf) {
@@ -624,14 +639,162 @@ fun QuranScreen(
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    SearchBox(query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
+                    SearchBox(
+                        query,
+                        { query = it },
+                        if (searchVersesMode) when (language) {
+                            AppLanguage.EN -> "Search Quran text…"
+                            AppLanguage.AR -> "ابحث في نص القرآن…"
+                            AppLanguage.CKB -> "لە دەقی قورئان بگەڕێ…"
+                        } else tr(language, "choose_surah") + " / " + tr(language, "search")
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                        FilterChip(
+                            selected = !searchVersesMode,
+                            onClick = {
+                                searchVersesMode = false
+                                query = ""
+                                verseSearchResults = emptyList()
+                            },
+                            label = {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Surah list"
+                                        AppLanguage.AR -> "قائمة السور"
+                                        AppLanguage.CKB -> "لیستی سوورەتەکان"
+                                    }, fontSize = 11.sp
+                                )
+                            }
+                        )
+                        FilterChip(
+                            selected = searchVersesMode,
+                            onClick = {
+                                searchVersesMode = true
+                                query = ""
+                            },
+                            label = {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Search Quran text"
+                                        AppLanguage.AR -> "البحث في الآيات"
+                                        AppLanguage.CKB -> "گەڕان لە دەقی ئایەتەکان"
+                                    }, fontSize = 11.sp
+                                )
+                            }
+                        )
+                    }
                 }
                 val filteredSurahs = surahs.filter { item ->
                     query.isBlank() || item.arabicName.contains(query.trim(), true) ||
                         item.englishName.contains(query.trim(), true) ||
                         item.number.toString() == query.trim()
                 }
-                if (surahs.isEmpty()) {
+                if (searchVersesMode) {
+                    when {
+                        query.isBlank() -> Box(
+                            Modifier.fillMaxSize().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Search Arabic verse text and the selected translation."
+                                    AppLanguage.AR -> "ابحث في نص الآيات العربية والترجمة المختارة."
+                                    AppLanguage.CKB -> "لە دەقی عەرەبیی ئایەت و وەرگێڕانی هەڵبژێردراودا بگەڕێ."
+                                }, color = foreground.copy(alpha = 0.6f), fontSize = 13.sp,
+                                lineHeight = 21.sp, textAlign = TextAlign.Center
+                            )
+                        }
+                        searchingVerses -> LoadingOrEmpty(true, language, foreground)
+                        verseSearchResults.isEmpty() -> LoadingOrEmpty(
+                            false, language, foreground,
+                            when (language) {
+                                AppLanguage.EN -> "No matching Quran verses were found."
+                                AppLanguage.AR -> "لم يتم العثور على آيات مطابقة."
+                                AppLanguage.CKB -> "هیچ ئایەتێکی هاوتا نەدۆزرایەوە."
+                            }
+                        )
+                        else -> LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 13.dp, vertical = 5.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(verseSearchResults, key = { "quran-search-${it.surah}-${it.number}" }) { verse ->
+                                val surahItem = surahs.firstOrNull { it.number == verse.surah }
+                                val surahLabel = when (language) {
+                                    AppLanguage.CKB -> surahItem?.arabicName ?: verse.surahNameArabic
+                                    AppLanguage.AR -> surahItem?.arabicName ?: verse.surahNameArabic
+                                    AppLanguage.EN -> verse.surahNameEnglish.ifBlank { surahItem?.englishName.orEmpty() }
+                                }
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        selected = verse.surah
+                                        onSurah(verse.surah)
+                                        onOpenVerse(verse.surah, verse.number)
+                                        prefs.edit()
+                                            .putInt("last_surah", verse.surah)
+                                            .putInt("last_ayah_number", verse.number)
+                                            .apply()
+                                        query = ""
+                                        searchVersesMode = false
+                                        showSurahList = false
+                                        openingMushaf = true
+                                        scope.launch {
+                                            val page = if (verse.page in 1..604) verse.page else runCatching {
+                                                ContentRepository.loadAyahs(
+                                                    context, verse.surah, language.key, translationKey = "none"
+                                                ).firstOrNull { it.number == verse.number }?.page
+                                            }.getOrNull() ?: 1
+                                            mushafPage = page.coerceIn(1, 604)
+                                            prefs.edit()
+                                                .putInt("last_mushaf_page", mushafPage)
+                                                .putInt("last_surah", verse.surah)
+                                                .putInt("last_ayah_number", verse.number)
+                                                .apply()
+                                            openingMushaf = false
+                                            mushafMode = true
+                                        }
+                                    },
+                                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                                    shape = RoundedCornerShape(18.dp),
+                                    border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.19f))
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    surahLabel + " • " + verse.surah + ":" + verse.number,
+                                                    color = Gold, fontWeight = FontWeight.Bold, fontSize = 13.sp
+                                                )
+                                                Text(
+                                                    when (language) {
+                                                        AppLanguage.EN -> "Open matching Mushaf page"
+                                                        AppLanguage.AR -> "فتح صفحة المصحف المطابقة"
+                                                        AppLanguage.CKB -> "پەڕەی هاوتای مصحەف بکەرەوە"
+                                                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
+                                                )
+                                            }
+                                            Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            verse.arabic, color = foreground, fontSize = 20.sp,
+                                            lineHeight = 33.sp, textAlign = TextAlign.End,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        if (verse.translation.isNotBlank()) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                verse.translation, color = foreground.copy(alpha = 0.78f),
+                                                fontSize = 12.sp, lineHeight = 20.sp, maxLines = 3
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if (surahs.isEmpty()) {
                     LoadingOrEmpty(true, language, foreground)
                 } else LazyColumn(
                     modifier = Modifier.fillMaxSize(),
