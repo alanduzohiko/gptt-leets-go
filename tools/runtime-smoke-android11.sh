@@ -208,6 +208,16 @@ if [[ "$fajr_visible" -ne 1 ]]; then
   exit 1
 fi
 
+# The default clock must be 12-hour on the live prayer screen, not merely a label
+# in Settings. Check localized AM/PM markers so 00:xx and 14:xx aren't shown as
+# an unlabelled 24-hour clock.
+if ! grep -Eq '[0-9]{1,2}:[0-9]{2} (AM|PM|صباحًا|مساءً|پ\.ن|د\.ن)' dist/runtime-test/window-prayer.xml; then
+  echo "FAIL: prayer times did not show a localized 12-hour time marker by default."
+  cat dist/runtime-test/window-prayer.xml
+  exit 1
+fi
+echo "PASS: the prayer screen renders a localized 12-hour clock by default."
+
 check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
 
 # The redesigned Quran entry is a surah list. Select Al-Fatiha, enter the
@@ -289,6 +299,55 @@ if grep -Eq 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز'
   cat dist/runtime-test/window-mushaf-fullscreen.xml
   exit 1
 fi
+
+# Verify Quran reader settings can search the bundled reciter library without
+# leaving the page-based Mushaf. The reciter list is long, so scroll the settings
+# list to its source-backed search box before returning to the page.
+reader_settings_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Settings|الإعدادات|ڕێکخستن", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$reader_settings_coords" ]]; then
+  echo "FAIL: Mushaf reader settings button was not tappable."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  exit 1
+fi
+read -r reader_settings_x reader_settings_y <<< "$reader_settings_coords"
+adb shell input tap "$reader_settings_x" "$reader_settings_y"
+sleep 2
+for attempt in $(seq 1 5); do
+  adb shell input swipe 540 1320 540 520 450 || true
+  sleep 1
+  adb shell uiautomator dump /sdcard/mashxall-reader-settings.xml > "dist/runtime-test/uiautomator-reader-settings-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-reader-settings.xml dist/runtime-test/window-reader-settings.xml >/dev/null 2>&1 || true
+  if grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-reader-settings.xml; then
+    echo "PASS: Quran settings expose a search box for the source reciter library."
+    break
+  fi
+done
+if ! grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-reader-settings.xml; then
+  echo "FAIL: Quran reader settings did not expose the reciter-library search after scrolling."
+  cat dist/runtime-test/window-reader-settings.xml
+  exit 1
+fi
+adb shell input keyevent 4
+sleep 2
 
 verse_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
 import re
