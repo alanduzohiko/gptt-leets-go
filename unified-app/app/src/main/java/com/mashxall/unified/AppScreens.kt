@@ -3276,9 +3276,15 @@ fun AudioScreen(
         }
         if (selectedTab == 0 || selectedTab == 2) {
             val adhanKeywords = listOf(
-                "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
-                "mecca", "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
-                "majid", "mansur", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan"
+                // English/Latin spellings from asset names and folders.
+                "adhan", "athan", "azan", "muezzin", "muadhin", "muazzin", "takbir", "takbeer",
+                "madina", "madinah", "mecca", "makkah", "fajr", "hijaz", "mosque", "masjid",
+                "abdulbasit", "abdul_basit", "abdulmajid", "majid", "mansur", "mshari",
+                "naqshbandi", "nasr", "peshawa", "rahid", "ramazan",
+                // Arabic and Kurdish filenames used by source application bundles.
+                "أذان", "اذان", "الاذان", "الأذان", "آذان", "مؤذن", "المؤذن", "المؤذنين",
+                "مسجد", "المسجد", "صلاة", "الصلاة", "تكبير", "التكبير", "حي على الصلاة",
+                "بانگ", "بەنگ", "موەزین", "موذن", "مزگەوت", "مزگوت", "نوێژ", "بانگی بەیانی"
             )
             val visibleAudio = audio.filter { item ->
                 val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
