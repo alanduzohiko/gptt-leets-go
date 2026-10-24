@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -68,6 +69,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -101,6 +103,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -998,13 +1002,13 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
                 val data = inventory!!
                 val metrics = listOf(
                     Triple(data.sourceApps.toString(), when (language) { AppLanguage.EN -> "Source apps"; AppLanguage.AR -> "تطبيقات المصدر"; AppLanguage.CKB -> "ئەپەی سەرچاوە" }, Icons.Outlined.LibraryBooks),
-                    Triple(data.databases.toString(), when (language) { AppLanguage.EN -> "SQLite databases"; AppLanguage.AR -> "قواعد SQLite"; AppLanguage.CKB -> "بنکەدراوەی SQLite" }, Icons.Outlined.Storage),
+                    Triple(data.databases.toString(), when (language) { AppLanguage.EN -> "SQLite databases"; AppLanguage.AR -> "قواعد SQLite"; AppLanguage.CKB -> "بنکەدراوەی SQLite" }, Icons.Outlined.LibraryBooks),
                     Triple(data.mushafSvgPages.toString(), when (language) { AppLanguage.EN -> "Mushaf pages"; AppLanguage.AR -> "صفحات المصحف"; AppLanguage.CKB -> "پەڕەکانی مصحەف" }, Icons.Outlined.MenuBook),
-                    Triple(data.files.toString(), when (language) { AppLanguage.EN -> "Bundled files"; AppLanguage.AR -> "الملفات المرفقة"; AppLanguage.CKB -> "فایلە ناوخۆییەکان" }, Icons.Outlined.FolderOpen),
+                    Triple(data.files.toString(), when (language) { AppLanguage.EN -> "Bundled files"; AppLanguage.AR -> "الملفات المرفقة"; AppLanguage.CKB -> "فایلە ناوخۆییەکان" }, Icons.Outlined.AutoStories),
                     Triple(data.audioFiles.toString(), when (language) { AppLanguage.EN -> "Audio files"; AppLanguage.AR -> "ملفات صوتية"; AppLanguage.CKB -> "فایلە دەنگییەکان" }, Icons.Outlined.GraphicEq),
-                    Triple(data.fontFiles.toString(), when (language) { AppLanguage.EN -> "Fonts"; AppLanguage.AR -> "الخطوط"; AppLanguage.CKB -> "فۆنتەکان" }, Icons.Outlined.TextFields),
-                    Triple(data.pdfDocuments.toString(), "PDF", Icons.Outlined.PictureAsPdf),
-                    Triple(String.format(Locale.US, "%.1f", data.totalContentBytes / 1_000_000.0), "MB source assets", Icons.Outlined.Storage)
+                    Triple(data.fontFiles.toString(), when (language) { AppLanguage.EN -> "Fonts"; AppLanguage.AR -> "الخطوط"; AppLanguage.CKB -> "فۆنتەکان" }, Icons.Outlined.MenuBook),
+                    Triple(data.pdfDocuments.toString(), "PDF", Icons.Outlined.AutoStories),
+                    Triple(String.format(Locale.US, "%.1f", data.totalContentBytes / 1_000_000.0), "MB source assets", Icons.Outlined.LibraryBooks)
                 )
                 metrics.chunked(2).forEach { pair ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -1053,7 +1057,7 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
                                         color = foreground.copy(alpha = 0.56f), fontSize = 10.sp
                                     )
                                 }
-                                Icon(Icons.Outlined.Verified, null, tint = Gold, modifier = Modifier.size(23.dp))
+                                Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(23.dp))
                             }
                             Spacer(Modifier.height(9.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
