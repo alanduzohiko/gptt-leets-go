@@ -490,6 +490,122 @@ if ! grep -Eq 'قورئانی پیرۆز|القرآن الكريم|The Holy Qura
 fi
 echo "PASS: the Mushaf exits cleanly back to the surah list and the app header."
 
+# Full-text Quran search belongs inside the Quran entry. Search for Al-Hamd,
+# open the matching verse result, and verify that it opens the correct graphic
+# Mushaf page instead of switching to a text-only reading screen.
+search_mode_coords="$(python3 - dist/runtime-test/window-quran-restored.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Search Quran text|البحث في الآيات|گەڕان لە دەقی ئایەتەکان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$search_mode_coords" ]]; then
+  echo "FAIL: Quran screen does not offer an in-section full-text search mode."
+  cat dist/runtime-test/window-quran-restored.xml
+  exit 1
+fi
+read -r search_mode_x search_mode_y <<< "$search_mode_coords"
+adb shell input tap "$search_mode_x" "$search_mode_y"
+sleep 3
+adb shell uiautomator dump /sdcard/mashxall-quran-search-mode.xml > dist/runtime-test/uiautomator-quran-search-mode.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran-search-mode.xml dist/runtime-test/window-quran-search-mode.xml >/dev/null 2>&1 || true
+search_field_coords="$(python3 - dist/runtime-test/window-quran-search-mode.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+# Prefer the visible search hint, then use an editable field as a fallback.
+pattern = re.compile(r"Search Quran text|ابحث في نص القرآن|لە دەقی قورئان بگەڕێ", re.I)
+for node in root.iter("node"):
+    if pattern.search(node.attrib.get("text", "")) or pattern.search(node.attrib.get("hint", "")):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("class", "").endswith("EditText"):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+if [[ -z "$search_field_coords" ]]; then
+  echo "FAIL: Quran text search mode did not provide a searchable field."
+  cat dist/runtime-test/window-quran-search-mode.xml
+  exit 1
+fi
+read -r search_field_x search_field_y <<< "$search_field_coords"
+adb shell input tap "$search_field_x" "$search_field_y"
+adb shell input text '%D8%A7%D9%84%D8%AD%D9%85%D8%AF'
+sleep 8
+adb shell uiautomator dump /sdcard/mashxall-quran-search-results.xml > dist/runtime-test/uiautomator-quran-search-results.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran-search-results.xml dist/runtime-test/window-quran-search-results.xml >/dev/null 2>&1 || true
+if ! grep -Eq '1:2|١:٢|الحمد لله رب العالمين' dist/runtime-test/window-quran-search-results.xml; then
+  echo "FAIL: searching for Al-Hamd did not return the matching verse inside Quran."
+  cat dist/runtime-test/window-quran-search-results.xml
+  exit 1
+fi
+echo "PASS: Quran full-text search returns matching verse results inside the Quran section."
+
+search_result_coords="$(python3 - dist/runtime-test/window-quran-search-results.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if not re.search(r"1:2|١:٢", node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$search_result_coords" ]]; then
+  echo "FAIL: Quran search results did not expose an accessible verse reference."
+  cat dist/runtime-test/window-quran-search-results.xml
+  exit 1
+fi
+read -r result_x result_y <<< "$search_result_coords"
+adb shell input tap "$result_x" "$result_y"
+sleep 7
+adb shell uiautomator dump /sdcard/mashxall-quran-search-result-open.xml > dist/runtime-test/uiautomator-quran-search-result-open.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran-search-result-open.xml dist/runtime-test/window-quran-search-result-open.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-quran-search-result-open.xml ||
+   ! grep -q '604' dist/runtime-test/window-quran-search-result-open.xml; then
+  echo "FAIL: selecting a searched Quran verse did not open the corresponding graphic Mushaf page."
+  cat dist/runtime-test/window-quran-search-result-open.xml
+  exit 1
+fi
+adb shell input keyevent 4 || true
+sleep 4
+adb shell uiautomator dump /sdcard/mashxall-quran-after-search.xml > dist/runtime-test/uiautomator-quran-after-search.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran-after-search.xml dist/runtime-test/window-quran-after-search.xml >/dev/null 2>&1 || true
+echo "PASS: a Quran text-search result opens the corresponding page-based Mushaf."
+
 
 check_screen hadith 'فەرموودەکان|الأحاديث|Hadith'
 
