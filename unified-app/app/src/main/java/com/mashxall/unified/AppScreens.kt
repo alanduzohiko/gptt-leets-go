@@ -155,7 +155,25 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}) {
+fun QuranScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    initialSurah: Int,
+    initialAyah: Int,
+    onSurah: (Int) -> Unit,
+    onTafsir: (Int, Int) -> Unit,
+    onBookmark: (Int, Int) -> Unit,
+    onOpenVerse: (Int, Int) -> Unit = { _, _ -> },
+    onPlayAudio: (Int, Int) -> Unit = { _, _ -> },
+    onImmersiveMushaf: (Boolean) -> Unit = {},
+    resumeLastMushaf: Boolean = false,
+    onResumeMushafHandled: () -> Unit = {},
+    openSelectedVerse: Boolean = false,
+    onSelectedVerseHandled: () -> Unit = {},
+    openReaderSettings: Boolean = false,
+    onReaderSettingsHandled: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -239,6 +257,56 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             openingMushaf = false
             mushafMode = true
             onResumeMushafHandled()
+        }
+    }
+
+    LaunchedEffect(openReaderSettings) {
+        if (openReaderSettings) {
+            selectedAyahForSheet = null
+            showSurahList = true
+            openingMushaf = false
+            mushafMode = false
+            showReaderSettings = true
+            onReaderSettingsHandled()
+        }
+    }
+
+    LaunchedEffect(openSelectedVerse, initialSurah, initialAyah) {
+        if (openSelectedVerse) {
+            val targetSurah = initialSurah.coerceIn(1, 114)
+            val targetAyah = initialAyah.coerceAtLeast(1)
+            selected = targetSurah
+            query = ""
+            showSurahList = false
+            openingMushaf = true
+            mushafMode = false
+            selectedAyahForSheet = null
+            val verse = runCatching {
+                ContentRepository.loadAyahs(
+                    context,
+                    targetSurah,
+                    language.key,
+                    translationKey = "none"
+                ).firstOrNull { it.number == targetAyah }
+            }.getOrNull()
+            if (verse == null) {
+                // If the saved verse cannot be resolved from the source database,
+                // gracefully return to the real surah list rather than guessing.
+                openingMushaf = false
+                showSurahList = true
+                onSelectedVerseHandled()
+                return@LaunchedEffect
+            }
+            mushafPage = verse.page.coerceIn(1, 604)
+            prefs.edit()
+                .putInt("last_mushaf_page", mushafPage)
+                .putInt("last_surah", targetSurah)
+                .putInt("last_ayah_number", targetAyah)
+                .apply()
+            openingMushaf = false
+            mushafMode = true
+            selectedAyahForSheet = targetSurah to targetAyah
+            onSelectedVerseHandled()
         }
     }
     // Do not let a restored or legacy state expose the old text-only reader.
