@@ -126,6 +126,14 @@ jobs:
       - name: Run unit tests, lint, and a debug APK build
         run: gradle --no-daemon --project-dir unified-app testDebugUnitTest lintDebug assembleDebug
 
+      - name: Verify every source asset is packaged byte-for-byte
+        run: |
+          set -euo pipefail
+          python tools/audit_apk_assets.py \
+            --apk unified-app/app/build/outputs/apk/debug/app-debug.apk \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --out dist/runtime-test/apk-assets-audit.json
+
       - name: Verify APK signature and archive integrity
         shell: bash
         run: |
