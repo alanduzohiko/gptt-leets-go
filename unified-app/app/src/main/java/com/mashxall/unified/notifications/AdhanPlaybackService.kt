@@ -70,17 +70,37 @@ class AdhanPlaybackService : Service() {
 
     private fun playAsset(assetPath: String) {
         releasePlayer()
+        val customRequested = assetPath.startsWith("custom:")
         val source = try {
-            if (assetPath.isBlank()) null else {
+            if (assetPath.isBlank()) null
+            else if (customRequested) {
+                val filename = assetPath.removePrefix("custom:")
+                require(filename.isNotBlank() && File(filename).name == filename) { "Invalid imported adhan reference." }
+                val directory = File(filesDir, "adhan-custom").canonicalFile
+                File(directory, filename).canonicalFile.also { file ->
+                    require(file.parentFile == directory && file.isFile && file.length() > 0L) {
+                        "The imported adhan file is unavailable."
+                    }
+                }
+            } else {
                 val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
                     .take(8).joinToString("") { "%02x".format(it) }
                 File(cacheDir, "adhan-$hash.audio").also { target ->
                     if (!target.exists() || target.length() == 0L) {
-                        assets.open(assetPath).use { input -> target.outputStream().use { output -> input.copyTo(output, 64 * 1024) } }
+                        assets.open(assetPath).use { input ->
+                            target.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                        }
                     }
                 }
             }
         } catch (_: Exception) { null }
+
+        if (customRequested && source == null) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+
         val mp = MediaPlayer()
         player = mp
         try {
