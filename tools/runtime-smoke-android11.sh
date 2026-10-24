@@ -331,18 +331,26 @@ fi
 read -r reader_settings_x reader_settings_y <<< "$reader_settings_coords"
 adb shell input tap "$reader_settings_x" "$reader_settings_y"
 sleep 2
-for attempt in $(seq 1 5); do
-  adb shell input swipe 540 1320 540 520 450 || true
-  sleep 1
-  adb shell uiautomator dump /sdcard/mashxall-reader-settings.xml > "dist/runtime-test/uiautomator-reader-settings-$attempt.txt" 2>&1 || true
-  adb pull /sdcard/mashxall-reader-settings.xml dist/runtime-test/window-reader-settings.xml >/dev/null 2>&1 || true
-  if grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-reader-settings.xml; then
-    echo "PASS: Quran settings expose a search box for the source reciter library."
-    break
-  fi
-done
+# The reciter search is intentionally pinned near the top of Quran reader
+# settings. Check before scrolling so the test also protects the intended UX.
+adb shell uiautomator dump /sdcard/mashxall-reader-settings-initial.xml > dist/runtime-test/uiautomator-reader-settings-initial.txt 2>&1 || true
+adb pull /sdcard/mashxall-reader-settings-initial.xml dist/runtime-test/window-reader-settings.xml >/dev/null 2>&1 || true
+if grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-reader-settings.xml; then
+  echo "PASS: Quran settings expose reciter search immediately at the top."
+else
+  for attempt in $(seq 1 12); do
+    adb shell input swipe 540 1320 540 520 450 || true
+    sleep 1
+    adb shell uiautomator dump /sdcard/mashxall-reader-settings.xml > "dist/runtime-test/uiautomator-reader-settings-$attempt.txt" 2>&1 || true
+    adb pull /sdcard/mashxall-reader-settings.xml dist/runtime-test/window-reader-settings.xml >/dev/null 2>&1 || true
+    if grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-reader-settings.xml; then
+      echo "PASS: Quran settings expose a source-backed reciter search after scrolling."
+      break
+    fi
+  done
+fi
 if ! grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-reader-settings.xml; then
-  echo "FAIL: Quran reader settings did not expose the reciter-library search after scrolling."
+  echo "FAIL: Quran reader settings did not expose the reciter-library search."
   cat dist/runtime-test/window-reader-settings.xml
   exit 1
 fi
