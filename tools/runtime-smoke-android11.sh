@@ -1006,19 +1006,37 @@ fi
 read -r quran_settings_x quran_settings_y <<< "$reader_settings_open_coords"
 adb shell input tap "$quran_settings_x" "$quran_settings_y"
 quran_settings_opened=0
-for attempt in $(seq 1 8); do
+for attempt in $(seq 1 6); do
   sleep 2
   adb shell uiautomator dump /sdcard/mashxall-settings-quran.xml > "dist/runtime-test/uiautomator-settings-quran-$attempt.txt" 2>&1 || true
   adb pull /sdcard/mashxall-settings-quran.xml dist/runtime-test/window-settings-quran.xml >/dev/null 2>&1 || true
-  if grep -Eq 'DEFAULT TRANSLATION|الترجمة الافتراضية|وەرگێڕانی بنەڕەت' dist/runtime-test/window-settings-quran.xml &&
-     grep -Eq 'DEFAULT TAFSIR|التفسير الافتراضي|تەفسیرى بنەڕەت' dist/runtime-test/window-settings-quran.xml; then
+  if grep -Eq 'Quran reader settings|إعدادات قارئ القرآن|ڕێکخستنەکانی خوێندنەوەی قورئان' dist/runtime-test/window-settings-quran.xml &&
+     grep -Eq 'DEFAULT TRANSLATION|الترجمة الافتراضية|وەرگێڕانی بنەڕەت' dist/runtime-test/window-settings-quran.xml; then
     quran_settings_opened=1
-    echo "PASS: global Settings opens the in-reader translation and tafsir choices."
+    echo "PASS: global Settings opened the reader dialog at its translation choices."
     break
   fi
 done
 if [[ "$quran_settings_opened" -ne 1 ]]; then
-  echo "FAIL: global Quran reader settings did not show translation and tafsir choices."
+  echo "FAIL: global Quran reader settings did not open the translation dialog."
+  cat dist/runtime-test/window-settings-quran.xml
+  exit 1
+fi
+
+tafseer_setting_visible=0
+for attempt in $(seq 1 7); do
+  if grep -Eq 'DEFAULT TAFSIR|التفسير الافتراضي|تەفسیرى بنەڕەت' dist/runtime-test/window-settings-quran.xml; then
+    tafseer_setting_visible=1
+    echo "PASS: reader settings expose the selected tafsir control."
+    break
+  fi
+  adb shell input swipe 540 1330 540 580 450 || true
+  sleep 1
+  adb shell uiautomator dump /sdcard/mashxall-settings-quran-scroll.xml > "dist/runtime-test/uiautomator-settings-quran-scroll-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings-quran-scroll.xml dist/runtime-test/window-settings-quran.xml >/dev/null 2>&1 || true
+done
+if [[ "$tafseer_setting_visible" -ne 1 ]]; then
+  echo "FAIL: Quran reader settings did not expose the selected tafsir control after scrolling."
   cat dist/runtime-test/window-settings-quran.xml
   exit 1
 fi
