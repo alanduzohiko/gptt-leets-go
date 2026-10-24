@@ -2200,7 +2200,7 @@ object ContentRepository {
             .sortedBy { it.name.lowercase(Locale.ROOT) }
             .map { file ->
                 AudioItem(
-                    assetPath = "custom:\${file.name}",
+                    assetPath = "custom:${file.name}",
                     title = file.nameWithoutExtension.replace(Regex("^[0-9]+_[a-fA-F0-9]+_"), "").replace('_', ' ').replace('-', ' '),
                     group = "Imported adhan from phone"
                 )
@@ -2229,7 +2229,10 @@ object ContentRepository {
         }
         val directory = File(context.filesDir, "adhan-custom")
         require(directory.exists() || directory.mkdirs()) { "Could not create the private adhan folder." }
-        val fileName = "adhan_\${System.currentTimeMillis()}_\${UUID.randomUUID().toString().take(8)}.$extension"
+        val title = displayName.substringBeforeLast('.', displayName).trim().ifBlank { "Imported adhan" }
+        val safeTitle = title.filter { it.isLetterOrDigit() || it == ' ' || it == '_' || it == '-' }
+            .replace(' ', '_').take(60).ifBlank { "adhan" }
+        val fileName = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().replace("-", "").take(8)}_${safeTitle}.$extension"
         val destination = File(directory, fileName)
         try {
             val input = resolver.openInputStream(uri) ?: error("Could not open the selected audio file.")
@@ -2251,7 +2254,6 @@ object ContentRepository {
             destination.delete()
             throw error
         }
-        val title = displayName.substringBeforeLast('.', displayName).trim().ifBlank { "Imported adhan" }
         AudioItem("custom:$fileName", title, "Imported adhan from phone")
     }
 
