@@ -4391,7 +4391,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         // must never hide an audio asset from the user's explicit selection.
         adhanAssets = ContentRepository.loadAudioItems(context)
         val preferredKeywords = listOf(
-            "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah", "mecca,
+            "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah", "mecca",
             "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
             "mshari", "peshawa", "ramazan", "mansur"
         )
