@@ -1147,7 +1147,8 @@ fun QuranScreen(
                             AppLanguage.CKB -> "فۆنتی دەقی عەرەبی لە پانێڵی ئایەتدا دەگۆڕێت؛ نەخشەی پەڕەی مصحەف ناگۆڕێت."
                         }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
                     )
-                    items(QuranFontOptions, key = { "quran-font-" + it.id }) { option ->
+                }
+                items(QuranFontOptions, key = { "quran-font-" + it.id }) { option ->
                         val label = when (language) {
                             AppLanguage.CKB -> option.labelCkb
                             AppLanguage.AR -> option.labelAr
