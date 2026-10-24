@@ -922,26 +922,46 @@ if [[ -z "$bookmark_open_coords" ]]; then
 fi
 read -r bookmark_open_x bookmark_open_y <<< "$bookmark_open_coords"
 adb shell input tap "$bookmark_open_x" "$bookmark_open_y"
-bookmark_restore_ok=0
+bookmark_sheet_ok=0
 for attempt in $(seq 1 20); do
   sleep 3
   adb shell uiautomator dump /sdcard/mashxall-bookmark-resume.xml > "dist/runtime-test/uiautomator-bookmark-resume-$attempt.txt" 2>&1 || true
   adb pull /sdcard/mashxall-bookmark-resume.xml dist/runtime-test/window-bookmark-resume.xml >/dev/null 2>&1 || true
-  if grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-bookmark-resume.xml &&
-     grep -q '604' dist/runtime-test/window-bookmark-resume.xml &&
-     grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-bookmark-resume.xml; then
-    bookmark_restore_ok=1
-    echo "PASS: opening a saved bookmark restored its graphic Mushaf page and verse-action panel."
+  # A verse-action ModalBottomSheet overlays the Mushaf and removes the page
+  # controls from the accessibility hierarchy. Assert the exact saved verse
+  # and its contextual controls here; after dismissing, separately assert that
+  # the underlying graphic page is really selected.
+  if grep -Eq '1:1|١:١' dist/runtime-test/window-bookmark-resume.xml &&
+     grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-bookmark-resume.xml &&
+     grep -Eq 'Play|تشغيل|لێدان' dist/runtime-test/window-bookmark-resume.xml; then
+    bookmark_sheet_ok=1
+    echo "PASS: opening a saved bookmark restored its exact 1:1 verse-action panel."
     break
   fi
 done
-if [[ "$bookmark_restore_ok" -ne 1 ]]; then
-  echo "FAIL: opening a bookmark did not resume the exact saved verse in the Mushaf."
+if [[ "$bookmark_sheet_ok" -ne 1 ]]; then
+  echo "FAIL: opening a bookmark did not show its exact saved verse and contextual actions."
   cat dist/runtime-test/window-bookmark-resume.xml
   adb logcat -d -v threadtime > dist/runtime-test/logcat-bookmark-resume-failure.txt || true
   grep -E 'MashxallData|FATAL EXCEPTION|SQLite|Content query failed' dist/runtime-test/logcat-bookmark-resume-failure.txt | tail -n 80 || true
   exit 1
 fi
+
+# Dismiss the action panel, then prove the real page-based Mushaf and its page
+# controls remain underneath it. This avoids falsely treating the modal's
+# accessibility tree as the full page tree.
+adb shell input keyevent 4
+sleep 4
+adb shell uiautomator dump /sdcard/mashxall-bookmark-page.xml > dist/runtime-test/uiautomator-bookmark-page.txt 2>&1 || true
+adb pull /sdcard/mashxall-bookmark-page.xml dist/runtime-test/window-bookmark-page.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-bookmark-page.xml ||
+   ! grep -q '604' dist/runtime-test/window-bookmark-page.xml ||
+   ! grep -Eq 'Exit|خروج|دەرچوون' dist/runtime-test/window-bookmark-page.xml; then
+  echo "FAIL: dismissing the saved-verse panel did not reveal the graphic Mushaf page."
+  cat dist/runtime-test/window-bookmark-page.xml
+  exit 1
+fi
+echo "PASS: a saved bookmark opens the correct verse panel over the 604-page graphic Mushaf."
 
 check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
 check_screen home 'کاتەکانی نوێژ|مواقيت الصلاة|Prayer times'
