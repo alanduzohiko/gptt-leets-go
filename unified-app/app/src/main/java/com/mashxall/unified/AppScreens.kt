@@ -206,6 +206,20 @@ private val MushafSepiaColorMatrix = ColorMatrix(
     )
 )
 
+internal fun isAdhanAudioAsset(title: String, assetPath: String, group: String): Boolean {
+    val name = (title + " " + assetPath + " " + group).lowercase(Locale.ROOT)
+    val keywords = listOf(
+        "adhan", "athan", "azan", "muezzin", "muadhin", "muazzin", "takbir", "takbeer",
+        "madina", "madinah", "mecca", "makkah", "fajr", "hijaz", "mosque", "masjid",
+        "abdulbasit", "abdul_basit", "abdulmajid", "majid", "mansur", "mshari",
+        "naqshbandi", "nasr", "peshawa", "rahid", "ramazan",
+        "أذان", "اذان", "الاذان", "الأذان", "آذان", "مؤذن", "المؤذن", "المؤذنين",
+        "مسجد", "المسجد", "صلاة", "الصلاة", "تكبير", "التكبير", "حي على الصلاة",
+        "بانگ", "بەنگ", "موەزین", "موذن", "مزگەوت", "مزگوت", "نوێژ", "بانگی بەیانی"
+    )
+    return keywords.any(name::contains)
+}
+
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -3275,20 +3289,9 @@ fun AudioScreen(
             }
         }
         if (selectedTab == 0 || selectedTab == 2) {
-            val adhanKeywords = listOf(
-                // English/Latin spellings from asset names and folders.
-                "adhan", "athan", "azan", "muezzin", "muadhin", "muazzin", "takbir", "takbeer",
-                "madina", "madinah", "mecca", "makkah", "fajr", "hijaz", "mosque", "masjid",
-                "abdulbasit", "abdul_basit", "abdulmajid", "majid", "mansur", "mshari",
-                "naqshbandi", "nasr", "peshawa", "rahid", "ramazan",
-                // Arabic and Kurdish filenames used by source application bundles.
-                "أذان", "اذان", "الاذان", "الأذان", "آذان", "مؤذن", "المؤذن", "المؤذنين",
-                "مسجد", "المسجد", "صلاة", "الصلاة", "تكبير", "التكبير", "حي على الصلاة",
-                "بانگ", "بەنگ", "موەزین", "موذن", "مزگەوت", "مزگوت", "نوێژ", "بانگی بەیانی"
-            )
             val visibleAudio = audio.filter { item ->
                 val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                (selectedTab == 0 || adhanKeywords.any { name.contains(it) }) &&
+                (selectedTab == 0 || isAdhanAudioAsset(item.title, item.assetPath, item.group)) &&
                     (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
             }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
