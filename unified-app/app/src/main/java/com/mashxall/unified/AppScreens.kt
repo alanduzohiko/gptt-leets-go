@@ -1264,7 +1264,6 @@ fun QuranScreen(
                             }
                         }
                     }
-                }
                 item {
                     Spacer(Modifier.height(9.dp))
                     Divider(color = Gold.copy(alpha = 0.25f))
