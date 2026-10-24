@@ -322,9 +322,12 @@ fun MashxallApp(startScreen: String? = null) {
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", 1).apply()
                                     },
                                     onTafsir = { s, a ->
-                                        selectedSurah = s; selectedAyah = a
+                                        selectedSurah = s
+                                        selectedAyah = a
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
-                                        navigateTo("tafsir")
+                                        openQuranReaderSettingsRequested = false
+                                        openSelectedVerseRequested = true
+                                        navigateTo("quran")
                                     },
                                     onBookmark = { s, a ->
                                         selectedSurah = s; selectedAyah = a
