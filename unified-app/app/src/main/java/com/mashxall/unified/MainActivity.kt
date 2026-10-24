@@ -222,6 +222,8 @@ fun MashxallApp(startScreen: String? = null) {
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var resumeMushafRequested by rememberSaveable { mutableStateOf(false) }
+    var openSelectedVerseRequested by rememberSaveable { mutableStateOf(false) }
+    var openQuranReaderSettingsRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var audioAutoPlayRequested by rememberSaveable { mutableStateOf(false) }
     var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
@@ -345,7 +347,11 @@ fun MashxallApp(startScreen: String? = null) {
                                     },
                                     onImmersiveMushaf = { immersiveMushaf = it },
                                     resumeLastMushaf = resumeMushafRequested,
-                                    onResumeMushafHandled = { resumeMushafRequested = false }
+                                    onResumeMushafHandled = { resumeMushafRequested = false },
+                                    openSelectedVerse = openSelectedVerseRequested,
+                                    onSelectedVerseHandled = { openSelectedVerseRequested = false },
+                                    openReaderSettings = openQuranReaderSettingsRequested,
+                                    onReaderSettingsHandled = { openQuranReaderSettingsRequested = false }
                                 )
                                 "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
@@ -370,8 +376,12 @@ fun MashxallApp(startScreen: String? = null) {
                                 "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "pdf" -> PdfReaderScreen(language, foreground, selectedPdf)
                                 "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
-                                    selectedSurah = s; selectedAyah = a
+                                    selectedSurah = s
+                                    selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                    resumeMushafRequested = false
+                                    openQuranReaderSettingsRequested = false
+                                    openSelectedVerseRequested = true
                                     navigationStack = emptyList()
                                     screen = "quran"
                                 })
@@ -392,7 +402,12 @@ fun MashxallApp(startScreen: String? = null) {
                                     audioStartsAtReciters = true
                                     audioAutoPlayRequested = false
                                     navigateTo("audio")
-                                }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
+                                }, onPrayer = { navigateTo("prayer") }, onQuran = {
+                                    resumeMushafRequested = false
+                                    openSelectedVerseRequested = false
+                                    openQuranReaderSettingsRequested = true
+                                    navigateTo("quran")
+                                })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) })
                             }
