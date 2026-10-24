@@ -351,7 +351,11 @@ fun MashxallApp(startScreen: String? = null) {
                                     openSelectedVerse = openSelectedVerseRequested,
                                     onSelectedVerseHandled = { openSelectedVerseRequested = false },
                                     openReaderSettings = openQuranReaderSettingsRequested,
-                                    onReaderSettingsHandled = { openQuranReaderSettingsRequested = false }
+                                    onReaderSettingsHandled = { openQuranReaderSettingsRequested = false },
+                                    onOpenSourcePdf = { path ->
+                                        selectedPdf = path
+                                        navigateTo("pdf")
+                                    }
                                 )
                                 "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
