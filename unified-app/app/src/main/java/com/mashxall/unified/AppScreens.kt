@@ -217,7 +217,7 @@ internal fun isAdhanAudioAsset(title: String, assetPath: String, group: String):
         "مسجد", "المسجد", "صلاة", "الصلاة", "تكبير", "التكبير", "حي على الصلاة",
         "بانگ", "بەنگ", "موەزین", "موذن", "مزگەوت", "مزگوت", "نوێژ", "بانگی بەیانی"
     )
-    return keywords.any(name::contains)
+    return keywords.any { keyword -> name.contains(keyword) }
 }
 
 @Composable
