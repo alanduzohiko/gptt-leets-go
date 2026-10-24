@@ -852,6 +852,43 @@ echo "PASS: Adhkar categories open a list, and an individual remembrance opens i
 check_screen names 'ناوە پیرۆزەکان|أسماء الله الحسنى|Names of Allah'
 check_screen tasbih 'تەسبیح|المسبحة|Digital tasbih'
 check_screen audio 'دەنگ و تلاوەت|التلاوات والصوتيات|Recitations & audio'
+
+adhan_tab_coords="$(python3 - dist/runtime-test/window-audio.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Adhan & mosque audio|الأذان وأصوات المساجد|بانگ و دەنگی مزگەوت", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$adhan_tab_coords" ]]; then
+  echo "FAIL: audio library does not expose the Adhan & mosque audio tab."
+  cat dist/runtime-test/window-audio.xml
+  exit 1
+fi
+read -r adhan_tab_x adhan_tab_y <<< "$adhan_tab_coords"
+adb shell input tap "$adhan_tab_x" "$adhan_tab_y"
+sleep 3
+adb shell uiautomator dump /sdcard/mashxall-audio-adhan.xml > dist/runtime-test/uiautomator-audio-adhan.txt 2>&1 || true
+adb pull /sdcard/mashxall-audio-adhan.xml dist/runtime-test/window-audio-adhan.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Import from phone|استيراد من الهاتف|لە مۆبایلەوە هاوردە بکە' dist/runtime-test/window-audio-adhan.xml; then
+  echo "FAIL: the Adhan tab does not offer phone-based audio import."
+  cat dist/runtime-test/window-audio-adhan.xml
+  exit 1
+fi
+echo "PASS: the Adhan library includes an import-from-phone option."
+
 check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
