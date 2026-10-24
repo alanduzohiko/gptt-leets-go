@@ -31,6 +31,25 @@ class PrayerTimeCorrectionTest {
     }
 
     @Test
+    fun invalidClockValuesFallBackToTheOtherCompleteSource() {
+        val noor = PrayerRow(
+            city = "Sulaymaniyah", date = "10-23",
+            fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
+            asr = "14:49", maghrib = "17:21", isha = "18:36",
+            source = "noor:Sulaymaniyah"
+        )
+        val invalidSalawati = noor.copy(
+            fajr = "25:61",
+            source = "salawati:Sulaymaniyah, Iraq"
+        )
+        assertEquals(noor, ContentRepository.preferredSourcePrayerTimes(invalidSalawati, noor))
+        assertEquals(
+            null,
+            ContentRepository.preferredSourcePrayerTimes(invalidSalawati, noor.copy(isha = "time unavailable"))
+        )
+    }
+
+    @Test
     fun prefersTheSelectedSalawatiCityScheduleOverNoorWhenBothExist() {
         val salawati = PrayerRow(
             city = "Sulaymaniyah", date = "10-23",

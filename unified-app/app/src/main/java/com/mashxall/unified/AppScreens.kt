@@ -632,7 +632,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Spacer(Modifier.height(6.dp))
                         Text(
                             if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic,
-                            color = foreground, fontSize = 23.sp, lineHeight = 39.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
+                            color = foreground, fontSize = (23f * verseTextScale).sp, lineHeight = (39f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
                         )
                         if (verse.hasHadith) {
                             Spacer(Modifier.height(5.dp))
@@ -770,7 +770,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }
                         if (verse.translation.isNotBlank()) {
                             Spacer(Modifier.height(8.dp)); Divider(color = Gold.copy(alpha = 0.24f)); Spacer(Modifier.height(8.dp))
-                            Text(verse.translation, color = foreground.copy(alpha = 0.83f), fontSize = 14.sp, lineHeight = 23.sp)
+                            Text(verse.translation, color = foreground.copy(alpha = 0.83f), fontSize = (14f * verseTextScale).sp, lineHeight = (23f * verseTextScale).sp)
                         }
                     }
                 }
@@ -1105,7 +1105,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Text(sheetVerse!!.arabic, color = foreground, fontSize = (27f * verseTextScale).sp, lineHeight = (48f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                         if (sheetVerse!!.translation.isNotBlank()) {
                             Spacer(Modifier.height(9.dp))
-                            Text(sheetVerse!!.translation, color = foreground.copy(alpha = 0.8f), fontSize = 15.sp, lineHeight = 25.sp)
+                            Text(sheetVerse!!.translation, color = foreground.copy(alpha = 0.8f), fontSize = (15f * verseTextScale).sp, lineHeight = (25f * verseTextScale).sp)
                             Text(
                                 when (language) { AppLanguage.EN -> currentTranslation.english; AppLanguage.AR -> currentTranslation.arabic; AppLanguage.CKB -> currentTranslation.ckb },
                                 color = Gold.copy(alpha = 0.9f), fontSize = 10.sp
@@ -4391,7 +4391,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         // must never hide an audio asset from the user's explicit selection.
         adhanAssets = ContentRepository.loadAudioItems(context)
         val preferredKeywords = listOf(
-            "adhan", "athan", "azan", "muezzin", "madina", "madinah", "mecca",
+            "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah", "mecca,
             "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
             "mshari", "peshawa", "ramazan", "mansur"
         )

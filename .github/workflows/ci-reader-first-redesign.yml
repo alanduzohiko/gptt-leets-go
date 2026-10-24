@@ -8,6 +8,11 @@ on:
       - "unified-app/**"
       - "docs/redesign-spec-ar.md"
       - "tools/runtime-smoke-android11.sh"
+      - "tools/audit_content_coverage.py"
+      - "tools/audit_content_wiring.py"
+      - "tools/audit_source_coverage.py"
+      - "tools/audit_prayer_data.py"
+      - "tools/extract_unified_content.py"
       - ".github/workflows/ci-reader-first-redesign.yml"
   pull_request:
     branches: ["main"]
@@ -15,6 +20,11 @@ on:
       - "unified-app/**"
       - "docs/redesign-spec-ar.md"
       - "tools/runtime-smoke-android11.sh"
+      - "tools/audit_content_coverage.py"
+      - "tools/audit_content_wiring.py"
+      - "tools/audit_source_coverage.py"
+      - "tools/audit_prayer_data.py"
+      - "tools/extract_unified_content.py"
       - ".github/workflows/ci-reader-first-redesign.yml"
   workflow_dispatch:
 
@@ -76,6 +86,21 @@ jobs:
             --catalog unified-app/app/src/main/assets/content_catalog.json \
             --assets-root unified-app/app/src/main/assets \
             --out dist/runtime-test/source-coverage-audit.json
+
+      - name: Audit database schemas and core content coverage
+        run: |
+          set -euo pipefail
+          python tools/audit_content_coverage.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --out dist/runtime-test/content-coverage-audit.json
+
+      - name: Audit every Kotlin-to-asset reference
+        run: |
+          set -euo pipefail
+          python tools/audit_content_wiring.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --source-root unified-app/app/src/main/java/com/mashxall/unified \
+            --out dist/runtime-test/content-wiring-audit.json
 
       - name: Audit actual Noor and Salawati prayer sources
         run: |

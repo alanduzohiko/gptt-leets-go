@@ -1681,8 +1681,14 @@ object ContentRepository {
      * Noor remains the verified regional fallback and supplies its source-linked
      * correction table for Iraq/local cities without a direct Salawati row.
      */
+    private val prayerClockPattern = Regex("""^(?:[01]\d|2[0-3]):[0-5]\d$""")
+
+    internal fun hasValidPrayerTimes(row: PrayerRow?): Boolean =
+        row != null && listOf(row.fajr, row.sunrise, row.dhuhr, row.asr, row.maghrib, row.isha)
+            .all { prayerClockPattern.matches(it.trim()) }
+
     internal fun preferredSourcePrayerTimes(salawati: PrayerRow?, noor: PrayerRow?): PrayerRow? =
-        salawati ?: noor
+        salawati?.takeIf(::hasValidPrayerTimes) ?: noor?.takeIf(::hasValidPrayerTimes)
 
     /**
      * GPS can find Noor and Salawati rows at identical coordinates. Keep physical
@@ -1734,7 +1740,9 @@ object ContentRepository {
         } else null
 
         preferredSourcePrayerTimes(salawati, noor)?.let { return@withContext it }
-        if (useNoorRegionalData) loadNoorPrayerTimesWithCorrection(context, city, date) else null
+        if (useNoorRegionalData) {
+            loadNoorPrayerTimesWithCorrection(context, city, date).takeIf(::hasValidPrayerTimes)
+        } else null
     }
 
     /**
@@ -1948,6 +1956,7 @@ object ContentRepository {
         staticRadiusKm: Double = 7.0
     ): PrayerRow = withContext(Dispatchers.IO) {
         val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
+            .filter(::hasValidPrayerTimes)
             .mapNotNull { row ->
                 val rowLat = row.latitude ?: return@mapNotNull null
                 val rowLon = row.longitude ?: return@mapNotNull null
