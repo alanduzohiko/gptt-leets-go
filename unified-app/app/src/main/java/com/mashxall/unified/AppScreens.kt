@@ -211,7 +211,8 @@ fun QuranScreen(
     openSelectedVerse: Boolean = false,
     onSelectedVerseHandled: () -> Unit = {},
     openReaderSettings: Boolean = false,
-    onReaderSettingsHandled: () -> Unit = {}
+    onReaderSettingsHandled: () -> Unit = {},
+    onOpenSourcePdf: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1126,6 +1127,54 @@ fun QuranScreen(
                             Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
                         }
+                    }
+                }
+                item {
+                    Spacer(Modifier.height(9.dp))
+                    Divider(color = Gold.copy(alpha = 0.25f))
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "QURAN STUDY GUIDES"
+                            AppLanguage.AR -> "أدلة دراسة القرآن"
+                            AppLanguage.CKB -> "ڕێنمای خوێندنەوە و تەجویدی قورئان"
+                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Open the original included PDFs without leaving the Quran section permanently."
+                            AppLanguage.AR -> "افتح ملفات PDF الأصلية المرفقة دون فصلها عن سياق القرآن."
+                            AppLanguage.CKB -> "PDFە ڕەسەنە بەردەستەکان بکەرەوە بەبێ جیاکردنەوەیان لە بەشی قورئان."
+                        }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = { onOpenSourcePdf("content/noor_tafsir_1.2.2/base/assets/tajwid.pdf") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.MenuBook, null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Open original Tajweed guide (PDF)"
+                                AppLanguage.AR -> "فتح دليل التجويد الأصلي (PDF)"
+                                AppLanguage.CKB -> "ڕێنمای ڕەسەنی تەجوید بکەرەوە (PDF)"
+                            }, fontSize = 11.sp
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { onOpenSourcePdf("content/noor_tafsir_1.2.2/base/assets/kurdish_transliteration.pdf") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Language, null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Kurdish transliteration guide (PDF)"
+                                AppLanguage.AR -> "دليل النقل الصوتي الكردي (PDF)"
+                                AppLanguage.CKB -> "ڕێنمای گواستنەوەی دەنگی کوردی (PDF)"
+                            }, fontSize = 11.sp
+                        )
                     }
                 }
                 item {
