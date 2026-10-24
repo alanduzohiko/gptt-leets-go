@@ -966,7 +966,12 @@ check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
 # The global Settings entry must open the real Quran reader settings dialog,
 # rather than sending the user to an unrelated generic library page.
-reader_settings_open_coords="$(python3 - dist/runtime-test/window-settings.xml <<'PY'
+reader_settings_open_coords=""
+for attempt in $(seq 1 8); do
+  rm -f dist/runtime-test/window-settings.xml
+  adb shell uiautomator dump /sdcard/mashxall-settings.xml > "dist/runtime-test/uiautomator-settings-scroll-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings.xml dist/runtime-test/window-settings.xml >/dev/null 2>&1 || true
+  reader_settings_open_coords="$(python3 - dist/runtime-test/window-settings.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -982,10 +987,17 @@ for node in root.iter("node"):
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
-        print(f"{(x1+x2)//2} {(y1+y2)//2}")
-        raise SystemExit(0)
+        if y1 >= 200 and y2 <= 1584 and x2 > x1 and y2 > y1:
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
 PY
 )"
+  if [[ -n "$reader_settings_open_coords" ]]; then break; fi
+  if [[ "$attempt" -lt 8 ]]; then
+    adb shell input swipe 540 1370 540 510 450 || true
+    sleep 1
+  fi
+done
 if [[ -z "$reader_settings_open_coords" ]]; then
   echo "FAIL: global Settings does not contain a Quran reader settings shortcut."
   cat dist/runtime-test/window-settings.xml
