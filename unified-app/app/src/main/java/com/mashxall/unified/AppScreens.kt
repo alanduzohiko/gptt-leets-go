@@ -418,8 +418,8 @@ fun QuranScreen(
             showSurahList = true
         }
     }
-    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList) {
-        if (mushafMode || showSurahList) {
+    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList, openingMushaf) {
+        if (mushafMode || showSurahList || openingMushaf) {
             loading = false
             return@LaunchedEffect
         }
@@ -436,8 +436,8 @@ fun QuranScreen(
         }
         loading = false
     }
-    LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode) {
-        if (!showSurahList && !mushafMode && query.isBlank() && verses.isNotEmpty()) {
+    LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode, openingMushaf) {
+        if (!showSurahList && !mushafMode && !openingMushaf && query.isBlank() && verses.isNotEmpty()) {
             val startAt = verses.indexOfFirst { it.number >= initialAyah }
             if (startAt >= 0) listState.scrollToItem(startAt)
         }
