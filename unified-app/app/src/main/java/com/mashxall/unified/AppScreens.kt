@@ -118,6 +118,45 @@ private val Gold: Color get() = MashxallAppearance.accent
 private val DeepGreen = Color(0xFF103D32)
 private val MainText = Color(0xFFF6F2E6)
 private val CardDark = Color(0xFF102B25)
+
+private data class QuranFontOption(
+    val id: String,
+    val labelCkb: String,
+    val labelAr: String,
+    val labelEn: String,
+    val assetPath: String
+)
+
+private val QuranFontOptions = listOf(
+    QuranFontOption(
+        "uthmanic_hafs", "عثماني حفص", "عثماني حفص", "Uthmanic Hafs",
+        "content/salawati_3.1.3/base/res/font/uthmanic_hafs.otf"
+    ),
+    QuranFontOption(
+        "amiri_quran", "ئەمیری قورئان", "أميري القرآن", "Amiri Quran",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_quran.ttf"
+    ),
+    QuranFontOption(
+        "me_quran", "Me Quran", "Me Quran", "Me Quran",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/me_quran.ttf"
+    ),
+    QuranFontOption(
+        "hafs_regular", "حفص", "حفص", "Hafs Regular",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/hafs_regular.ttf"
+    ),
+    QuranFontOption(
+        "amiri_modded", "ئەمیری", "أميري", "Amiri Arabic",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_modded.ttf"
+    )
+)
+
+private fun loadQuranFontFamily(context: Context, optionId: String): FontFamily {
+    val option = QuranFontOptions.firstOrNull { it.id == optionId } ?: QuranFontOptions.first()
+    return runCatching {
+        FontFamily(Typeface.createFromAsset(context.assets, option.assetPath))
+    }.getOrElse { FontFamily.Default }
+}
+
 private val MushafNightColorMatrix = ColorMatrix(
     floatArrayOf(
         -1f, 0f, 0f, 0f, 255f,
@@ -199,6 +238,12 @@ fun QuranScreen(
     var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
     var mushafSepiaMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_sepia_mode", false)) }
     var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
+    var selectedQuranFont by rememberSaveable {
+        mutableStateOf(prefs.getString("quran_verse_font", "uthmanic_hafs") ?: "uthmanic_hafs")
+    }
+    val quranFontFamily = remember(context, selectedQuranFont) {
+        loadQuranFontFamily(context, selectedQuranFont)
+    }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
             AppLanguage.EN -> "sahih"
@@ -1087,6 +1132,61 @@ fun QuranScreen(
                     Spacer(Modifier.height(9.dp))
                     Divider(color = Gold.copy(alpha = 0.25f))
                     Spacer(Modifier.height(9.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "ARABIC VERSE FONT"
+                            AppLanguage.AR -> "خط نص الآية العربية"
+                            AppLanguage.CKB -> "فۆنتی دەقی ئایەتی عەرەبی"
+                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Changes Arabic text in the verse panel. The printed page artwork remains unchanged."
+                            AppLanguage.AR -> "يغيّر خط النص العربي في لوحة الآية، ولا يغيّر رسم صفحة المصحف."
+                            AppLanguage.CKB -> "فۆنتی دەقی عەرەبی لە پانێڵی ئایەتدا دەگۆڕێت؛ نەخشەی پەڕەی مصحەف ناگۆڕێت."
+                        }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                    items(QuranFontOptions, key = { "quran-font-" + it.id }) { option ->
+                        val label = when (language) {
+                            AppLanguage.CKB -> option.labelCkb
+                            AppLanguage.AR -> option.labelAr
+                            AppLanguage.EN -> option.labelEn
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedQuranFont = option.id
+                                prefs.edit().putString("quran_verse_font", option.id).apply()
+                            }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedQuranFont == option.id,
+                                onClick = {
+                                    selectedQuranFont = option.id
+                                    prefs.edit().putString("quran_verse_font", option.id).apply()
+                                }
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(label, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+                                    color = foreground.copy(alpha = 0.78f),
+                                    fontSize = 17.sp,
+                                    lineHeight = 27.sp,
+                                    fontFamily = remember(option.id) { loadQuranFontFamily(context, option.id) },
+                                    textAlign = TextAlign.End,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+                item {
+                    Spacer(Modifier.height(9.dp))
+                    Divider(color = Gold.copy(alpha = 0.25f))
+                    Spacer(Modifier.height(9.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -1214,7 +1314,15 @@ fun QuranScreen(
                         }, color = foreground, fontSize = 13.sp
                     )
                     else -> {
-                        Text(sheetVerse!!.arabic, color = foreground, fontSize = (27f * verseTextScale).sp, lineHeight = (48f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            sheetVerse!!.arabic,
+                            color = foreground,
+                            fontSize = (27f * verseTextScale).sp,
+                            lineHeight = (48f * verseTextScale).sp,
+                            fontFamily = quranFontFamily,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         if (sheetVerse!!.translation.isNotBlank()) {
                             Spacer(Modifier.height(9.dp))
                             Text(sheetVerse!!.translation, color = foreground.copy(alpha = 0.8f), fontSize = (15f * verseTextScale).sp, lineHeight = (25f * verseTextScale).sp)
