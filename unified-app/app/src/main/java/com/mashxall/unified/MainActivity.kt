@@ -544,6 +544,8 @@ private fun HomeScreen(
     var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var manualCityLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
+    var manualCityLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -553,7 +555,17 @@ private fun HomeScreen(
             delay(60_000L)
         }
     }
-    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("prayer_method", "mwl"), prefs.getString("asr_school", "shafi"), prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(
+        selectedCity,
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)),
+        gpsLatitude,
+        gpsLongitude,
+        manualCityLatitude,
+        manualCityLongitude,
+        prefs.getString("prayer_method", "mwl"),
+        prefs.getString("asr_school", "shafi"),
+        prefs.getString("selected_city_country", "")
+    ) {
         loadingTimes = true
         val date = Date(clockNow)
         val country = prefs.getString("selected_city_country", "") ?: ""
@@ -563,6 +575,9 @@ private fun HomeScreen(
             when {
                 gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date, method, asr)
+                manualCityLatitude != null && manualCityLongitude != null ->
+                    ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
+                        ?: ContentRepository.loadPrayerTimesAtLocation(context, manualCityLatitude!!, manualCityLongitude!!, date, method, asr)
                 else -> ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
                     ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
                         PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, asr)
