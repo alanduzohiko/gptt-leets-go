@@ -68,6 +68,9 @@ fi
 adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION || true
 adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION || true
 adb shell settings put secure location_mode 3 || true
+# Give the CI emulator a deterministic Kurdistan location before the app asks
+# for its first fix. Emulator geo fix arguments are longitude, latitude.
+adb emu geo fix 45.44 35.56 || true
 
 check_screen() {
   local route="$1"
@@ -179,8 +182,28 @@ PY
   fi
 }
 check_screen prayer 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة'
-if ! grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window-prayer.xml; then
-  echo "FAIL: Fajr label is missing from the rendered prayer screen."
+
+# The heading can render while a large original timetable DB is still being
+# copied/opened on the first run. Wait for prayer rows instead of treating the
+# initial loading spinner as a missing Fajr label.
+fajr_visible=0
+for attempt in $(seq 1 30); do
+  if grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window-prayer.xml; then
+    fajr_visible=1
+    echo "PASS: Fajr prayer row rendered after poll $attempt."
+    break
+  fi
+  if [[ "$attempt" -lt 30 ]]; then
+    echo "Waiting for original prayer data to populate the screen ($attempt/30)…"
+    sleep 5
+    adb shell uiautomator dump /sdcard/mashxall-prayer-data.xml > "dist/runtime-test/uiautomator-prayer-data-$attempt.txt" 2>&1 || true
+    adb pull /sdcard/mashxall-prayer-data.xml dist/runtime-test/window-prayer.xml >/dev/null 2>&1 || true
+  fi
+done
+if [[ "$fajr_visible" -ne 1 ]]; then
+  echo "FAIL: prayer screen did not render Fajr after waiting for original source data."
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-prayer-data-failure.txt || true
+  grep -E 'MashxallData|Content query failed|prayertimes|salawati|Prayer|FATAL EXCEPTION|AndroidRuntime' dist/runtime-test/logcat-prayer-data-failure.txt | tail -n 120 || true
   cat dist/runtime-test/window-prayer.xml
   exit 1
 fi
