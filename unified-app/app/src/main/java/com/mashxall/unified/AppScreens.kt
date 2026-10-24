@@ -147,6 +147,38 @@ private val QuranFontOptions = listOf(
     QuranFontOption(
         "amiri_modded", "ئەمیری", "أميري", "Amiri Arabic",
         "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_modded.ttf"
+    ),
+    QuranFontOption(
+        "adobe_arabic", "Adobe Arabic", "Adobe Arabic", "Adobe Arabic",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/adobe_arabic.otf"
+    ),
+    QuranFontOption(
+        "al_qalam", "القلم", "القلم", "Al Qalam",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/al_qalam.ttf"
+    ),
+    QuranFontOption(
+        "arabic_type", "Arabic Type", "Arabic Type", "Arabic Type",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/arabic_type.ttf"
+    ),
+    QuranFontOption(
+        "kitab", "كتاب", "كتاب", "Kitab",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/kitab.ttf"
+    ),
+    QuranFontOption(
+        "maddina", "مدّينة", "مدّينة", "Maddina",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/maddina.ttf"
+    ),
+    QuranFontOption(
+        "noon", "نون", "نون", "Noon",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/noon.ttf"
+    ),
+    QuranFontOption(
+        "hafs_otf", "حفص (OTF)", "حفص (OTF)", "Hafs OTF",
+        "content/noor_tafsir_1.2.2/base/res/font/hafs.otf"
+    ),
+    QuranFontOption(
+        "sarchia_muslim", "سەرچیا موسڵم", "سەرچیا موسڵم", "Sarchia Muslim",
+        "content/noor_tafsir_1.2.2/base/assets/fonts/sarchia_muslim.ttf"
     )
 )
 
