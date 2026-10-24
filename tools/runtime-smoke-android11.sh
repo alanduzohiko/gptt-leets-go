@@ -410,6 +410,38 @@ then
 fi
 echo "PASS: tapping verse 1:1 opens its verse text and contextual actions inside the Mushaf."
 
+# Save this verse so the later Bookmarks test proves that the saved reference
+# opens its exact Mushaf page and its own action panel.
+save_verse_coords="$(python3 - dist/runtime-test/window-quran.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"^(Save|حفظ|پاشەکەوت)$", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$save_verse_coords" ]]; then
+  echo "FAIL: the verse action panel does not expose a Save/Bookmark action."
+  cat dist/runtime-test/window-quran.xml
+  exit 1
+fi
+read -r save_verse_x save_verse_y <<< "$save_verse_coords"
+adb shell input tap "$save_verse_x" "$save_verse_y"
+sleep 2
+echo "PASS: saved verse 1:1 from inside the Mushaf action panel."
+
 # Dismiss the verse sheet, then exit the Mushaf back to the surah list.
 adb shell input keyevent 4 || true
 sleep 3
@@ -823,6 +855,57 @@ check_screen audio 'دەنگ و تلاوەت|التلاوات والصوتيات
 check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
+
+# Opening a bookmark must resume its exact Quran page and verse in the graphic
+# Mushaf, not merely reset the user to the surah list.
+bookmark_open_coords="$(python3 - dist/runtime-test/window-bookmarks.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Open at this verse|فتح عند هذه الآية|لەسەر ئەم ئایەتە بکەرەوە", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$bookmark_open_coords" ]]; then
+  echo "FAIL: the saved verse does not expose its open-at-verse action."
+  cat dist/runtime-test/window-bookmarks.xml
+  exit 1
+fi
+read -r bookmark_open_x bookmark_open_y <<< "$bookmark_open_coords"
+adb shell input tap "$bookmark_open_x" "$bookmark_open_y"
+bookmark_restore_ok=0
+for attempt in $(seq 1 20); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/mashxall-bookmark-resume.xml > "dist/runtime-test/uiautomator-bookmark-resume-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-bookmark-resume.xml dist/runtime-test/window-bookmark-resume.xml >/dev/null 2>&1 || true
+  if grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-bookmark-resume.xml &&
+     grep -q '604' dist/runtime-test/window-bookmark-resume.xml &&
+     grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-bookmark-resume.xml; then
+    bookmark_restore_ok=1
+    echo "PASS: opening a saved bookmark restored its graphic Mushaf page and verse-action panel."
+    break
+  fi
+done
+if [[ "$bookmark_restore_ok" -ne 1 ]]; then
+  echo "FAIL: opening a bookmark did not resume the exact saved verse in the Mushaf."
+  cat dist/runtime-test/window-bookmark-resume.xml
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-bookmark-resume-failure.txt || true
+  grep -E 'MashxallData|FATAL EXCEPTION|SQLite|Content query failed' dist/runtime-test/logcat-bookmark-resume-failure.txt | tail -n 80 || true
+  exit 1
+fi
+
 check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
 check_screen home 'کاتەکانی نوێژ|مواقيت الصلاة|Prayer times'
 
@@ -880,6 +963,53 @@ echo "PASS: home prayer-times card, continue-reading resume, and quick access ar
 check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
+
+# The global Settings entry must open the real Quran reader settings dialog,
+# rather than sending the user to an unrelated generic library page.
+reader_settings_open_coords="$(python3 - dist/runtime-test/window-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Quran reader settings|إعدادات قارئ القرآن|ڕێکخستنەکانی خوێندنەوەی قورئان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$reader_settings_open_coords" ]]; then
+  echo "FAIL: global Settings does not contain a Quran reader settings shortcut."
+  cat dist/runtime-test/window-settings.xml
+  exit 1
+fi
+read -r quran_settings_x quran_settings_y <<< "$reader_settings_open_coords"
+adb shell input tap "$quran_settings_x" "$quran_settings_y"
+quran_settings_opened=0
+for attempt in $(seq 1 8); do
+  sleep 2
+  adb shell uiautomator dump /sdcard/mashxall-settings-quran.xml > "dist/runtime-test/uiautomator-settings-quran-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings-quran.xml dist/runtime-test/window-settings-quran.xml >/dev/null 2>&1 || true
+  if grep -Eq 'DEFAULT TRANSLATION|الترجمة الافتراضية|وەرگێڕانی بنەڕەت' dist/runtime-test/window-settings-quran.xml &&
+     grep -Eq 'DEFAULT TAFSIR|التفسير الافتراضي|تەفسیرى بنەڕەت' dist/runtime-test/window-settings-quran.xml; then
+    quran_settings_opened=1
+    echo "PASS: global Settings opens the in-reader translation and tafsir choices."
+    break
+  fi
+done
+if [[ "$quran_settings_opened" -ne 1 ]]; then
+  echo "FAIL: global Quran reader settings did not show translation and tafsir choices."
+  cat dist/runtime-test/window-settings-quran.xml
+  exit 1
+fi
 
 assert_visible_body_text() {
   local route="$1"
