@@ -1,6 +1,8 @@
 package com.mashxall.unified.data
 
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
@@ -19,6 +21,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 data class Surah(val number: Int, val arabicName: String, val englishName: String, val ayahCount: Int, val meaningEnglish: String = "", val place: String = "", val uniqueTitle: String = "")
 data class QuranTranslation(val id: String, val ckb: String, val arabic: String, val english: String)
@@ -2182,6 +2185,74 @@ object ContentRepository {
             walk("content")
             result.sortedBy { it.title.lowercase(Locale.ROOT) }
         }
+    }
+
+    private val customAdhanExtensions = setOf("mp3", "ogg", "wav", "m4a", "aac", "flac", "opus")
+    private const val MAX_CUSTOM_ADHAN_BYTES = 100L * 1024L * 1024L
+
+    suspend fun loadCustomAdhanItems(context: Context): List<AudioItem> = withContext(Dispatchers.IO) {
+        val directory = File(context.filesDir, "adhan-custom")
+        directory.listFiles().orEmpty()
+            .filter { file ->
+                file.isFile && file.length() > 0L &&
+                    file.extension.lowercase(Locale.ROOT) in customAdhanExtensions
+            }
+            .sortedBy { it.name.lowercase(Locale.ROOT) }
+            .map { file ->
+                AudioItem(
+                    assetPath = "custom:\${file.name}",
+                    title = file.nameWithoutExtension.replace(Regex("^[0-9]+_[a-fA-F0-9]+_"), "").replace('_', ' ').replace('-', ' '),
+                    group = "Imported adhan from phone"
+                )
+            }
+    }
+
+    suspend fun importCustomAdhanAudio(context: Context, uri: Uri): AudioItem = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val displayName = runCatching {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull().orEmpty().ifBlank { "Imported adhan" }
+        val namedExtension = displayName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+        val mime = resolver.getType(uri)?.lowercase(Locale.ROOT).orEmpty()
+        val extension = when {
+            namedExtension in customAdhanExtensions -> namedExtension
+            mime in setOf("audio/mpeg", "audio/mp3", "audio/x-mp3") -> "mp3"
+            mime in setOf("audio/ogg", "application/ogg") -> "ogg"
+            mime == "audio/opus" -> "opus"
+            mime in setOf("audio/wav", "audio/x-wav", "audio/wave") -> "wav"
+            mime in setOf("audio/mp4", "audio/m4a", "audio/x-m4a") -> "m4a"
+            mime in setOf("audio/aac", "audio/x-aac") -> "aac"
+            mime in setOf("audio/flac", "audio/x-flac") -> "flac"
+            else -> error("Choose an MP3, OGG, WAV, M4A, AAC, FLAC or OPUS audio file.")
+        }
+        val directory = File(context.filesDir, "adhan-custom")
+        require(directory.exists() || directory.mkdirs()) { "Could not create the private adhan folder." }
+        val fileName = "adhan_\${System.currentTimeMillis()}_\${UUID.randomUUID().toString().take(8)}.$extension"
+        val destination = File(directory, fileName)
+        try {
+            val input = resolver.openInputStream(uri) ?: error("Could not open the selected audio file.")
+            input.use { source ->
+                destination.outputStream().buffered().use { target ->
+                    val buffer = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val count = source.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= MAX_CUSTOM_ADHAN_BYTES) { "The selected audio file exceeds the 100 MB limit." }
+                        target.write(buffer, 0, count)
+                    }
+                }
+            }
+            require(destination.isFile && destination.length() > 0L) { "The selected audio file is empty." }
+        } catch (error: Exception) {
+            destination.delete()
+            throw error
+        }
+        val title = displayName.substringBeforeLast('.', displayName).trim().ifBlank { "Imported adhan" }
+        AudioItem("custom:$fileName", title, "Imported adhan from phone")
     }
 
     suspend fun loadPdfPaths(context: Context): List<String> = withContext(Dispatchers.IO) {
