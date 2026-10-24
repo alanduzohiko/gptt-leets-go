@@ -2983,13 +2983,34 @@ fun AudioScreen(
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
+    val audioImportScope = rememberCoroutineScope()
+    val customAudioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) audioImportScope.launch {
+            try {
+                ContentRepository.importCustomAdhanAudio(context, uri)
+                audio = ContentRepository.loadAudioItems(context) + ContentRepository.loadCustomAdhanItems(context)
+                audioQuery = ""
+                Toast.makeText(context, when (language) {
+                    AppLanguage.EN -> "Adhan audio imported and added to the library."
+                    AppLanguage.AR -> "تم استيراد صوت الأذان وإضافته إلى المكتبة."
+                    AppLanguage.CKB -> "دەنگی بانگ هاوردە کرا و زیاد کرا بۆ کتێبخانە."
+                }, Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                Toast.makeText(context, error.message ?: when (language) {
+                    AppLanguage.EN -> "Could not import this audio file."
+                    AppLanguage.AR -> "تعذر استيراد هذا الملف الصوتي."
+                    AppLanguage.CKB -> "نەتوانرا ئەم فایلە دەنگییە هاوردە بکرێت."
+                }, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     LaunchedEffect(initialSurah, initialAyah, focusReciters) {
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
         selectedTab = if (focusReciters) 1 else 0
     }
     LaunchedEffect(Unit) {
-        audio = ContentRepository.loadAudioItems(context)
+        audio = ContentRepository.loadAudioItems(context) + ContentRepository.loadCustomAdhanItems(context)
         reciters = ContentRepository.loadReciters(context)
         loading = false
     }
@@ -3035,6 +3056,16 @@ fun AudioScreen(
         }
         Spacer(Modifier.height(7.dp))
         SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
+        if (selectedTab == 2) {
+            Spacer(Modifier.height(7.dp))
+            OutlinedButton(onClick = { customAudioPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
+                Text(when (language) {
+                    AppLanguage.EN -> "Import from phone"
+                    AppLanguage.AR -> "استيراد من الهاتف"
+                    AppLanguage.CKB -> "لە مۆبایلەوە هاوردە بکە"
+                }, fontSize = 12.sp)
+            }
+        }
         if (selectedTab == 0 || selectedTab == 2) {
             val adhanKeywords = listOf(
                 "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
@@ -3192,19 +3223,32 @@ private object AudioController {
     fun play(context: Context, assetPath: String, callback: (Boolean) -> Unit) {
         stop()
         try {
-            val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
-            val copy = File(context.cacheDir, "audio-" + hash + "." + assetPath.substringAfterLast('.', "mp3"))
-            context.assets.open(assetPath).use { input -> copy.outputStream().use { input.copyTo(it) } }
+            val source = if (assetPath.startsWith("custom:")) {
+                val filename = assetPath.removePrefix("custom:")
+                require(filename.isNotBlank() && File(filename).name == filename) { "Invalid imported audio reference." }
+                val directory = File(context.filesDir, "adhan-custom").canonicalFile
+                File(directory, filename).canonicalFile.also { file ->
+                    require(file.parentFile == directory && file.isFile && file.length() > 0L) {
+                        "The imported audio file is no longer available."
+                    }
+                }
+            } else {
+                val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
+                    .take(8).joinToString("") { "%02x".format(it) }
+                File(context.cacheDir, "audio-" + hash + "." + assetPath.substringAfterLast('.', "mp3")).also { copy ->
+                    context.assets.open(assetPath).use { input -> copy.outputStream().use { input.copyTo(it) } }
+                }
+            }
             player = MediaPlayer().apply {
-                setDataSource(copy.absolutePath)
+                setDataSource(source.absolutePath)
                 setOnPreparedListener { it.start(); callback(true) }
                 setOnCompletionListener { callback(false); stop() }
                 setOnErrorListener { _, _, _ -> callback(false); stop(); true }
                 prepareAsync()
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             callback(false)
-            Toast.makeText(context, tr(AppLanguage.CKB, "no_data"), Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, error.message ?: tr(AppLanguage.CKB, "no_data"), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -4369,6 +4413,32 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var previewingAdhan by remember { mutableStateOf("") }
     var chooseAdhanSound by remember { mutableStateOf(false) }
     var adhanMessage by remember { mutableStateOf("") }
+    val adhanImportScope = rememberCoroutineScope()
+    val customAdhanPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) adhanImportScope.launch {
+            try {
+                val imported = ContentRepository.importCustomAdhanAudio(context, uri)
+                adhanAssets = ContentRepository.loadAudioItems(context) + ContentRepository.loadCustomAdhanItems(context)
+                selectedAdhanAsset = imported.assetPath
+                adhanSoundQuery = ""
+                prefs.edit().putString("adhan_audio_asset", imported.assetPath).apply()
+                adhanMessage = when (language) {
+                    AppLanguage.EN -> "Imported " + imported.title + ". It will be used for upcoming prayer alerts."
+                    AppLanguage.AR -> "تم استيراد " + imported.title + " وسيُستخدم في تنبيهات الصلاة القادمة."
+                    AppLanguage.CKB -> "دەنگی " + imported.title + " هاوردە کرا و لە ئاگادارکردنەوەکانی داهاتوودا بەکاردێت."
+                }
+                Toast.makeText(context, adhanMessage, Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                val message = error.message ?: when (language) {
+                    AppLanguage.EN -> "Could not import this audio file."
+                    AppLanguage.AR -> "تعذر استيراد هذا الملف الصوتي."
+                    AppLanguage.CKB -> "نەتوانرا ئەم فایلە دەنگییە هاوردە بکرێت."
+                }
+                adhanMessage = message
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val visibleCities = remember(cities, citySearch) {
         if (citySearch.isBlank()) cities
         else cities.filter { city ->
@@ -4501,7 +4571,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(Unit) {
         // Keep the full original audio inventory available; file-name filtering
         // must never hide an audio asset from the user's explicit selection.
-        adhanAssets = ContentRepository.loadAudioItems(context)
+        adhanAssets = ContentRepository.loadAudioItems(context) + ContentRepository.loadCustomAdhanItems(context)
         val preferredKeywords = listOf(
             "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah", "mecca",
             "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
@@ -5076,6 +5146,17 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
         text = {
             Column(Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { customAdhanPicker.launch(arrayOf("audio/*")) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(when (language) {
+                        AppLanguage.EN -> "Import an adhan audio file from phone"
+                        AppLanguage.AR -> "استيراد ملف أذان من الهاتف"
+                        AppLanguage.CKB -> "فایلی دەنگی بانگ لە مۆبایلەوە هاوردە بکە"
+                    }, fontSize = 12.sp)
+                }
+                Spacer(Modifier.height(6.dp))
                 SearchBox(
                     adhanSoundQuery,
                     { adhanSoundQuery = it },
