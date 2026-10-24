@@ -286,6 +286,15 @@ fun QuranScreen(
     }
     var readerReciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var readerReciterSearch by rememberSaveable { mutableStateOf("") }
+    val filteredReaderReciters = remember(readerReciters, readerReciterSearch) {
+        readerReciters.filter { reciter ->
+            reciter.audioType == 0 && (
+                readerReciterSearch.isBlank() ||
+                    reciter.nameArabic.contains(readerReciterSearch.trim(), ignoreCase = true) ||
+                    reciter.nameEnglish.contains(readerReciterSearch.trim(), ignoreCase = true)
+                )
+        }
+    }
     var preferredReaderReciterId by rememberSaveable {
         mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1))
     }
@@ -1026,6 +1035,47 @@ fun QuranScreen(
             LazyColumn(Modifier.heightIn(max = 470.dp)) {
                 item {
                     Text(
+                        when (language) {
+                            AppLanguage.EN -> "RECITER LIBRARY"
+                            AppLanguage.AR -> "مكتبة القراء"
+                            AppLanguage.CKB -> "کتێبخانەی قورئان‌خوێنەکان"
+                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                    OutlinedTextField(
+                        value = readerReciterSearch,
+                        onValueChange = { readerReciterSearch = it },
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 3.dp),
+                        singleLine = true,
+                        label = {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Search reciters by name"
+                                    AppLanguage.AR -> "ابحث عن قارئ بالاسم"
+                                    AppLanguage.CKB -> "بە ناوی قورئان‌خوێن بگەڕێ"
+                                }
+                            )
+                        },
+                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
+                    )
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "${filteredReaderReciters.size} of ${readerReciters.count { it.audioType == 0 }} reciters match"
+                            AppLanguage.AR -> "${filteredReaderReciters.size} من ${readerReciters.count { it.audioType == 0 }} قارئًا"
+                            AppLanguage.CKB -> "${filteredReaderReciters.size} لە ${readerReciters.count { it.audioType == 0 }} قورئان‌خوێن"
+                        }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp
+                    )
+                    if (filteredReaderReciters.isEmpty()) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "No reciter matches this search."
+                                AppLanguage.AR -> "لا يوجد قارئ يطابق البحث."
+                                AppLanguage.CKB -> "هیچ قورئان‌خوێنێک لەگەڵ ئەم گەڕانە ناگونجێت."
+                            }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
+                        )
+                    }
+                }
+                item {
+                    Text(
                         when (language) { AppLanguage.EN -> "DEFAULT TRANSLATION"; AppLanguage.AR -> "الترجمة الافتراضية"; AppLanguage.CKB -> "وەرگێڕانی بنەڕەت" },
                         color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
                     )
@@ -1097,47 +1147,16 @@ fun QuranScreen(
                     }
                 }
                 item {
-                    OutlinedTextField(
-                        value = readerReciterSearch,
-                        onValueChange = { readerReciterSearch = it },
-                        modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 4.dp),
-                        singleLine = true,
-                        label = {
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Search reciters by name"
-                                    AppLanguage.AR -> "ابحث عن قارئ بالاسم"
-                                    AppLanguage.CKB -> "بە ناوی قورئان‌خوێن بگەڕێ"
-                                }
-                            )
-                        },
-                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "${filteredReaderReciters.size} matching reciters are listed below"
+                            AppLanguage.AR -> "القراء المطابقون للبحث أدناه: ${filteredReaderReciters.size}"
+                            AppLanguage.CKB -> "قورئان‌خوێنە گونجاوەکان لە خوارەوەن: ${filteredReaderReciters.size}"
+                        }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp
                     )
-                    val filteredReaderCount = readerReciters.count { reciter ->
-                        reciter.audioType == 0 && (
-                            readerReciterSearch.isBlank() ||
-                                reciter.nameArabic.contains(readerReciterSearch.trim(), ignoreCase = true) ||
-                                reciter.nameEnglish.contains(readerReciterSearch.trim(), ignoreCase = true)
-                            )
-                    }
-                    if (filteredReaderCount == 0) {
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "No reciter matches this search."
-                                AppLanguage.AR -> "لا يوجد قارئ يطابق البحث."
-                                AppLanguage.CKB -> "هیچ قورئان‌خوێنێک لەگەڵ ئەم گەڕانە ناگونجێت."
-                            }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
-                        )
-                    }
                 }
                 items(
-                    readerReciters.filter { reciter ->
-                        reciter.audioType == 0 && (
-                            readerReciterSearch.isBlank() ||
-                                reciter.nameArabic.contains(readerReciterSearch.trim(), ignoreCase = true) ||
-                                reciter.nameEnglish.contains(readerReciterSearch.trim(), ignoreCase = true)
-                            )
-                    },
+                    filteredReaderReciters,
                     key = { "reader-reciter-" + it.id }
                 ) { reciter ->
                     Row(
