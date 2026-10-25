@@ -126,6 +126,14 @@ class PrayerTimeCalculatorTest {
     }
 
     @Test
+    fun longitudeFallbackSupportsQuarterHourTimeZones() {
+        assertEquals(
+            ZoneId.of("UTC+05:45"),
+            PrayerTimeCalculator.timeZoneForCountry("Unknown country", 86.25)
+        )
+    }
+
+    @Test
     fun distanceToSameCoordinateIsZero() {
         assertEquals(0.0, PrayerTimeCalculator.distanceKm(35.56, 45.43, 35.56, 45.43), 0.000001)
     }
