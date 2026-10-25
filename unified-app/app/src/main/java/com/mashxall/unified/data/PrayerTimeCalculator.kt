@@ -2,6 +2,7 @@ package com.mashxall.unified.data
 
 import java.text.SimpleDateFormat
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -60,17 +61,65 @@ object PrayerTimeCalculator {
         return 6371.0088 * 2.0 * kotlin.math.asin(kotlin.math.sqrt(a.coerceIn(0.0, 1.0)))
     }
 
+    fun timeZoneForCountry(countryName: String, longitude: Double): ZoneId {
+        val country = countryName.trim().lowercase(Locale.ROOT)
+        val namedZone = when {
+            listOf("iraq", "العراق", "عێراق").any { country.contains(it) } -> "Asia/Baghdad"
+            listOf("saudi", "السعودية", "السعودية العربية").any { country.contains(it) } -> "Asia/Riyadh"
+            listOf("kuwait", "الكويت").any { country.contains(it) } -> "Asia/Kuwait"
+            listOf("qatar", "قطر").any { country.contains(it) } -> "Asia/Qatar"
+            listOf("bahrain", "البحرين").any { country.contains(it) } -> "Asia/Bahrain"
+            listOf("united arab emirates", "uae", "الإمارات", "الامارات").any { country.contains(it) } -> "Asia/Dubai"
+            listOf("oman", "عمان", "سلطنة عمان").any { country.contains(it) } -> "Asia/Muscat"
+            listOf("yemen", "اليمن").any { country.contains(it) } -> "Asia/Aden"
+            listOf("jordan", "الأردن", "الاردن").any { country.contains(it) } -> "Asia/Amman"
+            listOf("lebanon", "لبنان").any { country.contains(it) } -> "Asia/Beirut"
+            listOf("palestine", "فلسطين").any { country.contains(it) } -> "Asia/Gaza"
+            listOf("syria", "سوريا").any { country.contains(it) } -> "Asia/Damascus"
+            listOf("turkey", "turkiye", "تركيا").any { country.contains(it) } -> "Europe/Istanbul"
+            listOf("egypt", "مصر").any { country.contains(it) } -> "Africa/Cairo"
+            listOf("libya", "ليبيا").any { country.contains(it) } -> "Africa/Tripoli"
+            listOf("tunisia", "تونس").any { country.contains(it) } -> "Africa/Tunis"
+            listOf("algeria", "الجزائر").any { country.contains(it) } -> "Africa/Algiers"
+            listOf("morocco", "المغرب").any { country.contains(it) } -> "Africa/Casablanca"
+            listOf("mauritania", "موريتانيا").any { country.contains(it) } -> "Africa/Nouakchott"
+            listOf("sudan", "السودان").any { country.contains(it) } -> "Africa/Khartoum"
+            listOf("somalia", "الصومال").any { country.contains(it) } -> "Africa/Mogadishu"
+            listOf("djibouti", "جيبوتي").any { country.contains(it) } -> "Africa/Djibouti"
+            listOf("comoros", "جزر القمر").any { country.contains(it) } -> "Indian/Comoro"
+            listOf("iran", "إيران", "ايران").any { country.contains(it) } -> "Asia/Tehran"
+            listOf("afghanistan", "أفغانستان").any { country.contains(it) } -> "Asia/Kabul"
+            listOf("pakistan", "باكستان").any { country.contains(it) } -> "Asia/Karachi"
+            listOf("bangladesh", "بنغلاديش").any { country.contains(it) } -> "Asia/Dhaka"
+            listOf("india", "الهند").any { country.contains(it) } -> "Asia/Kolkata"
+            listOf("malaysia", "ماليزيا").any { country.contains(it) } -> "Asia/Kuala_Lumpur"
+            listOf("singapore", "سنغافورة").any { country.contains(it) } -> "Asia/Singapore"
+            listOf("indonesia", "إندونيسيا").any { country.contains(it) } ->
+                if (longitude >= 130.0) "Asia/Jayapura" else if (longitude >= 120.0) "Asia/Makassar" else "Asia/Jakarta"
+            listOf("united kingdom", "britain", "uk", "المملكة المتحدة", "بريطانيا").any { country.contains(it) } -> "Europe/London"
+            listOf("france", "فرنسا").any { country.contains(it) } -> "Europe/Paris"
+            listOf("germany", "ألمانيا", "المانيا").any { country.contains(it) } -> "Europe/Berlin"
+            else -> null
+        }
+        if (namedZone != null) {
+            runCatching { ZoneId.of(namedZone) }.getOrNull()?.let { return it }
+        }
+        val approximateOffset = (longitude / 15.0).roundToInt().coerceIn(-12, 14)
+        return ZoneId.ofOffset("UTC", ZoneOffset.ofHours(approximateOffset))
+    }
+
     fun calculate(
         date: Date,
         latitude: Double,
         longitude: Double,
         method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
-        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI
+        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
+        timeZone: ZoneId = ZoneId.systemDefault()
     ): PrayerRow {
         require(latitude in -90.0..90.0) { "Latitude must be between -90 and 90 degrees" }
         require(longitude in -180.0..180.0) { "Longitude must be between -180 and 180 degrees" }
 
-        val zone = ZoneId.systemDefault()
+        val zone = timeZone
         val localDate = date.toInstant().atZone(zone).toLocalDate()
         val localNoon = localDate.atTime(12, 0).atZone(zone)
         val julianDay = localNoon.toInstant().toEpochMilli() / 86_400_000.0 + 2_440_587.5
