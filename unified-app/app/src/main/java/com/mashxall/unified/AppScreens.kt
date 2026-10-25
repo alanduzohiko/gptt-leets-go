@@ -3381,7 +3381,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, useGpsLocation, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
             PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
@@ -3389,10 +3389,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             PrayerAlarmScheduler.cancelAll(context)
         }
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
+    LaunchedEffect(selectedCity, useGpsLocation, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
+    LaunchedEffect(selectedCity, useGpsLocation, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
         var loadedDate = ""
         while (true) {
             val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
