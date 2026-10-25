@@ -316,6 +316,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
                 },
                 onExitFullscreen = { mushafMode = false },
+                onPlayAudio = onPlayAudio,
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -658,6 +659,7 @@ private fun MushafPageViewer(
     page: Int,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
+    onPlayAudio: (Int, Int) -> Unit,
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -733,6 +735,12 @@ private fun MushafPageViewer(
             }
             IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
                 Text("›", color = Gold, fontSize = 30.sp)
+            }
+            IconButton(
+                onClick = { (selectedVerse ?: pageVerses.firstOrNull())?.let { onPlayAudio(it.surah, it.ayah) } },
+                enabled = pageVerses.isNotEmpty()
+            ) {
+                Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play recitation" else if (language == AppLanguage.AR) "تشغيل التلاوة" else "پەخشکردنی تلاوەت", tint = Gold)
             }
             IconButton(onClick = { showPageJump = true }) {
                 Icon(Icons.Outlined.Search, contentDescription = if (language == AppLanguage.EN) "Go to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە", tint = Gold)
