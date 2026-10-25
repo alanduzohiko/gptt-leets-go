@@ -90,6 +90,42 @@ class PrayerTimeCalculatorTest {
     }
 
     @Test
+    fun selectedIraqiCityUsesBaghdadTimeZoneEvenWhenPhoneZoneDiffers() {
+        assertEquals(
+            ZoneId.of("Asia/Baghdad"),
+            PrayerTimeCalculator.timeZoneForCountry("Iraq", 45.43)
+        )
+        assertEquals(
+            ZoneId.of("Asia/Baghdad"),
+            PrayerTimeCalculator.timeZoneForCountry("العراق", 45.43)
+        )
+    }
+
+    @Test
+    fun unknownCountryFallbackUsesLongitudeBasedOffset() {
+        assertEquals(
+            ZoneId.of("UTC+03:00"),
+            PrayerTimeCalculator.timeZoneForCountry("Unknown country", 45.43)
+        )
+    }
+
+    @Test
+    fun calculatedDateAndPrayerClockRespectSelectedCityTimeZone() {
+        val instant = Date.from(java.time.Instant.parse("2026-10-22T22:00:00Z"))
+        val zone = ZoneId.of("Asia/Baghdad")
+        val row = PrayerTimeCalculator.calculate(
+            date = instant,
+            latitude = 35.56,
+            longitude = 45.43,
+            method = PrayerCalculationMethod.MWL,
+            asrSchool = AsrCalculationSchool.SHAFI,
+            timeZone = zone
+        )
+        assertEquals("10-23", row.date)
+        assertTrue("Fajr must remain a valid local clock time", minutes(row.fajr) in 0 until 1440)
+    }
+
+    @Test
     fun distanceToSameCoordinateIsZero() {
         assertEquals(0.0, PrayerTimeCalculator.distanceKm(35.56, 45.43, 35.56, 45.43), 0.000001)
     }
