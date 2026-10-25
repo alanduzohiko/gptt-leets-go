@@ -2,7 +2,7 @@ name: Validate unified Mashxall Android source
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "ux-immersive-quran-prayer-nav"]
     paths:
       - "unified-app/**"
       - ".github/workflows/ci-unified-android.yml"
