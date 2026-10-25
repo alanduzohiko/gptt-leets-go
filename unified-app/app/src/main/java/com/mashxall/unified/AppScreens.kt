@@ -1539,6 +1539,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 @Composable
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_azkar_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -1622,6 +1623,14 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.AR -> item.categoryArabic
                     AppLanguage.EN -> item.categoryEnglish
                 }
+                val targetCount = item.count.coerceAtLeast(1)
+                val incrementCount: () -> Unit = {
+                    count = if (count + 1 >= targetCount) 0 else count + 1
+                    progressPrefs.edit().putInt(item.id.toString(), count).apply()
+                    haptics.performHapticFeedback(
+                        if (count == 0) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove
+                    )
+                }
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1639,7 +1648,21 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }) { Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 21.sp) }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text(item.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            item.arabic,
+                            color = foreground,
+                            fontSize = 18.sp,
+                            lineHeight = 31.sp,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth().clickable(onClick = incrementCount)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = (count.toFloat() / targetCount).coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth().height(5.dp),
+                            color = Gold,
+                            trackColor = foreground.copy(alpha = 0.10f)
+                        )
                         val translation = when (language) { AppLanguage.CKB -> item.ckb; AppLanguage.AR -> ""; AppLanguage.EN -> item.english }
                         if (translation.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
@@ -1648,16 +1671,12 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                if (language == AppLanguage.EN) "Repeat: $count / " + item.count.coerceAtLeast(1)
-                                else if (language == AppLanguage.AR) "التكرار: $count / " + item.count.coerceAtLeast(1)
-                                else "ژمارە: $count / " + item.count.coerceAtLeast(1),
+                                if (language == AppLanguage.EN) "Repeat: $count / " + targetCount
+                                else if (language == AppLanguage.AR) "التكرار: $count / " + targetCount
+                                else "ژمارە: $count / " + targetCount,
                                 color = foreground.copy(alpha = 0.64f), fontSize = 11.sp, modifier = Modifier.weight(1f)
                             )
-                            Button(onClick = {
-                                val target = item.count.coerceAtLeast(1)
-                                count = if (count + 1 >= target) 0 else count + 1
-                                progressPrefs.edit().putInt(item.id.toString(), count).apply()
-                            }) {
+                            Button(onClick = incrementCount) {
                                 Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
                                 Spacer(Modifier.width(5.dp))
                                 Text(if (language == AppLanguage.EN) "Count" else if (language == AppLanguage.AR) "تسبيح" else "ژماردن")
