@@ -66,6 +66,7 @@ import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
@@ -571,7 +572,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 items(surahs, key = { it.number }) { item ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable { selected = item.number; onSurah(item.number); chooseSurah = false }
+                            .clickable {
+                                selected = item.number
+                                onSurah(item.number)
+                                query = ""
+                                chooseSurah = false
+                                scope.launch {
+                                    val targetAyahs = ContentRepository.loadAyahs(
+                                        context, item.number, language.key, translationKey = translationKey
+                                    )
+                                    val firstPage = targetAyahs.firstOrNull()?.page?.takeIf { it in 1..604 } ?: 1
+                                    mushafPage = firstPage
+                                    prefs.edit().putInt("last_mushaf_page", firstPage).apply()
+                                    mushafMode = true
+                                }
+                            }
                             .padding(vertical = 9.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -672,6 +687,9 @@ private fun MushafPageViewer(
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
     var showPageJump by remember { mutableStateOf(false) }
+    var showMushafSettings by remember { mutableStateOf(false) }
+    val mushafPrefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var tajweedColors by rememberSaveable { mutableStateOf(mushafPrefs.getBoolean("mushaf_tajweed_colors", true)) }
     val haptics = LocalHapticFeedback.current
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
@@ -687,7 +705,7 @@ private fun MushafPageViewer(
         }
     }
     LaunchedEffect(page) { pageInput = page.toString() }
-    LaunchedEffect(page) {
+    LaunchedEffect(page, tajweedColors) {
         loading = true
         failed = false
         bitmap = null
@@ -698,7 +716,10 @@ private fun MushafPageViewer(
         } else {
             bitmap = withContext(Dispatchers.Default) {
                 try {
-                    val svg = SVG.getFromString(source)
+                    val displaySource = if (tajweedColors) source else {
+                        source.replace(Regex("#[0-9a-fA-F]{6}"), "#111111")
+                    }
+                    val svg = SVG.getFromString(displaySource)
                     Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
                         image.eraseColor(AndroidColor.WHITE)
                         svg.renderToCanvas(Canvas(image))
@@ -742,7 +763,10 @@ private fun MushafPageViewer(
             ) {
                 Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play recitation" else if (language == AppLanguage.AR) "تشغيل التلاوة" else "پەخشکردنی تلاوەت", tint = Gold)
             }
-            IconButton(onClick = { showPageJump = true }) {
+            IconButton(onClick = { showMushafSettings = true; showPageJump = false }) {
+                Icon(Icons.Outlined.Settings, contentDescription = if (language == AppLanguage.EN) "Mushaf settings" else if (language == AppLanguage.AR) "إعدادات المصحف" else "ڕێکخستنەکانی مصحف", tint = Gold)
+            }
+            IconButton(onClick = { showPageJump = true; showMushafSettings = false }) {
                 Icon(Icons.Outlined.Search, contentDescription = if (language == AppLanguage.EN) "Go to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە", tint = Gold)
             }
             IconButton(onClick = onExitFullscreen) { Text("×", color = Gold, fontSize = 25.sp) }
@@ -890,6 +914,60 @@ private fun MushafPageViewer(
             }
         }
     }
+    if (showMushafSettings) AlertDialog(
+        onDismissRequest = { showMushafSettings = false },
+        title = { Text(when (language) {
+            AppLanguage.EN -> "Mushaf display settings"
+            AppLanguage.AR -> "إعدادات عرض المصحف"
+            AppLanguage.CKB -> "ڕێکخستنەکانی پیشاندانی مصحف"
+        }) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(when (language) {
+                            AppLanguage.EN -> "Tajweed colors"
+                            AppLanguage.AR -> "ألوان التجويد"
+                            AppLanguage.CKB -> "ڕەنگەکانی تەجوید"
+                        }, fontWeight = FontWeight.SemiBold)
+                        Text(when (language) {
+                            AppLanguage.EN -> "Show the original colored page or a single-color high-contrast page."
+                            AppLanguage.AR -> "اعرض ألوان الصفحة الأصلية أو صفحة بلون واحد عالي التباين."
+                            AppLanguage.CKB -> "ڕەنگە ڕەسەنەکان پیشان بدە یان لاپەڕەیەکی یەکڕەنگ و ڕوون."
+                        }, fontSize = 11.sp, lineHeight = 16.sp, color = foreground.copy(alpha = 0.7f))
+                    }
+                    Switch(
+                        checked = tajweedColors,
+                        onCheckedChange = {
+                            tajweedColors = it
+                            mushafPrefs.edit().putBoolean("mushaf_tajweed_colors", it).apply()
+                        }
+                    )
+                }
+                Divider(color = Gold.copy(alpha = 0.2f))
+                Text(when (language) {
+                    AppLanguage.EN -> "Double-tap the page to zoom. Swipe left or right to change pages when the page is at normal size."
+                    AppLanguage.AR -> "انقر مرتين للتكبير، واسحب يمينًا أو يسارًا لتغيير الصفحة عندما يكون الحجم طبيعيًا."
+                    AppLanguage.CKB -> "دوو جار لەسەر لاپەڕەکە بدە بۆ گەورەکردن؛ بە ئاسایی بوونی قەبارە، بۆ لای چەپ یان ڕاستی ڕابکێشە."
+                }, fontSize = 11.sp, lineHeight = 17.sp, color = foreground.copy(alpha = 0.75f))
+                OutlinedButton(
+                    onClick = { scale = 1f; offsetX = 0f; offsetY = 0f },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(when (language) {
+                        AppLanguage.EN -> "Reset zoom"
+                        AppLanguage.AR -> "إعادة ضبط التكبير"
+                        AppLanguage.CKB -> "گەڕاندنەوەی گەورەیی"
+                    })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { showMushafSettings = false }) {
+                Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+            }
+        }
+    )
     if (showPageJump) AlertDialog(
         onDismissRequest = { showPageJump = false },
         title = { Text(when (language) {
