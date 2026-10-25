@@ -767,6 +767,16 @@ private fun MushafPageViewer(
             ) {
                 Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play recitation" else if (language == AppLanguage.AR) "تشغيل التلاوة" else "پەخشکردنی تلاوەت", tint = Gold)
             }
+            IconButton(
+                onClick = { selectedVerse?.let { onVerseClick(it.surah, it.ayah) } },
+                enabled = selectedVerse != null
+            ) {
+                Icon(
+                    Icons.Outlined.AutoStories,
+                    contentDescription = if (language == AppLanguage.EN) "Open selected verse" else if (language == AppLanguage.AR) "فتح الآية المحددة" else "کردنەوەی ئایەتی دیاریکراو",
+                    tint = if (selectedVerse != null) Gold else SoftText.copy(alpha = 0.4f)
+                )
+            }
             IconButton(onClick = { showMushafSettings = true; showPageJump = false }) {
                 Icon(Icons.Outlined.Settings, contentDescription = if (language == AppLanguage.EN) "Mushaf settings" else if (language == AppLanguage.AR) "إعدادات المصحف" else "ڕێکخستنەکانی مصحف", tint = Gold)
             }
@@ -873,50 +883,7 @@ private fun MushafPageViewer(
                 }
             }
         }
-        if (pageVerses.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    selectedVerse?.let { it.surah.toString() + ":" + it.ayah } ?: when (language) {
-                        AppLanguage.EN -> pageVerses.size.toString() + " verses on this page"
-                        AppLanguage.AR -> pageVerses.size.toString() + " آيات في هذه الصفحة"
-                        AppLanguage.CKB -> pageVerses.size.toString() + " ئایەت لەم پەڕەیەدا"
-                    },
-                    color = DeepGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(
-                    enabled = selectedVerse != null,
-                    onClick = { selectedVerse?.let { onVerseClick(it.surah, it.ayah) } },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 1.dp)
-                ) {
-                    Text(when (language) {
-                        AppLanguage.EN -> "Open verse"
-                        AppLanguage.AR -> "فتح الآية"
-                        AppLanguage.CKB -> "کردنەوەی ئایەت"
-                    }, fontSize = 10.sp)
-                }
-            }
-            LazyRow(
-                modifier = Modifier.height(42.dp),
-                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 1.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                items(pageVerses, key = { it.surah.toString() + ":" + it.ayah }) { verse ->
-                    FilterChip(
-                        selected = selectedVerse == verse,
-                        onClick = {
-                            selectedVerse = verse
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        label = { Text(verse.surah.toString() + ":" + verse.ayah, fontSize = 9.sp) },
-                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(12.dp)) }
-                    )
-                }
-            }
-        }
+
     }
     if (showMushafSettings) AlertDialog(
         onDismissRequest = { showMushafSettings = false },
@@ -3583,11 +3550,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
     val locateNow = {
-        useGpsLocation = true
-        prefs.edit().putBoolean("prayer_use_gps", true).apply()
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
+            useGpsLocation = true
+            prefs.edit().putBoolean("prayer_use_gps", true).apply()
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
@@ -3604,7 +3571,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 
     LaunchedEffect(citySearch) {
         delay(250L)
-        cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
+        cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 300)
     }
     LaunchedEffect(Unit) {
         while (true) {

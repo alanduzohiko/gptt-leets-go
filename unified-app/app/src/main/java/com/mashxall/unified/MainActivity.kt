@@ -13,10 +13,15 @@ import androidx.compose.runtime.SideEffect
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -380,7 +385,23 @@ fun MashxallApp(startScreen: String? = null) {
                             onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot, showSettings = screen != AppScreen.SETTINGS.key
                         )
                         Box(Modifier.fillMaxSize()) {
-                            when (screen) {
+                            AnimatedContent(
+                                targetState = screen,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                                        slideInHorizontally(
+                                            initialOffsetX = { width -> width / 14 },
+                                            animationSpec = tween(220, easing = FastOutSlowInEasing)
+                                        )) togetherWith
+                                        (fadeOut(animationSpec = tween(140)) +
+                                            slideOutHorizontally(
+                                                targetOffsetX = { width -> -width / 20 },
+                                                animationSpec = tween(140)
+                                            ))
+                                },
+                                label = "native-screen-transition"
+                            ) { targetScreen ->
+                                when (targetScreen) {
                                 "home" -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "quran" -> QuranScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
@@ -450,6 +471,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                }
                             }
                         }
                     }
