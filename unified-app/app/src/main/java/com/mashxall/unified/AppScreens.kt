@@ -1938,6 +1938,7 @@ fun AudioScreen(
     focusReciters: Boolean = false
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
@@ -1945,6 +1946,8 @@ fun AudioScreen(
     val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
+    var offlineReciterUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var downloadingReciterUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
@@ -2041,16 +2044,28 @@ fun AudioScreen(
             val visibleReciters = reciters.filter { reciter ->
                 (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
             }
+            LaunchedEffect(visibleReciters, surahText, ayahText) {
+                val urls = visibleReciters.map { reciter ->
+                    ContentRepository.reciterSampleUrl(
+                        reciter,
+                        surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1,
+                        ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    )
+                }
+                offlineReciterUrls = withContext(Dispatchers.IO) {
+                    urls.filter { url -> AudioController.cachedRemoteFile(context, url).let { it.isFile && it.length() > 0L } }.toSet()
+                }
+            }
             Text(
                 if (language == AppLanguage.EN) {
                     if (preferredVerseReciter != null) "Your preferred verse-by-verse reciter will start automatically when you open this screen from a Quran verse."
-                    else "Streaming needs internet. Choose a verse-by-verse reciter below; it will be remembered and the Quran play button can use it next time."
+                    else "Streaming needs internet until you download a reciter track; downloaded tracks play offline. Choose a verse-by-verse reciter below to remember it for the Quran play button."
                 } else if (language == AppLanguage.AR) {
                     if (preferredVerseReciter != null) "سيبدأ قارئك المفضّل الذي يدعم تشغيل الآيات تلقائيًا عند فتح هذه الشاشة من آية في القرآن."
-                    else "البث يحتاج إلى الإنترنت. اختر قارئًا يدعم تشغيل الآيات أدناه؛ سيُحفظ اختيارك لزر تشغيل الآية لاحقًا."
+                    else "يحتاج البث إلى الإنترنت حتى تنزيل المقطع؛ بعدها يعمل دون اتصال. اختر قارئًا يدعم تشغيل الآيات ليُستخدم مع زر القرآن لاحقًا."
                 } else {
                     if (preferredVerseReciter != null) "کاتێک لەم شاشەیە لە ئایەتێکی قورئانەوە بکەیتەوە، قورئان‌خوێنی دڵخواز کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی دەکات خۆکارانە دەست پێدەکات."
-                    else "بۆ پەخش ئینتەرنێت پێویستە. قورئان‌خوێنێک هەڵبژێرە کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی بکات؛ دواتر دوگمەی گوێگرتن ئەوە بەکاردهێنێت."
+                    else "بۆ پەخشی سەرەتایی ئینتەرنێت پێویستە؛ بەڵام کە خوێندنەوەکە دابگریت، بێ ئینتەرنێتیش کار دەکات. قورئان‌خوێنێک دیاری بکە بۆ دوگمەی گوێگرتنی قورئان."
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
             )
@@ -2123,6 +2138,45 @@ fun AudioScreen(
                                     }
                                 }
                             }
+                            IconButton(
+                                enabled = url !in downloadingReciterUrls,
+                                onClick = {
+                                    if (url !in offlineReciterUrls && url !in downloadingReciterUrls) {
+                                        downloadingReciterUrls = downloadingReciterUrls + url
+                                        scope.launch {
+                                            try {
+                                                AudioController.downloadRemote(context, url)
+                                                offlineReciterUrls = offlineReciterUrls + url
+                                                Toast.makeText(context, when (language) {
+                                                    AppLanguage.EN -> "Audio saved for offline listening"
+                                                    AppLanguage.AR -> "تم حفظ الصوت للاستماع دون إنترنت"
+                                                    AppLanguage.CKB -> "دەنگەکە بۆ گوێگرتنی بێ ئینتەرنێت پاشەکەوت کرا"
+                                                }, Toast.LENGTH_SHORT).show()
+                                            } catch (_: Exception) {
+                                                Toast.makeText(context, when (language) {
+                                                    AppLanguage.EN -> "Download failed. Check your connection and try again."
+                                                    AppLanguage.AR -> "تعذر التنزيل؛ تحقق من الاتصال وحاول مجددًا."
+                                                    AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی ئینتەرنێت بپشکنە."
+                                                }, Toast.LENGTH_LONG).show()
+                                            } finally {
+                                                downloadingReciterUrls = downloadingReciterUrls - url
+                                            }
+                                        }
+                                    } else if (url in offlineReciterUrls) {
+                                        Toast.makeText(context, when (language) {
+                                            AppLanguage.EN -> "Already available offline"
+                                            AppLanguage.AR -> "الصوت محفوظ بالفعل دون إنترنت"
+                                            AppLanguage.CKB -> "دەنگەکە پێشتر بۆ بێ ئینتەرنێت پاشەکەوت کراوە"
+                                        }, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                if (url in downloadingReciterUrls) {
+                                    CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp, color = Gold)
+                                } else {
+                                    Text(if (url in offlineReciterUrls) "✓" else "↓", color = if (url in offlineReciterUrls) Color(0xFF58B987) else Gold, fontSize = 22.sp)
+                                }
+                            }
                             IconButton(onClick = {
                                 if (reciter.audioType == 0) {
                                     preferredReciterId = reciter.id
@@ -2149,6 +2203,49 @@ fun AudioScreen(
 
 private object AudioController {
     private var player: MediaPlayer? = null
+
+    fun cachedRemoteFile(context: Context, url: String): File {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(url.toByteArray(Charsets.UTF_8))
+            .take(12)
+            .joinToString("") { "%02x".format(it) }
+        val ext = url.substringBefore('?').substringAfterLast('.', "mp3").lowercase(Locale.ROOT)
+        val safeExt = if (ext in setOf("mp3", "m4a", "aac", "ogg", "opus", "wav")) ext else "mp3"
+        return File(File(context.filesDir, "offline-reciter-audio"), "reciter-" + digest + "." + safeExt)
+    }
+
+    suspend fun downloadRemote(context: Context, url: String): File = withContext(Dispatchers.IO) {
+        val destination = cachedRemoteFile(context, url)
+        if (destination.isFile && destination.length() > 0L) return@withContext destination
+        val folder = destination.parentFile ?: throw java.io.IOException("Audio folder is unavailable")
+        if (!folder.exists() && !folder.mkdirs()) throw java.io.IOException("Could not create audio folder")
+        val connection = URL(url).openConnection() as? HttpURLConnection
+            ?: throw java.io.IOException("Unsupported audio connection")
+        val temporary = File(folder, destination.name + ".part")
+        try {
+            connection.connectTimeout = 20000
+            connection.readTimeout = 60000
+            connection.instanceFollowRedirects = true
+            connection.requestMethod = "GET"
+            connection.connect()
+            if (connection.responseCode !in 200..299) throw java.io.IOException("Audio server returned HTTP " + connection.responseCode)
+            val expectedLength = connection.contentLengthLong
+            if (expectedLength > 120L * 1024L * 1024L) throw java.io.IOException("Audio track exceeds 120 MB")
+            temporary.delete()
+            connection.inputStream.use { input ->
+                temporary.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
+            if (!temporary.isFile || temporary.length() == 0L) throw java.io.IOException("Downloaded audio is empty")
+            if (destination.exists() && !destination.delete()) throw java.io.IOException("Could not replace cached audio")
+            if (!temporary.renameTo(destination)) {
+                temporary.copyTo(destination, overwrite = true)
+                temporary.delete()
+            }
+            destination
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     fun stop() {
         try { player?.stop() } catch (_: Exception) {}
@@ -2177,6 +2274,11 @@ private object AudioController {
 
     fun playRemote(context: Context, url: String, callback: (Boolean) -> Unit) {
         stop()
+        val cached = cachedRemoteFile(context, url)
+        if (cached.isFile && cached.length() > 0L) {
+            playFile(cached, callback)
+            return
+        }
         try {
             player = MediaPlayer().apply {
                 setDataSource(url)
@@ -2193,6 +2295,21 @@ private object AudioController {
         } catch (_: Exception) {
             callback(false)
             Toast.makeText(context, "Stream unavailable; check the connection.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun playFile(file: File, callback: (Boolean) -> Unit) {
+        stop()
+        try {
+            player = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnPreparedListener { it.start(); callback(true) }
+                setOnCompletionListener { callback(false); stop() }
+                setOnErrorListener { _, _, _ -> callback(false); stop(); true }
+                prepareAsync()
+            }
+        } catch (_: Exception) {
+            callback(false)
         }
     }
 
