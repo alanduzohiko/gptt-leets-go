@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
@@ -74,11 +75,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -117,6 +119,8 @@ private val Gold: Color get() = MashxallPalette.accent
 private val DeepGreen: Color get() = MashxallPalette.deepGreen
 private val MainText: Color get() = MashxallPalette.mainText
 private val CardDark: Color get() = MashxallPalette.panel
+private val PaleGold: Color get() = MashxallPalette.paleAccent
+private val SoftText: Color get() = MashxallPalette.softText
 
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
