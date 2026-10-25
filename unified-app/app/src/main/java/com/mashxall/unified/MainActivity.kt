@@ -268,7 +268,19 @@ fun MashxallApp(startScreen: String? = null) {
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
-    var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "") ?: "") }
+    var selectedCity by rememberSaveable {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        mutableStateOf(if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) "" else storedCity)
+    }
+    LaunchedEffect(Unit) {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) {
+            prefs.edit().putString("selected_city", "").remove("selected_city_country").apply()
+            selectedCity = ""
+        }
+    }
     var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
