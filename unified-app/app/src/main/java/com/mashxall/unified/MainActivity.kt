@@ -1,6 +1,8 @@
 package com.mashxall.unified
 
 import android.os.Bundle
+import android.os.SystemClock
+import android.widget.Toast
 import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -11,10 +13,15 @@ import androidx.compose.runtime.SideEffect
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -46,6 +53,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Favorite
@@ -70,6 +78,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -77,6 +86,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -95,13 +105,77 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.ContentRepository
 
-private val Ink = Color(0xFF071E1A)
-private val DeepGreen = Color(0xFF103D32)
-private val Emerald = Color(0xFF19725A)
-private val Gold = Color(0xFFC9A44C)
-private val PaleGold = Color(0xFFF4E5B4)
-private val SoftText = Color(0xFFB9CDC5)
-private val Panel = Color(0xFF102B25)
+data class MashxallPalettePreset(
+    val id: String,
+    val labelEn: String,
+    val labelAr: String,
+    val labelCkb: String,
+    val ink: Color,
+    val deepGreen: Color,
+    val emerald: Color,
+    val accent: Color,
+    val paleAccent: Color,
+    val softText: Color,
+    val panel: Color,
+    val mainText: Color
+)
+
+object MashxallPalette {
+    val options = listOf(
+        MashxallPalettePreset("emerald_gold", "Emerald & Gold", "زمردي وذهبي", "زومڕە و زێڕی",
+            Color(0xFF071E1A), Color(0xFF103D32), Color(0xFF19725A), Color(0xFFC9A44C),
+            Color(0xFFF4E5B4), Color(0xFFB9CDC5), Color(0xFF102B25), Color(0xFFF6F2E6)),
+        MashxallPalettePreset("ocean_cyan", "Ocean & Cyan", "المحيط والسماوي", "شیناو و شینی کاڵ",
+            Color(0xFF071927), Color(0xFF10354F), Color(0xFF1B6D8A), Color(0xFF52C7D7),
+            Color(0xFFD4F7FA), Color(0xFFBCDDE7), Color(0xFF0C2A3D), Color(0xFFF2FBFC)),
+        MashxallPalettePreset("amethyst", "Amethyst", "بنفسجي ملكي", "مۆرە شاهانە",
+            Color(0xFF160D25), Color(0xFF39245A), Color(0xFF62418A), Color(0xFFC9A4FF),
+            Color(0xFFE8DBFF), Color(0xFFCFC0E2), Color(0xFF251639), Color(0xFFFBF6FF)),
+        MashxallPalettePreset("ruby_rose", "Ruby & Rose", "ياقوتي ووردي", "یاقووتی و پەمەیی",
+            Color(0xFF1D0B12), Color(0xFF572833), Color(0xFF8F3F54), Color(0xFFF1A4B2),
+            Color(0xFFFFE1DE), Color(0xFFE3BEC6), Color(0xFF321720), Color(0xFFFFF5F4)),
+        MashxallPalettePreset("sapphire", "Sapphire", "ياقوت أزرق", "شینە یاقووتی",
+            Color(0xFF07152A), Color(0xFF122E5D), Color(0xFF2457A2), Color(0xFF88B9FF),
+            Color(0xFFDAE7FF), Color(0xFFB9CCE8), Color(0xFF0D2245), Color(0xFFF3F7FF))
+    )
+
+    var ink by mutableStateOf(options.first().ink)
+        private set
+    var deepGreen by mutableStateOf(options.first().deepGreen)
+        private set
+    var emerald by mutableStateOf(options.first().emerald)
+        private set
+    var accent by mutableStateOf(options.first().accent)
+        private set
+    var paleAccent by mutableStateOf(options.first().paleAccent)
+        private set
+    var softText by mutableStateOf(options.first().softText)
+        private set
+    var panel by mutableStateOf(options.first().panel)
+        private set
+    var mainText by mutableStateOf(options.first().mainText)
+        private set
+
+    fun apply(id: String) {
+        val selected = options.firstOrNull { it.id == id } ?: options.first()
+        ink = selected.ink
+        deepGreen = selected.deepGreen
+        emerald = selected.emerald
+        accent = selected.accent
+        paleAccent = selected.paleAccent
+        softText = selected.softText
+        panel = selected.panel
+        mainText = selected.mainText
+    }
+}
+
+private val Ink: Color get() = MashxallPalette.ink
+private val DeepGreen: Color get() = MashxallPalette.deepGreen
+private val Emerald: Color get() = MashxallPalette.emerald
+private val Gold: Color get() = MashxallPalette.accent
+private val PaleGold: Color get() = MashxallPalette.paleAccent
+private val SoftText: Color get() = MashxallPalette.softText
+private val Panel: Color get() = MashxallPalette.panel
 
 enum class AppLanguage(val key: String, val label: String) {
     CKB("ckb", "کوردی"), AR("ar", "العربية"), EN("en", "English");
@@ -141,13 +215,13 @@ private val homeModules = listOf(
 
 private val textMap = mapOf(
     "ckb" to mapOf(
-        "home" to "سەرەتا", "quran" to "قورئانی پیرۆز", "quran_sub" to "خوێندنەوە و گەڕان", "tafsir" to "تەفسیرو وەرگێڕان", "tafsir_sub" to "چەندین تەفسیر", "hadith" to "فەرموودەکان", "hadith_sub" to "گەڕان لە فەرموودە", "azkar" to "زیکر و دوعاکان", "azkar_sub" to "بەیانی، ئێواران و زیاتر", "prayer" to "کاتەکانی بانگ", "prayer_sub" to "کاتی نوێژ و شار", "audio" to "دەنگ و تلاوەت", "audio_sub" to "فایلە دەنگییە ناوخۆییەکان", "names" to "ناوە پیرۆزەکان", "names_sub" to "٩٩ ناوی خودا", "qibla" to "ئاڕاستەی قیبلە", "qibla_sub" to "ئاڕاستە بەپێی شوێن", "books" to "کتێبخانە", "books_sub" to "کتێب و PDF", "lexicon" to "فەرهەنگی وشەکان", "lexicon_sub" to "مانا و ڕەگی وشە", "word_by_word" to "شیکردنەوەی وشە بە وشە", "word_by_word_sub" to "ڕەگ و ڕێزمانی قورئان", "farmuda" to "فەرموودە و دوعاکان", "farmuda_sub" to "دەق و زانیاری زیادە", "tasbih" to "تەسبیح", "tasbih_sub" to "ژماردنی زیکر", "library" to "کتێبخانەی ئیسلامی", "library_sub" to "قورئان، حدیث و زانست", "welcome" to "هەموو زانیارییە ئیسلامییەکانت لە شوێنێکدا", "bookmarks" to "نیشانکراوەکان", "bookmarks_sub" to "ئایەتە پاشەکەوتکراوەکان", "surah" to "سوورەت", "ayah" to "ئایەت", "verse" to "ئایەت", "book_online" to "زانیاری کتێب", "mushaf_view" to "مصحەفی پیرۆز", "verse_view" to "ئایەت بە ئایەت", "mushaf_unavailable" to "نەتوانرا پەڕەی مصحف بخوێندرێتەوە", "mushaf_offline" to "٦٠٤ پەڕەی قورئان بەبێ ئینتەرنێت", "no_bookmarks" to "هیچ ئایەتێک نیشان نەکراوە", "no_adhan_audio" to "دەنگی بانگ لەم داتایەدا نەدۆزرایەوە", "page" to "پەڕە", "previous" to "پێشوو", "next" to "دواتر", "open_pdf" to "کردنەوەی PDF", "settings" to "ڕێکخستن", "back" to "گەڕانەوە", "home_title" to "دڵت ڕووناک بکە", "home_hint" to "ئەمڕۆ بە چەند خولەکێک خوێندنەوە دەست پێ بکە", "quick_access" to "دەستگەیشتنی خێرا", "featured" to "پێشنیاری ئەمڕۆ", "continue_reading" to "بەردەوام بە لە خوێندنەوە", "language" to "زمان", "offline" to "زۆربەی زانیارییەکان بەبێ ئینتەرنێت کار دەکەن", "about_data" to "سەرچاوەی داتا و مافەکان", "data_notice" to "هەندێک کتێب پێویستی بە ئینتەرنێت یان شیکردنەوەی تایبەت هەیە.", "search" to "گەڕان...", "choose_surah" to "سوورەت هەڵبژێرە", "select_tafsir" to "تەفسیر هەڵبژێرە", "search_hadith" to "لە فەرموودە بگەڕێ...", "search_words" to "وشە یان ڕەگ بگەڕێ...", "city" to "شار", "select_city" to "شار هەڵبژێرە", "fajr" to "بەیانی", "sunrise" to "هەڵهاتنی خۆر", "dhuhr" to "نیوەڕۆ", "asr" to "عەسر", "maghrib" to "مەغریب", "isha" to "عیشا", "search_azkar" to "لە زیکرەکان بگەڕێ...", "arabic" to "عەرەبی", "translation" to "وەرگێڕان", "reference" to "سەرچاوە", "reset" to "سفرکردنەوە", "play" to "لێدان", "available_data" to "داتای بەردەست", "no_data" to "داتاکان بارنەکراون. تکایە وەشانی data-enabled دروست بکە.", "not_found" to "هیچ ئەنجامێک نەدۆزرایەوە.", "qibla_heading" to "قیبلە لە ڕووی باکوورەوە", "degrees" to "پلە", "library_hint" to "قورئان، حدیث، تەفسیر، کتێب و دەنگ"
+        "home" to "سەرەتا", "more" to "زیاتر", "quran" to "قورئانی پیرۆز", "quran_sub" to "خوێندنەوە و گەڕان", "tafsir" to "تەفسیرو وەرگێڕان", "tafsir_sub" to "چەندین تەفسیر", "hadith" to "فەرموودەکان", "hadith_sub" to "گەڕان لە فەرموودە", "azkar" to "زیکر و دوعاکان", "azkar_sub" to "بەیانی، ئێواران و زیاتر", "prayer" to "کاتەکانی بانگ", "prayer_sub" to "کاتی نوێژ و شار", "audio" to "دەنگ و تلاوەت", "audio_sub" to "فایلە دەنگییە ناوخۆییەکان", "names" to "ناوە پیرۆزەکان", "names_sub" to "٩٩ ناوی خودا", "qibla" to "ئاڕاستەی قیبلە", "qibla_sub" to "ئاڕاستە بەپێی شوێن", "books" to "کتێبخانە", "books_sub" to "کتێب و PDF", "lexicon" to "فەرهەنگی وشەکان", "lexicon_sub" to "مانا و ڕەگی وشە", "word_by_word" to "شیکردنەوەی وشە بە وشە", "word_by_word_sub" to "ڕەگ و ڕێزمانی قورئان", "farmuda" to "فەرموودە و دوعاکان", "farmuda_sub" to "دەق و زانیاری زیادە", "tasbih" to "تەسبیح", "tasbih_sub" to "ژماردنی زیکر", "library" to "کتێبخانەی ئیسلامی", "library_sub" to "قورئان، حدیث و زانست", "more_sub" to "گەیشتن بە هەموو تایبەتمەندییەکان", "welcome" to "هەموو زانیارییە ئیسلامییەکانت لە شوێنێکدا", "bookmarks" to "نیشانکراوەکان", "bookmarks_sub" to "ئایەتە پاشەکەوتکراوەکان", "surah" to "سوورەت", "ayah" to "ئایەت", "verse" to "ئایەت", "book_online" to "زانیاری کتێب", "mushaf_view" to "مصحەفی پیرۆز", "verse_view" to "ئایەت بە ئایەت", "mushaf_unavailable" to "نەتوانرا پەڕەی مصحف بخوێندرێتەوە", "mushaf_offline" to "٦٠٤ پەڕەی قورئان بەبێ ئینتەرنێت", "no_bookmarks" to "هیچ ئایەتێک نیشان نەکراوە", "no_adhan_audio" to "دەنگی بانگ لەم داتایەدا نەدۆزرایەوە", "page" to "پەڕە", "previous" to "پێشوو", "next" to "دواتر", "open_pdf" to "کردنەوەی PDF", "settings" to "ڕێکخستن", "back" to "گەڕانەوە", "home_title" to "دڵت ڕووناک بکە", "home_hint" to "ئەمڕۆ بە چەند خولەکێک خوێندنەوە دەست پێ بکە", "quick_access" to "دەستگەیشتنی خێرا", "featured" to "پێشنیاری ئەمڕۆ", "continue_reading" to "بەردەوام بە لە خوێندنەوە", "language" to "زمان", "offline" to "زۆربەی زانیارییەکان بەبێ ئینتەرنێت کار دەکەن", "about_data" to "سەرچاوەی داتا و مافەکان", "data_notice" to "هەندێک کتێب پێویستی بە ئینتەرنێت یان شیکردنەوەی تایبەت هەیە.", "search" to "گەڕان...", "choose_surah" to "سوورەت هەڵبژێرە", "select_tafsir" to "تەفسیر هەڵبژێرە", "search_hadith" to "لە فەرموودە بگەڕێ...", "search_words" to "وشە یان ڕەگ بگەڕێ...", "city" to "شار", "select_city" to "شار هەڵبژێرە", "fajr" to "بەیانی", "sunrise" to "هەڵهاتنی خۆر", "dhuhr" to "نیوەڕۆ", "asr" to "عەسر", "maghrib" to "مەغریب", "isha" to "عیشا", "search_azkar" to "لە زیکرەکان بگەڕێ...", "arabic" to "عەرەبی", "translation" to "وەرگێڕان", "reference" to "سەرچاوە", "reset" to "سفرکردنەوە", "play" to "لێدان", "available_data" to "داتای بەردەست", "no_data" to "داتاکان بارنەکراون. تکایە وەشانی data-enabled دروست بکە.", "not_found" to "هیچ ئەنجامێک نەدۆزرایەوە.", "qibla_heading" to "قیبلە لە ڕووی باکوورەوە", "degrees" to "پلە", "library_hint" to "قورئان، حدیث، تەفسیر، کتێب و دەنگ"
     ),
     "ar" to mapOf(
-        "home" to "الرئيسية", "quran" to "القرآن الكريم", "quran_sub" to "قراءة وبحث", "tafsir" to "التفسير والترجمة", "tafsir_sub" to "تفاسير متعددة", "hadith" to "الأحاديث", "hadith_sub" to "البحث في الأحاديث", "azkar" to "الأذكار والأدعية", "azkar_sub" to "الصباح والمساء والمزيد", "prayer" to "مواقيت الصلاة", "prayer_sub" to "المواقيت والمدينة", "audio" to "التلاوات والصوتيات", "audio_sub" to "الملفات الصوتية المحلية", "names" to "أسماء الله الحسنى", "names_sub" to "الأسماء التسعة والتسعون", "qibla" to "اتجاه القبلة", "qibla_sub" to "الاتجاه حسب المدينة", "books" to "المكتبة", "books_sub" to "كتب وملفات PDF", "lexicon" to "معجم الكلمات", "lexicon_sub" to "المعاني والجذور", "word_by_word" to "تفسير كلمة بكلمة", "word_by_word_sub" to "الجذور والتحليل النحوي", "farmuda" to "المأثورات والأدعية", "farmuda_sub" to "أدعية ونصوص إضافية", "tasbih" to "المسبحة", "tasbih_sub" to "عدّ الذكر", "library" to "المكتبة الإسلامية", "library_sub" to "قرآن وحديث وعلوم", "welcome" to "مكتبتك الإسلامية في مكان واحد", "bookmarks" to "العلامات المرجعية", "bookmarks_sub" to "الآيات المحفوظة", "surah" to "السورة", "ayah" to "الآية", "verse" to "آية", "book_online" to "معلومات الكتاب", "mushaf_view" to "عرض المصحف", "verse_view" to "عرض الآيات", "mushaf_unavailable" to "تعذر فتح صفحة المصحف. تحقق من ملفات البيانات.", "mushaf_offline" to "٦٠٤ صفحة من المصحف تعمل دون إنترنت", "no_bookmarks" to "لا توجد آيات محفوظة بعد", "no_adhan_audio" to "لا توجد ملفات أذان ضمن البيانات المتاحة", "page" to "صفحة", "previous" to "السابق", "next" to "التالي", "open_pdf" to "فتح PDF", "settings" to "الإعدادات", "back" to "رجوع", "home_title" to "أضئ قلبك بالمعرفة", "quick_access" to "وصول سريع", "featured" to "اختيار اليوم", "continue_reading" to "متابعة القراءة", "language" to "اللغة", "offline" to "تعمل معظم المكتبة دون اتصال بالإنترنت", "about_data" to "مصادر البيانات والحقوق", "data_notice" to "بعض الكتب تتطلب الإنترنت أو معالجة خاصة.", "search" to "بحث...", "choose_surah" to "اختر السورة", "select_tafsir" to "اختر التفسير", "search_hadith" to "ابحث في الأحاديث...", "search_words" to "ابحث عن كلمة أو جذر...", "city" to "المدينة", "select_city" to "اختر المدينة", "fajr" to "الفجر", "sunrise" to "الشروق", "dhuhr" to "الظهر", "asr" to "العصر", "maghrib" to "المغرب", "isha" to "العشاء", "search_azkar" to "ابحث في الأذكار...", "arabic" to "العربية", "translation" to "الترجمة", "reference" to "المصدر", "reset" to "إعادة", "play" to "تشغيل", "available_data" to "البيانات المتاحة", "no_data" to "لم تُحمّل البيانات بعد. أنشئ نسخة data-enabled من GitHub Actions.", "not_found" to "لم يتم العثور على نتائج.", "qibla_heading" to "اتجاه القبلة من الشمال", "degrees" to "درجة", "library_hint" to "القرآن، الحديث، التفسير، الكتب والصوتيات"
+        "home" to "الرئيسية", "more" to "المزيد", "quran" to "القرآن الكريم", "quran_sub" to "قراءة وبحث", "tafsir" to "التفسير والترجمة", "tafsir_sub" to "تفاسير متعددة", "hadith" to "الأحاديث", "hadith_sub" to "البحث في الأحاديث", "azkar" to "الأذكار والأدعية", "azkar_sub" to "الصباح والمساء والمزيد", "prayer" to "مواقيت الصلاة", "prayer_sub" to "المواقيت والمدينة", "audio" to "التلاوات والصوتيات", "audio_sub" to "الملفات الصوتية المحلية", "names" to "أسماء الله الحسنى", "names_sub" to "الأسماء التسعة والتسعون", "qibla" to "اتجاه القبلة", "qibla_sub" to "الاتجاه حسب المدينة", "books" to "المكتبة", "books_sub" to "كتب وملفات PDF", "lexicon" to "معجم الكلمات", "lexicon_sub" to "المعاني والجذور", "word_by_word" to "تفسير كلمة بكلمة", "word_by_word_sub" to "الجذور والتحليل النحوي", "farmuda" to "المأثورات والأدعية", "farmuda_sub" to "أدعية ونصوص إضافية", "tasbih" to "المسبحة", "tasbih_sub" to "عدّ الذكر", "library" to "المكتبة الإسلامية", "library_sub" to "قرآن وحديث وعلوم", "more_sub" to "استكشف بقية الأدوات والميزات الإسلامية", "welcome" to "مكتبتك الإسلامية في مكان واحد", "bookmarks" to "العلامات المرجعية", "bookmarks_sub" to "الآيات المحفوظة", "surah" to "السورة", "ayah" to "الآية", "verse" to "آية", "book_online" to "معلومات الكتاب", "mushaf_view" to "عرض المصحف", "verse_view" to "عرض الآيات", "mushaf_unavailable" to "تعذر فتح صفحة المصحف. تحقق من ملفات البيانات.", "mushaf_offline" to "٦٠٤ صفحة من المصحف تعمل دون إنترنت", "no_bookmarks" to "لا توجد آيات محفوظة بعد", "no_adhan_audio" to "لا توجد ملفات أذان ضمن البيانات المتاحة", "page" to "صفحة", "previous" to "السابق", "next" to "التالي", "open_pdf" to "فتح PDF", "settings" to "الإعدادات", "back" to "رجوع", "home_title" to "أضئ قلبك بالمعرفة", "quick_access" to "وصول سريع", "featured" to "اختيار اليوم", "continue_reading" to "متابعة القراءة", "language" to "اللغة", "offline" to "تعمل معظم المكتبة دون اتصال بالإنترنت", "about_data" to "مصادر البيانات والحقوق", "data_notice" to "بعض الكتب تتطلب الإنترنت أو معالجة خاصة.", "search" to "بحث...", "choose_surah" to "اختر السورة", "select_tafsir" to "اختر التفسير", "search_hadith" to "ابحث في الأحاديث...", "search_words" to "ابحث عن كلمة أو جذر...", "city" to "المدينة", "select_city" to "اختر المدينة", "fajr" to "الفجر", "sunrise" to "الشروق", "dhuhr" to "الظهر", "asr" to "العصر", "maghrib" to "المغرب", "isha" to "العشاء", "search_azkar" to "ابحث في الأذكار...", "arabic" to "العربية", "translation" to "الترجمة", "reference" to "المصدر", "reset" to "إعادة", "play" to "تشغيل", "available_data" to "البيانات المتاحة", "no_data" to "لم تُحمّل البيانات بعد. أنشئ نسخة data-enabled من GitHub Actions.", "not_found" to "لم يتم العثور على نتائج.", "qibla_heading" to "اتجاه القبلة من الشمال", "degrees" to "درجة", "library_hint" to "القرآن، الحديث، التفسير، الكتب والصوتيات"
     ),
     "en" to mapOf(
-        "home" to "Home", "quran" to "The Holy Quran", "quran_sub" to "Read and search", "tafsir" to "Tafsir & translation", "tafsir_sub" to "Multiple commentaries", "hadith" to "Hadith", "hadith_sub" to "Search narrations", "azkar" to "Adhkar & duas", "azkar_sub" to "Morning, evening and more", "prayer" to "Prayer times", "prayer_sub" to "Times and city", "audio" to "Recitations & audio", "audio_sub" to "Bundled local media", "names" to "Names of Allah", "names_sub" to "The 99 names", "qibla" to "Qibla direction", "qibla_sub" to "Direction by selected city", "books" to "Book library", "books_sub" to "Books and PDFs", "lexicon" to "Word lexicon", "lexicon_sub" to "Meanings and roots", "word_by_word" to "Word-by-word analysis", "word_by_word_sub" to "Roots and Quranic grammar", "farmuda" to "Supplications & sayings", "farmuda_sub" to "Additional texts and duas", "tasbih" to "Digital tasbih", "tasbih_sub" to "Count remembrance", "library" to "Islamic library", "library_sub" to "Quran, Hadith and studies", "welcome" to "Your Islamic library in one place", "bookmarks" to "Bookmarks", "bookmarks_sub" to "Saved verses", "surah" to "Surah", "ayah" to "Ayah", "verse" to "verses", "book_online" to "Book details", "mushaf_view" to "Mushaf pages", "verse_view" to "Verse list", "mushaf_unavailable" to "Could not read this Mushaf page; verify the bundled data.", "mushaf_offline" to "All 604 Mushaf pages work offline", "no_bookmarks" to "No saved verses yet", "no_adhan_audio" to "No adhan-specific audio was found in the supplied data", "page" to "Page", "previous" to "Previous", "next" to "Next", "open_pdf" to "Open PDF", "settings" to "Settings", "back" to "Back", "home_title" to "Let knowledge light your heart", "quick_access" to "Quick access", "featured" to "Today's pick", "continue_reading" to "Continue reading", "language" to "Language", "offline" to "Most of the library works offline", "about_data" to "Data sources & rights", "data_notice" to "Some books need internet access or format-specific processing.", "search" to "Search...", "choose_surah" to "Choose a surah", "select_tafsir" to "Choose tafsir", "search_hadith" to "Search Hadith...", "search_words" to "Search words or roots...", "city" to "City", "select_city" to "Choose city", "fajr" to "Fajr", "sunrise" to "Sunrise", "dhuhr" to "Dhuhr", "asr" to "Asr", "maghrib" to "Maghrib", "isha" to "Isha", "search_azkar" to "Search adhkar...", "arabic" to "Arabic", "translation" to "Translation", "reference" to "Reference", "reset" to "Reset", "play" to "Play", "available_data" to "Available content", "no_data" to "Content data is not loaded yet. Build the data-enabled variant from GitHub Actions.", "not_found" to "No results found.", "qibla_heading" to "Qibla bearing from north", "degrees" to "degrees", "library_hint" to "Quran, Hadith, tafsir, books and audio"
+        "home" to "Home", "more" to "More", "quran" to "The Holy Quran", "quran_sub" to "Read and search", "tafsir" to "Tafsir & translation", "tafsir_sub" to "Multiple commentaries", "hadith" to "Hadith", "hadith_sub" to "Search narrations", "azkar" to "Adhkar & duas", "azkar_sub" to "Morning, evening and more", "prayer" to "Prayer times", "prayer_sub" to "Times and city", "audio" to "Recitations & audio", "audio_sub" to "Bundled local media", "names" to "Names of Allah", "names_sub" to "The 99 names", "qibla" to "Qibla direction", "qibla_sub" to "Direction by selected city", "books" to "Book library", "books_sub" to "Books and PDFs", "lexicon" to "Word lexicon", "lexicon_sub" to "Meanings and roots", "word_by_word" to "Word-by-word analysis", "word_by_word_sub" to "Roots and Quranic grammar", "farmuda" to "Supplications & sayings", "farmuda_sub" to "Additional texts and duas", "tasbih" to "Digital tasbih", "tasbih_sub" to "Count remembrance", "library" to "Islamic library", "library_sub" to "Quran, Hadith and studies", "more_sub" to "Explore the extra features and tools", "welcome" to "Your Islamic library in one place", "bookmarks" to "Bookmarks", "bookmarks_sub" to "Saved verses", "surah" to "Surah", "ayah" to "Ayah", "verse" to "verses", "book_online" to "Book details", "mushaf_view" to "Mushaf pages", "verse_view" to "Verse list", "mushaf_unavailable" to "Could not read this Mushaf page; verify the bundled data.", "mushaf_offline" to "All 604 Mushaf pages work offline", "no_bookmarks" to "No saved verses yet", "no_adhan_audio" to "No adhan-specific audio was found in the supplied data", "page" to "Page", "previous" to "Previous", "next" to "Next", "open_pdf" to "Open PDF", "settings" to "Settings", "back" to "Back", "home_title" to "Let knowledge light your heart", "quick_access" to "Quick access", "featured" to "Today's pick", "continue_reading" to "Continue reading", "language" to "Language", "offline" to "Most of the library works offline", "about_data" to "Data sources & rights", "data_notice" to "Some books need internet access or format-specific processing.", "search" to "Search...", "choose_surah" to "Choose a surah", "select_tafsir" to "Choose tafsir", "search_hadith" to "Search Hadith...", "search_words" to "Search words or roots...", "city" to "City", "select_city" to "Choose city", "fajr" to "Fajr", "sunrise" to "Sunrise", "dhuhr" to "Dhuhr", "asr" to "Asr", "maghrib" to "Maghrib", "isha" to "Isha", "search_azkar" to "Search adhkar...", "arabic" to "Arabic", "translation" to "Translation", "reference" to "Reference", "reset" to "Reset", "play" to "Play", "available_data" to "Available content", "no_data" to "Content data is not loaded yet. Build the data-enabled variant from GitHub Actions.", "not_found" to "No results found.", "qibla_heading" to "Qibla bearing from north", "degrees" to "degrees", "library_hint" to "Quran, Hadith, tafsir, books and audio"
     )
 )
 
@@ -196,14 +270,31 @@ fun MashxallApp(startScreen: String? = null) {
         }
     }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
+    var paletteId by rememberSaveable { mutableStateOf(prefs.getString("color_palette", "emerald_gold") ?: "emerald_gold") }
+    var quranFont by rememberSaveable { mutableStateOf(prefs.getString("quran_font_family", "amiri") ?: "amiri") }
+    var quranTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_text_scale", 1.0f).coerceIn(0.85f, 1.4f)) }
+    var quranDefaultMushaf by rememberSaveable { mutableStateOf(prefs.getBoolean("quran_default_mushaf", false)) }
+    LaunchedEffect(paletteId) { MashxallPalette.apply(paletteId) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
-    var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
+    var selectedCity by rememberSaveable {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        mutableStateOf(if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) "" else storedCity)
+    }
+    LaunchedEffect(Unit) {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) {
+            prefs.edit().putString("selected_city", "").remove("selected_city_country").apply()
+            selectedCity = ""
+        }
+    }
     var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
-    val rootScreens = setOf("home", "quran", "library", "worship", "prayer")
+    val rootScreens = setOf("home", "quran", "azkar", "library", "settings")
     val isRoot = screen in rootScreens
     val activity = context as? ComponentActivity
     val window = activity?.window
@@ -239,7 +330,32 @@ fun MashxallApp(startScreen: String? = null) {
         audioStartsAtReciters = false
     }
 
-    BackHandler(enabled = !isRoot) { navigateBack() }
+    var lastBackPressAt by remember { mutableStateOf(0L) }
+    BackHandler(enabled = true) {
+        if (navigationStack.isNotEmpty()) {
+            navigateBack()
+        } else if (screen != AppScreen.HOME.key) {
+            screen = AppScreen.HOME.key
+            navigationStack = emptyList()
+            audioStartsAtReciters = false
+        } else {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastBackPressAt < 2000L) {
+                activity?.finish()
+            } else {
+                lastBackPressAt = now
+                Toast.makeText(
+                    context,
+                    when (language) {
+                        AppLanguage.EN -> "Press Back again to exit"
+                        AppLanguage.AR -> "اضغط رجوع مرة أخرى للخروج"
+                        AppLanguage.CKB -> "بۆ دەرچوون جارێکی تر گەڕانەوە دابگرە"
+                    },
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
 
     val background = if (dark) Ink else Color(0xFFF4F1E7)
     val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
@@ -271,10 +387,26 @@ fun MashxallApp(startScreen: String? = null) {
                             language = language, foreground = foreground, isDark = dark,
                             onLanguage = { language = it; prefs.edit().putString("language", it.key).apply() },
                             onBack = { navigateBack() },
-                            onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot
+                            onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot, showSettings = screen != AppScreen.SETTINGS.key
                         )
                         Box(Modifier.fillMaxSize()) {
-                            when (screen) {
+                            AnimatedContent(
+                                targetState = screen,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                                        slideInHorizontally(
+                                            initialOffsetX = { width -> width / 14 },
+                                            animationSpec = tween(220, easing = FastOutSlowInEasing)
+                                        )) togetherWith
+                                        (fadeOut(animationSpec = tween(140)) +
+                                            slideOutHorizontally(
+                                                targetOffsetX = { width -> -width / 20 },
+                                                animationSpec = tween(140)
+                                            ))
+                                },
+                                label = "native-screen-transition"
+                            ) { targetScreen ->
+                                when (targetScreen) {
                                 "home" -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "quran" -> QuranScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
@@ -306,7 +438,14 @@ fun MashxallApp(startScreen: String? = null) {
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo("audio")
                                     },
-                                    onImmersiveMushaf = { immersiveMushaf = it }
+                                    onImmersiveMushaf = { immersiveMushaf = it },
+                                    quranFont = quranFont,
+                                    quranTextScale = quranTextScale,
+                                    defaultMushafMode = quranDefaultMushaf,
+                                    onDefaultMushafModeChange = { selected ->
+                                        quranDefaultMushaf = selected
+                                        prefs.edit().putBoolean("quran_default_mushaf", selected).apply()
+                                    }
                                 )
                                 "library" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
@@ -335,12 +474,32 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
+                                "settings" -> SettingsScreen(
+                                    language, foreground, cardColor, dark, paletteId, quranFont, quranTextScale, quranDefaultMushaf,
+                                    onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() },
+                                    onPalette = { selected ->
+                                        paletteId = selected
+                                        prefs.edit().putString("color_palette", selected).apply()
+                                    },
+                                    onQuranFont = { selected ->
+                                        quranFont = selected
+                                        prefs.edit().putString("quran_font_family", selected).apply()
+                                    },
+                                    onQuranTextScale = { selected ->
+                                        quranTextScale = selected.coerceIn(0.85f, 1.4f)
+                                        prefs.edit().putFloat("quran_text_scale", quranTextScale).apply()
+                                    },
+                                    onQuranDefaultMushaf = { selected ->
+                                        quranDefaultMushaf = selected
+                                        prefs.edit().putBoolean("quran_default_mushaf", selected).apply()
+                                    },
+                                    onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
                                 }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                }
                             }
                         }
                     }
@@ -354,7 +513,7 @@ fun MashxallApp(startScreen: String? = null) {
 private fun AppHeader(
     language: AppLanguage, foreground: Color, isDark: Boolean,
     onLanguage: (AppLanguage) -> Unit, onBack: () -> Unit,
-    onSettings: () -> Unit, showBack: Boolean
+    onSettings: () -> Unit, showBack: Boolean, showSettings: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().background(if (isDark) Ink else Color(0xFFF4F1E7)).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -362,7 +521,7 @@ private fun AppHeader(
     ) {
         if (showBack) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Outlined.Explore, contentDescription = tr(language, "back"), tint = Gold)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Gold)
             }
         } else {
             Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(DeepGreen, Emerald))), contentAlignment = Alignment.Center) {
@@ -384,7 +543,7 @@ private fun AppHeader(
                 )
             }
         }
-        if (!showBack) IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
+        if (!showBack && showSettings) IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
             Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = Gold)
         }
     }
@@ -395,9 +554,9 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
     val items = listOf(
         Triple("home", tr(language, "home"), Icons.Outlined.Home),
         Triple("quran", tr(language, "quran"), Icons.Outlined.MenuBook),
-        Triple("library", tr(language, "library"), Icons.Outlined.LibraryBooks),
-        Triple("worship", tr(language, "azkar"), Icons.Outlined.Favorite),
-        Triple("prayer", tr(language, "prayer"), Icons.Outlined.Schedule)
+        Triple("azkar", tr(language, "azkar"), Icons.Outlined.Spa),
+        Triple("library", tr(language, "more"), Icons.Outlined.Tune),
+        Triple("settings", tr(language, "settings"), Icons.Outlined.Settings)
     )
     NavigationBar(containerColor = cardColor, contentColor = foreground, windowInsets = WindowInsets.navigationBars) {
         items.forEach { (key, title, icon) ->
@@ -412,37 +571,8 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
 
 @Composable
 private fun HomeScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
-    val transition = rememberInfiniteTransition(label = "homeGlow")
-    val shimmer by transition.animateFloat(
-        initialValue = 0.12f, targetValue = 0.38f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
-        label = "glow"
-    )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Card(Modifier.fillMaxWidth().animateContentSize().graphicsLayer { scaleX = 1f + shimmer * 0.018f; scaleY = 1f + shimmer * 0.018f }, shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = DeepGreen)) {
-            Box(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF155744), Ink))).padding(22.dp)) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(Gold).alpha(0.6f + shimmer))
-                        Spacer(Modifier.width(8.dp))
-                        Text(tr(language, "featured"), color = PaleGold, fontSize = 11.sp, letterSpacing = 1.sp)
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(tr(language, "home_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 34.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(tr(language, "welcome"), color = SoftText, fontSize = 14.sp, lineHeight = 22.sp)
-                    Spacer(Modifier.height(18.dp))
-                    Surface(color = Gold.copy(alpha = 0.16f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f)), modifier = Modifier.clickable { onOpen(AppScreen.QURAN) }) {
-                        Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = PaleGold)
-                            Spacer(Modifier.width(8.dp))
-                            Text(tr(language, "continue_reading"), color = PaleGold, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-                Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Gold.copy(alpha = 0.16f), modifier = Modifier.align(Alignment.BottomEnd).size(90.dp))
-            }
-        }
+        HomePrayerTimesPanel(language, foreground, cardColor) { onOpen(AppScreen.PRAYER) }
         Spacer(Modifier.height(22.dp))
         Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(12.dp))
@@ -497,16 +627,23 @@ private fun HomeScreen(language: AppLanguage, foreground: Color, cardColor: Colo
 @Composable
 fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(tr(language, "library"), color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-        Text(tr(language, "library_hint"), color = foreground.copy(alpha = 0.6f), fontSize = 13.sp)
+        Text(tr(language, "more"), color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text(tr(language, "more_sub"), color = foreground.copy(alpha = 0.6f), fontSize = 13.sp)
         Spacer(Modifier.height(16.dp))
         listOf(
+            AppScreen.PRAYER to Icons.Outlined.Schedule,
+            AppScreen.QIBLA to Icons.Outlined.Explore,
+            AppScreen.AZKAR to Icons.Outlined.Spa,
             AppScreen.TAFSIR to Icons.Outlined.AutoStories,
             AppScreen.HADITH to Icons.Outlined.LibraryBooks,
-            AppScreen.LEXICON to Icons.Outlined.Search,
-            AppScreen.BOOKS to Icons.Outlined.MenuBook,
+            AppScreen.BOOKMARKS to Icons.Outlined.BookmarkBorder,
+            AppScreen.NAMES to Icons.Outlined.Favorite,
+            AppScreen.TASBIH to Icons.Outlined.Spa,
             AppScreen.AUDIO to Icons.Outlined.GraphicEq,
-            AppScreen.QURAN to Icons.Outlined.MenuBook
+            AppScreen.BOOKS to Icons.Outlined.MenuBook,
+            AppScreen.LEXICON to Icons.Outlined.Search,
+            AppScreen.WORD_BY_WORD to Icons.Outlined.AutoStories,
+            AppScreen.FARMUDA to Icons.Outlined.VolunteerActivism
         ).forEach { (target, icon) ->
             Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(target) }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -514,7 +651,7 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(tr(language, target.key), color = foreground, fontWeight = FontWeight.Bold)
-                        Text(tr(language, "library_hint"), color = foreground.copy(alpha = 0.5f), fontSize = 11.sp)
+                        Text(tr(language, target.key + "_sub"), color = foreground.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 2)
                     }
                     Icon(Icons.Outlined.Explore, null, tint = Gold.copy(alpha = 0.8f))
                 }
@@ -557,8 +694,12 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 
 @Composable
 private fun SettingsScreen(
-    language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean,
-    onDark: (Boolean) -> Unit, onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
+    language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean, paletteId: String,
+    quranFont: String, quranTextScale: Float, quranDefaultMushaf: Boolean,
+    onDark: (Boolean) -> Unit, onPalette: (String) -> Unit,
+    onQuranFont: (String) -> Unit, onQuranTextScale: (Float) -> Unit,
+    onQuranDefaultMushaf: (Boolean) -> Unit,
+    onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "settings"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -568,6 +709,117 @@ private fun SettingsScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AppLanguage.entries.forEach { item -> FilterChip(selected = item == language, onClick = { onLanguage(item) }, label = { Text(item.label) }) }
         }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Color palette"
+                AppLanguage.AR -> "ألوان التطبيق"
+                AppLanguage.CKB -> "ڕەنگی ڕووکار"
+            }, color = foreground, fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 2.dp)) {
+            items(MashxallPalette.options, key = { it.id }) { option ->
+                val selected = paletteId == option.id
+                Card(
+                    modifier = Modifier.width(142.dp).clickable { onPalette(option.id) },
+                    shape = RoundedCornerShape(17.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    border = BorderStroke(if (selected) 1.8.dp else 0.7.dp, if (selected) option.accent else foreground.copy(alpha = 0.14f))
+                ) {
+                    Column(Modifier.padding(11.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            listOf(option.deepGreen, option.accent, option.paleAccent).forEach { swatch ->
+                                Box(Modifier.padding(end = 5.dp).size(20.dp).clip(CircleShape).background(swatch))
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (selected) Text("✓", color = option.accent, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> option.labelEn
+                                AppLanguage.AR -> option.labelAr
+                                AppLanguage.CKB -> option.labelCkb
+                            }, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Qur'an reading"
+                AppLanguage.AR -> "إعدادات قراءة القرآن"
+                AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان"
+            }, color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Default reading layout"
+                AppLanguage.AR -> "نمط العرض الافتراضي"
+                AppLanguage.CKB -> "شێوازی پیشاندانی بنەڕەتی"
+            }, color = foreground.copy(alpha = 0.76f), fontSize = 12.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FilterChip(
+                selected = quranDefaultMushaf,
+                onClick = { onQuranDefaultMushaf(true) },
+                label = { Text(when (language) {
+                    AppLanguage.EN -> "Full-page Mushaf"
+                    AppLanguage.AR -> "المصحف بملء الشاشة"
+                    AppLanguage.CKB -> "مصحەف بە تەواوی شاشە"
+                }, fontSize = 11.sp) }
+            )
+            FilterChip(
+                selected = !quranDefaultMushaf,
+                onClick = { onQuranDefaultMushaf(false) },
+                label = { Text(when (language) {
+                    AppLanguage.EN -> "Verse list"
+                    AppLanguage.AR -> "عرض الآيات"
+                    AppLanguage.CKB -> "لیستی ئایەتەکان"
+                }, fontSize = 11.sp) }
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Arabic text font"
+                AppLanguage.AR -> "خط النص العربي"
+                AppLanguage.CKB -> "فۆنتی دەقی عەرەبی"
+            }, color = foreground.copy(alpha = 0.76f), fontSize = 12.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FilterChip(
+                selected = quranFont == "amiri",
+                onClick = { onQuranFont("amiri") },
+                label = { Text(if (language == AppLanguage.EN) "Traditional Amiri" else if (language == AppLanguage.AR) "خط أميري" else "فۆنتی ئەمیری", fontSize = 11.sp) }
+            )
+            FilterChip(
+                selected = quranFont == "system",
+                onClick = { onQuranFont("system") },
+                label = { Text(if (language == AppLanguage.EN) "System font" else if (language == AppLanguage.AR) "خط النظام" else "فۆنتی سیستەم", fontSize = 11.sp) }
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Arabic text size"
+                    AppLanguage.AR -> "حجم النص العربي"
+                    AppLanguage.CKB -> "قەبارەی دەقی عەرەبی"
+                }, color = foreground.copy(alpha = 0.76f), fontSize = 12.sp, modifier = Modifier.weight(1f)
+            )
+            Text(quranTextScale.times(100).toInt().toString() + "%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+        Slider(
+            value = quranTextScale,
+            onValueChange = onQuranTextScale,
+            valueRange = 0.85f..1.4f,
+            steps = 10
+        )
         Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cardColor).clickable { onDark(!dark) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Tune, null, tint = Gold)

@@ -21,6 +21,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.GeomagneticField
 import android.os.ParcelFileDescriptor
 import android.content.Intent
 import android.media.MediaPlayer
@@ -37,6 +38,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -63,6 +65,8 @@ import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
@@ -73,10 +77,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -105,15 +111,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.tan
 
-private val Gold = Color(0xFFC9A44C)
-private val DeepGreen = Color(0xFF103D32)
-private val MainText = Color(0xFFF6F2E6)
-private val CardDark = Color(0xFF102B25)
+private val Gold: Color get() = MashxallPalette.accent
+private val DeepGreen: Color get() = MashxallPalette.deepGreen
+private val MainText: Color get() = MashxallPalette.mainText
+private val CardDark: Color get() = MashxallPalette.panel
+private val PaleGold: Color get() = MashxallPalette.paleAccent
+private val SoftText: Color get() = MashxallPalette.softText
 
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
@@ -134,7 +143,14 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}) {
+fun QuranScreen(
+    language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int,
+    onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit,
+    onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> },
+    onImmersiveMushaf: (Boolean) -> Unit = {},
+    quranFont: String = "amiri", quranTextScale: Float = 1f, defaultMushafMode: Boolean = false,
+    onDefaultMushafModeChange: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -152,9 +168,20 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
-    var mushafMode by rememberSaveable { mutableStateOf(false) }
+    var mushafMode by rememberSaveable { mutableStateOf(defaultMushafMode) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(mushafMode) { onImmersiveMushaf(mushafMode) }
+    val quranArabicFont = remember(quranFont) {
+        if (quranFont == "amiri") runCatching {
+            FontFamily(Typeface.createFromAsset(context.assets, "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_modded.ttf"))
+        }.getOrNull() else null
+    }
+    LaunchedEffect(defaultMushafMode) {
+        if (mushafMode != defaultMushafMode) mushafMode = defaultMushafMode
+    }
+    LaunchedEffect(mushafMode) {
+        onDefaultMushafModeChange(mushafMode)
+        onImmersiveMushaf(mushafMode)
+    }
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
     }
@@ -259,12 +286,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChip(
-                    selected = !mushafMode, onClick = { mushafMode = false },
+                    selected = !mushafMode, onClick = { mushafMode = false; onDefaultMushafModeChange(false) },
                     label = { Text(tr(language, "verse_view"), fontSize = 11.sp, maxLines = 1) },
                     modifier = Modifier.weight(1f)
                 )
                 FilterChip(
-                    selected = mushafMode, onClick = { mushafMode = true; query = "" },
+                    selected = mushafMode, onClick = { mushafMode = true; query = ""; onDefaultMushafModeChange(true) },
                     label = { Text(tr(language, "mushaf_view"), fontSize = 11.sp, maxLines = 1) },
                     modifier = Modifier.weight(1f)
                 )
@@ -308,6 +335,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
                 },
                 onExitFullscreen = { mushafMode = false },
+                onPlayAudio = onPlayAudio,
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -410,7 +438,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Spacer(Modifier.height(6.dp))
                         Text(
                             if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic,
-                            color = foreground, fontSize = 23.sp, lineHeight = 39.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
+                            color = foreground,
+                            fontSize = (23f * quranTextScale).sp,
+                            lineHeight = (39f * quranTextScale).sp,
+                            fontFamily = quranArabicFont,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         if (verse.hasHadith) {
                             Spacer(Modifier.height(5.dp))
@@ -562,7 +595,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 items(surahs, key = { it.number }) { item ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable { selected = item.number; onSurah(item.number); chooseSurah = false }
+                            .clickable {
+                                selected = item.number
+                                onSurah(item.number)
+                                query = ""
+                                chooseSurah = false
+                                scope.launch {
+                                    val targetAyahs = ContentRepository.loadAyahs(
+                                        context, item.number, language.key, translationKey = translationKey
+                                    )
+                                    val firstPage = targetAyahs.firstOrNull()?.page?.takeIf { it in 1..604 } ?: 1
+                                    mushafPage = firstPage
+                                    prefs.edit().putInt("last_mushaf_page", firstPage).apply()
+                                    mushafMode = true
+                                }
+                            }
                             .padding(vertical = 9.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -650,6 +697,7 @@ private fun MushafPageViewer(
     page: Int,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
+    onPlayAudio: (Int, Int) -> Unit,
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -661,6 +709,11 @@ private fun MushafPageViewer(
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    var showPageJump by remember { mutableStateOf(false) }
+    var showMushafSettings by remember { mutableStateOf(false) }
+    val mushafPrefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var tajweedColors by rememberSaveable { mutableStateOf(mushafPrefs.getBoolean("mushaf_tajweed_colors", true)) }
+    val haptics = LocalHapticFeedback.current
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
@@ -675,7 +728,7 @@ private fun MushafPageViewer(
         }
     }
     LaunchedEffect(page) { pageInput = page.toString() }
-    LaunchedEffect(page) {
+    LaunchedEffect(page, tajweedColors) {
         loading = true
         failed = false
         bitmap = null
@@ -686,7 +739,14 @@ private fun MushafPageViewer(
         } else {
             bitmap = withContext(Dispatchers.Default) {
                 try {
-                    val svg = SVG.getFromString(source)
+                    val displaySource = if (tajweedColors) source else {
+                        source.replace(Regex("#[0-9a-fA-F]{6}")) { match ->
+                            if (match.value.equals("#FFFFFF", ignoreCase = true) ||
+                                match.value.equals("#000000", ignoreCase = true)
+                            ) match.value else "#111111"
+                        }
+                    }
+                    val svg = SVG.getFromString(displaySource)
                     Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
                         image.eraseColor(AndroidColor.WHITE)
                         svg.renderToCanvas(Canvas(image))
@@ -706,49 +766,49 @@ private fun MushafPageViewer(
             ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
         }
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
-                Text(tr(language, "previous"), fontSize = 11.sp)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(tr(language, "mushaf_view"), color = Gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(tr(language, "page") + " " + page + " / 604", color = foreground.copy(alpha = 0.6f), fontSize = 10.sp)
-            }
-            OutlinedButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
-                Text(tr(language, "next"), fontSize = 11.sp)
-            }
-            OutlinedButton(onClick = onExitFullscreen) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Exit"
-                        AppLanguage.AR -> "خروج"
-                        AppLanguage.CKB -> "دەرچوون"
-                    }, fontSize = 10.sp
-                )
-            }
-        }
-        Spacer(Modifier.height(7.dp))
+    Column(Modifier.fillMaxSize().background(Color.White).padding(horizontal = 4.dp, vertical = 4.dp)) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(DeepGreen).padding(horizontal = 3.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = pageInput,
-                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.width(112.dp),
-                label = { Text(if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە") },
-                singleLine = true
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = {
-                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
-            }) {
-                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
+                Text("‹", color = Gold, fontSize = 30.sp)
             }
+            Column(
+                Modifier.weight(1f).clickable { showPageJump = true },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 10.sp)
+            }
+            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
+                Text("›", color = Gold, fontSize = 30.sp)
+            }
+            IconButton(
+                onClick = { (selectedVerse ?: pageVerses.firstOrNull())?.let { onPlayAudio(it.surah, it.ayah) } },
+                enabled = pageVerses.isNotEmpty()
+            ) {
+                Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play recitation" else if (language == AppLanguage.AR) "تشغيل التلاوة" else "پەخشکردنی تلاوەت", tint = Gold)
+            }
+            IconButton(
+                onClick = { selectedVerse?.let { onVerseClick(it.surah, it.ayah) } },
+                enabled = selectedVerse != null
+            ) {
+                Icon(
+                    Icons.Outlined.AutoStories,
+                    contentDescription = if (language == AppLanguage.EN) "Open selected verse" else if (language == AppLanguage.AR) "فتح الآية المحددة" else "کردنەوەی ئایەتی دیاریکراو",
+                    tint = if (selectedVerse != null) Gold else SoftText.copy(alpha = 0.4f)
+                )
+            }
+            IconButton(onClick = { showMushafSettings = true; showPageJump = false }) {
+                Icon(Icons.Outlined.Settings, contentDescription = if (language == AppLanguage.EN) "Mushaf settings" else if (language == AppLanguage.AR) "إعدادات المصحف" else "ڕێکخستنەکانی مصحف", tint = Gold)
+            }
+            IconButton(onClick = { showPageJump = true; showMushafSettings = false }) {
+                Icon(Icons.Outlined.Search, contentDescription = if (language == AppLanguage.EN) "Go to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە", tint = Gold)
+            }
+            IconButton(onClick = onExitFullscreen) { Text("×", color = Gold, fontSize = 25.sp) }
         }
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(4.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -768,6 +828,20 @@ private fun MushafPageViewer(
                                 translationY = offsetY
                             }
                             .transformable(transformState)
+                            .pointerInput(page, scale) {
+                                var dragDistance = 0f
+                                detectHorizontalDragGestures(
+                                    onHorizontalDrag = { _, distance -> dragDistance += distance },
+                                    onDragEnd = {
+                                        if (scale <= 1.01f && abs(dragDistance) >= 70f) {
+                                            val delta = if (dragDistance < 0f) 1 else -1
+                                            onPageChange((page + delta).coerceIn(1, 604))
+                                        }
+                                        dragDistance = 0f
+                                    },
+                                    onDragCancel = { dragDistance = 0f }
+                                )
+                            }
                             .pointerInput(page, scale, bitmap) {
                                 detectTapGestures(
                                     onDoubleTap = {
@@ -789,7 +863,10 @@ private fun MushafPageViewer(
                                             if (x in 0f..1148f && y in 0f..1641f) {
                                                 scope.launch {
                                                     val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
-                                                    if (hit != null) selectedVerse = hit
+                                                    if (hit != null) {
+                                                        selectedVerse = hit
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    }
                                                 }
                                             }
                                         }
@@ -829,47 +906,85 @@ private fun MushafPageViewer(
                 }
             }
         }
-        if (pageVerses.isNotEmpty()) {
-            Spacer(Modifier.height(5.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Tap a word in the Mushaf or choose a verse to highlight its original bounds."
-                    AppLanguage.AR -> "اضغط على كلمة في المصحف أو اختر آية لإظهار حدودها الأصلية."
-                    AppLanguage.CKB -> "لەسەر وشەیەک دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنوورە ڕەسەنەکەی."
-                },
-                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
-            )
-            selectedVerse?.let { picked ->
-                Text(
-                    (if (language == AppLanguage.EN) "Highlighted verse: " else if (language == AppLanguage.AR) "الآية المحددة: " else "ئایەتی دیاریکراو: ") + "${picked.surah}:${picked.ayah}",
-                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
-                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
-                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
-                },
-                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
-                    FilterChip(
-                        selected = selectedVerse == verse,
-                        onClick = { selectedVerse = verse },
-                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
-                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
+
+    }
+    if (showMushafSettings) AlertDialog(
+        onDismissRequest = { showMushafSettings = false },
+        title = { Text(when (language) {
+            AppLanguage.EN -> "Mushaf display settings"
+            AppLanguage.AR -> "إعدادات عرض المصحف"
+            AppLanguage.CKB -> "ڕێکخستنەکانی پیشاندانی مصحف"
+        }) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(when (language) {
+                            AppLanguage.EN -> "Tajweed colors"
+                            AppLanguage.AR -> "ألوان التجويد"
+                            AppLanguage.CKB -> "ڕەنگەکانی تەجوید"
+                        }, fontWeight = FontWeight.SemiBold)
+                        Text(when (language) {
+                            AppLanguage.EN -> "Show the original colored page or a single-color high-contrast page."
+                            AppLanguage.AR -> "اعرض ألوان الصفحة الأصلية أو صفحة بلون واحد عالي التباين."
+                            AppLanguage.CKB -> "ڕەنگە ڕەسەنەکان پیشان بدە یان لاپەڕەیەکی یەکڕەنگ و ڕوون."
+                        }, fontSize = 11.sp, lineHeight = 16.sp, color = foreground.copy(alpha = 0.7f))
+                    }
+                    Switch(
+                        checked = tajweedColors,
+                        onCheckedChange = {
+                            tajweedColors = it
+                            mushafPrefs.edit().putBoolean("mushaf_tajweed_colors", it).apply()
+                        }
                     )
                 }
+                Divider(color = Gold.copy(alpha = 0.2f))
+                Text(when (language) {
+                    AppLanguage.EN -> "Double-tap the page to zoom. Swipe left or right to change pages when the page is at normal size."
+                    AppLanguage.AR -> "انقر مرتين للتكبير، واسحب يمينًا أو يسارًا لتغيير الصفحة عندما يكون الحجم طبيعيًا."
+                    AppLanguage.CKB -> "دوو جار لەسەر لاپەڕەکە بدە بۆ گەورەکردن؛ بە ئاسایی بوونی قەبارە، بۆ لای چەپ یان ڕاستی ڕابکێشە."
+                }, fontSize = 11.sp, lineHeight = 17.sp, color = foreground.copy(alpha = 0.75f))
+                OutlinedButton(
+                    onClick = { scale = 1f; offsetX = 0f; offsetY = 0f },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(when (language) {
+                        AppLanguage.EN -> "Reset zoom"
+                        AppLanguage.AR -> "إعادة ضبط التكبير"
+                        AppLanguage.CKB -> "گەڕاندنەوەی گەورەیی"
+                    })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { showMushafSettings = false }) {
+                Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
             }
         }
-        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
+    )
+    if (showPageJump) AlertDialog(
+        onDismissRequest = { showPageJump = false },
+        title = { Text(when (language) {
+            AppLanguage.EN -> "Go to Mushaf page"
+            AppLanguage.AR -> "الانتقال إلى صفحة المصحف"
+            AppLanguage.CKB -> "بڕۆ بۆ پەڕەی مصحف"
+        }) },
+        text = {
+            OutlinedTextField(
+                value = pageInput,
+                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
+                label = { Text(tr(language, "page") + " 1–604") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
+                showPageJump = false
+            }) { Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ") }
+        },
+        dismissButton = { TextButton(onClick = { showPageJump = false }) { Text(tr(language, "back")) } }
+    )
 }
 
 @Composable
@@ -1496,6 +1611,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 @Composable
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_azkar_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -1579,6 +1695,14 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.AR -> item.categoryArabic
                     AppLanguage.EN -> item.categoryEnglish
                 }
+                val targetCount = item.count.coerceAtLeast(1)
+                val incrementCount: () -> Unit = {
+                    count = if (count + 1 >= targetCount) 0 else count + 1
+                    progressPrefs.edit().putInt(item.id.toString(), count).apply()
+                    haptics.performHapticFeedback(
+                        if (count == 0) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove
+                    )
+                }
                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp), border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1596,7 +1720,21 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }) { Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 21.sp) }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text(item.arabic, color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            item.arabic,
+                            color = foreground,
+                            fontSize = 18.sp,
+                            lineHeight = 31.sp,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth().clickable(onClick = incrementCount)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = (count.toFloat() / targetCount).coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth().height(5.dp),
+                            color = Gold,
+                            trackColor = foreground.copy(alpha = 0.10f)
+                        )
                         val translation = when (language) { AppLanguage.CKB -> item.ckb; AppLanguage.AR -> ""; AppLanguage.EN -> item.english }
                         if (translation.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
@@ -1605,16 +1743,12 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                if (language == AppLanguage.EN) "Repeat: $count / " + item.count.coerceAtLeast(1)
-                                else if (language == AppLanguage.AR) "التكرار: $count / " + item.count.coerceAtLeast(1)
-                                else "ژمارە: $count / " + item.count.coerceAtLeast(1),
+                                if (language == AppLanguage.EN) "Repeat: $count / " + targetCount
+                                else if (language == AppLanguage.AR) "التكرار: $count / " + targetCount
+                                else "ژمارە: $count / " + targetCount,
                                 color = foreground.copy(alpha = 0.64f), fontSize = 11.sp, modifier = Modifier.weight(1f)
                             )
-                            Button(onClick = {
-                                val target = item.count.coerceAtLeast(1)
-                                count = if (count + 1 >= target) 0 else count + 1
-                                progressPrefs.edit().putInt(item.id.toString(), count).apply()
-                            }) {
+                            Button(onClick = incrementCount) {
                                 Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
                                 Spacer(Modifier.width(5.dp))
                                 Text(if (language == AppLanguage.EN) "Count" else if (language == AppLanguage.AR) "تسبيح" else "ژماردن")
@@ -1904,6 +2038,7 @@ fun AudioScreen(
     focusReciters: Boolean = false
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
@@ -1911,8 +2046,11 @@ fun AudioScreen(
     val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
+    var offlineReciterUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var downloadingReciterUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
+    var audioScope by rememberSaveable { mutableStateOf(if (focusReciters) "verse" else "surah") }
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
@@ -1920,21 +2058,22 @@ fun AudioScreen(
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
         selectedTab = if (focusReciters) 1 else 0
+        audioScope = if (focusReciters) "verse" else "surah"
     }
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
         reciters = ContentRepository.loadReciters(context)
         loading = false
     }
-    LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId) {
+    LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId, audioScope) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
-        if (focusReciters && preferred != null) {
+        if (focusReciters && audioScope == "verse" && preferred != null) {
             val url = ContentRepository.reciterSampleUrl(
                 preferred,
                 initialSurah.coerceIn(1, 114),
                 initialAyah.coerceAtLeast(1)
             )
-            val key = "$url|${initialSurah}|${initialAyah}"
+            val key = url + "|" + initialSurah + "|" + initialAyah + "|" + audioScope
             if (autoPlayKey != key) {
                 autoPlayKey = key
                 playing = url
@@ -1959,7 +2098,7 @@ fun AudioScreen(
                             when (index) {
                                 0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
                                 1 -> if (language == AppLanguage.EN) "Reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
-                                else -> if (language == AppLanguage.EN) "Adhan & mosque audio" else if (language == AppLanguage.AR) "الأذان وأصوات المساجد" else "بانگ و دەنگی مزگەوت"
+                                else -> if (language == AppLanguage.EN) "Muezzins & Adhan" else if (language == AppLanguage.AR) "مكتبة المؤذنين والأذان" else "کتێبخانەی بانگدەران و بانگ"
                             }
                         )
                     }
@@ -1968,19 +2107,56 @@ fun AudioScreen(
         }
         Spacer(Modifier.height(7.dp))
         SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
+        if (selectedTab == 1) {
+            Spacer(Modifier.height(7.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = audioScope == "surah",
+                    onClick = { audioScope = "surah"; AudioController.stop(); playing = "" },
+                    label = { Text(if (language == AppLanguage.EN) "Full surah" else if (language == AppLanguage.AR) "السورة كاملة" else "هەموو سوورەت", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = audioScope == "verse",
+                    onClick = { audioScope = "verse"; AudioController.stop(); playing = "" },
+                    label = { Text(if (language == AppLanguage.EN) "Single verse" else if (language == AppLanguage.AR) "آية محددة" else "ئایەتی دیاریکراو", fontSize = 11.sp) }
+                )
+            }
+        }
         if (selectedTab == 0 || selectedTab == 2) {
             val adhanKeywords = listOf(
-                "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
-                "mecca", "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
-                "majid", "mansur", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan"
+                "adhan", "athan", "azan", "muezzin", "muadhin", "muazzin", "takbir", "takbeer",
+                "iqama", "iqamah", "madina", "madinah", "mecca", "makkah", "fajr", "hijaz",
+                "abdulbasit", "abdul_basit", "abdulmajid", "majid", "mansur", "mshari", "naqshbandi",
+                "nasr", "peshawa", "rahid", "ramazan", "ahmad", "ahmed", "nufais", "nufays",
+                "yasser", "yaser", "dossari", "dosari", "nasser", "naser", "qatami", "qattami",
+                "islam sobhi", "sobhi", "الأذان", "الاذان", "أذان", "اذان", "مؤذن", "مؤذنين",
+                "المسجد", "مسجد", "مكة", "المدينة", "الفجر", "صلاة الفجر", "أحمد النفيس",
+                "احمد النفيس", "ياسر الدوسري", "ناصر القطامي", "إسلام صبحي", "اسلام صبحي",
+                "بانگ", "بانگدان", "ئازان"
             )
+            val isAdhanAsset: (AudioItem) -> Boolean = { item ->
+                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
+                adhanKeywords.any { keyword -> name.contains(keyword.lowercase(Locale.ROOT)) }
+            }
+            val hasAdhanTaggedAudio = audio.any(isAdhanAsset)
             val visibleAudio = audio.filter { item ->
                 val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                (selectedTab == 0 || adhanKeywords.any { name.contains(it) }) &&
+                (selectedTab == 0 || isAdhanAsset(item) || (selectedTab == 2 && !hasAdhanTaggedAudio)) &&
                     (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
             }
+            if (selectedTab == 2 && audio.isNotEmpty() && !hasAdhanTaggedAudio) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "The bundled files have no adhan labels, so all available local tracks are shown for searching."
+                        AppLanguage.AR -> "لا تحمل الملفات المضمنة أسماء أذان واضحة؛ لذلك تظهر جميع المقاطع المحلية المتاحة لتبحث بينها."
+                        AppLanguage.CKB -> "ناوی فایلەکان بانگیان دیاری ناکات؛ بۆیە هەموو دەنگە ناوخۆییەکان پیشان دەدرێن بۆ گەڕان."
+                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
+                )
+                Spacer(Modifier.height(5.dp))
+            }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
-            else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            else {
+                LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 items(visibleAudio, key = { it.assetPath }) { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
                         Row(Modifier.fillMaxWidth().clickable {
@@ -2002,21 +2178,35 @@ fun AudioScreen(
                         }
                     }
                 }
+                }
             }
         } else {
             val visibleReciters = reciters.filter { reciter ->
-                (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+                (audioScope == "verse" && reciter.audioType == 0 || audioScope == "surah" && reciter.audioType != 0) &&
+                    (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+            }
+            LaunchedEffect(visibleReciters, surahText, ayahText) {
+                val urls = visibleReciters.map { reciter ->
+                    ContentRepository.reciterSampleUrl(
+                        reciter,
+                        surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1,
+                        ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    )
+                }
+                offlineReciterUrls = withContext(Dispatchers.IO) {
+                    urls.filter { url -> AudioController.cachedRemoteFile(context, url).let { it.isFile && it.length() > 0L } }.toSet()
+                }
             }
             Text(
                 if (language == AppLanguage.EN) {
                     if (preferredVerseReciter != null) "Your preferred verse-by-verse reciter will start automatically when you open this screen from a Quran verse."
-                    else "Streaming needs internet. Choose a verse-by-verse reciter below; it will be remembered and the Quran play button can use it next time."
+                    else "Streaming needs internet until you download a reciter track; downloaded tracks play offline. Choose a verse-by-verse reciter below to remember it for the Quran play button."
                 } else if (language == AppLanguage.AR) {
                     if (preferredVerseReciter != null) "سيبدأ قارئك المفضّل الذي يدعم تشغيل الآيات تلقائيًا عند فتح هذه الشاشة من آية في القرآن."
-                    else "البث يحتاج إلى الإنترنت. اختر قارئًا يدعم تشغيل الآيات أدناه؛ سيُحفظ اختيارك لزر تشغيل الآية لاحقًا."
+                    else "يحتاج البث إلى الإنترنت حتى تنزيل المقطع؛ بعدها يعمل دون اتصال. اختر قارئًا يدعم تشغيل الآيات ليُستخدم مع زر القرآن لاحقًا."
                 } else {
                     if (preferredVerseReciter != null) "کاتێک لەم شاشەیە لە ئایەتێکی قورئانەوە بکەیتەوە، قورئان‌خوێنی دڵخواز کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی دەکات خۆکارانە دەست پێدەکات."
-                    else "بۆ پەخش ئینتەرنێت پێویستە. قورئان‌خوێنێک هەڵبژێرە کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی بکات؛ دواتر دوگمەی گوێگرتن ئەوە بەکاردهێنێت."
+                    else "بۆ پەخشی سەرەتایی ئینتەرنێت پێویستە؛ بەڵام کە خوێندنەوەکە دابگریت، بێ ئینتەرنێتیش کار دەکات. قورئان‌خوێنێک دیاری بکە بۆ دوگمەی گوێگرتنی قورئان."
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
             )
@@ -2089,6 +2279,45 @@ fun AudioScreen(
                                     }
                                 }
                             }
+                            IconButton(
+                                enabled = url !in downloadingReciterUrls,
+                                onClick = {
+                                    if (url !in offlineReciterUrls && url !in downloadingReciterUrls) {
+                                        downloadingReciterUrls = downloadingReciterUrls + url
+                                        scope.launch {
+                                            try {
+                                                AudioController.downloadRemote(context, url)
+                                                offlineReciterUrls = offlineReciterUrls + url
+                                                Toast.makeText(context, when (language) {
+                                                    AppLanguage.EN -> "Audio saved for offline listening"
+                                                    AppLanguage.AR -> "تم حفظ الصوت للاستماع دون إنترنت"
+                                                    AppLanguage.CKB -> "دەنگەکە بۆ گوێگرتنی بێ ئینتەرنێت پاشەکەوت کرا"
+                                                }, Toast.LENGTH_SHORT).show()
+                                            } catch (_: Exception) {
+                                                Toast.makeText(context, when (language) {
+                                                    AppLanguage.EN -> "Download failed. Check your connection and try again."
+                                                    AppLanguage.AR -> "تعذر التنزيل؛ تحقق من الاتصال وحاول مجددًا."
+                                                    AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی ئینتەرنێت بپشکنە."
+                                                }, Toast.LENGTH_LONG).show()
+                                            } finally {
+                                                downloadingReciterUrls = downloadingReciterUrls - url
+                                            }
+                                        }
+                                    } else if (url in offlineReciterUrls) {
+                                        Toast.makeText(context, when (language) {
+                                            AppLanguage.EN -> "Already available offline"
+                                            AppLanguage.AR -> "الصوت محفوظ بالفعل دون إنترنت"
+                                            AppLanguage.CKB -> "دەنگەکە پێشتر بۆ بێ ئینتەرنێت پاشەکەوت کراوە"
+                                        }, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                if (url in downloadingReciterUrls) {
+                                    CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp, color = Gold)
+                                } else {
+                                    Text(if (url in offlineReciterUrls) "✓" else "↓", color = if (url in offlineReciterUrls) Color(0xFF58B987) else Gold, fontSize = 22.sp)
+                                }
+                            }
                             IconButton(onClick = {
                                 if (reciter.audioType == 0) {
                                     preferredReciterId = reciter.id
@@ -2115,6 +2344,49 @@ fun AudioScreen(
 
 private object AudioController {
     private var player: MediaPlayer? = null
+
+    fun cachedRemoteFile(context: Context, url: String): File {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(url.toByteArray(Charsets.UTF_8))
+            .take(12)
+            .joinToString("") { "%02x".format(it) }
+        val ext = url.substringBefore('?').substringAfterLast('.', "mp3").lowercase(Locale.ROOT)
+        val safeExt = if (ext in setOf("mp3", "m4a", "aac", "ogg", "opus", "wav")) ext else "mp3"
+        return File(File(context.filesDir, "offline-reciter-audio"), "reciter-" + digest + "." + safeExt)
+    }
+
+    suspend fun downloadRemote(context: Context, url: String): File = withContext(Dispatchers.IO) {
+        val destination = cachedRemoteFile(context, url)
+        if (destination.isFile && destination.length() > 0L) return@withContext destination
+        val folder = destination.parentFile ?: throw java.io.IOException("Audio folder is unavailable")
+        if (!folder.exists() && !folder.mkdirs()) throw java.io.IOException("Could not create audio folder")
+        val connection = URL(url).openConnection() as? HttpURLConnection
+            ?: throw java.io.IOException("Unsupported audio connection")
+        val temporary = File(folder, destination.name + ".part")
+        try {
+            connection.connectTimeout = 20000
+            connection.readTimeout = 60000
+            connection.instanceFollowRedirects = true
+            connection.requestMethod = "GET"
+            connection.connect()
+            if (connection.responseCode !in 200..299) throw java.io.IOException("Audio server returned HTTP " + connection.responseCode)
+            val expectedLength = connection.contentLengthLong
+            if (expectedLength > 120L * 1024L * 1024L) throw java.io.IOException("Audio track exceeds 120 MB")
+            temporary.delete()
+            connection.inputStream.use { input ->
+                temporary.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
+            if (!temporary.isFile || temporary.length() == 0L) throw java.io.IOException("Downloaded audio is empty")
+            if (destination.exists() && !destination.delete()) throw java.io.IOException("Could not replace cached audio")
+            if (!temporary.renameTo(destination)) {
+                temporary.copyTo(destination, overwrite = true)
+                temporary.delete()
+            }
+            destination
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     fun stop() {
         try { player?.stop() } catch (_: Exception) {}
@@ -2143,6 +2415,11 @@ private object AudioController {
 
     fun playRemote(context: Context, url: String, callback: (Boolean) -> Unit) {
         stop()
+        val cached = cachedRemoteFile(context, url)
+        if (cached.isFile && cached.length() > 0L) {
+            playFile(cached, callback)
+            return
+        }
         try {
             player = MediaPlayer().apply {
                 setDataSource(url)
@@ -2159,6 +2436,21 @@ private object AudioController {
         } catch (_: Exception) {
             callback(false)
             Toast.makeText(context, "Stream unavailable; check the connection.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun playFile(file: File, callback: (Boolean) -> Unit) {
+        stop()
+        try {
+            player = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnPreparedListener { it.start(); callback(true) }
+                setOnCompletionListener { callback(false); stop() }
+                setOnErrorListener { _, _, _ -> callback(false); stop(); true }
+                prepareAsync()
+            }
+        } catch (_: Exception) {
+            callback(false)
         }
     }
 
@@ -3003,6 +3295,166 @@ private fun requestCurrentLocation(
     }
 }
 
+private fun formatPrayerClock12(value: String): String {
+    val match = Regex("^(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(AM|PM)?$", RegexOption.IGNORE_CASE).matchEntire(value.trim())
+        ?: return value
+    val rawHour = match.groupValues[1].toIntOrNull() ?: return value
+    val minute = match.groupValues[2].toIntOrNull() ?: return value
+    if (rawHour !in 0..23 || minute !in 0..59) return value
+    val suppliedMeridiem = match.groupValues[3].uppercase(Locale.ROOT)
+    val hour24 = if (suppliedMeridiem.isBlank()) rawHour else (rawHour % 12) + if (suppliedMeridiem == "PM") 12 else 0
+    val hour12 = (hour24 % 12).let { if (it == 0) 12 else it }
+    val meridiem = if (hour24 < 12) "AM" else "PM"
+    return String.format(Locale.US, "%d:%02d %s", hour12, minute, meridiem)
+}
+
+@Composable
+fun HomePrayerTimesPanel(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPrayer: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var cityName by remember {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        mutableStateOf(if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) "" else storedCity)
+    }
+    var countryName by remember { mutableStateOf(prefs.getString("selected_city_country", "") ?: "") }
+    var latitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
+    var longitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var row by remember { mutableStateOf<PrayerRow?>(null) }
+    var loadingTimes by remember { mutableStateOf(true) }
+    var locating by remember { mutableStateOf(false) }
+    var locationError by remember { mutableStateOf("") }
+    var reloadToken by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        cityName = if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) "" else storedCity
+        countryName = prefs.getString("selected_city_country", "") ?: ""
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (prefs.getBoolean("prayer_use_gps", true) && (fine || coarse)) {
+            locating = true
+            requestCurrentLocation(context, { fix ->
+                latitude = fix.latitude
+                longitude = fix.longitude
+                prefs.edit()
+                    .putString("gps_latitude", fix.latitude.toString())
+                    .putString("gps_longitude", fix.longitude.toString())
+                    .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+                    .apply()
+                locating = false
+                locationError = ""
+                reloadToken++
+            }, { error ->
+                locating = false
+                locationError = error
+            })
+        }
+    }
+
+    LaunchedEffect(latitude, longitude, cityName, countryName, reloadToken) {
+        loadingTimes = true
+        val targetDate = Date()
+        val useGps = prefs.getBoolean("prayer_use_gps", true)
+        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl") ?: "mwl")
+        val asr = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi") ?: "shafi")
+        row = when {
+            useGps && latitude != null && longitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+                context, latitude!!, longitude!!, targetDate, method, asr
+            )
+            !useGps && cityName.isNotBlank() -> ContentRepository.loadPrayerTimes(context, cityName, targetDate, countryName)
+                ?: ContentRepository.findCityByName(context, cityName, countryName)?.let {
+                    PrayerTimeCalculator.calculate(
+                        targetDate, it.latitude, it.longitude, method, asr,
+                        PrayerTimeCalculator.timeZoneForCountry(it.country, it.longitude)
+                    )
+                }
+            else -> null
+        }
+        loadingTimes = false
+    }
+
+    val useGps = prefs.getBoolean("prayer_use_gps", true)
+    val locationLabel = if (useGps) when (language) {
+        AppLanguage.EN -> "Current location"
+        AppLanguage.AR -> "موقعك الحالي"
+        AppLanguage.CKB -> "شوێنی ئێستات"
+    } else cityName.ifBlank { tr(language, "select_city") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenPrayer),
+        shape = RoundedCornerShape(25.dp),
+        colors = CardDefaults.cardColors(containerColor = DeepGreen),
+        border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.35f))
+    ) {
+        Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF155744), Color(0xFF092720)))).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
+                }
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(when (language) {
+                        AppLanguage.EN -> "TODAY'S PRAYER TIMES"
+                        AppLanguage.AR -> "مواقيت الصلاة اليوم"
+                        AppLanguage.CKB -> "کاتەکانی نوێژی ئەمڕۆ"
+                    }, color = PaleGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Spacer(Modifier.height(3.dp))
+                    Text(locationLabel, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            if (loadingTimes || locating) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = Gold, modifier = Modifier.size(19.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(9.dp))
+                    Text(when (language) {
+                        AppLanguage.EN -> if (locating) "Refreshing GPS location…" else "Loading prayer times…"
+                        AppLanguage.AR -> if (locating) "جارٍ تحديث موقع GPS…" else "جارٍ تحميل المواقيت…"
+                        AppLanguage.CKB -> if (locating) "شوێنی GPS نوێ دەکرێتەوە…" else "کاتەکان بار دەکرێن…"
+                    }, color = SoftText, fontSize = 11.sp)
+                }
+            } else if (row == null) {
+                Text(locationError.ifBlank { when (language) {
+                    AppLanguage.EN -> "Allow location access or choose your city to calculate accurate times."
+                    AppLanguage.AR -> "فعّل إذن الموقع أو اختر مدينتك لحساب المواقيت بدقة."
+                    AppLanguage.CKB -> "مۆڵەتی شوێن چالاک بکە یان شارەکەت هەڵبژێرە بۆ حسابکردنی وردی کاتەکان."
+                } }, color = SoftText, fontSize = 11.sp, lineHeight = 16.sp)
+            } else {
+                val timeItems = listOf(
+                    tr(language, "fajr") to row!!.fajr,
+                    tr(language, "sunrise") to row!!.sunrise,
+                    tr(language, "dhuhr") to row!!.dhuhr,
+                    tr(language, "asr") to row!!.asr,
+                    tr(language, "maghrib") to row!!.maghrib,
+                    tr(language, "isha") to row!!.isha
+                )
+                timeItems.chunked(3).forEach { line ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        line.forEach { (label, time) ->
+                            Surface(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.075f), shape = RoundedCornerShape(13.dp)) {
+                                Column(Modifier.padding(horizontal = 7.dp, vertical = 8.dp)) {
+                                    Text(label, color = SoftText, fontSize = 10.sp, maxLines = 1)
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(formatPrayerClock12(time), color = PaleGold, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(when (language) {
+                    AppLanguage.EN -> "Tap to view full timetable and calculation method"
+                    AppLanguage.AR -> "اضغط لعرض الجدول الكامل وطريقة الحساب"
+                    AppLanguage.CKB -> "لێی بدە بۆ بینینی خشتە و شێوازی حسابکردن"
+                }, color = SoftText.copy(alpha = 0.8f), fontSize = 10.sp)
+            }
+        }
+    }
+}
+
 private data class PrayerCountdownTarget(
     val prayerKey: String,
     val timeText: String,
@@ -3050,6 +3502,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
     var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
+    var useGpsLocation by rememberSaveable { mutableStateOf(prefs.getBoolean("prayer_use_gps", true)) }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
@@ -3128,6 +3581,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (allowed) {
+            useGpsLocation = true
+            prefs.edit().putBoolean("prayer_use_gps", true).apply()
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
@@ -3144,6 +3599,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
+            useGpsLocation = true
+            prefs.edit().putBoolean("prayer_use_gps", true).apply()
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
@@ -3152,9 +3609,15 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
+    LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (useGpsLocation && (fine || coarse)) locateNow()
+    }
+
     LaunchedEffect(citySearch) {
         delay(250L)
-        cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
+        cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 300)
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -3189,7 +3652,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, useGpsLocation, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
             PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
@@ -3197,10 +3660,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             PrayerAlarmScheduler.cancelAll(context)
         }
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
+    LaunchedEffect(selectedCity, useGpsLocation, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
+    LaunchedEffect(selectedCity, useGpsLocation, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
         var loadedDate = ""
         while (true) {
             val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -3211,19 +3674,20 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     add(Calendar.DAY_OF_YEAR, dayOffset)
                 }.time
                 times = when {
-                    gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+                    useGpsLocation && gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
                         context, gpsLatitude!!, gpsLongitude!!, targetDate,
                         PrayerCalculationMethod.fromId(calculationMethod),
                         AsrCalculationSchool.fromId(asrSchool)
                     )
-                    manualLatitude != null && manualLongitude != null -> {
+                    !useGpsLocation && manualLatitude != null && manualLongitude != null -> {
                         val sourceCityTimes = ContentRepository.loadPrayerTimes(
                             context, selectedCity, targetDate, manualCountry
                         )
                         sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
                             context, manualLatitude!!, manualLongitude!!, targetDate,
                             PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
+                            AsrCalculationSchool.fromId(asrSchool),
+                            fallbackTimeZone = PrayerTimeCalculator.timeZoneForCountry(manualCountry, manualLongitude!!)
                         )
                     }
                     else -> {
@@ -3232,7 +3696,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 PrayerTimeCalculator.calculate(
                                     targetDate, city.latitude, city.longitude,
                                     PrayerCalculationMethod.fromId(calculationMethod),
-                                    AsrCalculationSchool.fromId(asrSchool)
+                                    AsrCalculationSchool.fromId(asrSchool),
+                                    PrayerTimeCalculator.timeZoneForCountry(city.country, city.longitude)
                                 )
                             }
                     }
@@ -3255,18 +3720,19 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 add(Calendar.DAY_OF_YEAR, 1)
             }.time
             tomorrowTimes = when {
-                gpsLatitude != null && gpsLongitude != null ->
+                useGpsLocation && gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(
                         context, gpsLatitude!!, gpsLongitude!!, tomorrow,
                         PrayerCalculationMethod.fromId(calculationMethod),
                         AsrCalculationSchool.fromId(asrSchool)
                     )
-                manualLatitude != null && manualLongitude != null -> {
+                !useGpsLocation && manualLatitude != null && manualLongitude != null -> {
                     ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
                         ?: ContentRepository.loadPrayerTimesAtLocation(
                             context, manualLatitude!!, manualLongitude!!, tomorrow,
                             PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
+                            AsrCalculationSchool.fromId(asrSchool),
+                            fallbackTimeZone = PrayerTimeCalculator.timeZoneForCountry(manualCountry, manualLongitude!!)
                         )
                 }
                 else -> {
@@ -3275,7 +3741,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             PrayerTimeCalculator.calculate(
                                 tomorrow, city.latitude, city.longitude,
                                 PrayerCalculationMethod.fromId(calculationMethod),
-                                AsrCalculationSchool.fromId(asrSchool)
+                                AsrCalculationSchool.fromId(asrSchool),
+                                PrayerTimeCalculator.timeZoneForCountry(city.country, city.longitude)
                             )
                         }
                 }
@@ -3369,7 +3836,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Column(Modifier.weight(1f)) {
                         Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
                         Text(
-                            if (gpsLatitude != null) {
+                            if (useGpsLocation && gpsLatitude != null) {
                                 when (language) {
                                     AppLanguage.EN -> "Current GPS location"
                                     AppLanguage.AR -> "موقع GPS الحالي"
@@ -3378,7 +3845,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             } else selectedCity,
                             color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
                         )
-                        if (gpsLatitude != null && gpsLongitude != null) {
+                        if (useGpsLocation && gpsLatitude != null && gpsLongitude != null) {
                             Text(String.format(Locale.US, "%.5f, %.5f", gpsLatitude, gpsLongitude), color = Color(0xFFB9CDC5), fontSize = 11.sp)
                         } else Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
                     }
@@ -3387,7 +3854,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(
-                    if (gpsLatitude != null) {
+                    if (useGpsLocation && gpsLatitude != null) {
                         when (language) {
                             AppLanguage.EN -> "Nearby original city timetables are used when available; otherwise times are calculated from GPS coordinates."
                             AppLanguage.AR -> "يُستخدم جدول المدينة الأصلية القريبة عند توفره، وإلا تُحسب المواقيت من إحداثيات GPS."
@@ -3429,7 +3896,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text(label, color = foreground.copy(alpha = 0.64f), fontSize = 12.sp)
                                 Spacer(Modifier.height(7.dp))
-                                Text(time, color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                                Text(formatPrayerClock12(time), color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -3498,7 +3965,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(3.dp))
-                        Text(nextPrayerTarget.timeText, color = Color(0xFFF1D78D), fontSize = 14.sp)
+                        Text(formatPrayerClock12(nextPrayerTarget.timeText), color = Color(0xFFF1D78D), fontSize = 14.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
@@ -3681,10 +4148,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 gpsLatitude = null
                                 gpsLongitude = null
                                 gpsAccuracy = null
+                                useGpsLocation = false
+                                prefs.edit().putBoolean("prayer_use_gps", false).apply()
                                 manualLatitude = city.latitude
                                 manualLongitude = city.longitude
                                 prefs.edit()
-                                    .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
                                     .putString("manual_city_latitude", city.latitude.toString())
                                     .putString("manual_city_longitude", city.longitude.toString())
                                     .putString("selected_city_country", city.country)
@@ -3790,8 +4258,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 @Composable
 fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     var city by remember { mutableStateOf<City?>(null) }
     var azimuth by remember { mutableFloatStateOf(0f) }
+    var magneticDeclination by remember { mutableFloatStateOf(0f) }
     var sensorAvailable by remember { mutableStateOf(false) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
@@ -3853,12 +4323,25 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
+    LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!locating) {
+            if (fine || coarse) locateNow()
+            else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry) {
         city = when {
             gpsLatitude != null && gpsLongitude != null -> City("GPS", gpsLatitude!!, gpsLongitude!!)
             manualLatitude != null && manualLongitude != null -> City(selectedCity, manualLatitude, manualLongitude, manualCountry)
             else -> ContentRepository.findCityByName(context, selectedCity, manualCountry)
         }
+    }
+    LaunchedEffect(city) {
+        magneticDeclination = city?.let {
+            GeomagneticField(it.latitude.toFloat(), it.longitude.toFloat(), 0f, System.currentTimeMillis()).declination
+        } ?: 0f
     }
     DisposableEffect(context) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
@@ -3885,7 +4368,8 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                     val orientation = FloatArray(3)
                     if (SensorManager.getRotationMatrix(matrix, null, gravity, magnetic)) {
                         SensorManager.getOrientation(matrix, orientation)
-                        azimuth = ((Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f)
+                        val magneticHeading = (Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f
+                        azimuth = ((magneticHeading + magneticDeclination + 360f) % 360f)
                         sensorAvailable = true
                     }
                 }
@@ -3905,6 +4389,12 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
         label = "qiblaHeading"
     )
+    val qiblaAligned = sensorAvailable && abs(relativeHeading) <= 5f
+    var alignmentPreviouslyNotified by remember { mutableStateOf(false) }
+    LaunchedEffect(qiblaAligned) {
+        if (qiblaAligned && !alignmentPreviouslyNotified) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        alignmentPreviouslyNotified = qiblaAligned
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(tr(language, "qibla"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(28.dp))
@@ -3914,7 +4404,14 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             Text("🕋", fontSize = 26.sp)
         }
         Spacer(Modifier.height(24.dp))
-        Text(city?.name ?: selectedCity, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (city?.name == "GPS") when (language) {
+                AppLanguage.EN -> "Current location"
+                AppLanguage.AR -> "موقعك الحالي"
+                AppLanguage.CKB -> "شوێنی ئێستات"
+            } else city?.name ?: selectedCity.ifBlank { "—" },
+            color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             if (sensorAvailable) {
@@ -3934,20 +4431,58 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         )
         Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = locateNow, enabled = !locating) {
-            if (locating) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-            } else {
-                Icon(Icons.Outlined.GpsFixed, null, tint = Gold, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(8.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.94f),
+            color = if (qiblaAligned) Color(0xFF1E6A4A) else Gold.copy(alpha = 0.12f),
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(0.8.dp, if (qiblaAligned) Color(0xFF8ED0A4) else Gold.copy(alpha = 0.35f))
+        ) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (qiblaAligned) Icons.Outlined.CheckCircle else Icons.Outlined.Explore,
+                    contentDescription = null,
+                    tint = if (qiblaAligned) Color(0xFFB9F0C8) else Gold,
+                    modifier = Modifier.size(25.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (qiblaAligned) when (language) {
+                            AppLanguage.EN -> "Qibla aligned"
+                            AppLanguage.AR -> "أنت باتجاه القبلة"
+                            AppLanguage.CKB -> "ئاراستەکە لەگەڵ قیبلە یەکە"
+                        } else when (language) {
+                            AppLanguage.EN -> "Move the phone slowly to align the pointer"
+                            AppLanguage.AR -> "حرّك الهاتف ببطء حتى يتجه المؤشر نحو القبلة"
+                            AppLanguage.CKB -> "مۆبایلەکە بە هێواشی بجوڵێنە تا نیشانەکە لەگەڵ قیبلە یەک بێت"
+                        },
+                        color = if (qiblaAligned) Color.White else foreground,
+                        fontWeight = FontWeight.Bold, fontSize = 12.sp
+                    )
+                    Text(
+                        if (sensorAvailable) when (language) {
+                            AppLanguage.EN -> "Keep the phone level for the compass to settle."
+                            AppLanguage.AR -> "أبقِ الهاتف مستويًا حتى يستقر اتجاه البوصلة."
+                            AppLanguage.CKB -> "مۆبایلەکە ئاست بگرە تا کۆمپاسەکە جێگیر ببێت."
+                        } else when (language) {
+                            AppLanguage.EN -> "Compass sensor unavailable; bearing is approximate."
+                            AppLanguage.AR -> "مستشعر البوصلة غير متاح؛ الاتجاه تقريبي."
+                            AppLanguage.CKB -> "سێنسەری کۆمپاس بەردەست نییە؛ ئاراستەکە نزیکەییە."
+                        },
+                        color = (if (qiblaAligned) Color.White else foreground).copy(alpha = 0.72f),
+                        fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
             }
+        }
+        if (locating) {
+            Spacer(Modifier.height(6.dp))
             Text(
                 when (language) {
-                    AppLanguage.EN -> if (locating) "Finding your location…" else "Use my current location"
-                    AppLanguage.AR -> if (locating) "جارٍ تحديد موقعك…" else "استخدم موقعي الحالي"
-                    AppLanguage.CKB -> if (locating) "شوێن دیاری دەکرێت…" else "شوێنی ئێستام بەکاربهێنە"
-                }
+                    AppLanguage.EN -> "Refreshing current location…"
+                    AppLanguage.AR -> "جارٍ تحديث الموقع الحالي…"
+                    AppLanguage.CKB -> "شوێنی ئێستا نوێ دەکرێتەوە…"
+                }, color = foreground.copy(alpha = 0.6f), fontSize = 10.sp
             )
         }
         if (locationMessage.isNotBlank()) {

@@ -2,6 +2,7 @@ package com.mashxall.unified.data
 
 import java.text.SimpleDateFormat
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -60,17 +61,156 @@ object PrayerTimeCalculator {
         return 6371.0088 * 2.0 * kotlin.math.asin(kotlin.math.sqrt(a.coerceIn(0.0, 1.0)))
     }
 
+    fun timeZoneForCountry(countryName: String, longitude: Double): ZoneId {
+        val country = countryName.trim().lowercase(Locale.ROOT)
+        val namedZone = when {
+            listOf("iraq", "العراق", "عێراق").any { country.contains(it) } -> "Asia/Baghdad"
+            listOf("saudi", "السعودية", "السعودية العربية").any { country.contains(it) } -> "Asia/Riyadh"
+            listOf("kuwait", "الكويت").any { country.contains(it) } -> "Asia/Kuwait"
+            listOf("qatar", "قطر").any { country.contains(it) } -> "Asia/Qatar"
+            listOf("bahrain", "البحرين").any { country.contains(it) } -> "Asia/Bahrain"
+            listOf("united arab emirates", "uae", "الإمارات", "الامارات").any { country.contains(it) } -> "Asia/Dubai"
+            listOf("oman", "عمان", "سلطنة عمان").any { country.contains(it) } -> "Asia/Muscat"
+            listOf("yemen", "اليمن").any { country.contains(it) } -> "Asia/Aden"
+            listOf("jordan", "الأردن", "الاردن").any { country.contains(it) } -> "Asia/Amman"
+            listOf("lebanon", "لبنان").any { country.contains(it) } -> "Asia/Beirut"
+            listOf("palestine", "فلسطين").any { country.contains(it) } -> "Asia/Gaza"
+            listOf("syria", "سوريا").any { country.contains(it) } -> "Asia/Damascus"
+            listOf("turkey", "turkiye", "تركيا").any { country.contains(it) } -> "Europe/Istanbul"
+            listOf("egypt", "مصر").any { country.contains(it) } -> "Africa/Cairo"
+            listOf("libya", "ليبيا").any { country.contains(it) } -> "Africa/Tripoli"
+            listOf("tunisia", "تونس").any { country.contains(it) } -> "Africa/Tunis"
+            listOf("algeria", "الجزائر").any { country.contains(it) } -> "Africa/Algiers"
+            listOf("morocco", "المغرب").any { country.contains(it) } -> "Africa/Casablanca"
+            listOf("mauritania", "موريتانيا").any { country.contains(it) } -> "Africa/Nouakchott"
+            listOf("sudan", "السودان").any { country.contains(it) } -> "Africa/Khartoum"
+            listOf("somalia", "الصومال").any { country.contains(it) } -> "Africa/Mogadishu"
+            listOf("djibouti", "جيبوتي").any { country.contains(it) } -> "Africa/Djibouti"
+            listOf("comoros", "جزر القمر").any { country.contains(it) } -> "Indian/Comoro"
+            listOf("iran", "إيران", "ايران").any { country.contains(it) } -> "Asia/Tehran"
+            listOf("afghanistan", "أفغانستان").any { country.contains(it) } -> "Asia/Kabul"
+            listOf("pakistan", "باكستان").any { country.contains(it) } -> "Asia/Karachi"
+            listOf("bangladesh", "بنغلاديش").any { country.contains(it) } -> "Asia/Dhaka"
+            listOf("india", "الهند").any { country.contains(it) } -> "Asia/Kolkata"
+            listOf("malaysia", "ماليزيا").any { country.contains(it) } -> "Asia/Kuala_Lumpur"
+            listOf("singapore", "سنغافورة").any { country.contains(it) } -> "Asia/Singapore"
+            listOf("indonesia", "إندونيسيا").any { country.contains(it) } ->
+                if (longitude >= 130.0) "Asia/Jayapura" else if (longitude >= 120.0) "Asia/Makassar" else "Asia/Jakarta"
+            listOf("united kingdom", "britain", "uk", "المملكة المتحدة", "بريطانيا").any { country.contains(it) } -> "Europe/London"
+            listOf("france", "فرنسا").any { country.contains(it) } -> "Europe/Paris"
+            listOf("germany", "ألمانيا", "المانيا").any { country.contains(it) } -> "Europe/Berlin"
+            listOf("italy", "إيطاليا", "ايطاليا").any { country.contains(it) } -> "Europe/Rome"
+            listOf("spain", "إسبانيا", "اسبانيا").any { country.contains(it) } -> if (longitude < -10.0) "Atlantic/Canary" else "Europe/Madrid"
+            listOf("portugal", "البرتغال").any { country.contains(it) } -> if (longitude < -15.0) "Atlantic/Madeira" else "Europe/Lisbon"
+            listOf("ireland", "أيرلندا", "ايرلندا").any { country.contains(it) } -> "Europe/Dublin"
+            listOf("netherlands", "هولندا").any { country.contains(it) } -> "Europe/Amsterdam"
+            listOf("belgium", "بلجيكا").any { country.contains(it) } -> "Europe/Brussels"
+            listOf("switzerland", "سويسرا").any { country.contains(it) } -> "Europe/Zurich"
+            listOf("austria", "النمسا").any { country.contains(it) } -> "Europe/Vienna"
+            listOf("norway", "النرويج").any { country.contains(it) } -> "Europe/Oslo"
+            listOf("sweden", "السويد").any { country.contains(it) } -> "Europe/Stockholm"
+            listOf("finland", "فنلندا").any { country.contains(it) } -> "Europe/Helsinki"
+            listOf("denmark", "الدنمارك").any { country.contains(it) } -> "Europe/Copenhagen"
+            listOf("poland", "بولندا").any { country.contains(it) } -> "Europe/Warsaw"
+            listOf("greece", "اليونان").any { country.contains(it) } -> "Europe/Athens"
+            listOf("ukraine", "أوكرانيا", "اوكرانيا").any { country.contains(it) } -> "Europe/Kyiv"
+            listOf("romania", "رومانيا").any { country.contains(it) } -> "Europe/Bucharest"
+            listOf("bulgaria", "بلغاريا").any { country.contains(it) } -> "Europe/Sofia"
+            listOf("czech", "التشيك").any { country.contains(it) } -> "Europe/Prague"
+            listOf("russia", "روسيا").any { country.contains(it) } -> when {
+                longitude < 30.0 -> "Europe/Moscow"
+                longitude < 60.0 -> "Asia/Yekaterinburg"
+                longitude < 90.0 -> "Asia/Omsk"
+                longitude < 110.0 -> "Asia/Krasnoyarsk"
+                longitude < 130.0 -> "Asia/Irkutsk"
+                longitude < 150.0 -> "Asia/Yakutsk"
+                longitude < 170.0 -> "Asia/Vladivostok"
+                else -> "Asia/Magadan"
+            }
+            listOf("united states", "united states of america", "usa", "الولايات المتحدة").any { country.contains(it) } -> when {
+                longitude < -150.0 -> "Pacific/Honolulu"
+                longitude < -130.0 -> "America/Anchorage"
+                longitude < -114.0 -> "America/Los_Angeles"
+                longitude < -101.0 -> "America/Denver"
+                longitude < -86.0 -> "America/Chicago"
+                else -> "America/New_York"
+            }
+            listOf("canada", "كندا").any { country.contains(it) } -> when {
+                longitude < -120.0 -> "America/Vancouver"
+                longitude < -102.0 -> "America/Edmonton"
+                longitude < -90.0 -> "America/Winnipeg"
+                longitude < -68.0 -> "America/Toronto"
+                else -> "America/Halifax"
+            }
+            listOf("mexico", "المكسيك").any { country.contains(it) } -> when {
+                longitude < -112.0 -> "America/Tijuana"
+                longitude < -104.0 -> "America/Chihuahua"
+                longitude < -90.0 -> "America/Mexico_City"
+                else -> "America/Cancun"
+            }
+            listOf("brazil", "البرازيل").any { country.contains(it) } -> when {
+                longitude < -60.0 -> "America/Manaus"
+                longitude < -45.0 -> "America/Cuiaba"
+                longitude < -35.0 -> "America/Sao_Paulo"
+                else -> "America/Noronha"
+            }
+            listOf("argentina", "الأرجنتين", "الارجنتين").any { country.contains(it) } -> "America/Argentina/Buenos_Aires"
+            listOf("chile", "تشيلي").any { country.contains(it) } -> if (longitude < -100.0) "Pacific/Easter" else "America/Santiago"
+            listOf("peru", "بيرو").any { country.contains(it) } -> "America/Lima"
+            listOf("colombia", "كولومبيا").any { country.contains(it) } -> "America/Bogota"
+            listOf("south africa", "جنوب أفريقيا", "جنوب افريقيا").any { country.contains(it) } -> "Africa/Johannesburg"
+            listOf("nigeria", "نيجيريا").any { country.contains(it) } -> "Africa/Lagos"
+            listOf("ghana", "غانا").any { country.contains(it) } -> "Africa/Accra"
+            listOf("kenya", "كينيا").any { country.contains(it) } -> "Africa/Nairobi"
+            listOf("ethiopia", "إثيوبيا", "اثيوبيا").any { country.contains(it) } -> "Africa/Addis_Ababa"
+            listOf("uganda", "أوغندا", "اوغندا").any { country.contains(it) } -> "Africa/Kampala"
+            listOf("tanzania", "تنزانيا").any { country.contains(it) } -> "Africa/Dar_es_Salaam"
+            listOf("senegal", "السنغال").any { country.contains(it) } -> "Africa/Dakar"
+            listOf("ivory coast", "côte d'ivoire", "ساحل العاج").any { country.contains(it) } -> "Africa/Abidjan"
+            listOf("uzbekistan", "أوزبكستان", "اوزبكستان").any { country.contains(it) } -> "Asia/Tashkent"
+            listOf("kazakhstan", "كازاخستان").any { country.contains(it) } -> if (longitude < 60.0) "Asia/Aqtau" else if (longitude < 75.0) "Asia/Aqtobe" else "Asia/Almaty"
+            listOf("azerbaijan", "أذربيجان", "اذربيجان").any { country.contains(it) } -> "Asia/Baku"
+            listOf("georgia", "جورجيا").any { country.contains(it) } -> "Asia/Tbilisi"
+            listOf("armenia", "أرمينيا", "ارمينيا").any { country.contains(it) } -> "Asia/Yerevan"
+            listOf("nepal", "نيبال").any { country.contains(it) } -> "Asia/Kathmandu"
+            listOf("bhutan", "بوتان").any { country.contains(it) } -> "Asia/Thimphu"
+            listOf("sri lanka", "سريلانكا", "سري لانكا").any { country.contains(it) } -> "Asia/Colombo"
+            listOf("myanmar", "burma", "ميانمار").any { country.contains(it) } -> "Asia/Yangon"
+            listOf("thailand", "تايلاند").any { country.contains(it) } -> "Asia/Bangkok"
+            listOf("vietnam", "فيتنام").any { country.contains(it) } -> "Asia/Ho_Chi_Minh"
+            listOf("china", "الصين").any { country.contains(it) } -> "Asia/Shanghai"
+            listOf("japan", "اليابان").any { country.contains(it) } -> "Asia/Tokyo"
+            listOf("south korea", "korea, republic", "كوريا الجنوبية").any { country.contains(it) } -> "Asia/Seoul"
+            listOf("philippines", "الفلبين").any { country.contains(it) } -> "Asia/Manila"
+            listOf("australia", "أستراليا", "استراليا").any { country.contains(it) } -> when {
+                longitude < 129.0 -> "Australia/Perth"
+                longitude < 133.0 -> "Australia/Darwin"
+                longitude < 141.0 -> "Australia/Adelaide"
+                else -> "Australia/Sydney"
+            }
+            listOf("new zealand", "نيوزيلندا").any { country.contains(it) } -> "Pacific/Auckland"
+            listOf("fiji", "فيجي").any { country.contains(it) } -> "Pacific/Fiji"
+            else -> null
+        }
+        if (namedZone != null) {
+            runCatching { ZoneId.of(namedZone) }.getOrNull()?.let { return it }
+        }
+        val approximateOffsetMinutes = ((longitude / 3.75).roundToInt() * 15).coerceIn(-720, 840)
+        return ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(approximateOffsetMinutes * 60))
+    }
+
     fun calculate(
         date: Date,
         latitude: Double,
         longitude: Double,
         method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
-        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI
+        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
+        timeZone: ZoneId = ZoneId.systemDefault()
     ): PrayerRow {
         require(latitude in -90.0..90.0) { "Latitude must be between -90 and 90 degrees" }
         require(longitude in -180.0..180.0) { "Longitude must be between -180 and 180 degrees" }
 
-        val zone = ZoneId.systemDefault()
+        val zone = timeZone
         val localDate = date.toInstant().atZone(zone).toLocalDate()
         val localNoon = localDate.atTime(12, 0).atZone(zone)
         val julianDay = localNoon.toInstant().toEpochMilli() / 86_400_000.0 + 2_440_587.5
@@ -132,7 +272,7 @@ object PrayerTimeCalculator {
         }
 
         val dateFormatter = SimpleDateFormat("MM-dd", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone(zone)
+            this.timeZone = TimeZone.getTimeZone(zone)
         }
         fun clock(hour: Double): String {
             val rounded = (hour * 60.0).roundToInt().mod(1440)
@@ -142,7 +282,9 @@ object PrayerTimeCalculator {
             calendar.set(Calendar.MINUTE, rounded % 60)
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
-            return SimpleDateFormat("HH:mm", Locale.US).format(calendar.time)
+            return SimpleDateFormat("HH:mm", Locale.US).apply {
+                this.timeZone = TimeZone.getTimeZone(zone)
+            }.format(calendar.time)
         }
 
         return PrayerRow(
