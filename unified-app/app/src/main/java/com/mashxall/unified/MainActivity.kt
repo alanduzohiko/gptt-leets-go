@@ -97,13 +97,77 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.ContentRepository
 
-private val Ink = Color(0xFF071E1A)
-private val DeepGreen = Color(0xFF103D32)
-private val Emerald = Color(0xFF19725A)
-private val Gold = Color(0xFFC9A44C)
-private val PaleGold = Color(0xFFF4E5B4)
-private val SoftText = Color(0xFFB9CDC5)
-private val Panel = Color(0xFF102B25)
+data class MashxallPalettePreset(
+    val id: String,
+    val labelEn: String,
+    val labelAr: String,
+    val labelCkb: String,
+    val ink: Color,
+    val deepGreen: Color,
+    val emerald: Color,
+    val accent: Color,
+    val paleAccent: Color,
+    val softText: Color,
+    val panel: Color,
+    val mainText: Color
+)
+
+object MashxallPalette {
+    val options = listOf(
+        MashxallPalettePreset("emerald_gold", "Emerald & Gold", "زمردي وذهبي", "زومڕە و زێڕی",
+            Color(0xFF071E1A), Color(0xFF103D32), Color(0xFF19725A), Color(0xFFC9A44C),
+            Color(0xFFF4E5B4), Color(0xFFB9CDC5), Color(0xFF102B25), Color(0xFFF6F2E6)),
+        MashxallPalettePreset("ocean_cyan", "Ocean & Cyan", "المحيط والسماوي", "شیناو و شینی کاڵ",
+            Color(0xFF071927), Color(0xFF10354F), Color(0xFF1B6D8A), Color(0xFF52C7D7),
+            Color(0xFFD4F7FA), Color(0xFFBCDDE7), Color(0xFF0C2A3D), Color(0xFFF2FBFC)),
+        MashxallPalettePreset("amethyst", "Amethyst", "بنفسجي ملكي", "مۆرە شاهانە",
+            Color(0xFF160D25), Color(0xFF39245A), Color(0xFF62418A), Color(0xFFC9A4FF),
+            Color(0xFFE8DBFF), Color(0xFFCFC0E2), Color(0xFF251639), Color(0xFFFBF6FF)),
+        MashxallPalettePreset("ruby_rose", "Ruby & Rose", "ياقوتي ووردي", "یاقووتی و پەمەیی",
+            Color(0xFF1D0B12), Color(0xFF572833), Color(0xFF8F3F54), Color(0xFFF1A4B2),
+            Color(0xFFFFE1DE), Color(0xFFE3BEC6), Color(0xFF321720), Color(0xFFFFF5F4)),
+        MashxallPalettePreset("sapphire", "Sapphire", "ياقوت أزرق", "شینە یاقووتی",
+            Color(0xFF07152A), Color(0xFF122E5D), Color(0xFF2457A2), Color(0xFF88B9FF),
+            Color(0xFFDAE7FF), Color(0xFFB9CCE8), Color(0xFF0D2245), Color(0xFFF3F7FF))
+    )
+
+    var ink by mutableStateOf(options.first().ink)
+        private set
+    var deepGreen by mutableStateOf(options.first().deepGreen)
+        private set
+    var emerald by mutableStateOf(options.first().emerald)
+        private set
+    var accent by mutableStateOf(options.first().accent)
+        private set
+    var paleAccent by mutableStateOf(options.first().paleAccent)
+        private set
+    var softText by mutableStateOf(options.first().softText)
+        private set
+    var panel by mutableStateOf(options.first().panel)
+        private set
+    var mainText by mutableStateOf(options.first().mainText)
+        private set
+
+    fun apply(id: String) {
+        val selected = options.firstOrNull { it.id == id } ?: options.first()
+        ink = selected.ink
+        deepGreen = selected.deepGreen
+        emerald = selected.emerald
+        accent = selected.accent
+        paleAccent = selected.paleAccent
+        softText = selected.softText
+        panel = selected.panel
+        mainText = selected.mainText
+    }
+}
+
+private val Ink: Color get() = MashxallPalette.ink
+private val DeepGreen: Color get() = MashxallPalette.deepGreen
+private val Emerald: Color get() = MashxallPalette.emerald
+private val Gold: Color get() = MashxallPalette.accent
+private val PaleGold: Color get() = MashxallPalette.paleAccent
+private val SoftText: Color get() = MashxallPalette.softText
+private val Panel: Color get() = MashxallPalette.panel
 
 enum class AppLanguage(val key: String, val label: String) {
     CKB("ckb", "کوردی"), AR("ar", "العربية"), EN("en", "English");
@@ -198,6 +262,8 @@ fun MashxallApp(startScreen: String? = null) {
         }
     }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
+    var paletteId by rememberSaveable { mutableStateOf(prefs.getString("color_palette", "emerald_gold") ?: "emerald_gold") }
+    LaunchedEffect(paletteId) { MashxallPalette.apply(paletteId) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
@@ -362,7 +428,10 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
+                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, paletteId, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onPalette = { selected ->
+                                    paletteId = selected
+                                    prefs.edit().putString("color_palette", selected).apply()
+                                }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
                                 }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
@@ -562,8 +631,9 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 
 @Composable
 private fun SettingsScreen(
-    language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean,
-    onDark: (Boolean) -> Unit, onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
+    language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean, paletteId: String,
+    onDark: (Boolean) -> Unit, onPalette: (String) -> Unit,
+    onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "settings"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -572,6 +642,44 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AppLanguage.entries.forEach { item -> FilterChip(selected = item == language, onClick = { onLanguage(item) }, label = { Text(item.label) }) }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Color palette"
+                AppLanguage.AR -> "ألوان التطبيق"
+                AppLanguage.CKB -> "ڕەنگی ڕووکار"
+            }, color = foreground, fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 2.dp)) {
+            items(MashxallPalette.options, key = { it.id }) { option ->
+                val selected = paletteId == option.id
+                Card(
+                    modifier = Modifier.width(142.dp).clickable { onPalette(option.id) },
+                    shape = RoundedCornerShape(17.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    border = BorderStroke(if (selected) 1.8.dp else 0.7.dp, if (selected) option.accent else foreground.copy(alpha = 0.14f))
+                ) {
+                    Column(Modifier.padding(11.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            listOf(option.deepGreen, option.accent, option.paleAccent).forEach { swatch ->
+                                Box(Modifier.padding(end = 5.dp).size(20.dp).clip(CircleShape).background(swatch))
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (selected) Text("✓", color = option.accent, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> option.labelEn
+                                AppLanguage.AR -> option.labelAr
+                                AppLanguage.CKB -> option.labelCkb
+                            }, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                        )
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cardColor).clickable { onDark(!dark) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
