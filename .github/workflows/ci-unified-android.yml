@@ -5,6 +5,13 @@ on:
     branches: ["main", "ux-immersive-quran-prayer-nav"]
     paths:
       - "unified-app/**"
+      - "tools/runtime-smoke-android11.sh"
+      - ".github/workflows/ci-unified-android.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "unified-app/**"
+      - "tools/runtime-smoke-android11.sh"
       - ".github/workflows/ci-unified-android.yml"
   workflow_dispatch:
 
