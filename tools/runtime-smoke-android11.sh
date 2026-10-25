@@ -61,6 +61,14 @@ if [[ "$install_success" -ne 1 ]]; then
   exit 1
 fi
 
+# A fresh emulator starts without location permission or a mock GPS fix. Grant both
+# before first launch so the prayer screen is tested with coordinates rather than
+# mistaking an empty location state for missing bundled data.
+adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION
+adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION
+adb emu geo fix 44.3661 33.3152
+sleep 3
+
 check_screen() {
   local route="$1"
   local expected_title="$2"
@@ -70,7 +78,7 @@ check_screen() {
   adb shell am force-stop com.mashxall.unified
   # Android's am start parser on API 30 accepts Intent flags through -f,
   # not the unsupported long options --activity-new-task / --activity-clear-task.
-  adb shell am start -S -W -f 0x10008000 \
+  adb shell am start -S -f 0x10008000 \
     -n com.mashxall.unified/.MainActivity \
     --es com.mashxall.unified.OPEN_SCREEN "$route" |
     tee "dist/runtime-test/launch-${route}.txt"
