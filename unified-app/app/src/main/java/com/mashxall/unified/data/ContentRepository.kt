@@ -17,6 +17,7 @@ import org.json.JSONObject
 import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
@@ -1917,7 +1918,8 @@ object ContentRepository {
         date: Date = Date(),
         method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
         asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
-        staticRadiusKm: Double = 7.0
+        staticRadiusKm: Double = 7.0,
+        fallbackTimeZone: ZoneId = ZoneId.systemDefault()
     ): PrayerRow = withContext(Dispatchers.IO) {
         val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
             .mapNotNull { row ->
@@ -1935,7 +1937,7 @@ object ContentRepository {
                 longitude = longitude
             )
         } else {
-            PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool)
+            PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool, fallbackTimeZone)
         }
     }
 
