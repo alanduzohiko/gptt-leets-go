@@ -21,6 +21,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.GeomagneticField
 import android.os.ParcelFileDescriptor
 import android.content.Intent
 import android.media.MediaPlayer
@@ -4107,6 +4108,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val haptics = LocalHapticFeedback.current
     var city by remember { mutableStateOf<City?>(null) }
     var azimuth by remember { mutableFloatStateOf(0f) }
+    var magneticDeclination by remember { mutableFloatStateOf(0f) }
     var sensorAvailable by remember { mutableStateOf(false) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
@@ -4183,6 +4185,11 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             else -> ContentRepository.findCityByName(context, selectedCity, manualCountry)
         }
     }
+    LaunchedEffect(city) {
+        magneticDeclination = city?.let {
+            GeomagneticField(it.latitude.toFloat(), it.longitude.toFloat(), 0f, System.currentTimeMillis()).declination
+        } ?: 0f
+    }
     DisposableEffect(context) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -4208,7 +4215,8 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                     val orientation = FloatArray(3)
                     if (SensorManager.getRotationMatrix(matrix, null, gravity, magnetic)) {
                         SensorManager.getOrientation(matrix, orientation)
-                        azimuth = ((Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f)
+                        val magneticHeading = (Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f
+                        azimuth = ((magneticHeading + magneticDeclination + 360f) % 360f)
                         sensorAvailable = true
                     }
                 }
