@@ -99,13 +99,104 @@ object PrayerTimeCalculator {
             listOf("united kingdom", "britain", "uk", "المملكة المتحدة", "بريطانيا").any { country.contains(it) } -> "Europe/London"
             listOf("france", "فرنسا").any { country.contains(it) } -> "Europe/Paris"
             listOf("germany", "ألمانيا", "المانيا").any { country.contains(it) } -> "Europe/Berlin"
+            listOf("italy", "إيطاليا", "ايطاليا").any { country.contains(it) } -> "Europe/Rome"
+            listOf("spain", "إسبانيا", "اسبانيا").any { country.contains(it) } -> if (longitude < -10.0) "Atlantic/Canary" else "Europe/Madrid"
+            listOf("portugal", "البرتغال").any { country.contains(it) } -> if (longitude < -15.0) "Atlantic/Madeira" else "Europe/Lisbon"
+            listOf("ireland", "أيرلندا", "ايرلندا").any { country.contains(it) } -> "Europe/Dublin"
+            listOf("netherlands", "هولندا").any { country.contains(it) } -> "Europe/Amsterdam"
+            listOf("belgium", "بلجيكا").any { country.contains(it) } -> "Europe/Brussels"
+            listOf("switzerland", "سويسرا").any { country.contains(it) } -> "Europe/Zurich"
+            listOf("austria", "النمسا").any { country.contains(it) } -> "Europe/Vienna"
+            listOf("norway", "النرويج").any { country.contains(it) } -> "Europe/Oslo"
+            listOf("sweden", "السويد").any { country.contains(it) } -> "Europe/Stockholm"
+            listOf("finland", "فنلندا").any { country.contains(it) } -> "Europe/Helsinki"
+            listOf("denmark", "الدنمارك").any { country.contains(it) } -> "Europe/Copenhagen"
+            listOf("poland", "بولندا").any { country.contains(it) } -> "Europe/Warsaw"
+            listOf("greece", "اليونان").any { country.contains(it) } -> "Europe/Athens"
+            listOf("ukraine", "أوكرانيا", "اوكرانيا").any { country.contains(it) } -> "Europe/Kyiv"
+            listOf("romania", "رومانيا").any { country.contains(it) } -> "Europe/Bucharest"
+            listOf("bulgaria", "بلغاريا").any { country.contains(it) } -> "Europe/Sofia"
+            listOf("czech", "التشيك").any { country.contains(it) } -> "Europe/Prague"
+            listOf("russia", "روسيا").any { country.contains(it) } -> when {
+                longitude < 30.0 -> "Europe/Moscow"
+                longitude < 60.0 -> "Asia/Yekaterinburg"
+                longitude < 90.0 -> "Asia/Omsk"
+                longitude < 110.0 -> "Asia/Krasnoyarsk"
+                longitude < 130.0 -> "Asia/Irkutsk"
+                longitude < 150.0 -> "Asia/Yakutsk"
+                longitude < 170.0 -> "Asia/Vladivostok"
+                else -> "Asia/Magadan"
+            }
+            listOf("united states", "united states of america", "usa", "الولايات المتحدة").any { country.contains(it) } -> when {
+                longitude < -150.0 -> "Pacific/Honolulu"
+                longitude < -130.0 -> "America/Anchorage"
+                longitude < -114.0 -> "America/Los_Angeles"
+                longitude < -101.0 -> "America/Denver"
+                longitude < -86.0 -> "America/Chicago"
+                else -> "America/New_York"
+            }
+            listOf("canada", "كندا").any { country.contains(it) } -> when {
+                longitude < -120.0 -> "America/Vancouver"
+                longitude < -102.0 -> "America/Edmonton"
+                longitude < -90.0 -> "America/Winnipeg"
+                longitude < -68.0 -> "America/Toronto"
+                else -> "America/Halifax"
+            }
+            listOf("mexico", "المكسيك").any { country.contains(it) } -> when {
+                longitude < -112.0 -> "America/Tijuana"
+                longitude < -104.0 -> "America/Chihuahua"
+                longitude < -90.0 -> "America/Mexico_City"
+                else -> "America/Cancun"
+            }
+            listOf("brazil", "البرازيل").any { country.contains(it) } -> when {
+                longitude < -60.0 -> "America/Manaus"
+                longitude < -45.0 -> "America/Cuiaba"
+                longitude < -35.0 -> "America/Sao_Paulo"
+                else -> "America/Noronha"
+            }
+            listOf("argentina", "الأرجنتين", "الارجنتين").any { country.contains(it) } -> "America/Argentina/Buenos_Aires"
+            listOf("chile", "تشيلي").any { country.contains(it) } -> if (longitude < -100.0) "Pacific/Easter" else "America/Santiago"
+            listOf("peru", "بيرو").any { country.contains(it) } -> "America/Lima"
+            listOf("colombia", "كولومبيا").any { country.contains(it) } -> "America/Bogota"
+            listOf("south africa", "جنوب أفريقيا", "جنوب افريقيا").any { country.contains(it) } -> "Africa/Johannesburg"
+            listOf("nigeria", "نيجيريا").any { country.contains(it) } -> "Africa/Lagos"
+            listOf("ghana", "غانا").any { country.contains(it) } -> "Africa/Accra"
+            listOf("kenya", "كينيا").any { country.contains(it) } -> "Africa/Nairobi"
+            listOf("ethiopia", "إثيوبيا", "اثيوبيا").any { country.contains(it) } -> "Africa/Addis_Ababa"
+            listOf("uganda", "أوغندا", "اوغندا").any { country.contains(it) } -> "Africa/Kampala"
+            listOf("tanzania", "تنزانيا").any { country.contains(it) } -> "Africa/Dar_es_Salaam"
+            listOf("senegal", "السنغال").any { country.contains(it) } -> "Africa/Dakar"
+            listOf("ivory coast", "côte d'ivoire", "ساحل العاج").any { country.contains(it) } -> "Africa/Abidjan"
+            listOf("uzbekistan", "أوزبكستان", "اوزبكستان").any { country.contains(it) } -> "Asia/Tashkent"
+            listOf("kazakhstan", "كازاخستان").any { country.contains(it) } -> if (longitude < 60.0) "Asia/Aqtau" else if (longitude < 75.0) "Asia/Aqtobe" else "Asia/Almaty"
+            listOf("azerbaijan", "أذربيجان", "اذربيجان").any { country.contains(it) } -> "Asia/Baku"
+            listOf("georgia", "جورجيا").any { country.contains(it) } -> "Asia/Tbilisi"
+            listOf("armenia", "أرمينيا", "ارمينيا").any { country.contains(it) } -> "Asia/Yerevan"
+            listOf("nepal", "نيبال").any { country.contains(it) } -> "Asia/Kathmandu"
+            listOf("bhutan", "بوتان").any { country.contains(it) } -> "Asia/Thimphu"
+            listOf("sri lanka", "سريلانكا", "سري لانكا").any { country.contains(it) } -> "Asia/Colombo"
+            listOf("myanmar", "burma", "ميانمار").any { country.contains(it) } -> "Asia/Yangon"
+            listOf("thailand", "تايلاند").any { country.contains(it) } -> "Asia/Bangkok"
+            listOf("vietnam", "فيتنام").any { country.contains(it) } -> "Asia/Ho_Chi_Minh"
+            listOf("china", "الصين").any { country.contains(it) } -> "Asia/Shanghai"
+            listOf("japan", "اليابان").any { country.contains(it) } -> "Asia/Tokyo"
+            listOf("south korea", "korea, republic", "كوريا الجنوبية").any { country.contains(it) } -> "Asia/Seoul"
+            listOf("philippines", "الفلبين").any { country.contains(it) } -> "Asia/Manila"
+            listOf("australia", "أستراليا", "استراليا").any { country.contains(it) } -> when {
+                longitude < 129.0 -> "Australia/Perth"
+                longitude < 133.0 -> "Australia/Darwin"
+                longitude < 141.0 -> "Australia/Adelaide"
+                else -> "Australia/Sydney"
+            }
+            listOf("new zealand", "نيوزيلندا").any { country.contains(it) } -> "Pacific/Auckland"
+            listOf("fiji", "فيجي").any { country.contains(it) } -> "Pacific/Fiji"
             else -> null
         }
         if (namedZone != null) {
             runCatching { ZoneId.of(namedZone) }.getOrNull()?.let { return it }
         }
-        val approximateOffset = (longitude / 15.0).roundToInt().coerceIn(-12, 14)
-        return ZoneId.ofOffset("UTC", ZoneOffset.ofHours(approximateOffset))
+        val approximateOffsetMinutes = ((longitude / 3.75).roundToInt() * 15).coerceIn(-720, 840)
+        return ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(approximateOffsetMinutes * 60))
     }
 
     fun calculate(
