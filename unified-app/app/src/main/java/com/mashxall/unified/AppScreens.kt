@@ -3612,7 +3612,15 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(Unit) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (useGpsLocation && (fine || coarse)) locateNow()
+        if (useGpsLocation) {
+            if (fine || coarse) {
+                locateNow()
+            } else if (!prefs.getBoolean("location_permission_prompted", false)) {
+                // Ask at the moment the user opens prayer times, not silently leave the screen empty.
+                prefs.edit().putBoolean("location_permission_prompted", true).apply()
+                permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
+        }
     }
 
     LaunchedEffect(citySearch) {
@@ -3883,7 +3891,32 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
         }
         Spacer(Modifier.height(14.dp))
-        if (times == null) LoadingOrEmpty(loading, language, foreground) else {
+        if (times == null) {
+            when {
+                loading -> LoadingOrEmpty(true, language, foreground)
+                locationMessage.isNotBlank() -> Text(locationMessage, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp)
+                useGpsLocation && (gpsLatitude == null || gpsLongitude == null) -> Text(
+                    when (language) {
+                        AppLanguage.EN -> "Location is not set yet. Tap the location icon or choose a city."
+                        AppLanguage.AR -> "لم يُحدَّد موقعك بعد؛ اضغط رمز الموقع أو اختر مدينة."
+                        AppLanguage.CKB -> "شوێنت هێشتا دیاری نەکراوە؛ نیشانەی شوێن دابگرە یان شارێک هەڵبژێرە."
+                    },
+                    color = foreground.copy(alpha = 0.72f),
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+                selectedCity.isBlank() && (manualLatitude == null || manualLongitude == null) -> Text(
+                    when (language) {
+                        AppLanguage.EN -> "Choose a city to calculate prayer times."
+                        AppLanguage.AR -> "اختر مدينة لحساب مواقيت الصلاة."
+                        AppLanguage.CKB -> "شارێک هەڵبژێرە بۆ حسابکردنی کاتەکانی نوێژ."
+                    },
+                    color = foreground.copy(alpha = 0.72f),
+                    fontSize = 12.sp
+                )
+                else -> LoadingOrEmpty(false, language, foreground)
+            }
+        } else {
             val timeItems = listOf(
                 tr(language, "fajr") to times!!.fajr, tr(language, "sunrise") to times!!.sunrise,
                 tr(language, "dhuhr") to times!!.dhuhr, tr(language, "asr") to times!!.asr,
