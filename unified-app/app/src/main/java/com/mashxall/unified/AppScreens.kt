@@ -1951,6 +1951,7 @@ fun AudioScreen(
     var downloadingReciterUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
+    var audioScope by rememberSaveable { mutableStateOf(if (focusReciters) "verse" else "surah") }
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
@@ -1958,21 +1959,22 @@ fun AudioScreen(
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
         selectedTab = if (focusReciters) 1 else 0
+        audioScope = if (focusReciters) "verse" else "surah"
     }
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
         reciters = ContentRepository.loadReciters(context)
         loading = false
     }
-    LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId) {
+    LaunchedEffect(reciters, focusReciters, initialSurah, initialAyah, preferredReciterId, audioScope) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
-        if (focusReciters && preferred != null) {
+        if (focusReciters && audioScope == "verse" && preferred != null) {
             val url = ContentRepository.reciterSampleUrl(
                 preferred,
                 initialSurah.coerceIn(1, 114),
                 initialAyah.coerceAtLeast(1)
             )
-            val key = "$url|${initialSurah}|${initialAyah}"
+            val key = url + "|" + initialSurah + "|" + initialAyah + "|" + audioScope
             if (autoPlayKey != key) {
                 autoPlayKey = key
                 playing = url
@@ -2006,6 +2008,21 @@ fun AudioScreen(
         }
         Spacer(Modifier.height(7.dp))
         SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
+        if (selectedTab == 1) {
+            Spacer(Modifier.height(7.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = audioScope == "surah",
+                    onClick = { audioScope = "surah"; AudioController.stop(); playing = "" },
+                    label = { Text(if (language == AppLanguage.EN) "Full surah" else if (language == AppLanguage.AR) "السورة كاملة" else "هەموو سوورەت", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = audioScope == "verse",
+                    onClick = { audioScope = "verse"; AudioController.stop(); playing = "" },
+                    label = { Text(if (language == AppLanguage.EN) "Single verse" else if (language == AppLanguage.AR) "آية محددة" else "ئایەتی دیاریکراو", fontSize = 11.sp) }
+                )
+            }
+        }
         if (selectedTab == 0 || selectedTab == 2) {
             val adhanKeywords = listOf(
                 "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
@@ -2043,7 +2060,8 @@ fun AudioScreen(
             }
         } else {
             val visibleReciters = reciters.filter { reciter ->
-                (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+                (audioScope == "verse" && reciter.audioType == 0 || audioScope == "surah" && reciter.audioType != 0) &&
+                    (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
             }
             LaunchedEffect(visibleReciters, surahText, ayahText) {
                 val urls = visibleReciters.map { reciter ->
