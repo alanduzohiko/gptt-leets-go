@@ -3299,7 +3299,11 @@ private fun formatPrayerClock12(value: String): String {
 fun HomePrayerTimesPanel(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPrayer: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
-    var cityName by remember { mutableStateOf(prefs.getString("selected_city", "") ?: "") }
+    var cityName by remember {
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        mutableStateOf(if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) "" else storedCity)
+    }
     var countryName by remember { mutableStateOf(prefs.getString("selected_city_country", "") ?: "") }
     var latitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var longitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
@@ -3310,7 +3314,9 @@ fun HomePrayerTimesPanel(language: AppLanguage, foreground: Color, cardColor: Co
     var reloadToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
-        cityName = prefs.getString("selected_city", "") ?: ""
+        val storedCity = prefs.getString("selected_city", "") ?: ""
+        val hasManualCoordinates = prefs.contains("manual_city_latitude") && prefs.contains("manual_city_longitude")
+        cityName = if (storedCity.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) "" else storedCity
         countryName = prefs.getString("selected_city_country", "") ?: ""
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -3346,7 +3352,10 @@ fun HomePrayerTimesPanel(language: AppLanguage, foreground: Color, cardColor: Co
             )
             !useGps && cityName.isNotBlank() -> ContentRepository.loadPrayerTimes(context, cityName, targetDate, countryName)
                 ?: ContentRepository.findCityByName(context, cityName, countryName)?.let {
-                    PrayerTimeCalculator.calculate(targetDate, it.latitude, it.longitude, method, asr)
+                    PrayerTimeCalculator.calculate(
+                        targetDate, it.latitude, it.longitude, method, asr,
+                        PrayerTimeCalculator.timeZoneForCountry(it.country, it.longitude)
+                    )
                 }
             else -> null
         }
@@ -3664,7 +3673,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
                             context, manualLatitude!!, manualLongitude!!, targetDate,
                             PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
+                            AsrCalculationSchool.fromId(asrSchool),
+                            fallbackTimeZone = PrayerTimeCalculator.timeZoneForCountry(manualCountry, manualLongitude!!)
                         )
                     }
                     else -> {
@@ -3673,7 +3683,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 PrayerTimeCalculator.calculate(
                                     targetDate, city.latitude, city.longitude,
                                     PrayerCalculationMethod.fromId(calculationMethod),
-                                    AsrCalculationSchool.fromId(asrSchool)
+                                    AsrCalculationSchool.fromId(asrSchool),
+                                    PrayerTimeCalculator.timeZoneForCountry(city.country, city.longitude)
                                 )
                             }
                     }
@@ -3707,7 +3718,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         ?: ContentRepository.loadPrayerTimesAtLocation(
                             context, manualLatitude!!, manualLongitude!!, tomorrow,
                             PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
+                            AsrCalculationSchool.fromId(asrSchool),
+                            fallbackTimeZone = PrayerTimeCalculator.timeZoneForCountry(manualCountry, manualLongitude!!)
                         )
                 }
                 else -> {
@@ -3716,7 +3728,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             PrayerTimeCalculator.calculate(
                                 tomorrow, city.latitude, city.longitude,
                                 PrayerCalculationMethod.fromId(calculationMethod),
-                                AsrCalculationSchool.fromId(asrSchool)
+                                AsrCalculationSchool.fromId(asrSchool),
+                                PrayerTimeCalculator.timeZoneForCountry(city.country, city.longitude)
                             )
                         }
                 }
