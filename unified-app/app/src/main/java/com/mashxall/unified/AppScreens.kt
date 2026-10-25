@@ -717,7 +717,11 @@ private fun MushafPageViewer(
             bitmap = withContext(Dispatchers.Default) {
                 try {
                     val displaySource = if (tajweedColors) source else {
-                        source.replace(Regex("#[0-9a-fA-F]{6}"), "#111111")
+                        source.replace(Regex("#[0-9a-fA-F]{6}")) { match ->
+                            if (match.value.equals("#FFFFFF", ignoreCase = true) ||
+                                match.value.equals("#000000", ignoreCase = true)
+                            ) match.value else "#111111"
+                        }
                     }
                     val svg = SVG.getFromString(displaySource)
                     Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
