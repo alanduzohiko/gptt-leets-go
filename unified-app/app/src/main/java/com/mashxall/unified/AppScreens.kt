@@ -37,6 +37,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,6 +78,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -105,6 +107,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -661,6 +664,8 @@ private fun MushafPageViewer(
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    var showPageJump by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
@@ -706,49 +711,30 @@ private fun MushafPageViewer(
             ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
         }
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
-                Text(tr(language, "previous"), fontSize = 11.sp)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(tr(language, "mushaf_view"), color = Gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(tr(language, "page") + " " + page + " / 604", color = foreground.copy(alpha = 0.6f), fontSize = 10.sp)
-            }
-            OutlinedButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
-                Text(tr(language, "next"), fontSize = 11.sp)
-            }
-            OutlinedButton(onClick = onExitFullscreen) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Exit"
-                        AppLanguage.AR -> "خروج"
-                        AppLanguage.CKB -> "دەرچوون"
-                    }, fontSize = 10.sp
-                )
-            }
-        }
-        Spacer(Modifier.height(7.dp))
+    Column(Modifier.fillMaxSize().background(Color.White).padding(horizontal = 4.dp, vertical = 4.dp)) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(DeepGreen).padding(horizontal = 3.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = pageInput,
-                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.width(112.dp),
-                label = { Text(if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە") },
-                singleLine = true
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = {
-                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
-            }) {
-                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
+                Text("‹", color = Gold, fontSize = 30.sp)
             }
+            Column(
+                Modifier.weight(1f).clickable { showPageJump = true },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 10.sp)
+            }
+            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
+                Text("›", color = Gold, fontSize = 30.sp)
+            }
+            IconButton(onClick = { showPageJump = true }) {
+                Icon(Icons.Outlined.Search, contentDescription = if (language == AppLanguage.EN) "Go to page" else if (language == AppLanguage.AR) "اذهب إلى صفحة" else "بڕۆ بۆ پەڕە", tint = Gold)
+            }
+            IconButton(onClick = onExitFullscreen) { Text("×", color = Gold, fontSize = 25.sp) }
         }
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(4.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -768,6 +754,20 @@ private fun MushafPageViewer(
                                 translationY = offsetY
                             }
                             .transformable(transformState)
+                            .pointerInput(page, scale) {
+                                var dragDistance = 0f
+                                detectHorizontalDragGestures(
+                                    onHorizontalDrag = { _, distance -> dragDistance += distance },
+                                    onDragEnd = {
+                                        if (scale <= 1.01f && abs(dragDistance) >= 70f) {
+                                            val delta = if (dragDistance < 0f) 1 else -1
+                                            onPageChange((page + delta).coerceIn(1, 604))
+                                        }
+                                        dragDistance = 0f
+                                    },
+                                    onDragCancel = { dragDistance = 0f }
+                                )
+                            }
                             .pointerInput(page, scale, bitmap) {
                                 detectTapGestures(
                                     onDoubleTap = {
@@ -789,7 +789,10 @@ private fun MushafPageViewer(
                                             if (x in 0f..1148f && y in 0f..1641f) {
                                                 scope.launch {
                                                     val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
-                                                    if (hit != null) selectedVerse = hit
+                                                    if (hit != null) {
+                                                        selectedVerse = hit
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    }
                                                 }
                                             }
                                         }
@@ -830,46 +833,73 @@ private fun MushafPageViewer(
             }
         }
         if (pageVerses.isNotEmpty()) {
-            Spacer(Modifier.height(5.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Tap a word in the Mushaf or choose a verse to highlight its original bounds."
-                    AppLanguage.AR -> "اضغط على كلمة في المصحف أو اختر آية لإظهار حدودها الأصلية."
-                    AppLanguage.CKB -> "لەسەر وشەیەک دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنوورە ڕەسەنەکەی."
-                },
-                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
-            )
-            selectedVerse?.let { picked ->
-                Text(
-                    (if (language == AppLanguage.EN) "Highlighted verse: " else if (language == AppLanguage.AR) "الآية المحددة: " else "ئایەتی دیاریکراو: ") + "${picked.surah}:${picked.ayah}",
-                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
-                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
-                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
-                },
-                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
+                Text(
+                    selectedVerse?.let { it.surah.toString() + ":" + it.ayah } ?: when (language) {
+                        AppLanguage.EN -> pageVerses.size.toString() + " verses on this page"
+                        AppLanguage.AR -> pageVerses.size.toString() + " آيات في هذه الصفحة"
+                        AppLanguage.CKB -> pageVerses.size.toString() + " ئایەت لەم پەڕەیەدا"
+                    },
+                    color = DeepGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    enabled = selectedVerse != null,
+                    onClick = { selectedVerse?.let { onVerseClick(it.surah, it.ayah) } },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 1.dp)
+                ) {
+                    Text(when (language) {
+                        AppLanguage.EN -> "Open verse"
+                        AppLanguage.AR -> "فتح الآية"
+                        AppLanguage.CKB -> "کردنەوەی ئایەت"
+                    }, fontSize = 10.sp)
+                }
+            }
+            LazyRow(
+                modifier = Modifier.height(42.dp),
+                contentPadding = PaddingValues(horizontal = 3.dp, vertical = 1.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                items(pageVerses, key = { it.surah.toString() + ":" + it.ayah }) { verse ->
                     FilterChip(
                         selected = selectedVerse == verse,
-                        onClick = { selectedVerse = verse },
-                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
-                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
+                        onClick = {
+                            selectedVerse = verse
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
+                        label = { Text(verse.surah.toString() + ":" + verse.ayah, fontSize = 9.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(12.dp)) }
                     )
                 }
             }
         }
-        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
+    if (showPageJump) AlertDialog(
+        onDismissRequest = { showPageJump = false },
+        title = { Text(when (language) {
+            AppLanguage.EN -> "Go to Mushaf page"
+            AppLanguage.AR -> "الانتقال إلى صفحة المصحف"
+            AppLanguage.CKB -> "بڕۆ بۆ پەڕەی مصحف"
+        }) },
+        text = {
+            OutlinedTextField(
+                value = pageInput,
+                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
+                label = { Text(tr(language, "page") + " 1–604") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
+                showPageJump = false
+            }) { Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ") }
+        },
+        dismissButton = { TextButton(onClick = { showPageJump = false }) { Text(tr(language, "back")) } }
+    )
 }
 
 @Composable
@@ -3003,6 +3033,157 @@ private fun requestCurrentLocation(
     }
 }
 
+private fun formatPrayerClock12(value: String): String {
+    val match = Regex("^(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(AM|PM)?$", RegexOption.IGNORE_CASE).matchEntire(value.trim())
+        ?: return value
+    val rawHour = match.groupValues[1].toIntOrNull() ?: return value
+    val minute = match.groupValues[2].toIntOrNull() ?: return value
+    if (rawHour !in 0..23 || minute !in 0..59) return value
+    val suppliedMeridiem = match.groupValues[3].uppercase(Locale.ROOT)
+    val hour24 = if (suppliedMeridiem.isBlank()) rawHour else (rawHour % 12) + if (suppliedMeridiem == "PM") 12 else 0
+    val hour12 = (hour24 % 12).let { if (it == 0) 12 else it }
+    val meridiem = if (hour24 < 12) "AM" else "PM"
+    return String.format(Locale.US, "%d:%02d %s", hour12, minute, meridiem)
+}
+
+@Composable
+fun HomePrayerTimesPanel(language: AppLanguage, foreground: Color, cardColor: Color, onOpenPrayer: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var cityName by remember { mutableStateOf(prefs.getString("selected_city", "") ?: "") }
+    var countryName by remember { mutableStateOf(prefs.getString("selected_city_country", "") ?: "") }
+    var latitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
+    var longitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var row by remember { mutableStateOf<PrayerRow?>(null) }
+    var loadingTimes by remember { mutableStateOf(true) }
+    var locating by remember { mutableStateOf(false) }
+    var locationError by remember { mutableStateOf("") }
+    var reloadToken by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        cityName = prefs.getString("selected_city", "") ?: ""
+        countryName = prefs.getString("selected_city_country", "") ?: ""
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (prefs.getBoolean("prayer_use_gps", true) && (fine || coarse)) {
+            locating = true
+            requestCurrentLocation(context, { fix ->
+                latitude = fix.latitude
+                longitude = fix.longitude
+                prefs.edit()
+                    .putString("gps_latitude", fix.latitude.toString())
+                    .putString("gps_longitude", fix.longitude.toString())
+                    .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+                    .apply()
+                locating = false
+                locationError = ""
+                reloadToken++
+            }, { error ->
+                locating = false
+                locationError = error
+            })
+        }
+    }
+
+    LaunchedEffect(latitude, longitude, cityName, countryName, reloadToken) {
+        loadingTimes = true
+        val targetDate = Date()
+        val useGps = prefs.getBoolean("prayer_use_gps", true)
+        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl") ?: "mwl")
+        val asr = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi") ?: "shafi")
+        row = when {
+            useGps && latitude != null && longitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+                context, latitude!!, longitude!!, targetDate, method, asr
+            )
+            !useGps && cityName.isNotBlank() -> ContentRepository.loadPrayerTimes(context, cityName, targetDate, countryName)
+                ?: ContentRepository.findCityByName(context, cityName, countryName)?.let {
+                    PrayerTimeCalculator.calculate(targetDate, it.latitude, it.longitude, method, asr)
+                }
+            else -> null
+        }
+        loadingTimes = false
+    }
+
+    val useGps = prefs.getBoolean("prayer_use_gps", true)
+    val locationLabel = if (useGps) when (language) {
+        AppLanguage.EN -> "Current location"
+        AppLanguage.AR -> "موقعك الحالي"
+        AppLanguage.CKB -> "شوێنی ئێستات"
+    } else cityName.ifBlank { tr(language, "select_city") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenPrayer),
+        shape = RoundedCornerShape(25.dp),
+        colors = CardDefaults.cardColors(containerColor = DeepGreen),
+        border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.35f))
+    ) {
+        Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF155744), Color(0xFF092720)))).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
+                }
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(when (language) {
+                        AppLanguage.EN -> "TODAY'S PRAYER TIMES"
+                        AppLanguage.AR -> "مواقيت الصلاة اليوم"
+                        AppLanguage.CKB -> "کاتەکانی نوێژی ئەمڕۆ"
+                    }, color = PaleGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Spacer(Modifier.height(3.dp))
+                    Text(locationLabel, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            if (loadingTimes || locating) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = Gold, modifier = Modifier.size(19.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(9.dp))
+                    Text(when (language) {
+                        AppLanguage.EN -> if (locating) "Refreshing GPS location…" else "Loading prayer times…"
+                        AppLanguage.AR -> if (locating) "جارٍ تحديث موقع GPS…" else "جارٍ تحميل المواقيت…"
+                        AppLanguage.CKB -> if (locating) "شوێنی GPS نوێ دەکرێتەوە…" else "کاتەکان بار دەکرێن…"
+                    }, color = SoftText, fontSize = 11.sp)
+                }
+            } else if (row == null) {
+                Text(locationError.ifBlank { when (language) {
+                    AppLanguage.EN -> "Allow location access or choose your city to calculate accurate times."
+                    AppLanguage.AR -> "فعّل إذن الموقع أو اختر مدينتك لحساب المواقيت بدقة."
+                    AppLanguage.CKB -> "مۆڵەتی شوێن چالاک بکە یان شارەکەت هەڵبژێرە بۆ حسابکردنی وردی کاتەکان."
+                } }, color = SoftText, fontSize = 11.sp, lineHeight = 16.sp)
+            } else {
+                val timeItems = listOf(
+                    tr(language, "fajr") to row!!.fajr,
+                    tr(language, "sunrise") to row!!.sunrise,
+                    tr(language, "dhuhr") to row!!.dhuhr,
+                    tr(language, "asr") to row!!.asr,
+                    tr(language, "maghrib") to row!!.maghrib,
+                    tr(language, "isha") to row!!.isha
+                )
+                timeItems.chunked(3).forEach { line ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        line.forEach { (label, time) ->
+                            Surface(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.075f), shape = RoundedCornerShape(13.dp)) {
+                                Column(Modifier.padding(horizontal = 7.dp, vertical = 8.dp)) {
+                                    Text(label, color = SoftText, fontSize = 10.sp, maxLines = 1)
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(formatPrayerClock12(time), color = PaleGold, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(when (language) {
+                    AppLanguage.EN -> "Tap to view full timetable and calculation method"
+                    AppLanguage.AR -> "اضغط لعرض الجدول الكامل وطريقة الحساب"
+                    AppLanguage.CKB -> "لێی بدە بۆ بینینی خشتە و شێوازی حسابکردن"
+                }, color = SoftText.copy(alpha = 0.8f), fontSize = 10.sp)
+            }
+        }
+    }
+}
+
 private data class PrayerCountdownTarget(
     val prayerKey: String,
     val timeText: String,
@@ -3050,6 +3231,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
     var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
+    var useGpsLocation by rememberSaveable { mutableStateOf(prefs.getBoolean("prayer_use_gps", true)) }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
@@ -3128,6 +3310,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (allowed) {
+            useGpsLocation = true
+            prefs.edit().putBoolean("prayer_use_gps", true).apply()
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
@@ -3141,6 +3325,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
     val locateNow = {
+        useGpsLocation = true
+        prefs.edit().putBoolean("prayer_use_gps", true).apply()
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
@@ -3150,6 +3336,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         } else {
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
+    }
+
+    LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (useGpsLocation && (fine || coarse)) locateNow()
     }
 
     LaunchedEffect(citySearch) {
@@ -3211,12 +3403,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     add(Calendar.DAY_OF_YEAR, dayOffset)
                 }.time
                 times = when {
-                    gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+                    useGpsLocation && gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
                         context, gpsLatitude!!, gpsLongitude!!, targetDate,
                         PrayerCalculationMethod.fromId(calculationMethod),
                         AsrCalculationSchool.fromId(asrSchool)
                     )
-                    manualLatitude != null && manualLongitude != null -> {
+                    !useGpsLocation && manualLatitude != null && manualLongitude != null -> {
                         val sourceCityTimes = ContentRepository.loadPrayerTimes(
                             context, selectedCity, targetDate, manualCountry
                         )
@@ -3255,13 +3447,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 add(Calendar.DAY_OF_YEAR, 1)
             }.time
             tomorrowTimes = when {
-                gpsLatitude != null && gpsLongitude != null ->
+                useGpsLocation && gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(
                         context, gpsLatitude!!, gpsLongitude!!, tomorrow,
                         PrayerCalculationMethod.fromId(calculationMethod),
                         AsrCalculationSchool.fromId(asrSchool)
                     )
-                manualLatitude != null && manualLongitude != null -> {
+                !useGpsLocation && manualLatitude != null && manualLongitude != null -> {
                     ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
                         ?: ContentRepository.loadPrayerTimesAtLocation(
                             context, manualLatitude!!, manualLongitude!!, tomorrow,
@@ -3369,7 +3561,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Column(Modifier.weight(1f)) {
                         Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
                         Text(
-                            if (gpsLatitude != null) {
+                            if (useGpsLocation && gpsLatitude != null) {
                                 when (language) {
                                     AppLanguage.EN -> "Current GPS location"
                                     AppLanguage.AR -> "موقع GPS الحالي"
@@ -3378,7 +3570,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             } else selectedCity,
                             color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
                         )
-                        if (gpsLatitude != null && gpsLongitude != null) {
+                        if (useGpsLocation && gpsLatitude != null && gpsLongitude != null) {
                             Text(String.format(Locale.US, "%.5f, %.5f", gpsLatitude, gpsLongitude), color = Color(0xFFB9CDC5), fontSize = 11.sp)
                         } else Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
                     }
@@ -3387,7 +3579,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(
-                    if (gpsLatitude != null) {
+                    if (useGpsLocation && gpsLatitude != null) {
                         when (language) {
                             AppLanguage.EN -> "Nearby original city timetables are used when available; otherwise times are calculated from GPS coordinates."
                             AppLanguage.AR -> "يُستخدم جدول المدينة الأصلية القريبة عند توفره، وإلا تُحسب المواقيت من إحداثيات GPS."
@@ -3429,7 +3621,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text(label, color = foreground.copy(alpha = 0.64f), fontSize = 12.sp)
                                 Spacer(Modifier.height(7.dp))
-                                Text(time, color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                                Text(formatPrayerClock12(time), color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -3498,7 +3690,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(3.dp))
-                        Text(nextPrayerTarget.timeText, color = Color(0xFFF1D78D), fontSize = 14.sp)
+                        Text(formatPrayerClock12(nextPrayerTarget.timeText), color = Color(0xFFF1D78D), fontSize = 14.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
@@ -3681,10 +3873,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 gpsLatitude = null
                                 gpsLongitude = null
                                 gpsAccuracy = null
+                                useGpsLocation = false
+                                prefs.edit().putBoolean("prayer_use_gps", false).apply()
                                 manualLatitude = city.latitude
                                 manualLongitude = city.longitude
                                 prefs.edit()
-                                    .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
                                     .putString("manual_city_latitude", city.latitude.toString())
                                     .putString("manual_city_longitude", city.longitude.toString())
                                     .putString("selected_city_country", city.country)
@@ -3790,6 +3983,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 @Composable
 fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     var city by remember { mutableStateOf<City?>(null) }
     var azimuth by remember { mutableFloatStateOf(0f) }
     var sensorAvailable by remember { mutableStateOf(false) }
@@ -3853,6 +4047,14 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
+    LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!locating) {
+            if (fine || coarse) locateNow()
+            else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry) {
         city = when {
             gpsLatitude != null && gpsLongitude != null -> City("GPS", gpsLatitude!!, gpsLongitude!!)
@@ -3905,6 +4107,12 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
         label = "qiblaHeading"
     )
+    val qiblaAligned = sensorAvailable && abs(relativeHeading) <= 5f
+    var alignmentPreviouslyNotified by remember { mutableStateOf(false) }
+    LaunchedEffect(qiblaAligned) {
+        if (qiblaAligned && !alignmentPreviouslyNotified) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        alignmentPreviouslyNotified = qiblaAligned
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(tr(language, "qibla"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(28.dp))
@@ -3914,7 +4122,14 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             Text("🕋", fontSize = 26.sp)
         }
         Spacer(Modifier.height(24.dp))
-        Text(city?.name ?: selectedCity, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (city?.name == "GPS") when (language) {
+                AppLanguage.EN -> "Current location"
+                AppLanguage.AR -> "موقعك الحالي"
+                AppLanguage.CKB -> "شوێنی ئێستات"
+            } else city?.name ?: selectedCity.ifBlank { "—" },
+            color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             if (sensorAvailable) {
@@ -3934,20 +4149,58 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         )
         Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = locateNow, enabled = !locating) {
-            if (locating) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-            } else {
-                Icon(Icons.Outlined.GpsFixed, null, tint = Gold, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(8.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.94f),
+            color = if (qiblaAligned) Color(0xFF1E6A4A) else Gold.copy(alpha = 0.12f),
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(0.8.dp, if (qiblaAligned) Color(0xFF8ED0A4) else Gold.copy(alpha = 0.35f))
+        ) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (qiblaAligned) Icons.Outlined.CheckCircle else Icons.Outlined.Explore,
+                    contentDescription = null,
+                    tint = if (qiblaAligned) Color(0xFFB9F0C8) else Gold,
+                    modifier = Modifier.size(25.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (qiblaAligned) when (language) {
+                            AppLanguage.EN -> "Qibla aligned"
+                            AppLanguage.AR -> "أنت باتجاه القبلة"
+                            AppLanguage.CKB -> "ئاراستەکە لەگەڵ قیبلە یەکە"
+                        } else when (language) {
+                            AppLanguage.EN -> "Move the phone slowly to align the pointer"
+                            AppLanguage.AR -> "حرّك الهاتف ببطء حتى يتجه المؤشر نحو القبلة"
+                            AppLanguage.CKB -> "مۆبایلەکە بە هێواشی بجوڵێنە تا نیشانەکە لەگەڵ قیبلە یەک بێت"
+                        },
+                        color = if (qiblaAligned) Color.White else foreground,
+                        fontWeight = FontWeight.Bold, fontSize = 12.sp
+                    )
+                    Text(
+                        if (sensorAvailable) when (language) {
+                            AppLanguage.EN -> "Keep the phone level for the compass to settle."
+                            AppLanguage.AR -> "أبقِ الهاتف مستويًا حتى يستقر اتجاه البوصلة."
+                            AppLanguage.CKB -> "مۆبایلەکە ئاست بگرە تا کۆمپاسەکە جێگیر ببێت."
+                        } else when (language) {
+                            AppLanguage.EN -> "Compass sensor unavailable; bearing is approximate."
+                            AppLanguage.AR -> "مستشعر البوصلة غير متاح؛ الاتجاه تقريبي."
+                            AppLanguage.CKB -> "سێنسەری کۆمپاس بەردەست نییە؛ ئاراستەکە نزیکەییە."
+                        },
+                        color = (if (qiblaAligned) Color.White else foreground).copy(alpha = 0.72f),
+                        fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
             }
+        }
+        if (locating) {
+            Spacer(Modifier.height(6.dp))
             Text(
                 when (language) {
-                    AppLanguage.EN -> if (locating) "Finding your location…" else "Use my current location"
-                    AppLanguage.AR -> if (locating) "جارٍ تحديد موقعك…" else "استخدم موقعي الحالي"
-                    AppLanguage.CKB -> if (locating) "شوێن دیاری دەکرێت…" else "شوێنی ئێستام بەکاربهێنە"
-                }
+                    AppLanguage.EN -> "Refreshing current location…"
+                    AppLanguage.AR -> "جارٍ تحديث الموقع الحالي…"
+                    AppLanguage.CKB -> "شوێنی ئێستا نوێ دەکرێتەوە…"
+                }, color = foreground.copy(alpha = 0.6f), fontSize = 10.sp
             )
         }
         if (locationMessage.isNotBlank()) {
