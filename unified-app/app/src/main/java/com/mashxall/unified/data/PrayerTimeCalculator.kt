@@ -181,7 +181,7 @@ object PrayerTimeCalculator {
         }
 
         val dateFormatter = SimpleDateFormat("MM-dd", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone(zone)
+            this.timeZone = TimeZone.getTimeZone(zone)
         }
         fun clock(hour: Double): String {
             val rounded = (hour * 60.0).roundToInt().mod(1440)
@@ -191,7 +191,9 @@ object PrayerTimeCalculator {
             calendar.set(Calendar.MINUTE, rounded % 60)
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
-            return SimpleDateFormat("HH:mm", Locale.US).format(calendar.time)
+            return SimpleDateFormat("HH:mm", Locale.US).apply {
+                this.timeZone = TimeZone.getTimeZone(zone)
+            }.format(calendar.time)
         }
 
         return PrayerRow(
