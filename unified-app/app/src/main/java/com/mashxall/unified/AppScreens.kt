@@ -143,7 +143,14 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}) {
+fun QuranScreen(
+    language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int,
+    onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit,
+    onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> },
+    onImmersiveMushaf: (Boolean) -> Unit = {},
+    quranFont: String = "amiri", quranTextScale: Float = 1f, defaultMushafMode: Boolean = false,
+    onDefaultMushafModeChange: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -161,9 +168,20 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
-    var mushafMode by rememberSaveable { mutableStateOf(false) }
+    var mushafMode by rememberSaveable { mutableStateOf(defaultMushafMode) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(mushafMode) { onImmersiveMushaf(mushafMode) }
+    val quranArabicFont = remember(quranFont) {
+        if (quranFont == "amiri") runCatching {
+            FontFamily(Typeface.createFromAsset(context.assets, "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_modded.ttf"))
+        }.getOrNull() else null
+    }
+    LaunchedEffect(defaultMushafMode) {
+        if (mushafMode != defaultMushafMode) mushafMode = defaultMushafMode
+    }
+    LaunchedEffect(mushafMode) {
+        onDefaultMushafModeChange(mushafMode)
+        onImmersiveMushaf(mushafMode)
+    }
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
     }
@@ -268,12 +286,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChip(
-                    selected = !mushafMode, onClick = { mushafMode = false },
+                    selected = !mushafMode, onClick = { mushafMode = false; onDefaultMushafModeChange(false) },
                     label = { Text(tr(language, "verse_view"), fontSize = 11.sp, maxLines = 1) },
                     modifier = Modifier.weight(1f)
                 )
                 FilterChip(
-                    selected = mushafMode, onClick = { mushafMode = true; query = "" },
+                    selected = mushafMode, onClick = { mushafMode = true; query = ""; onDefaultMushafModeChange(true) },
                     label = { Text(tr(language, "mushaf_view"), fontSize = 11.sp, maxLines = 1) },
                     modifier = Modifier.weight(1f)
                 )
@@ -420,7 +438,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Spacer(Modifier.height(6.dp))
                         Text(
                             if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic,
-                            color = foreground, fontSize = 23.sp, lineHeight = 39.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
+                            color = foreground,
+                            fontSize = (23f * quranTextScale).sp,
+                            lineHeight = (39f * quranTextScale).sp,
+                            fontFamily = quranArabicFont,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         if (verse.hasHadith) {
                             Spacer(Modifier.height(5.dp))
@@ -2075,7 +2098,7 @@ fun AudioScreen(
                             when (index) {
                                 0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
                                 1 -> if (language == AppLanguage.EN) "Reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
-                                else -> if (language == AppLanguage.EN) "Adhan & mosque audio" else if (language == AppLanguage.AR) "الأذان وأصوات المساجد" else "بانگ و دەنگی مزگەوت"
+                                else -> if (language == AppLanguage.EN) "Muezzins & Adhan" else if (language == AppLanguage.AR) "مكتبة المؤذنين والأذان" else "کتێبخانەی بانگدەران و بانگ"
                             }
                         )
                     }
@@ -2101,17 +2124,39 @@ fun AudioScreen(
         }
         if (selectedTab == 0 || selectedTab == 2) {
             val adhanKeywords = listOf(
-                "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
-                "mecca", "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
-                "majid", "mansur", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan"
+                "adhan", "athan", "azan", "muezzin", "muadhin", "muazzin", "takbir", "takbeer",
+                "iqama", "iqamah", "madina", "madinah", "mecca", "makkah", "fajr", "hijaz",
+                "abdulbasit", "abdul_basit", "abdulmajid", "majid", "mansur", "mshari", "naqshbandi",
+                "nasr", "peshawa", "rahid", "ramazan", "ahmad", "ahmed", "nufais", "nufays",
+                "yasser", "yaser", "dossari", "dosari", "nasser", "naser", "qatami", "qattami",
+                "islam sobhi", "sobhi", "الأذان", "الاذان", "أذان", "اذان", "مؤذن", "مؤذنين",
+                "المسجد", "مسجد", "مكة", "المدينة", "الفجر", "صلاة الفجر", "أحمد النفيس",
+                "احمد النفيس", "ياسر الدوسري", "ناصر القطامي", "إسلام صبحي", "اسلام صبحي",
+                "بانگ", "بانگدان", "ئازان"
             )
+            val isAdhanAsset: (AudioItem) -> Boolean = { item ->
+                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
+                adhanKeywords.any { keyword -> name.contains(keyword.lowercase(Locale.ROOT)) }
+            }
+            val hasAdhanTaggedAudio = audio.any(isAdhanAsset)
             val visibleAudio = audio.filter { item ->
                 val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                (selectedTab == 0 || adhanKeywords.any { name.contains(it) }) &&
+                (selectedTab == 0 || isAdhanAsset(item) || (selectedTab == 2 && !hasAdhanTaggedAudio)) &&
                     (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
             }
+            if (selectedTab == 2 && audio.isNotEmpty() && !hasAdhanTaggedAudio) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "The bundled files have no adhan labels, so all available local tracks are shown for searching."
+                        AppLanguage.AR -> "لا تحمل الملفات المضمنة أسماء أذان واضحة؛ لذلك تظهر جميع المقاطع المحلية المتاحة لتبحث بينها."
+                        AppLanguage.CKB -> "ناوی فایلەکان بانگیان دیاری ناکات؛ بۆیە هەموو دەنگە ناوخۆییەکان پیشان دەدرێن بۆ گەڕان."
+                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
+                )
+                Spacer(Modifier.height(5.dp))
+            }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
-            else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            else {
+                LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 items(visibleAudio, key = { it.assetPath }) { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
                         Row(Modifier.fillMaxWidth().clickable {
@@ -2132,6 +2177,7 @@ fun AudioScreen(
                             Icon(Icons.Outlined.VolumeUp, null, tint = foreground.copy(alpha = 0.5f))
                         }
                     }
+                }
                 }
             }
         } else {

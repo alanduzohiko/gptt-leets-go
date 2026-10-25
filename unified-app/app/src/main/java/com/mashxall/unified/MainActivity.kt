@@ -85,6 +85,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -269,6 +270,9 @@ fun MashxallApp(startScreen: String? = null) {
     }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var paletteId by rememberSaveable { mutableStateOf(prefs.getString("color_palette", "emerald_gold") ?: "emerald_gold") }
+    var quranFont by rememberSaveable { mutableStateOf(prefs.getString("quran_font_family", "amiri") ?: "amiri") }
+    var quranTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_text_scale", 1.0f).coerceIn(0.85f, 1.4f)) }
+    var quranDefaultMushaf by rememberSaveable { mutableStateOf(prefs.getBoolean("quran_default_mushaf", false)) }
     LaunchedEffect(paletteId) { MashxallPalette.apply(paletteId) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
@@ -433,7 +437,14 @@ fun MashxallApp(startScreen: String? = null) {
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo("audio")
                                     },
-                                    onImmersiveMushaf = { immersiveMushaf = it }
+                                    onImmersiveMushaf = { immersiveMushaf = it },
+                                    quranFont = quranFont,
+                                    quranTextScale = quranTextScale,
+                                    defaultMushafMode = quranDefaultMushaf,
+                                    onDefaultMushafModeChange = { selected ->
+                                        quranDefaultMushaf = selected
+                                        prefs.edit().putBoolean("quran_default_mushaf", selected).apply()
+                                    }
                                 )
                                 "library" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
@@ -462,10 +473,26 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, paletteId, onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onPalette = { selected ->
-                                    paletteId = selected
-                                    prefs.edit().putString("color_palette", selected).apply()
-                                }, onLanguage = {
+                                "settings" -> SettingsScreen(
+                                    language, foreground, cardColor, dark, paletteId, quranFont, quranTextScale, quranDefaultMushaf,
+                                    onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() },
+                                    onPalette = { selected ->
+                                        paletteId = selected
+                                        prefs.edit().putString("color_palette", selected).apply()
+                                    },
+                                    onQuranFont = { selected ->
+                                        quranFont = selected
+                                        prefs.edit().putString("quran_font_family", selected).apply()
+                                    },
+                                    onQuranTextScale = { selected ->
+                                        quranTextScale = selected.coerceIn(0.85f, 1.4f)
+                                        prefs.edit().putFloat("quran_text_scale", quranTextScale).apply()
+                                    },
+                                    onQuranDefaultMushaf = { selected ->
+                                        quranDefaultMushaf = selected
+                                        prefs.edit().putBoolean("quran_default_mushaf", selected).apply()
+                                    },
+                                    onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
                                 }, onDataInfo = { navigateTo("library") }, onBackup = { navigateTo("backup") })
@@ -667,7 +694,10 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 @Composable
 private fun SettingsScreen(
     language: AppLanguage, foreground: Color, cardColor: Color, dark: Boolean, paletteId: String,
+    quranFont: String, quranTextScale: Float, quranDefaultMushaf: Boolean,
     onDark: (Boolean) -> Unit, onPalette: (String) -> Unit,
+    onQuranFont: (String) -> Unit, onQuranTextScale: (Float) -> Unit,
+    onQuranDefaultMushaf: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit, onDataInfo: () -> Unit, onBackup: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -716,6 +746,79 @@ private fun SettingsScreen(
                 }
             }
         }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Qur'an reading"
+                AppLanguage.AR -> "إعدادات قراءة القرآن"
+                AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان"
+            }, color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Default reading layout"
+                AppLanguage.AR -> "نمط العرض الافتراضي"
+                AppLanguage.CKB -> "شێوازی پیشاندانی بنەڕەتی"
+            }, color = foreground.copy(alpha = 0.76f), fontSize = 12.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FilterChip(
+                selected = quranDefaultMushaf,
+                onClick = { onQuranDefaultMushaf(true) },
+                label = { Text(when (language) {
+                    AppLanguage.EN -> "Full-page Mushaf"
+                    AppLanguage.AR -> "المصحف بملء الشاشة"
+                    AppLanguage.CKB -> "مصحەف بە تەواوی شاشە"
+                }, fontSize = 11.sp) }
+            )
+            FilterChip(
+                selected = !quranDefaultMushaf,
+                onClick = { onQuranDefaultMushaf(false) },
+                label = { Text(when (language) {
+                    AppLanguage.EN -> "Verse list"
+                    AppLanguage.AR -> "عرض الآيات"
+                    AppLanguage.CKB -> "لیستی ئایەتەکان"
+                }, fontSize = 11.sp) }
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Arabic text font"
+                AppLanguage.AR -> "خط النص العربي"
+                AppLanguage.CKB -> "فۆنتی دەقی عەرەبی"
+            }, color = foreground.copy(alpha = 0.76f), fontSize = 12.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FilterChip(
+                selected = quranFont == "amiri",
+                onClick = { onQuranFont("amiri") },
+                label = { Text(if (language == AppLanguage.EN) "Traditional Amiri" else if (language == AppLanguage.AR) "خط أميري" else "فۆنتی ئەمیری", fontSize = 11.sp) }
+            )
+            FilterChip(
+                selected = quranFont == "system",
+                onClick = { onQuranFont("system") },
+                label = { Text(if (language == AppLanguage.EN) "System font" else if (language == AppLanguage.AR) "خط النظام" else "فۆنتی سیستەم", fontSize = 11.sp) }
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Arabic text size"
+                    AppLanguage.AR -> "حجم النص العربي"
+                    AppLanguage.CKB -> "قەبارەی دەقی عەرەبی"
+                }, color = foreground.copy(alpha = 0.76f), fontSize = 12.sp, modifier = Modifier.weight(1f)
+            )
+            Text(quranTextScale.times(100).toInt().toString() + "%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+        Slider(
+            value = quranTextScale,
+            onValueChange = onQuranTextScale,
+            valueRange = 0.85f..1.4f,
+            steps = 10
+        )
         Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cardColor).clickable { onDark(!dark) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Tune, null, tint = Gold)
