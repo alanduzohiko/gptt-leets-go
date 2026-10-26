@@ -1650,8 +1650,10 @@ object ContentRepository {
         row != null && listOf(row.fajr, row.sunrise, row.dhuhr, row.asr, row.maghrib, row.isha)
             .all { prayerClockPattern.matches(it.trim()) }
 
-    internal fun preferredSourcePrayerTimes(salawati: PrayerRow?, noor: PrayerRow?): PrayerRow? =
-        salawati?.takeIf(::hasValidPrayerTimes) ?: noor?.takeIf(::hasValidPrayerTimes)
+    /** The prayer feature accepts only a valid timetable from Salawati. */
+    internal fun salawatiOnlyPrayerTimes(row: PrayerRow?): PrayerRow? =
+        row?.takeIf { it.source.startsWith("salawati", ignoreCase = true) && hasValidPrayerTimes(it) }
+
 
     /**
      * GPS can find Noor and Salawati rows at identical coordinates. Keep physical
@@ -1677,35 +1679,11 @@ object ContentRepository {
         date: Date = Date(),
         countryName: String = ""
     ): PrayerRow? = withContext(Dispatchers.IO) {
-        val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
-        val country = countryName.trim()
-        val useNoorRegionalData = country.isBlank() ||
-            country.contains("iraq", ignoreCase = true) ||
-            country.contains("العراق", ignoreCase = true)
-
-        // Salawati is the first-choice city database: users can select the exact
-        // country/location record from its 166k-location catalogue, including
-        // the original fixed and dependent timetable metadata.
-        val salawati = loadSalawatiPrayerTimesForCity(context, city, country, date)
-        val noor = if (useNoorRegionalData) {
-            queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
-                db.rawQuery(
-                    "SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha FROM staticprayertimes WHERE lower(city)=lower(?) AND date=? LIMIT 1",
-                    arrayOf(city, md)
-                ).use { c ->
-                    if (c.moveToFirst()) PrayerRow(
-                        c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"),
-                        c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"),
-                        source = "noor:${c.string("city")}"
-                    ) else null
-                }
-            }
-        } else null
-
-        preferredSourcePrayerTimes(salawati, noor)?.let { return@withContext it }
-        if (useNoorRegionalData) {
-            loadNoorPrayerTimesWithCorrection(context, city, date).takeIf(::hasValidPrayerTimes)
-        } else null
+        // No Noor/static-city correction or astronomical fallback here: this
+        // route mirrors the selected Salawati location and its dependent-city rule.
+        salawatiOnlyPrayerTimes(
+            loadSalawatiPrayerTimesForCity(context, city, countryName.trim(), date)
+        )
     }
 
     /**
@@ -1798,35 +1776,6 @@ object ContentRepository {
         val maxLat = (latitude + latDelta).coerceAtMost(90.0)
         val minLon = (longitude - lonDelta).coerceAtLeast(-180.0)
         val maxLon = (longitude + lonDelta).coerceAtMost(180.0)
-        val noorRows = queryDb(context, PRAYER_DB, emptyList<PrayerRow>()) { db ->
-            db.rawQuery(
-                """
-                SELECT c.city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,c.lat,c.lon
-                FROM staticprayertimes pt
-                JOIN cities c ON lower(c.city)=lower(pt.city)
-                WHERE pt.date=?
-                  AND c.lat BETWEEN ? AND ?
-                  AND c.lon BETWEEN ? AND ?
-                ORDER BY ((c.lat-?)*(c.lat-?)) + ((c.lon-?)*(c.lon-?))
-                LIMIT 120
-                """.trimIndent(),
-                arrayOf(
-                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
-                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
-                )
-            ).use { c ->
-                buildList {
-                    while (c.moveToNext()) add(
-                        PrayerRow(
-                            city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
-                            sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
-                            maghrib=c.string("maghrib"), isha=c.string("isha"),
-                            source="noor:${c.string("city")}", latitude=c.double("lat"), longitude=c.double("lon")
-                        )
-                    )
-                }
-            }
-        }
         val salawatiRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
             db.rawQuery(
                 """
@@ -1906,7 +1855,7 @@ object ContentRepository {
                 }
             }
         }
-        noorRows + salawatiRows + dependentRows
+        salawatiRows + dependentRows
     }
 
     suspend fun loadPrayerTimesAtLocation(
@@ -1917,7 +1866,7 @@ object ContentRepository {
         method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
         asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
         staticRadiusKm: Double = 7.0
-    ): PrayerRow = withContext(Dispatchers.IO) {
+    ): PrayerRow? = withContext(Dispatchers.IO) {
         val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
             .filter(::hasValidPrayerTimes)
             .mapNotNull { row ->
@@ -1935,7 +1884,9 @@ object ContentRepository {
                 longitude = longitude
             )
         } else {
-            PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool)
+            // Do not invent a calculation method that differs from Salawati.
+            // The UI will report unavailable if no valid nearby source timetable exists.
+            null
         }
     }
 
