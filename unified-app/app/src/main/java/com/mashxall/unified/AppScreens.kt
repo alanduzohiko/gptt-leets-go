@@ -5071,11 +5071,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
-    var dayOffset by rememberSaveable { mutableIntStateOf(0) }
-    var showWeekView by rememberSaveable { mutableStateOf(false) }
-    var weekLoading by remember { mutableStateOf(false) }
-    var weekTimes by remember { mutableStateOf<List<Pair<Date, PrayerRow>>>(emptyList()) }
-    var showDatePicker by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
@@ -5343,65 +5338,26 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
-        var loadedDate = ""
-        while (true) {
-            val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-            val requestedKey = "$todayKey:$dayOffset"
-            if (requestedKey != loadedDate) {
-                loading = true
-                val targetDate = Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_YEAR, dayOffset)
-                }.time
-                times = loadSelectedCityTimes(targetDate)
-                loadedDate = requestedKey
-                loading = false
-            }
-            delay(60_000L)
-        }
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, currentLocalDateKey) {
+        loading = true
+        times = runCatching { loadSelectedCityTimes(Date()) }.getOrNull()
+        loading = false
     }
     LaunchedEffect(
         selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
-        manualCountry, calculationMethod, asrSchool, dayOffset, currentLocalDateKey
+        manualCountry, calculationMethod, asrSchool, currentLocalDateKey
     ) {
-        if (dayOffset != 0) {
-            tomorrowTimes = null
-        } else {
-            val tomorrow = Calendar.getInstance().apply {
-                timeInMillis = clockNowMillis
-                add(Calendar.DAY_OF_YEAR, 1)
-            }.time
-            tomorrowTimes = loadSelectedCityTimes(tomorrow)
-        }
-    }
-    LaunchedEffect(showWeekView, selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, dayOffset) {
-        if (!showWeekView) {
-            weekTimes = emptyList()
-            weekLoading = false
-        } else {
-            weekLoading = true
-            try {
-                weekTimes = emptyList()
-                val start = Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_YEAR, dayOffset)
-                }
-                val rows = mutableListOf<Pair<Date, PrayerRow>>()
-                repeat(7) {
-                    val date = start.time
-                    val row = runCatching { loadSelectedCityTimes(date) }.getOrNull()
-                    if (row != null && hasValidPrayerTimesForScreen(row)) rows.add(date to row)
-                    start.add(Calendar.DAY_OF_YEAR, 1)
-                }
-                weekTimes = rows
-            } finally {
-                weekLoading = false
-            }
-        }
+        val tomorrow = Calendar.getInstance().apply {
+            timeInMillis = clockNowMillis
+            add(Calendar.DAY_OF_YEAR, 1)
+        }.time
+        tomorrowTimes = runCatching { loadSelectedCityTimes(tomorrow) }.getOrNull()
     }
 
-    val nextPrayerTarget = remember(times, tomorrowTimes, dayOffset, clockNowMillis) {
+
+    val nextPrayerTarget = remember(times, tomorrowTimes, clockNowMillis) {
         val currentTimes = times
-        if (dayOffset != 0 || currentTimes == null) {
+        if (currentTimes == null) {
             null
         } else {
             val now = Date(clockNowMillis)
@@ -5428,79 +5384,46 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
-    val displayDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
-    val displayLocalDate = Instant.ofEpochMilli(displayDate.time).atZone(ZoneId.systemDefault()).toLocalDate()
-    val displayDateText = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(displayDate)
-    val datePickerState = key(dayOffset) {
-        rememberDatePickerState(
-            initialSelectedDateMillis = displayLocalDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-            yearRange = (LocalDate.now().year - 1)..(LocalDate.now().year + 1)
-        )
-    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { dayOffset = (dayOffset - 1).coerceAtLeast(-366) }, enabled = dayOffset > -366) {
-                    Text("‹", color = Gold, fontSize = 22.sp)
-                }
-                Column(
-                    Modifier.weight(1f).clickable { showDatePicker = true },
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
                 ) {
+                    Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold)
+                }
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
                         when (language) {
-                            AppLanguage.EN -> if (dayOffset == 0) "Today" else if (dayOffset < 0) "Past date" else "Upcoming date"
-                            AppLanguage.AR -> if (dayOffset == 0) "اليوم" else if (dayOffset < 0) "تاريخ سابق" else "تاريخ قادم"
-                            AppLanguage.CKB -> if (dayOffset == 0) "ئەمڕۆ" else if (dayOffset < 0) "ڕۆژی ڕابردوو" else "ڕۆژی داهاتوو"
-                        }, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                            AppLanguage.EN -> "Today's prayer times"
+                            AppLanguage.AR -> "مواقيت الصلاة اليوم"
+                            AppLanguage.CKB -> "کاتەکانی نوێژی ئەمڕۆ"
+                        }, color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold
                     )
-                    Text(displayDateText, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                    Text(
+                        SimpleDateFormat("EEEE, d MMMM yyyy", when (language) {
+                            AppLanguage.EN -> Locale.ENGLISH
+                            AppLanguage.AR -> Locale("ar")
+                            AppLanguage.CKB -> Locale("ckb")
+                        }).format(Date()),
+                        color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
+                    )
                 }
-                IconButton(onClick = { dayOffset = (dayOffset + 1).coerceAtMost(366) }, enabled = dayOffset < 366) {
-                    Text("›", color = Gold, fontSize = 22.sp)
-                }
-                IconButton(onClick = { showDatePicker = true }) {
-                    Text("▦", color = Gold, fontSize = 19.sp)
-                }
-                if (dayOffset != 0) {
-                    TextButton(onClick = { dayOffset = 0 }) {
-                        Text(when (language) {
-                            AppLanguage.EN -> "Today"
-                            AppLanguage.AR -> "اليوم"
-                            AppLanguage.CKB -> "ئەمڕۆ"
-                        }, fontSize = 10.sp)
-                    }
-                }
+                Text(
+                    when (language) { AppLanguage.EN -> "TODAY"; AppLanguage.AR -> "اليوم"; AppLanguage.CKB -> "ئەمڕۆ" },
+                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                )
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = !showWeekView,
-                onClick = { showWeekView = false },
-                label = {
-                    Text(
-                        when (language) { AppLanguage.EN -> "Day"; AppLanguage.AR -> "اليوم"; AppLanguage.CKB -> "ڕۆژ" },
-                        fontSize = 11.sp
-                    )
-                },
-                modifier = Modifier.weight(1f)
-            )
-            FilterChip(
-                selected = showWeekView,
-                onClick = { showWeekView = true },
-                label = {
-                    Text(
-                        when (language) { AppLanguage.EN -> "7-day schedule"; AppLanguage.AR -> "جدول ٧ أيام"; AppLanguage.CKB -> "خشتەی ٧ ڕۆژ" },
-                        fontSize = 11.sp
-                    )
-                },
-                modifier = Modifier.weight(1f)
-            )
         }
         Spacer(Modifier.height(10.dp))
         Card(colors = CardDefaults.cardColors(containerColor = DeepGreen), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
@@ -5558,60 +5481,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
         }
         Spacer(Modifier.height(14.dp))
-        if (showWeekView) {
-            if (weekTimes.isEmpty()) {
-                if (weekLoading) LoadingOrEmpty(true, language, foreground)
-                else Text(
-                    when (language) {
-                        AppLanguage.EN -> "Allow location or choose a city to see the weekly source timetable."
-                        AppLanguage.AR -> "اسمح بالموقع أو اختر مدينة لعرض جدول الأسبوع."
-                        AppLanguage.CKB -> "مۆڵەتی شوێن بدە یان شارێک هەڵبژێرە بۆ بینینی خشتەی هەفتانە."
-                    }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp, lineHeight = 18.sp
-                )
-            } else {
-                val weekLocale = when (language) { AppLanguage.EN -> Locale.ENGLISH; AppLanguage.AR -> Locale("ar"); AppLanguage.CKB -> Locale("ckb") }
-                weekTimes.forEachIndexed { index, pair ->
-                    val (date, row) = pair
-                    val dateLabel = SimpleDateFormat("EEEE, MMM d", weekLocale).format(date)
-                    val dayPrayers = listOf(
-                        tr(language, "fajr") to formatPrayerTime(row.fajr, language, use24Hour),
-                        tr(language, "sunrise") to formatPrayerTime(row.sunrise, language, use24Hour),
-                        tr(language, "dhuhr") to formatPrayerTime(row.dhuhr, language, use24Hour),
-                        tr(language, "asr") to formatPrayerTime(row.asr, language, use24Hour),
-                        tr(language, "maghrib") to formatPrayerTime(row.maghrib, language, use24Hour),
-                        tr(language, "isha") to formatPrayerTime(row.isha, language, use24Hour)
-                    )
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardColor),
-                        shape = RoundedCornerShape(18.dp),
-                        border = BorderStroke(if (index == 0) 1.dp else 0.5.dp, if (index == 0) Gold.copy(alpha = 0.38f) else foreground.copy(alpha = 0.07f))
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(dateLabel, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text(row.source.substringBefore(" • "), color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, maxLines = 1)
-                            }
-                            Spacer(Modifier.height(7.dp))
-                            dayPrayers.chunked(3).forEach { trio ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    trio.forEach { (label, time) ->
-                                        Column(
-                                            Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(foreground.copy(alpha = 0.035f)).padding(horizontal = 6.dp, vertical = 7.dp)
-                                        ) {
-                                            Text(label, color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 1)
-                                            Spacer(Modifier.height(2.dp))
-                                            Text(time, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                        }
-                                    }
-                                }
-                                if (trio == dayPrayers.take(3)) Spacer(Modifier.height(5.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        } else if (times == null && loading) {
+        if (times == null && loading) {
             LoadingOrEmpty(true, language, foreground)
         } else if (times == null && gpsLatitude == null && manualLatitude == null && selectedCity.isBlank()) {
             Card(
@@ -5722,7 +5592,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
         )
         Spacer(Modifier.height(10.dp))
-        if (!showWeekView && dayOffset == 0 && nextPrayerTarget != null) {
+        if (nextPrayerTarget != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = DeepGreen),
                 shape = RoundedCornerShape(22.dp),
@@ -5907,185 +5777,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         Spacer(Modifier.height(10.dp))
     }
-    if (showDatePicker) DatePickerDialog(
-        onDismissRequest = { showDatePicker = false },
-        confirmButton = {
-            TextButton(onClick = {
-                val selectedMillis = datePickerState.selectedDateMillis
-                if (selectedMillis != null) {
-                    val selectedDate = Instant.ofEpochMilli(selectedMillis).atZone(ZoneOffset.UTC).toLocalDate()
-                    dayOffset = ChronoUnit.DAYS.between(LocalDate.now(), selectedDate).toInt().coerceIn(-366, 366)
-                }
-                showDatePicker = false
-            }) {
-                Text(if (language == AppLanguage.EN) "Apply" else if (language == AppLanguage.AR) "تطبيق" else "جێبەجێکردن")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { showDatePicker = false }) {
-                Text(tr(language, "back"))
-            }
-        }
-    ) {
-        DatePicker(
-            state = datePickerState,
-            title = {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Choose prayer date"
-                        AppLanguage.AR -> "اختر تاريخ المواقيت"
-                        AppLanguage.CKB -> "بەرواری کاتەکانی نوێژ هەڵبژێرە"
-                    }, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp)
-                )
-            },
-            showModeToggle = true
-        )
-    }
-    if (chooseCity) AlertDialog(
-        onDismissRequest = { chooseCity = false },
-        title = { Text(tr(language, "select_city")) },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                SearchBox(
-                    citySearch,
-                    { citySearch = it },
-                    when (language) {
-                        AppLanguage.EN -> "Search city or country…"
-                        AppLanguage.AR -> "ابحث عن مدينة أو دولة…"
-                        AppLanguage.CKB -> "گەڕان بە ناوی شار یان وڵات…"
-                    }
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "${visibleCities.size} matching locations"
-                        AppLanguage.AR -> "${visibleCities.size} موقعًا مطابقًا"
-                        AppLanguage.CKB -> "${visibleCities.size} شوێنی هاوتا"
-                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
-                )
-                LazyColumn(Modifier.height(355.dp)) {
-                    items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
-                        Column(
-                            Modifier.fillMaxWidth().clickable {
-                                onCity(city.name)
-                                gpsLatitude = null
-                                gpsLongitude = null
-                                gpsAccuracy = null
-                                manualLatitude = city.latitude
-                                manualLongitude = city.longitude
-                                prefs.edit()
-                                    .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
-                                    .putString("manual_city_latitude", city.latitude.toString())
-                                    .putString("manual_city_longitude", city.longitude.toString())
-                                    .putString("selected_city_country", city.country)
-                                    .apply()
-                                chooseCity = false
-                            }.padding(vertical = 9.dp, horizontal = 4.dp)
-                        ) {
-                            Text(city.name, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            if (city.country.isNotBlank()) Text(city.country, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp)
-                        }
-                        Divider(color = foreground.copy(alpha = 0.08f))
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { chooseCity = false }) { Text(tr(language, "back")) } }
-    )
-    if (chooseAdhanSound) AlertDialog(
-        onDismissRequest = {
-            AudioController.stop()
-            previewingAdhan = ""
-            chooseAdhanSound = false
-        },
-        title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { customAdhanPicker.launch(arrayOf("audio/*")) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(when (language) {
-                        AppLanguage.EN -> "Import an adhan audio file from phone"
-                        AppLanguage.AR -> "استيراد ملف أذان من الهاتف"
-                        AppLanguage.CKB -> "فایلی دەنگی بانگ لە مۆبایلەوە هاوردە بکە"
-                    }, fontSize = 12.sp)
-                }
-                Spacer(Modifier.height(6.dp))
-                SearchBox(
-                    adhanSoundQuery,
-                    { adhanSoundQuery = it },
-                    when (language) {
-                        AppLanguage.EN -> "Search every bundled audio file…"
-                        AppLanguage.AR -> "ابحث في كل الملفات الصوتية المرفقة…"
-                        AppLanguage.CKB -> "گەڕان لە هەموو فایلە دەنگییە ناوخۆییەکان…"
-                    }
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "${visibleAdhanAssets.size} of ${adhanAssets.size} audio files"
-                        AppLanguage.AR -> "${visibleAdhanAssets.size} من ${adhanAssets.size} ملفًا صوتيًا"
-                        AppLanguage.CKB -> "${visibleAdhanAssets.size} لە ${adhanAssets.size} فایل دەنگییەکە"
-                    }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
-                )
-                LazyColumn(Modifier.height(340.dp)) {
-                items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable {
-                            AudioController.stop()
-                            previewingAdhan = ""
-                            selectedAdhanAsset = sound.assetPath
-                            prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
-                            chooseAdhanSound = false
-                        }.padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = selectedAdhanAsset == sound.assetPath, onClick = {
-                            AudioController.stop()
-                            previewingAdhan = ""
-                            selectedAdhanAsset = sound.assetPath
-                            prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
-                            chooseAdhanSound = false
-                        })
-                        Spacer(Modifier.width(8.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(sound.title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text(sound.assetPath.substringAfterLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
-                        }
-                        IconButton(onClick = {
-                            if (previewingAdhan == sound.assetPath) {
-                                AudioController.stop()
-                                previewingAdhan = ""
-                            } else {
-                                AudioController.stop()
-                                previewingAdhan = sound.assetPath
-                                AudioController.play(context, sound.assetPath) { active ->
-                                    if (!active) previewingAdhan = ""
-                                }
-                            }
-                        }, modifier = Modifier.size(36.dp)) {
-                            Icon(
-                                if (previewingAdhan == sound.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-                                contentDescription = if (language == AppLanguage.EN) "Preview audio" else if (language == AppLanguage.AR) "معاينة الصوت" else "تاقیکردنەوەی دەنگ",
-                                tint = Gold,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                AudioController.stop()
-                previewingAdhan = ""
-                chooseAdhanSound = false
-            }) { Text(tr(language, "back")) }
-        }
-    )
-
 }
 
 @Composable
