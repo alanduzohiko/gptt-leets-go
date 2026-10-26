@@ -489,7 +489,7 @@ private fun prayerSourceLabel(source: String, language: AppLanguage): String {
 internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
     // Match the complete source value so an existing AM/PM suffix can never be
     // silently ignored by a partial Regex.find() match.
-    val match = Regex("""^(\\d{1,2}):(\\d{2})(?:\\s*(AM|PM))?$""", RegexOption.IGNORE_CASE)
+    val match = Regex("""^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$""", RegexOption.IGNORE_CASE)
         .matchEntire(raw.trim()) ?: return raw
     val sourceHour = match.groupValues[1].toIntOrNull() ?: return raw
     val minute = match.groupValues[2]
