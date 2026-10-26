@@ -14,6 +14,17 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Alarm scheduling must not silently assume the app's display-default city.
+ * A typed/selected city is valid only after the user explicitly picked it.
+ * Location coordinates are resolved before this function is needed.
+ */
+internal fun explicitPrayerCityOrNull(cityName: String?, isExplicit: Boolean): String? {
+    if (!isExplicit) return null
+    val normalized = cityName?.trim().orEmpty()
+    return normalized.takeIf { it.isNotBlank() }
+}
+
 object PrayerAlarmScheduler {
     const val PREFS = "mashxall_preferences"
     const val KEY_ENABLED = "adhan_enabled"
