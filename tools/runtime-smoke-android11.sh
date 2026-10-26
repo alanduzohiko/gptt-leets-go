@@ -218,6 +218,21 @@ if ! grep -Eq '[0-9]{1,2}:[0-9]{2} (AM|PM|صباحًا|مساءً|پ\.ن|د\.ن)
 fi
 echo "PASS: the prayer screen renders a localized 12-hour clock by default."
 
+# Method and Asr preferences are below the fold. Check the actual selectable
+# controls exist, rather than treating a translated heading as implementation.
+adb shell input swipe 540 1640 540 470 420
+sleep 3
+adb shell uiautomator dump /sdcard/mashxall-prayer-method-settings.xml > dist/runtime-test/uiautomator-prayer-method-settings.txt 2>&1 || true
+adb pull /sdcard/mashxall-prayer-method-settings.xml dist/runtime-test/window-prayer-method-settings.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Calculation method|طريقة الحساب|شێوازی حسابکردن' dist/runtime-test/window-prayer-method-settings.xml ||
+   ! grep -Eq 'Hanafi|الحنفي|حەنەفی' dist/runtime-test/window-prayer-method-settings.xml ||
+   ! grep -Eq 'ISNA|Umm al-Qura|Karachi|MWL' dist/runtime-test/window-prayer-method-settings.xml; then
+  echo "FAIL: prayer screen does not expose its actual calculation method and Asr school controls."
+  cat dist/runtime-test/window-prayer-method-settings.xml
+  exit 1
+fi
+echo "PASS: calculation method and Asr school choices are available on the prayer screen."
+
 check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
 
 # The redesigned Quran entry is a surah list. Select Al-Fatiha, enter the
