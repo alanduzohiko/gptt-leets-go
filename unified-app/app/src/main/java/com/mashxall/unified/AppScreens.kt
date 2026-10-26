@@ -3368,7 +3368,8 @@ fun AudioScreen(
     initialSurah: Int = 1,
     initialAyah: Int = 1,
     focusReciters: Boolean = false,
-    autoPlayRequested: Boolean = false
+    autoPlayRequested: Boolean = false,
+    autoPlayWholeSurah: Boolean = false
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
@@ -3378,6 +3379,9 @@ fun AudioScreen(
     val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
+    var downloadedReciterFiles by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var downloadingUrl by remember { mutableStateOf("") }
+    var downloadGeneration by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
@@ -3414,22 +3418,39 @@ fun AudioScreen(
         reciters = ContentRepository.loadReciters(context)
         loading = false
     }
-    LaunchedEffect(reciters, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
-        val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
+    LaunchedEffect(reciters, focusReciters, autoPlayRequested, autoPlayWholeSurah, initialSurah, initialAyah, preferredReciterId) {
+        val targetType = if (autoPlayWholeSurah) 1 else 0
+        val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == targetType }
+            ?: reciters.firstOrNull { it.audioType == targetType }
         if (autoPlayRequested && focusReciters && preferred != null) {
             val url = ContentRepository.reciterSampleUrl(
                 preferred,
                 initialSurah.coerceIn(1, 114),
-                initialAyah.coerceAtLeast(1)
+                if (autoPlayWholeSurah) 1 else initialAyah.coerceAtLeast(1)
             )
-            val key = "$url|${initialSurah}|${initialAyah}"
+            val key = "$url|${initialSurah}|${if (autoPlayWholeSurah) 1 else initialAyah}"
             if (autoPlayKey != key) {
                 autoPlayKey = key
                 playing = url
-                AudioController.playRemote(context, url) { state ->
-                    if (!state) playing = ""
+                val offline = downloadedReciterFiles[url] ?: ContentRepository.findDownloadedReciterAudio(context, url)
+                if (offline != null) {
+                    AudioController.play(context, offline) { state -> if (!state) playing = "" }
+                } else {
+                    AudioController.playRemote(context, url) { state -> if (!state) playing = "" }
                 }
             }
+        } else if (autoPlayRequested && focusReciters) {
+            Toast.makeText(
+                context,
+                if (language == AppLanguage.EN) {
+                    if (autoPlayWholeSurah) "No full-surah reciter is available in the bundled library." else "No verse-by-verse reciter is available in the bundled library."
+                } else if (language == AppLanguage.AR) {
+                    if (autoPlayWholeSurah) "لا يوجد قارئ للتلاوة الكاملة للسورة في المكتبة المضمّنة." else "لا يوجد قارئ يدعم التلاوة آيةً بآية في المكتبة المضمّنة."
+                } else {
+                    if (autoPlayWholeSurah) "لە کتێبخانەی ناوخۆدا قورئان‌خوێنی تەواوی سوورەت بەردەست نییە." else "لە کتێبخانەی ناوخۆدا قورئان‌خوێنی ئایەت بە ئایەت بەردەست نییە."
+                },
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -3540,6 +3561,8 @@ fun AudioScreen(
                         surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1,
                         ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
                     )
+                    val downloadedReference = downloadedReciterFiles[url]
+                        ?: remember(url, downloadGeneration) { ContentRepository.findDownloadedReciterAudio(context, url) }
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
@@ -3582,21 +3605,67 @@ fun AudioScreen(
                                     }
                                 }
                             }
-                            IconButton(onClick = {
-                                if (reciter.audioType == 0) {
-                                    preferredReciterId = reciter.id
-                                    prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                TextButton(
+                                    enabled = downloadedReference == null && downloadingUrl != url,
+                                    onClick = {
+                                        audioImportScope.launch {
+                                            downloadingUrl = url
+                                            try {
+                                                val localReference = ContentRepository.downloadReciterAudio(context, url)
+                                                downloadedReciterFiles = downloadedReciterFiles + (url to localReference)
+                                                downloadGeneration++
+                                                Toast.makeText(
+                                                    context,
+                                                    when (language) {
+                                                        AppLanguage.EN -> "Saved for offline playback."
+                                                        AppLanguage.AR -> "تم حفظ التلاوة للتشغيل دون إنترنت."
+                                                        AppLanguage.CKB -> "تلاوەتەکە بۆ لێدانی بەبێ ئینتەرنێت پاشەکەوت کرا."
+                                                    }, Toast.LENGTH_SHORT
+                                                ).show()
+                                            } catch (error: Exception) {
+                                                Toast.makeText(
+                                                    context,
+                                                    error.message ?: when (language) {
+                                                        AppLanguage.EN -> "Download failed. Check the connection."
+                                                        AppLanguage.AR -> "فشل التنزيل. تحقق من الاتصال."
+                                                        AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی بپشکنە."
+                                                    }, Toast.LENGTH_LONG
+                                                ).show()
+                                            } finally {
+                                                downloadingUrl = ""
+                                            }
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(27.dp)
+                                ) {
+                                    Text(
+                                        when {
+                                            downloadingUrl == url -> if (language == AppLanguage.EN) "Downloading…" else if (language == AppLanguage.AR) "جارٍ التنزيل…" else "دادەگیرێت…"
+                                            downloadedReference != null -> if (language == AppLanguage.EN) "Offline ✓" else if (language == AppLanguage.AR) "دون إنترنت ✓" else "بێ ئینتەرنێت ✓"
+                                            else -> if (language == AppLanguage.EN) "Download" else if (language == AppLanguage.AR) "تنزيل" else "داگرتن"
+                                        }, fontSize = 9.sp, maxLines = 1
+                                    )
                                 }
-                                if (playing == url) {
-                                    AudioController.stop()
-                                    playing = ""
-                                } else {
-                                    playing = url
-                                    autoPlayKey = "$url|${initialSurah}|${initialAyah}"
-                                    AudioController.playRemote(context, url) { state -> if (!state) playing = "" }
+                                IconButton(onClick = {
+                                    if (reciter.audioType == 0) {
+                                        preferredReciterId = reciter.id
+                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                    }
+                                    if (playing == url) {
+                                        AudioController.stop()
+                                        playing = ""
+                                    } else {
+                                        playing = url
+                                        autoPlayKey = "$url|${initialSurah}|${initialAyah}"
+                                        val offline = downloadedReciterFiles[url] ?: ContentRepository.findDownloadedReciterAudio(context, url)
+                                        if (offline != null) AudioController.play(context, offline) { state -> if (!state) playing = "" }
+                                        else AudioController.playRemote(context, url) { state -> if (!state) playing = "" }
+                                    }
+                                }) {
+                                    Icon(if (playing == url) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(29.dp))
                                 }
-                            }) {
-                                Icon(if (playing == url) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(29.dp))
                             }
                         }
                     }
@@ -3618,7 +3687,16 @@ private object AudioController {
     fun play(context: Context, assetPath: String, callback: (Boolean) -> Unit) {
         stop()
         try {
-            val source = if (assetPath.startsWith("custom:")) {
+            val source = if (assetPath.startsWith("download:")) {
+                val filename = assetPath.removePrefix("download:")
+                require(filename.isNotBlank() && File(filename).name == filename) { "Invalid downloaded recitation reference." }
+                val directory = File(context.filesDir, "recitations").canonicalFile
+                File(directory, filename).canonicalFile.also { file ->
+                    require(file.parentFile == directory && file.isFile && file.length() > 0L) {
+                        "The downloaded recitation is no longer available."
+                    }
+                }
+            } else if (assetPath.startsWith("custom:")) {
                 val filename = assetPath.removePrefix("custom:")
                 require(filename.isNotBlank() && File(filename).name == filename) { "Invalid imported audio reference." }
                 val directory = File(context.filesDir, "adhan-custom").canonicalFile
