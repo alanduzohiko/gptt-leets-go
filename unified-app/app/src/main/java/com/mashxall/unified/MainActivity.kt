@@ -778,6 +778,16 @@ private fun HomeScreen(
                 AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android."
                 AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە."
             }
+            "LOCATION_ACCURACY_TOO_LOW" -> when (language) {
+                AppLanguage.EN -> "Location accuracy is too low to choose a reliable city timetable. Move outdoors or choose your city manually."
+                AppLanguage.AR -> "دقة الموقع منخفضة جدًا لاختيار جدول موثوق. تحرّك إلى مكان مفتوح أو اختر مدينتك يدويًا."
+                AppLanguage.CKB -> "وردی شوێن زۆر کەمە؛ بۆ خشتەی دروست بچۆ بۆ شوێنێکی کراوە یان شارەکەت بە دەستی هەڵبژێرە."
+            }
+            "NO_FRESH_LOCATION" -> when (language) {
+                AppLanguage.EN -> "No fresh location fix was received. Move outdoors or choose your city manually."
+                AppLanguage.AR -> "لم تصل إحداثيات حديثة. انتقل إلى مكان مفتوح أو اختر المدينة يدويًا."
+                AppLanguage.CKB -> "کۆئۆردیناتی نوێ نەگەیشت؛ بچۆ بۆ شوێنێکی کراوە یان شارەکەت بە دەستی هەڵبژێرە."
+            }
             else -> when (language) {
                 AppLanguage.EN -> "Could not obtain location. Choose your city manually."
                 AppLanguage.AR -> "تعذر تحديد الموقع. اختر مدينتك يدويًا."
