@@ -1467,7 +1467,7 @@ private fun SettingsScreen(
                 Icons.Outlined.BookmarkBorder to onBackup
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Data sources & book library"; AppLanguage.AR -> "مصادر البيانات ومكتبة الكتب"; AppLanguage.CKB -> "سەرچاوەی داتا و کتێبخانە" },
+                when (language) { AppLanguage.EN -> "Data sources & rights"; AppLanguage.AR -> "مصادر البيانات والحقوق"; AppLanguage.CKB -> "سەرچاوەی داتا و مافەکان" },
                 when (language) { AppLanguage.EN -> "Offline content, book catalogue and source notes"; AppLanguage.AR -> "المحتوى دون اتصال وفهرس الكتب ومصادر البيانات"; AppLanguage.CKB -> "ناوەڕۆکی ناوخۆیی، فهرستی کتێب و سەرچاوەی داتا" },
                 Icons.Outlined.LibraryBooks to onDataInfo
             )
