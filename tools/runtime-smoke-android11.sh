@@ -596,15 +596,47 @@ fi
 read -r search_field_x search_field_y <<< "$search_field_coords"
 adb shell input tap "$search_field_x" "$search_field_y"
 adb shell input text '1:2'
-sleep 8
-adb shell uiautomator dump /sdcard/mashxall-quran-search-results.xml > dist/runtime-test/uiautomator-quran-search-results.txt 2>&1 || true
-adb pull /sdcard/mashxall-quran-search-results.xml dist/runtime-test/window-quran-search-results.xml >/dev/null 2>&1 || true
-if ! grep -Eq '1:2|١:٢|الحمد لله رب العالمين' dist/runtime-test/window-quran-search-results.xml; then
-  echo "FAIL: searching for verse reference 1:2 did not return its matching Quran result."
+
+# Wait for an actual result card. The editable search field itself contains
+# "1:2", so checking for that string alone can produce a false positive.
+search_ready=0
+for attempt in $(seq 1 30); do
+  adb shell uiautomator dump /sdcard/mashxall-quran-search-results.xml > "dist/runtime-test/uiautomator-quran-search-results-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-quran-search-results.xml dist/runtime-test/window-quran-search-results.xml >/dev/null 2>&1 || true
+  if python3 - dist/runtime-test/window-quran-search-results.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(1)
+nodes = list(root.iter("node"))
+has_reference_result = any(
+    node.attrib.get("class", "").endswith("TextView") and
+    re.search(r"(^|\\s)1:2($|\\s)|(^|\\s)١:٢($|\\s)", node.attrib.get("text", ""))
+    for node in nodes
+)
+has_open_action = any(
+    re.search(r"Open matching Mushaf page|فتح صفحة المصحف المطابقة|پەڕەی هاوتای مصحەف بکەرەوە", node.attrib.get("text", ""), re.I)
+    for node in nodes
+)
+raise SystemExit(0 if has_reference_result and has_open_action else 1)
+PY
+  then
+    search_ready=1
+    echo "PASS: exact verse search returned a visible result card after poll $attempt."
+    break
+  fi
+  if [[ "$attempt" -lt 30 ]]; then sleep 2; fi
+done
+if [[ "$search_ready" -ne 1 ]]; then
+  echo "FAIL: exact Quran verse search did not produce an actual result card."
   cat dist/runtime-test/window-quran-search-results.xml
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-quran-search-failure.txt || true
+  grep -E 'MashxallData|Content query failed|FATAL EXCEPTION|SQLite|Quran' dist/runtime-test/logcat-quran-search-failure.txt | tail -n 100 || true
   exit 1
 fi
-echo "PASS: Quran search resolves a verse reference to its matching result inside the Quran section."
 
 search_result_coords="$(python3 - dist/runtime-test/window-quran-search-results.xml <<'PY'
 import re
@@ -614,10 +646,13 @@ try:
     root = ET.parse(sys.argv[1]).getroot()
 except Exception:
     raise SystemExit(0)
+# Tap the explicit result-card action, not the EditText that still contains 1:2.
+pattern = re.compile(r"Open matching Mushaf page|فتح صفحة المصحف المطابقة|پەڕەی هاوتای مصحەف بکەرەوە", re.I)
 for node in root.iter("node"):
-    if not re.search(r"1:2|١:٢", node.attrib.get("text", "")):
+    if not pattern.search(node.attrib.get("text", "")):
         continue
-    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    bounds = node.attrib.get("bounds", "")
+    match = re.fullmatch(r"\[(-?\\d+),(-?\\d+)\]\[(-?\\d+),(-?\\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -625,7 +660,7 @@ for node in root.iter("node"):
 PY
 )"
 if [[ -z "$search_result_coords" ]]; then
-  echo "FAIL: Quran search results did not expose an accessible verse reference."
+  echo "FAIL: Quran search result card had no accessible Open Mushaf action."
   cat dist/runtime-test/window-quran-search-results.xml
   exit 1
 fi
