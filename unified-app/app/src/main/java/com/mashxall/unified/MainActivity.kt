@@ -243,7 +243,13 @@ fun MashxallApp(startScreen: String? = null) {
     var openQuranReaderSettingsRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var audioAutoPlayRequested by rememberSaveable { mutableStateOf(false) }
-    var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
+    var selectedCity by rememberSaveable {
+        mutableStateOf(
+            prefs.getString("selected_city", "").orEmpty().let { saved ->
+                if (saved.equals("Erbil", ignoreCase = true) && !prefs.getBoolean("selected_city_explicit", false)) "" else saved
+            }
+        )
+    }
     var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -386,7 +392,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "about_data" -> DataSourcesScreen(language, foreground, cardColor)
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = {
                                     selectedCity = it
-                                    prefs.edit().putString("selected_city", it).apply()
+                                    prefs.edit().putString("selected_city", it).putBoolean("selected_city_explicit", true).apply()
                                 }, onQibla = { navigateTo("qibla") })
                                 "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
                                     selectedSurah = s; selectedAyah = a
