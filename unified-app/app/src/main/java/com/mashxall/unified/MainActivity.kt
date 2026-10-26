@@ -724,16 +724,14 @@ private fun HomeScreen(
     }
     var manualCityLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualCityLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
-    var calculationMethodId by remember { mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl") }
-    var asrSchoolId by remember { mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi") }
+    val calculationMethodId = "mwl"
+    val asrSchoolId = "shafi"
     var locationMessage by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
             use24Hour = prefs.getBoolean("time_format_24h", false)
-            calculationMethodId = prefs.getString("prayer_method", "mwl") ?: "mwl"
-            asrSchoolId = prefs.getString("asr_school", "shafi") ?: "shafi"
             manualCityLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
             manualCityLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
             delay(60_000L)
