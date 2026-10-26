@@ -67,8 +67,10 @@ object PrayerAlarmScheduler {
     }
 
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
-        val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
+        // Source-supplied city timetable rows remain preferred. These fixed
+        // settings are only used when no verified source timetable exists.
+        val method = PrayerCalculationMethod.fromId("mwl")
+        val school = AsrCalculationSchool.fromId("shafi")
         val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
         if (gpsLatitude != null && gpsLongitude != null) {
