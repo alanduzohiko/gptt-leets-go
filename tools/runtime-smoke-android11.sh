@@ -402,7 +402,7 @@ sleep 2
 adb shell uiautomator dump /sdcard/mashxall-mushaf-after-settings.xml > dist/runtime-test/uiautomator-mushaf-after-settings.txt 2>&1 || true
 adb pull /sdcard/mashxall-mushaf-after-settings.xml dist/runtime-test/window-mushaf-after-settings.xml >/dev/null 2>&1 || true
 if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-mushaf-after-settings.xml ||
-   ! grep -q '604' dist/runtime-test/window-mushaf-after-settings.xml; then
+   ! grep -Eq '604|٦٠٤|۶۰۴' dist/runtime-test/window-mushaf-after-settings.xml; then
   echo "FAIL: dismissing reader settings exited the Mushaf instead of returning to the current page."
   cat dist/runtime-test/window-mushaf-after-settings.xml
   exit 1
@@ -710,7 +710,7 @@ sleep 7
 adb shell uiautomator dump /sdcard/mashxall-quran-search-result-open.xml > dist/runtime-test/uiautomator-quran-search-result-open.txt 2>&1 || true
 adb pull /sdcard/mashxall-quran-search-result-open.xml dist/runtime-test/window-quran-search-result-open.xml >/dev/null 2>&1 || true
 if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-quran-search-result-open.xml ||
-   ! grep -q '604' dist/runtime-test/window-quran-search-result-open.xml; then
+   ! grep -Eq '604|٦٠٤|۶۰۴' dist/runtime-test/window-quran-search-result-open.xml; then
   echo "FAIL: selecting a searched Quran verse did not open the corresponding graphic Mushaf page."
   cat dist/runtime-test/window-quran-search-result-open.xml
   exit 1
@@ -1194,7 +1194,7 @@ sleep 4
 adb shell uiautomator dump /sdcard/mashxall-bookmark-page.xml > dist/runtime-test/uiautomator-bookmark-page.txt 2>&1 || true
 adb pull /sdcard/mashxall-bookmark-page.xml dist/runtime-test/window-bookmark-page.xml >/dev/null 2>&1 || true
 if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-bookmark-page.xml ||
-   ! grep -q '604' dist/runtime-test/window-bookmark-page.xml ||
+   ! grep -Eq '604|٦٠٤|۶۰۴' dist/runtime-test/window-bookmark-page.xml ||
    ! grep -Eq 'Exit|خروج|دەرچوون' dist/runtime-test/window-bookmark-page.xml; then
   echo "FAIL: dismissing the saved-verse panel did not reveal the graphic Mushaf page."
   cat dist/runtime-test/window-bookmark-page.xml
@@ -1249,7 +1249,7 @@ sleep 7
 adb shell uiautomator dump /sdcard/mashxall-home-resume.xml > dist/runtime-test/uiautomator-home-resume.txt 2>&1 || true
 adb pull /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml >/dev/null 2>&1 || true
 if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.xml ||
-   ! grep -q '604' dist/runtime-test/window-home-resume.xml; then
+   ! grep -Eq '604|٦٠٤|۶۰۴' dist/runtime-test/window-home-resume.xml; then
   echo "FAIL: Continue reading did not resume the saved 604-page graphic Mushaf."
   cat dist/runtime-test/window-home-resume.xml
   exit 1
