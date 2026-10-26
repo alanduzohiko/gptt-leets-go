@@ -91,4 +91,14 @@ class PrayerTimeCorrectionTest {
         assertEquals(salawati, ContentRepository.orderPrayerCandidates(candidates).first().first)
         assertEquals(noor, ContentRepository.orderPrayerCandidates(listOf(noor to 0.1, salawati to 0.3)).first().first)
     }
+
+    @Test
+    fun notificationCityNeverSilentlyDefaultsToErbil() {
+        assertEquals(null, explicitPrayerCityOrNull(null, false))
+        assertEquals(null, explicitPrayerCityOrNull("", false))
+        assertEquals(null, explicitPrayerCityOrNull("Erbil", false))
+        assertEquals("Erbil", explicitPrayerCityOrNull("Erbil", true))
+        assertEquals("Sulaymaniyah", explicitPrayerCityOrNull(" Sulaymaniyah ", true))
+    }
+
 }
