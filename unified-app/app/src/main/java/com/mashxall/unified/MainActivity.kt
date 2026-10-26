@@ -206,8 +206,12 @@ class MainActivity : ComponentActivity() {
 }
 
 private fun normalizeAppRoute(candidate: String?): String? {
+    // "books" is a real detail route. Do not collapse it into the More tab:
+    // its BooksScreen owns the source-backed PDF catalogue and is also used by
+    // explicit intents and smoke tests. Legacy "library"/"worship" still map
+    // to the More landing page.
     val route = when (candidate) {
-        "library", "books", "worship" -> "more"
+        "library", "worship" -> "more"
         else -> candidate
     }
     return route?.takeIf { key ->
