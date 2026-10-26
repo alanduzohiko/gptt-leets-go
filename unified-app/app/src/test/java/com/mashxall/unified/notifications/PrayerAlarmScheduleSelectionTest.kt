@@ -7,6 +7,18 @@ import org.junit.Test
 
 class PrayerAlarmScheduleSelectionTest {
     @Test
+    fun missingOrImplicitCityIsNeverUsedForPrayerAlarms() {
+        assertFalse(explicitPrayerCityOrNull("Erbil", false) != null)
+        assertFalse(explicitPrayerCityOrNull(null, true) != null)
+        assertFalse(explicitPrayerCityOrNull("   ", true) != null)
+    }
+
+    @Test
+    fun explicitlyChosenCityIsTrimmedAndReturnedForPrayerAlarms() {
+        assertTrue(explicitPrayerCityOrNull("  Sulaymaniyah  ", true) == "Sulaymaniyah")
+    }
+
+    @Test
     fun absentWeekdayPreferenceMeansEveryDayForExistingUsers() {
         (Calendar.SUNDAY..Calendar.SATURDAY).forEach { day ->
             assertTrue(PrayerAlarmScheduler.isPrayerDaySelected(null, day))
