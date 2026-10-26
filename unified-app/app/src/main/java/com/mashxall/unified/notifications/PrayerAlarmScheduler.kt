@@ -79,7 +79,10 @@ object PrayerAlarmScheduler {
         if (manualLatitude != null && manualLongitude != null) {
             return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude, manualLongitude, date, method, school)
         }
-        val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
+        val cityName = explicitPrayerCityOrNull(
+            prefs.getString("selected_city", null),
+            prefs.getBoolean("selected_city_explicit", false)
+        ) ?: return null
         val countryName = prefs.getString("selected_city_country", "") ?: ""
         ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
         val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
