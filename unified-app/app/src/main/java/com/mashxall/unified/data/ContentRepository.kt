@@ -1532,7 +1532,12 @@ object ContentRepository {
                 }
             }
         }
-        (noor + salawati)
+        // Prefer Salawati records when both source databases expose the same
+        // named location; keep Noor-only cities as a fallback. This avoids two
+        // indistinguishable entries where one has no country label.
+        (salawati + noor.filter { candidate ->
+            salawati.none { it.name.trim().equals(candidate.name.trim(), ignoreCase = true) }
+        })
             .distinctBy { "${it.name.trim().lowercase(Locale.ROOT)}|${it.country.trim().lowercase(Locale.ROOT)}" }
             .let { results ->
                 if (term.isBlank()) results
