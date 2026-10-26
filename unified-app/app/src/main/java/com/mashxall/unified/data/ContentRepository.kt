@@ -1454,65 +1454,46 @@ object ContentRepository {
      * locations into Compose state. Results preserve the country so same-name
      * cities in different countries remain selectable.
      */
+    /**
+     * Search Salawati's full location catalogue. The prayer screen must use the
+     * same source the user requested; Noor's unrelated city list is not merged
+     * into prayer-location choices. Dependent locations are searchable too.
+     */
     suspend fun searchCities(context: Context, query: String = "", limit: Int = 220): List<City> = withContext(Dispatchers.IO) {
         val term = query.trim()
         val pageLimit = limit.coerceIn(20, 300)
         val pattern = "%$term%"
-        val noor = queryDb(context, PRAYER_DB, emptyList<City>()) { db ->
-            val sql = if (term.isBlank()) {
-                """
-                SELECT city,lat,lon
-                FROM cities
-                ORDER BY CASE
-                    WHEN lower(city) LIKE '%sulaymaniyah%' OR lower(city) LIKE '%sulaimani%' OR lower(city) LIKE '%halabja%' THEN 0
-                    WHEN lower(city) LIKE '%erbil%' OR lower(city) LIKE '%kirkuk%' OR lower(city) LIKE '%baghdad%' THEN 1
-                    WHEN lower(city) LIKE '%duhok%' OR lower(city) LIKE '%mosul%' THEN 2
-                    ELSE 3 END, city
-                LIMIT ?
-                """.trimIndent()
-            } else {
-                """
-                SELECT city,lat,lon FROM cities
-                WHERE city LIKE ?
-                ORDER BY CASE WHEN lower(city)=lower(?) THEN 0 WHEN lower(city) LIKE lower(?) THEN 1 ELSE 2 END,city
-                LIMIT ?
-                """.trimIndent()
-            }
-            val args = if (term.isBlank()) arrayOf(pageLimit.toString())
-                else arrayOf(pattern, term, "$term%", pageLimit.toString())
-            db.rawQuery(sql, args).use { c ->
-                buildList {
-                    while (c.moveToNext()) add(City(c.string("city"), c.double("lat"), c.double("lon"), ""))
-                }
-            }
-        }
-        val salawati = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
-            val where = if (term.isBlank()) {
-                """
-                (
-                    lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%'
-                    OR lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
-                    OR lower(l.name) LIKE '%halabja%' OR lower(l.name) LIKE '%erbil%'
-                    OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%kirkuk%'
-                    OR lower(l.name) LIKE '%baghdad%' OR lower(l.name) LIKE '%duhok%'
-                    OR lower(l.name) LIKE '%mosul%' OR lower(l.name) LIKE '%basra%'
-                    OR lower(l.name) LIKE '%najaf%' OR lower(l.name) LIKE '%karbala%'
-                )
-                """.trimIndent()
-            } else "(l.name LIKE ? OR country.name LIKE ?)"
+        val where = if (term.isBlank()) {
+            """
+            (
+                lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%'
+                OR lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
+                OR lower(l.name) LIKE '%halabja%' OR lower(l.name) LIKE '%erbil%'
+                OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%kirkuk%'
+                OR lower(l.name) LIKE '%baghdad%' OR lower(l.name) LIKE '%duhok%'
+                OR lower(l.name) LIKE '%mosul%' OR lower(l.name) LIKE '%basra%'
+                OR lower(l.name) LIKE '%najaf%' OR lower(l.name) LIKE '%karbala%'
+            )
+            """.trimIndent()
+        } else "(l.name LIKE ? OR country.name LIKE ?)"
+        queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
             val sql = """
-                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
+                SELECT l.name AS city,l.latitude AS lat,l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name
                 FROM location l
-                JOIN prayer_time pt ON pt.location_id=l._id
                 LEFT JOIN country ON country._id=l.country_id
                 WHERE $where
+                  AND EXISTS (
+                    SELECT 1 FROM prayer_time available
+                    WHERE available.location_id = CASE
+                        WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN l._id
+                        WHEN COALESCE(l.prayer_dependent_id,0)>0 THEN l.prayer_dependent_id
+                        ELSE l._id
+                    END
+                  )
                 GROUP BY l._id
                 ORDER BY
-                    CASE
-                        WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0
-                        WHEN lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%' THEN 1
-                        ELSE 2
-                    END,
+                    CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
                     CASE WHEN lower(l.name)=lower(?) THEN 0 WHEN lower(l.name) LIKE lower(?) THEN 1 ELSE 2 END,
                     country_name,l.name
                 LIMIT ?
@@ -1522,67 +1503,49 @@ object ContentRepository {
             } else {
                 arrayOf(pattern, pattern, term, "$term%", pageLimit.toString())
             }
-            db.rawQuery(sql, args).use { c ->
+            db.rawQuery(sql, args).use { cursor ->
                 buildList {
-                    while (c.moveToNext()) add(
-                        City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name"))
-                    )
+                    while (cursor.moveToNext()) {
+                        add(City(cursor.string("city"), cursor.double("lat"), cursor.double("lon"), cursor.string("country_name")))
+                    }
                 }
             }
         }
-        (noor + salawati)
-            .distinctBy { "${it.name.trim().lowercase(Locale.ROOT)}|${it.country.trim().lowercase(Locale.ROOT)}" }
-            .let { results ->
-                if (term.isBlank()) results
-                else results.sortedWith(
-                    compareBy<City> {
-                        when {
-                            it.name.equals(term, true) -> 0
-                            it.name.startsWith(term, true) -> 1
-                            it.country.equals(term, true) -> 2
-                            else -> 3
-                        }
-                    }.thenBy { it.country.lowercase(Locale.ROOT) }.thenBy { it.name.lowercase(Locale.ROOT) }
-                )
-            }
     }
 
     suspend fun findCityByName(context: Context, name: String, countryName: String = ""): City? = withContext(Dispatchers.IO) {
-        val noor = queryDb(context, PRAYER_DB, null as City?) { db ->
-            db.rawQuery(
-                "SELECT city,lat,lon FROM cities WHERE lower(city)=lower(?) LIMIT 1",
-                arrayOf(name)
-            ).use { c ->
-                if (c.moveToFirst()) City(c.string("city"), c.double("lat"), c.double("lon")) else null
-            }
-        }
-        if (noor != null && countryName.isBlank()) return@withContext noor
-        queryDb(context, SALAWATI_DB, noor) { db ->
-            val sql = if (countryName.isBlank()) {
-                """
-                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
-                FROM location l LEFT JOIN country ON country._id=l.country_id
+        queryDb(context, SALAWATI_DB, null as City?) { db ->
+            val sql = """
+                SELECT l.name AS city,l.latitude AS lat,l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name
+                FROM location l
+                LEFT JOIN country ON country._id=l.country_id
                 WHERE lower(l.name)=lower(?)
-                ORDER BY CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END
+                  AND (?='' OR lower(country.name)=lower(?))
+                  AND EXISTS (
+                    SELECT 1 FROM prayer_time available
+                    WHERE available.location_id = CASE
+                        WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN l._id
+                        WHEN COALESCE(l.prayer_dependent_id,0)>0 THEN l.prayer_dependent_id
+                        ELSE l._id
+                    END
+                  )
+                ORDER BY
+                    CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
+                    l._id
                 LIMIT 1
-                """.trimIndent()
-            } else {
-                """
-                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
-                FROM location l LEFT JOIN country ON country._id=l.country_id
-                WHERE lower(l.name)=lower(?) AND lower(country.name)=lower(?)
-                LIMIT 1
-                """.trimIndent()
-            }
-            val args = if (countryName.isBlank()) arrayOf(name) else arrayOf(name, countryName)
-            db.rawQuery(sql, args).use { c ->
-                if (c.moveToFirst()) City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name")) else noor
+            """.trimIndent()
+            db.rawQuery(sql, arrayOf(name, countryName, countryName)).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    City(cursor.string("city"), cursor.double("lat"), cursor.double("lon"), cursor.string("country_name"))
+                } else null
             }
         }
     }
 
-    /** Limited compatibility helper for callers that only need common city choices. */
+    /** Load the same Salawati-backed catalogue for non-search city pickers. */
     suspend fun loadCities(context: Context): List<City> = searchCities(context, "", limit = 250)
+
 
     internal fun addMinutesToPrayerTime(value: String, offsetMinutes: Int): String {
         if (offsetMinutes == 0) return value
