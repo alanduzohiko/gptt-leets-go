@@ -1917,39 +1917,50 @@ private fun MushafPageViewer(
     }
     Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF0C1110) else if (sepiaMode) Color(0xFFF0E1BE) else Color(0xFFF6F3EB))) {
         Row(
-            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 3.dp),
+            Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(42.dp)) {
+            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Outlined.ChevronRight,
-                    contentDescription = when (language) { AppLanguage.EN -> "Exit Mushaf"; AppLanguage.AR -> "الخروج من المصحف"; AppLanguage.CKB -> "دەرچوون لە مصحەف" },
+                    contentDescription = when (language) {
+                        AppLanguage.EN -> "Exit Mushaf"
+                        AppLanguage.AR -> "الخروج من المصحف"
+                        AppLanguage.CKB -> "دەرچوون لە مصحەف"
+                    },
                     tint = Gold,
                     modifier = Modifier.rotate(if (language == AppLanguage.EN) 180f else 0f)
                 )
             }
-            Column(Modifier.weight(1f).padding(start = 3.dp)) {
+            Column(Modifier.weight(1f).padding(start = 2.dp, end = 3.dp)) {
                 Text(
-                    tr(language, "mushaf_view") + if (surahTitle.isBlank()) "" else " • " + surahTitle,
-                    color = foreground, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1
+                    surahTitle.ifBlank { tr(language, "mushaf_view") },
+                    color = foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                    maxLines = 1
                 )
                 Text(
-                    tr(language, "page") + " " + page + " / 604",
-                    color = foreground.copy(alpha = 0.62f), fontSize = 10.sp
+                    when (language) {
+                        AppLanguage.EN -> "Mushaf • 604 pages"
+                        AppLanguage.AR -> "المصحف • ٦٠٤ صفحات"
+                        AppLanguage.CKB -> "مصحەف • ٦٠٤ پەڕە"
+                    },
+                    color = foreground.copy(alpha = 0.58f), fontSize = 9.sp, maxLines = 1
                 )
             }
             IconButton(
-                onClick = {
-                    val pageSurah = pageVerses.firstOrNull()?.surah
-                    onPlaySurahAudio(pageSurah ?: 1)
-                },
-                enabled = pageVerses.isNotEmpty() && !loading
+                onClick = { pageVerses.firstOrNull()?.surah?.let(onPlaySurahAudio) },
+                enabled = pageVerses.isNotEmpty() && !loading,
+                modifier = Modifier.size(40.dp)
             ) {
-                Icon(Icons.Outlined.PlayCircle, contentDescription = when (language) {
-                    AppLanguage.EN -> "Play full surah"
-                    AppLanguage.AR -> "تشغيل السورة كاملة"
-                    AppLanguage.CKB -> "لێدانی هەموو سوورەت"
-                }, tint = Gold, modifier = Modifier.size(25.dp))
+                Icon(
+                    Icons.Outlined.PlayCircle,
+                    contentDescription = when (language) {
+                        AppLanguage.EN -> "Play current surah"
+                        AppLanguage.AR -> "تشغيل السورة الحالية"
+                        AppLanguage.CKB -> "لێدانی ئەم سوورەتە"
+                    }, tint = if (pageVerses.isNotEmpty() && !loading) Gold else foreground.copy(alpha = 0.3f),
+                    modifier = Modifier.size(24.dp)
+                )
             }
             IconButton(
                 onClick = {
@@ -1965,7 +1976,8 @@ private fun MushafPageViewer(
                         language == AppLanguage.AR -> "تمت إزالة علامة الصفحة"
                         else -> "نیشانەی پەڕەکە سڕایەوە"
                     }, Toast.LENGTH_SHORT).show()
-                }
+                },
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     Icons.Outlined.BookmarkBorder,
@@ -1977,42 +1989,22 @@ private fun MushafPageViewer(
                     tint = if (savedPageKeys.contains(page.toString())) Gold else foreground.copy(alpha = 0.75f)
                 )
             }
-            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
+            IconButton(onClick = onReaderSettings, modifier = Modifier.size(40.dp)) {
                 Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = when (language) { AppLanguage.EN -> "Previous page"; AppLanguage.AR -> "الصفحة السابقة"; AppLanguage.CKB -> "پەڕەی پێشوو" },
-                    tint = if (page > 1) Gold else foreground.copy(alpha = 0.24f),
-                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 180f else 0f)
+                    Icons.Outlined.Tune,
+                    contentDescription = when (language) {
+                        AppLanguage.EN -> "Reader settings"
+                        AppLanguage.AR -> "إعدادات المصحف"
+                        AppLanguage.CKB -> "ڕێکخستنەکانی مصحەف"
+                    }, tint = Gold
                 )
-            }
-            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
-                Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = when (language) { AppLanguage.EN -> "Next page"; AppLanguage.AR -> "الصفحة التالية"; AppLanguage.CKB -> "پەڕەی دواتر" },
-                    tint = if (page < 604) Gold else foreground.copy(alpha = 0.24f),
-                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 0f else 180f)
-                )
-            }
-            IconButton(onClick = {
-                pageInput = page.toString()
-                showPagePicker = true
-                onInternalOverlayChanged(true)
-            }) {
-                Box(
-                    Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Gold.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) { Text(page.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-            }
-            IconButton(onClick = onReaderSettings) {
-                Icon(Icons.Outlined.Tune, contentDescription = when (language) {
-                    AppLanguage.EN -> "Reader settings"
-                    AppLanguage.AR -> "إعدادات المصحف"
-                    AppLanguage.CKB -> "ڕێکخستنەکانی مصحەف"
-                }, tint = Gold)
             }
             Box {
-                IconButton(onClick = { showReaderMenu = true; onInternalOverlayChanged(true) }) {
-                    Text("⋮", color = Gold, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                IconButton(
+                    onClick = { showReaderMenu = true; onInternalOverlayChanged(true) },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Text("⋮", color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                 }
                 DropdownMenu(expanded = showReaderMenu, onDismissRequest = {
                     showReaderMenu = false
@@ -2054,7 +2046,80 @@ private fun MushafPageViewer(
                 }
             }
         }
-        Spacer(Modifier.height(2.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().height(42.dp).padding(horizontal = 15.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onPageChange(page - 1)
+                },
+                enabled = page > 1 && !loading,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = when (language) {
+                        AppLanguage.EN -> "Previous page"
+                        AppLanguage.AR -> "الصفحة السابقة"
+                        AppLanguage.CKB -> "پەڕەی پێشوو"
+                    },
+                    tint = if (page > 1) Gold else foreground.copy(alpha = 0.24f),
+                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 180f else 0f)
+                )
+            }
+            Surface(
+                color = Gold.copy(alpha = 0.13f),
+                contentColor = Gold,
+                shape = RoundedCornerShape(11.dp),
+                border = BorderStroke(1.dp, Gold.copy(alpha = 0.3f)),
+                modifier = Modifier
+                    .height(32.dp)
+                    .clickable {
+                        pageInput = page.toString()
+                        showPagePicker = true
+                        onInternalOverlayChanged(true)
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Outlined.MenuBook, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Page $page of 604"
+                            AppLanguage.AR -> "الصفحة $page من ٦٠٤"
+                            AppLanguage.CKB -> "پەڕە $page لە ٦٠٤"
+                        }, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            IconButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onPageChange(page + 1)
+                },
+                enabled = page < 604 && !loading,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = when (language) {
+                        AppLanguage.EN -> "Next page"
+                        AppLanguage.AR -> "الصفحة التالية"
+                        AppLanguage.CKB -> "پەڕەی دواتر"
+                    },
+                    tint = if (page < 604) Gold else foreground.copy(alpha = 0.24f),
+                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 0f else 180f)
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(
