@@ -614,7 +614,7 @@ except Exception:
 nodes = list(root.iter("node"))
 has_reference_result = any(
     node.attrib.get("class", "").endswith("TextView") and
-    re.search(r"(^|\\s)1:2($|\\s)|(^|\\s)١:٢($|\\s)", node.attrib.get("text", ""))
+    re.search(r"(^|\s)1:2($|\s)|(^|\s)١:٢($|\s)", node.attrib.get("text", ""))
     for node in nodes
 )
 has_open_action = any(
@@ -652,7 +652,7 @@ for node in root.iter("node"):
     if not pattern.search(node.attrib.get("text", "")):
         continue
     bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\[(-?\\d+),(-?\\d+)\]\[(-?\\d+),(-?\\d+)\]", bounds)
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
