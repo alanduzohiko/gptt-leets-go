@@ -415,7 +415,7 @@ fun MashxallApp(startScreen: String? = null) {
                                         navigateTo("pdf")
                                     }
                                 )
-                                "library", "books", "worship" -> MoreScreen(language, foreground, cardColor, ::navigateTo)
+                                "library", "worship" -> MoreScreen(language, foreground, cardColor, ::navigateTo)
                                 "about_data" -> DataSourcesScreen(language, foreground, cardColor)
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = {
                                     selectedCity = it
@@ -572,6 +572,7 @@ private fun MoreScreen(
 ) {
     val destinations = listOf(
         MoreDestination("prayer", tr(language, "prayer"), tr(language, "prayer_sub"), Icons.Outlined.Schedule, Color(0xFF82B7E8)),
+        MoreDestination("books", tr(language, "books"), tr(language, "books_sub"), Icons.Outlined.LibraryBooks, Color(0xFF9BC8A2)),
         MoreDestination("qibla", tr(language, "qibla"), tr(language, "qibla_sub"), Icons.Outlined.Explore, Color(0xFF85C4C6)),
         MoreDestination("hadith", tr(language, "hadith"), tr(language, "hadith_sub"), Icons.Outlined.LibraryBooks, Color(0xFFA99AE8)),
         MoreDestination("farmuda", tr(language, "farmuda"), tr(language, "farmuda_sub"), Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
