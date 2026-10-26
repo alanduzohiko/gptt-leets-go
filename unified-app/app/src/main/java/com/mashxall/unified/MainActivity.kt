@@ -267,7 +267,7 @@ fun MashxallApp(startScreen: String? = null) {
         audioAutoPlayRequested = false
     }
 
-    BackHandler(enabled = !isRoot) { navigateBack() }
+    BackHandler(enabled = !immersiveMushaf && screen != AppScreen.HOME.key) { navigateBack() }
 
     val background = if (dark) Ink else Color(0xFFF4F1E7)
     val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
@@ -495,7 +495,6 @@ private fun MoreScreen(
         HomeModule(AppScreen.LEXICON, "lexicon", "lexicon_sub", Icons.Outlined.Search, Color(0xFFB3A2F0)),
         HomeModule(AppScreen.BOOKMARKS, "bookmarks", "bookmarks_sub", Icons.Outlined.BookmarkBorder, Gold),
         HomeModule(AppScreen.BACKUP, "backup_title", "backup_subtitle", Icons.Outlined.Tune, Emerald),
-        HomeModule(AppScreen.LIBRARY, "about_data", "data_notice", Icons.Outlined.LibraryBooks, Gold)
     )
     val visibleModules = modules.filter { module ->
         query.isBlank() ||
