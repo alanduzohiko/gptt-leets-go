@@ -405,6 +405,12 @@ if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-mushaf-after
    ! grep -Eq '604|٦٠٤|۶۰۴' dist/runtime-test/window-mushaf-after-settings.xml; then
   echo "FAIL: dismissing reader settings exited the Mushaf instead of returning to the current page."
   cat dist/runtime-test/window-mushaf-after-settings.xml
+  timeout --foreground 20s "$ADB_BIN" logcat -d -v threadtime > dist/runtime-test/logcat-reader-settings-failure.txt || true
+  timeout --foreground 15s "$ADB_BIN" shell dumpsys activity lastanr > dist/runtime-test/lastanr-reader-settings.txt 2>&1 || true
+  echo "=== Reader/settings ANR and main-thread diagnostics ==="
+  grep -E -i 'ANR in|Reason:|Input dispatching timed out|main thread|FATAL EXCEPTION|AndroidRuntime|MashxallData|Content query failed|SQLite|Typeface|font' \
+    dist/runtime-test/logcat-reader-settings-failure.txt | tail -n 160 || true
+  cat dist/runtime-test/lastanr-reader-settings.txt || true
   exit 1
 fi
 
