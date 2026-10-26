@@ -487,21 +487,27 @@ private fun prayerSourceLabel(source: String, language: AppLanguage): String {
 }
 
 internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boolean): String {
-    val match = Regex("""(\d{1,2}):(\d{2})(?: ?(AM|PM))?""", RegexOption.IGNORE_CASE).find(raw.trim())
-        ?: return raw
-    var hour = match.groupValues[1].toIntOrNull() ?: return raw
-    val minuteNumber = match.groupValues[2].toIntOrNull() ?: return raw
+    // Match the complete source value so an existing AM/PM suffix can never be
+    // silently ignored by a partial Regex.find() match.
+    val match = Regex("""^(\\d{1,2}):(\\d{2})(?:\\s*(AM|PM))?$""", RegexOption.IGNORE_CASE)
+        .matchEntire(raw.trim()) ?: return raw
+    val sourceHour = match.groupValues[1].toIntOrNull() ?: return raw
     val minute = match.groupValues[2]
-    val suffix = match.groupValues.getOrNull(3).orEmpty().uppercase(Locale.ROOT)
+    val minuteNumber = minute.toIntOrNull() ?: return raw
+    val suffix = match.groupValues[3].uppercase(Locale.ROOT)
     if (minuteNumber !in 0..59) return raw
-    if (suffix.isNotBlank() && hour !in 1..12) return raw
-    if (suffix.isBlank() && hour !in 0..23) return raw
+    if (suffix.isNotBlank() && sourceHour !in 1..12) return raw
+    if (suffix.isBlank() && sourceHour !in 0..23) return raw
 
-    val hour24 = if (suffix.isNotBlank()) (hour % 12) + if (suffix == "PM") 12 else 0 else hour % 24
+    val hour24 = when {
+        suffix == "AM" -> sourceHour % 12
+        suffix == "PM" -> (sourceHour % 12) + 12
+        else -> sourceHour
+    }
     if (use24Hour) return String.format(Locale.US, "%02d:%s", hour24, minute)
-    val isPm = if (suffix.isNotBlank()) suffix == "PM" else hour >= 12
-    if (suffix.isBlank()) hour %= 24
-    val hour12 = when (hour % 12) { 0 -> 12; else -> hour % 12 }
+
+    val hour12 = when (hour24 % 12) { 0 -> 12; else -> hour24 % 12 }
+    val isPm = hour24 >= 12
     val marker = if (language == AppLanguage.AR) {
         if (isPm) "مساءً" else "صباحًا"
     } else if (language == AppLanguage.CKB) {
