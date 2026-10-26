@@ -1838,6 +1838,7 @@ private fun MushafPageViewer(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
@@ -1863,9 +1864,11 @@ private fun MushafPageViewer(
             swipeDistance += panChange.x
             if (swipeDistance < -120f && page < 604) {
                 swipeDistance = 0f
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onPageChange(page + 1)
             } else if (swipeDistance > 120f && page > 1) {
                 swipeDistance = 0f
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onPageChange(page - 1)
             }
         } else {
@@ -2025,6 +2028,22 @@ private fun MushafPageViewer(
                         }
                     )
                     DropdownMenuItem(
+                        text = {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Choose another surah"
+                                    AppLanguage.AR -> "اختيار سورة أخرى"
+                                    AppLanguage.CKB -> "سوورەتێکی تر هەڵبژێرە"
+                                }
+                            )
+                        },
+                        onClick = {
+                            showReaderMenu = false
+                            onInternalOverlayChanged(false)
+                            onExitFullscreen()
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text(if (language == AppLanguage.EN) "Reader appearance" else if (language == AppLanguage.AR) "مظهر المصحف" else "ڕووکاری مصحەف") },
                         onClick = {
                             showReaderMenu = false
@@ -2083,9 +2102,10 @@ private fun MushafPageViewer(
                                                 scope.launch {
                                                     val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
                                                     if (hit != null) {
-                                                 selectedVerse = hit
-                                                 onVerseClick(hit.surah, hit.ayah)
-                                             }
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        selectedVerse = hit
+                                                        onVerseClick(hit.surah, hit.ayah)
+                                                    }
                                                 }
                                             }
                                         }
