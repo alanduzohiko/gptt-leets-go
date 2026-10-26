@@ -22,6 +22,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class Surah(val number: Int, val arabicName: String, val englishName: String, val ayahCount: Int, val meaningEnglish: String = "", val place: String = "", val uniqueTitle: String = "")
 data class QuranTranslation(val id: String, val ckb: String, val arabic: String, val english: String)
@@ -2155,6 +2157,79 @@ object ContentRepository {
         val fileName = if (reciter.audioType == 0) "%03d%03d.mp3".format(Locale.US, surah.coerceIn(1, 114), ayah.coerceAtLeast(1))
             else "%03d.mp3".format(Locale.US, surah.coerceIn(1, 114))
         return base + fileName
+    }
+
+    private const val MAX_RECITER_DOWNLOAD_BYTES = 200L * 1024L * 1024L
+
+    private fun reciterDownloadFile(context: Context, sourceUrl: String): File {
+        val cleanUrl = sourceUrl.substringBefore('#')
+        val extension = cleanUrl.substringBefore('?').substringAfterLast('.', "mp3")
+            .lowercase(Locale.ROOT)
+            .takeIf { it in setOf("mp3", "m4a", "aac", "ogg", "opus", "flac", "wav") }
+            ?: "mp3"
+        val digest = MessageDigest.getInstance("SHA-256").digest(cleanUrl.toByteArray())
+            .take(16).joinToString("") { "%02x".format(it) }
+        val directory = File(context.filesDir, "recitations").canonicalFile
+        require(directory.exists() || directory.mkdirs()) { "Could not create the recitation download folder." }
+        return File(directory, "$digest.$extension").canonicalFile.also { file ->
+            require(file.parentFile == directory) { "Invalid recitation download path." }
+        }
+    }
+
+    /** Returns a private-file reference that AudioController can play offline. */
+    fun findDownloadedReciterAudio(context: Context, sourceUrl: String): String? =
+        runCatching {
+            reciterDownloadFile(context, sourceUrl).takeIf { it.isFile && it.length() > 0L }
+                ?.let { "download:" + it.name }
+        }.getOrNull()
+
+    /**
+     * Download only source-provided reciter URLs; the library entry itself remains
+     * the source of truth. The download is bounded and saved into app-private storage.
+     */
+    suspend fun downloadReciterAudio(context: Context, sourceUrl: String): String = withContext(Dispatchers.IO) {
+        findDownloadedReciterAudio(context, sourceUrl)?.let { return@withContext it }
+        val uri = Uri.parse(sourceUrl)
+        require(uri.scheme.equals("https", true) || uri.scheme.equals("http", true)) {
+            "This recitation has no valid online download URL."
+        }
+        require(!uri.host.isNullOrBlank()) { "This recitation URL is incomplete." }
+        val destination = reciterDownloadFile(context, sourceUrl)
+        val temporary = File(destination.parentFile, destination.name + ".part")
+        val connection = (URL(sourceUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 25_000
+            instanceFollowRedirects = true
+            requestMethod = "GET"
+        }
+        try {
+            connection.connect()
+            require(connection.responseCode in 200..299) { "The recitation server returned HTTP ${connection.responseCode}." }
+            val declaredLength = connection.contentLengthLong
+            require(declaredLength <= MAX_RECITER_DOWNLOAD_BYTES) { "The recitation is larger than the 200 MB offline limit." }
+            var total = 0L
+            connection.inputStream.buffered().use { input ->
+                temporary.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= MAX_RECITER_DOWNLOAD_BYTES) { "The recitation exceeded the 200 MB offline limit." }
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            require(temporary.isFile && temporary.length() > 0L) { "The download was empty." }
+            if (destination.exists()) destination.delete()
+            require(temporary.renameTo(destination)) { "Could not save the downloaded recitation." }
+            "download:" + destination.name
+        } catch (error: Exception) {
+            temporary.delete()
+            throw error
+        } finally {
+            connection.disconnect()
+        }
     }
 
     suspend fun loadFarmuda(context: Context, query: String = ""): List<FarmudaItem> = withContext(Dispatchers.IO) {
