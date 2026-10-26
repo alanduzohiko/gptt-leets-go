@@ -5470,6 +5470,19 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         }
                     }, color = Color(0xFFB9CDC5), fontSize = 11.sp, lineHeight = 17.sp
                 )
+                if (times != null) {
+                    Spacer(Modifier.height(7.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Source: ${times!!.source}"
+                            AppLanguage.AR -> "المصدر: ${times!!.source}"
+                            AppLanguage.CKB -> "سەرچاوە: ${times!!.source}"
+                        },
+                        color = Color(0xFFF4E5B4),
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp
+                    )
+                }
             }
         }
         if (locating) {
@@ -5553,9 +5566,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
             Text(
                 when (language) {
-                    AppLanguage.EN -> "Source: ${times!!.source}. Times shown in local phone time."
-                    AppLanguage.AR -> "المصدر: ${times!!.source}. الأوقات بتوقيت الهاتف المحلي."
-                    AppLanguage.CKB -> "سەرچاوە: ${times!!.source}. کاتەکان بە کاتی مۆبایلەکەتن."
+                    AppLanguage.EN -> "Times shown in local phone time."
+                    AppLanguage.AR -> "الأوقات بتوقيت الهاتف المحلي."
+                    AppLanguage.CKB -> "کاتەکان بە کاتی مۆبایلەکەتن."
                 }, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
             )
         }
