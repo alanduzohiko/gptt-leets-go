@@ -1128,6 +1128,154 @@ if ! grep -Eq 'Import from phone|استيراد من الهاتف|لە مۆبا�
 fi
 echo "PASS: the Adhan library includes an import-from-phone option."
 
+# Verify that users can inspect the whole source audio inventory, even if an
+# older adhan recording has an ambiguous file name and misses the auto-labels.
+all_audio_coords="$(python3 - dist/runtime-test/window-audio-adhan.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"All source audio|كل الصوتيات الأصلية|هەموو دەنگە ڕەسەنەکان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$all_audio_coords" ]]; then
+  echo "FAIL: Adhan tab does not offer access to all original source audio."
+  cat dist/runtime-test/window-audio-adhan.xml
+  exit 1
+fi
+read -r all_audio_x all_audio_y <<< "$all_audio_coords"
+adb shell input tap "$all_audio_x" "$all_audio_y"
+sleep 3
+adb shell uiautomator dump /sdcard/mashxall-audio-all-source.xml > dist/runtime-test/uiautomator-audio-all-source.txt 2>&1 || true
+adb pull /sdcard/mashxall-audio-all-source.xml dist/runtime-test/window-audio-all-source.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'total source/custom audio|إجمالي الصوتيات|کۆی دەنگ' dist/runtime-test/window-audio-all-source.xml; then
+  echo "FAIL: selecting all source audio did not expose the source-library inventory count."
+  cat dist/runtime-test/window-audio-all-source.xml
+  exit 1
+fi
+echo "PASS: the Adhan/mosque section can show its detected matches or the complete source audio inventory."
+
+# Test the source-backed reciter catalogue's playback-type filters and
+# per-reciter favourites, so the library is usable rather than just a long list.
+reciters_tab_coords="$(python3 - dist/runtime-test/window-audio-all-source.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"^Reciters$|^القرّاء$|^القُرّاء$|قورئان‌خوێنەکان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$reciters_tab_coords" ]]; then
+  echo "FAIL: audio library does not expose the reciter catalogue tab."
+  cat dist/runtime-test/window-audio-all-source.xml
+  exit 1
+fi
+read -r reciters_tab_x reciters_tab_y <<< "$reciters_tab_coords"
+adb shell input tap "$reciters_tab_x" "$reciters_tab_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-reciter-library.xml > dist/runtime-test/uiautomator-reciter-library.txt 2>&1 || true
+adb pull /sdcard/mashxall-reciter-library.xml dist/runtime-test/window-reciter-library.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'source reciters|قارئ من المصدر|قورئان‌خوێنی سەرچاوە' dist/runtime-test/window-reciter-library.xml ||
+   ! grep -Eq 'Full surah|السورة كاملة|سوورەتی تەواو' dist/runtime-test/window-reciter-library.xml ||
+   ! grep -Eq 'Favourites|المفضلة|دڵخوازەکان' dist/runtime-test/window-reciter-library.xml; then
+  echo "FAIL: reciter catalogue is missing total/source counts or playback-type/favourites filters."
+  cat dist/runtime-test/window-reciter-library.xml
+  exit 1
+fi
+
+reciter_favourite_coords="$(python3 - dist/runtime-test/window-reciter-library.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Add to favourites|أضف للمفضلة|زیادکردن بۆ دڵخوازەکان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$reciter_favourite_coords" ]]; then
+  echo "FAIL: source reciter cards do not offer a per-reciter favourite action."
+  cat dist/runtime-test/window-reciter-library.xml
+  exit 1
+fi
+read -r reciter_fav_x reciter_fav_y <<< "$reciter_favourite_coords"
+adb shell input tap "$reciter_fav_x" "$reciter_fav_y"
+sleep 2
+adb shell uiautomator dump /sdcard/mashxall-reciter-favourite.xml > dist/runtime-test/uiautomator-reciter-favourite.txt 2>&1 || true
+adb pull /sdcard/mashxall-reciter-favourite.xml dist/runtime-test/window-reciter-favourite.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Saved reciter|قارئ محفوظ|قورئان‌خوێنی پاشەکەوتکراو' dist/runtime-test/window-reciter-favourite.xml; then
+  echo "FAIL: saving a reciter did not update its favourite state."
+  cat dist/runtime-test/window-reciter-favourite.xml
+  exit 1
+fi
+
+reciter_favs_coords="$(python3 - dist/runtime-test/window-reciter-favourite.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"^Favourites$|^المفضلة$|^دڵخوازەکان$", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$reciter_favs_coords" ]]; then
+  echo "FAIL: reciter favourites filter could not be selected."
+  cat dist/runtime-test/window-reciter-favourite.xml
+  exit 1
+fi
+read -r reciter_favs_x reciter_favs_y <<< "$reciter_favs_coords"
+adb shell input tap "$reciter_favs_x" "$reciter_favs_y"
+sleep 3
+adb shell uiautomator dump /sdcard/mashxall-reciter-favourites-only.xml > dist/runtime-test/uiautomator-reciter-favourites-only.txt 2>&1 || true
+adb pull /sdcard/mashxall-reciter-favourites-only.xml dist/runtime-test/window-reciter-favourites-only.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Saved reciter|قارئ محفوظ|قورئان‌خوێنی پاشەکەوتکراو' dist/runtime-test/window-reciter-favourites-only.xml; then
+  echo "FAIL: reciter favourites filter did not return the saved reciter."
+  cat dist/runtime-test/window-reciter-favourites-only.xml
+  exit 1
+fi
+echo "PASS: source reciter counts, playback-type filters, and saved-reciter favourites work."
+
 check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
