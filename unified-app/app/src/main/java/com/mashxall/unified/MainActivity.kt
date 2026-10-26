@@ -713,7 +713,7 @@ private fun HomeScreen(
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
-    var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
+    val use24Hour = false
     val savedGpsAccuracyMeters = prefs.getString("gps_accuracy", null)?.toFloatOrNull()
     val savedGpsIsTooCoarse = savedGpsAccuracyMeters != null && savedGpsAccuracyMeters > 1500f
     var gpsLatitude by remember {
@@ -731,7 +731,6 @@ private fun HomeScreen(
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
-            use24Hour = prefs.getBoolean("time_format_24h", false)
             manualCityLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
             manualCityLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
             delay(60_000L)
@@ -1410,41 +1409,6 @@ private fun SettingsScreen(
                 FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
             }
         }
-        Spacer(Modifier.height(9.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-            Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Schedule, null, tint = Gold, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when (language) { AppLanguage.EN -> "Prayer time format"; AppLanguage.AR -> "تنسيق وقت الصلاة"; AppLanguage.CKB -> "شێوازی کاتی نوێژ" },
-                        color = foreground, fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        when (language) { AppLanguage.EN -> "12-hour format is the default"; AppLanguage.AR -> "نظام 12 ساعة هو الافتراضي"; AppLanguage.CKB -> "شێوازی ١٢ کاتژمێر بە بنەڕەتە" },
-                        color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
-                    )
-                }
-                FilterChip(
-                    selected = !use24Hour,
-                    onClick = {
-                        use24Hour = false
-                        prefs.edit().putBoolean("time_format_24h", false).apply()
-                    },
-                    label = { Text("12 h") }
-                )
-                Spacer(Modifier.width(5.dp))
-                FilterChip(
-                    selected = use24Hour,
-                    onClick = {
-                        use24Hour = true
-                        prefs.edit().putBoolean("time_format_24h", true).apply()
-                    },
-                    label = { Text("24 h") }
-                )
-            }
-        }
-
         Spacer(Modifier.height(20.dp))
         Text(
             when (language) { AppLanguage.EN -> "READING & WORSHIP"; AppLanguage.AR -> "القراءة والعبادة"; AppLanguage.CKB -> "خوێندنەوە و پەرستش" },
