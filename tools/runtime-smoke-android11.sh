@@ -313,7 +313,8 @@ except Exception:
     raise SystemExit(0)
 pattern = re.compile(r"Settings|الإعدادات|ڕێکخستن", re.I)
 for node in root.iter("node"):
-    if not pattern.search(node.attrib.get("text", "")):
+    label = node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")
+    if not pattern.search(label):
         continue
     bounds = node.attrib.get("bounds", "")
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
@@ -367,7 +368,11 @@ if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-mushaf-after
   exit 1
 fi
 
-verse_coords="$(python3 - dist/runtime-test/window-mushaf-after-settings.xml <<'PY'
+# The Mushaf is now a full-page image with no visible verse-chip footer.
+# Locate its accessible page bounds, then tap where the first Al-Fatiha lines
+# appear on the printed page. Probe several nearby heights in case font/page
+# margins differ slightly across source-bundle builds.
+mushaf_bounds="$(python3 - dist/runtime-test/window-mushaf-after-settings.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -375,27 +380,50 @@ try:
     root = ET.parse(sys.argv[1]).getroot()
 except Exception:
     raise SystemExit(0)
+candidates = []
 for node in root.iter("node"):
-    if node.attrib.get("text", "").strip() not in {"1:1", "١:١"}:
+    label = node.attrib.get("content-desc", "") + " " + node.attrib.get("text", "")
+    if not re.search(r"Mushaf|مصح|المصحف", label, re.I) or not re.search(r"1|١", label):
         continue
     bounds = node.attrib.get("bounds", "")
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
-        print(f"{(x1+x2)//2} {(y1+y2)//2}")
-        raise SystemExit(0)
+        if x2 > x1 and y2 > y1:
+            candidates.append(((x2-x1)*(y2-y1), x1, y1, x2, y2))
+if candidates:
+    _, x1, y1, x2, y2 = max(candidates)
+    print(x1, y1, x2, y2)
 PY
 )"
-if [[ -z "$verse_coords" ]]; then
-  echo "FAIL: Mushaf page has no accessible 1:1 verse chip for the in-reader action test."
-  cat dist/runtime-test/window-mushaf-fullscreen.xml
+if [[ -z "$mushaf_bounds" ]]; then
+  echo "FAIL: the rendered Mushaf page image did not expose accessible bounds."
+  cat dist/runtime-test/window-mushaf-after-settings.xml
   exit 1
 fi
-read -r verse_x verse_y <<< "$verse_coords"
-adb shell input tap "$verse_x" "$verse_y"
-sleep 7
-adb shell uiautomator dump /sdcard/mashxall-quran-verse-actions.xml > dist/runtime-test/uiautomator-quran-verse-actions.txt 2>&1 || true
-adb pull /sdcard/mashxall-quran-verse-actions.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
+read -r mushaf_x1 mushaf_y1 mushaf_x2 mushaf_y2 <<< "$mushaf_bounds"
+mushaf_x=$(((mushaf_x1 + mushaf_x2) / 2))
+mushaf_h=$((mushaf_y2 - mushaf_y1))
+verse_found=0
+for fraction in 18 22 26 30 34 38; do
+  mushaf_y=$((mushaf_y1 + mushaf_h * fraction / 100))
+  adb shell input tap "$mushaf_x" "$mushaf_y"
+  sleep 2
+  adb shell uiautomator dump /sdcard/mashxall-verse-probe.xml > "dist/runtime-test/uiautomator-verse-probe-$fraction.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-verse-probe.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
+  if grep -Eq 'Copy|نسخ|کۆپی' dist/runtime-test/window-quran.xml &&
+     grep -Eq 'Play|تشغيل|لێدان' dist/runtime-test/window-quran.xml; then
+    verse_found=1
+    echo "PASS: a tap on the printed Mushaf page opened verse actions (page fraction $fraction%)."
+    break
+  fi
+done
+if [[ "$verse_found" -ne 1 ]]; then
+  echo "FAIL: tapping the visible Mushaf page did not open its in-page verse action sheet."
+  cat dist/runtime-test/window-quran.xml
+  exit 1
+fi
+
 if ! python3 - dist/runtime-test/window-quran.xml <<'PY'
 import re
 import sys
@@ -474,7 +502,8 @@ try:
 except Exception:
     raise SystemExit(0)
 for node in root.iter("node"):
-    if not re.search(r"Exit|خروج|دەرچوون", node.attrib.get("text", ""), re.I):
+    label = node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")
+    if not re.search(r"Exit|خروج|دەرچوون", label, re.I):
         continue
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
     if match:
