@@ -243,6 +243,7 @@ fun MashxallApp(startScreen: String? = null) {
     var openQuranReaderSettingsRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var audioAutoPlayRequested by rememberSaveable { mutableStateOf(false) }
+    var audioWholeSurahRequested by rememberSaveable { mutableStateOf(false) }
     var selectedCity by rememberSaveable {
         mutableStateOf(
             prefs.getString("selected_city", "").orEmpty().let { saved ->
@@ -289,6 +290,7 @@ fun MashxallApp(startScreen: String? = null) {
         }
         audioStartsAtReciters = false
         audioAutoPlayRequested = false
+        audioWholeSurahRequested = false
     }
 
     BackHandler(enabled = !isRoot) { navigateBack() }
@@ -320,6 +322,7 @@ fun MashxallApp(startScreen: String? = null) {
                             screen = target
                             audioStartsAtReciters = false
                             audioAutoPlayRequested = false
+                            audioWholeSurahRequested = false
                         }
                     }
                 ) { padding ->
@@ -373,7 +376,17 @@ fun MashxallApp(startScreen: String? = null) {
                                         selectedAyah = a
                                         audioStartsAtReciters = true
                                         audioAutoPlayRequested = true
+                                        audioWholeSurahRequested = false
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                        navigateTo("audio")
+                                    },
+                                    onPlaySurahAudio = { s ->
+                                        selectedSurah = s
+                                        selectedAyah = 1
+                                        audioStartsAtReciters = true
+                                        audioAutoPlayRequested = true
+                                        audioWholeSurahRequested = true
+                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", 1).apply()
                                         navigateTo("audio")
                                     },
                                     onImmersiveMushaf = { immersiveMushaf = it },
@@ -405,7 +418,8 @@ fun MashxallApp(startScreen: String? = null) {
                                 "audio" -> AudioScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
                                     focusReciters = audioStartsAtReciters,
-                                    autoPlayRequested = audioAutoPlayRequested
+                                    autoPlayRequested = audioAutoPlayRequested,
+                                    autoPlayWholeSurah = audioWholeSurahRequested
                                 )
                                 "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "pdf" -> PdfReaderScreen(language, foreground, selectedPdf)
@@ -435,6 +449,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 }, onDataInfo = { navigateTo("about_data") }, onBackup = { navigateTo("backup") }, onAudio = {
                                     audioStartsAtReciters = true
                                     audioAutoPlayRequested = false
+                                    audioWholeSurahRequested = false
                                     navigateTo("audio")
                                 }, onPrayer = { navigateTo("prayer") }, onQuran = {
                                     resumeMushafRequested = false
