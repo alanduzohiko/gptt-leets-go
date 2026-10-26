@@ -699,8 +699,14 @@ private fun HomeScreen(
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
     var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
-    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
-    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    val savedGpsAccuracyMeters = prefs.getString("gps_accuracy", null)?.toFloatOrNull()
+    val savedGpsIsTooCoarse = savedGpsAccuracyMeters != null && savedGpsAccuracyMeters > 1500f
+    var gpsLatitude by remember {
+        mutableStateOf(if (savedGpsIsTooCoarse) null else prefs.getString("gps_latitude", null)?.toDoubleOrNull())
+    }
+    var gpsLongitude by remember {
+        mutableStateOf(if (savedGpsIsTooCoarse) null else prefs.getString("gps_longitude", null)?.toDoubleOrNull())
+    }
     var manualCityLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualCityLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
@@ -815,7 +821,17 @@ private fun HomeScreen(
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     LaunchedEffect(Unit) {
-        if (!prefs.getBoolean("prayer_location_prompted", false) && gpsLatitude == null && gpsLongitude == null) {
+        if (savedGpsIsTooCoarse) {
+            // Legacy low-accuracy fixes often snapped to a regional city (for
+            // example Erbil). Discard them instead of silently using that city.
+            prefs.edit()
+                .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
+                .putBoolean("prayer_location_prompted", false)
+                .apply()
+        }
+        if ((!prefs.getBoolean("prayer_location_prompted", false) || savedGpsIsTooCoarse) &&
+            gpsLatitude == null && gpsLongitude == null
+        ) {
             prefs.edit().putBoolean("prayer_location_prompted", true).apply()
             requestHomeLocation()
         }
