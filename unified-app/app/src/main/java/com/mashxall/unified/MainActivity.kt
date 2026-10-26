@@ -577,7 +577,6 @@ private fun MoreScreen(
         MoreDestination("farmuda", tr(language, "farmuda"), tr(language, "farmuda_sub"), Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
         MoreDestination("names", tr(language, "names"), tr(language, "names_sub"), Icons.Outlined.Favorite, Color(0xFFE39FB2)),
         MoreDestination("tasbih", tr(language, "tasbih"), tr(language, "tasbih_sub"), Icons.Outlined.Spa, Color(0xFF80C6B1)),
-        MoreDestination("audio", tr(language, "audio"), tr(language, "audio_sub"), Icons.Outlined.GraphicEq, Color(0xFF9BC8A2)),
         MoreDestination("bookmarks", tr(language, "bookmarks"), tr(language, "bookmarks_sub"), Icons.Outlined.BookmarkBorder, Color(0xFFE0B86C)),
         MoreDestination("lexicon", tr(language, "lexicon"), tr(language, "lexicon_sub"), Icons.Outlined.Search, Color(0xFFB3A2F0)),
         MoreDestination(
@@ -1458,12 +1457,12 @@ private fun SettingsScreen(
                 Icons.Outlined.MenuBook to onQuran
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Prayer & location"; AppLanguage.AR -> "الصلاة والموقع"; AppLanguage.CKB -> "نوێژ و شوێن" },
+                when (language) { AppLanguage.EN -> "Prayer, location & muezzins"; AppLanguage.AR -> "الصلاة والموقع والمؤذنون"; AppLanguage.CKB -> "نوێژ، شوێن و موئەزین" },
                 when (language) { AppLanguage.EN -> "City, GPS permission, calculation method and adhan alerts"; AppLanguage.AR -> "المدينة وإذن GPS وطريقة الحساب وتنبيهات الأذان"; AppLanguage.CKB -> "شار، مۆڵەتی GPS، شێوازی حساب و ئاگادارکردنەوەی بانگ" },
                 Icons.Outlined.Schedule to onPrayer
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Reciters & adhan library"; AppLanguage.AR -> "مكتبة القراء والمؤذنين"; AppLanguage.CKB -> "کتێبخانەی قورئان‌خوێن و موئەزین" },
+                when (language) { AppLanguage.EN -> "Reciters & recitations"; AppLanguage.AR -> "مكتبة القراء والتلاوات"; AppLanguage.CKB -> "کتێبخانەی قورئان‌خوێن و تلاوەت" },
                 when (language) { AppLanguage.EN -> "Browse included audio and available reciters"; AppLanguage.AR -> "تصفّح الصوتيات والقراء المتاحين"; AppLanguage.CKB -> "گەڕان لە دەنگ و قورئان‌خوێنە بەردەستەکان" },
                 Icons.Outlined.GraphicEq to onAudio
             ),
