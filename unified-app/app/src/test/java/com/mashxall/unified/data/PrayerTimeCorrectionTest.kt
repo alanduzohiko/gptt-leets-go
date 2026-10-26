@@ -31,64 +31,40 @@ class PrayerTimeCorrectionTest {
     }
 
     @Test
-    fun invalidClockValuesFallBackToTheOtherCompleteSource() {
-        val noor = PrayerRow(
+    fun invalidSalawatiClockIsRejectedInsteadOfSubstitutingAnotherSource() {
+        val invalidSalawati = PrayerRow(
             city = "Sulaymaniyah", date = "10-23",
-            fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
+            fajr = "25:61", sunrise = "06:12", dhuhr = "11:49",
             asr = "14:49", maghrib = "17:21", isha = "18:36",
-            source = "noor:Sulaymaniyah"
-        )
-        val invalidSalawati = noor.copy(
-            fajr = "25:61",
             source = "salawati:Sulaymaniyah, Iraq"
         )
-        assertEquals(noor, ContentRepository.preferredSourcePrayerTimes(invalidSalawati, noor))
-        assertEquals(
-            null,
-            ContentRepository.preferredSourcePrayerTimes(invalidSalawati, noor.copy(isha = "time unavailable"))
-        )
+        assertEquals(null, ContentRepository.salawatiOnlyPrayerTimes(invalidSalawati))
     }
 
     @Test
-    fun prefersTheSelectedSalawatiCityScheduleOverNoorWhenBothExist() {
+    fun onlyValidSalawatiRowsAreAccepted() {
         val salawati = PrayerRow(
             city = "Sulaymaniyah", date = "10-23",
             fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
             asr = "14:49", maghrib = "17:21", isha = "18:36",
             source = "salawati:Sulaymaniyah, Iraq"
         )
-        val noor = PrayerRow(
-            city = "Sulaymaniyah", date = "10-23",
-            fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
-            asr = "14:49", maghrib = "17:21", isha = "18:36",
-            source = "noor:Sulaymaniyah"
-        )
-        assertEquals(salawati, ContentRepository.preferredSourcePrayerTimes(salawati, noor))
+        val otherSource = salawati.copy(source = "noor:Sulaymaniyah")
+        assertEquals(salawati, ContentRepository.salawatiOnlyPrayerTimes(salawati))
+        assertEquals(null, ContentRepository.salawatiOnlyPrayerTimes(otherSource))
+        assertEquals(null, ContentRepository.salawatiOnlyPrayerTimes(null))
     }
 
     @Test
-    fun fallsBackToNoorWhenSalawatiHasNoMatchingSchedule() {
-        val noor = PrayerRow(
-            city = "Halabja", date = "10-23",
-            fajr = "04:46", sunrise = "06:16", dhuhr = "11:46",
-            asr = "14:50", maghrib = "17:17", isha = "18:25",
-            source = "noor:Halabja"
-        )
-        assertEquals(noor, ContentRepository.preferredSourcePrayerTimes(null, noor))
-        assertEquals(null, ContentRepository.preferredSourcePrayerTimes(null, null))
-    }
-
-    @Test
-    fun gpsTimetableUsesNearestRowButPrefersSalawatiOnAnExactDistanceTie() {
-        val salawati = PrayerRow(
+    fun gpsCandidateOrderingUsesNearestSalawatiLocation() {
+        val farther = PrayerRow(
             city = "Sulaymaniyah", date = "10-23",
             fajr = "04:51", sunrise = "06:12", dhuhr = "11:49",
             asr = "14:49", maghrib = "17:21", isha = "18:36",
             source = "salawati:Sulaymaniyah, Iraq"
         )
-        val noor = salawati.copy(source = "noor:Sulaymaniyah")
-        val candidates = listOf(noor to 0.0, salawati to 0.0)
-        assertEquals(salawati, ContentRepository.orderPrayerCandidates(candidates).first().first)
-        assertEquals(noor, ContentRepository.orderPrayerCandidates(listOf(noor to 0.1, salawati to 0.3)).first().first)
+        val nearer = farther.copy(city = "Tasluja", source = "salawati:Tasluja, Iraq")
+        val candidates = listOf(farther to 3.4, nearer to 0.8)
+        assertEquals(nearer, ContentRepository.orderPrayerCandidates(candidates).first().first)
     }
 }
