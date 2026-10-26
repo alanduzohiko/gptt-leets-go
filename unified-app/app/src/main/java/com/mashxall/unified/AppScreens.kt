@@ -469,6 +469,7 @@ fun QuranScreen(
         }
     }
     val currentSurah = surahs.firstOrNull { it.number == selected }
+    val surahNamesByNumber = remember(surahs) { surahs.associate { it.number to it.arabicName } }
     val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
         ?: ContentRepository.quranTranslations.first()
     LaunchedEffect(selectedAyahForSheet, language, translationKey, selectedTafsirBook) {
@@ -614,6 +615,7 @@ fun QuranScreen(
                 darkMode = mushafDarkMode,
                 sepiaMode = mushafSepiaMode,
                 surahTitle = currentSurah?.arabicName.orEmpty(),
+                surahNames = surahNamesByNumber,
                 onPlaySurahAudio = onPlaySurahAudio,
                 onInternalOverlayChanged = { mushafInternalOverlayOpen = it },
                 onPageChange = { requested ->
@@ -1829,6 +1831,7 @@ private fun MushafPageViewer(
     darkMode: Boolean,
     sepiaMode: Boolean,
     surahTitle: String,
+    surahNames: Map<Int, String>,
     onPlaySurahAudio: (Int) -> Unit,
     onInternalOverlayChanged: (Boolean) -> Unit,
     onPageChange: (Int) -> Unit,
@@ -1853,6 +1856,7 @@ private fun MushafPageViewer(
             .getStringSet("mushaf_page_bookmarks", emptySet()).orEmpty().toSet())
     }
     var swipeDistance by remember(page) { mutableFloatStateOf(0f) }
+    val visibleSurahTitle = pageVerses.firstOrNull()?.surah?.let { surahNames[it] }.orEmpty().ifBlank { surahTitle }
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
@@ -1934,7 +1938,7 @@ private fun MushafPageViewer(
             }
             Column(Modifier.weight(1f).padding(start = 2.dp, end = 3.dp)) {
                 Text(
-                    surahTitle.ifBlank { tr(language, "mushaf_view") },
+                    visibleSurahTitle.ifBlank { tr(language, "mushaf_view") },
                     color = foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp,
                     maxLines = 1
                 )
