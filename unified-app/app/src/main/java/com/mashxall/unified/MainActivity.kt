@@ -704,15 +704,13 @@ private fun HomeScreen(
         gpsLongitude,
         manualCityLatitude,
         manualCityLongitude,
-        prefs.getString("prayer_method", "mwl"),
-        prefs.getString("asr_school", "shafi"),
         prefs.getString("selected_city_country", "")
     ) {
         loadingTimes = true
         val date = Date(clockNow)
         val country = prefs.getString("selected_city_country", "") ?: ""
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl") ?: "mwl")
-        val asr = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi") ?: "shafi")
+        val method = PrayerCalculationMethod.MWL
+        val asr = AsrCalculationSchool.SHAFI
         prayerTimes = runCatching {
             when {
                 gpsLatitude != null && gpsLongitude != null ->
@@ -827,13 +825,28 @@ private fun HomeScreen(
                             when (language) { AppLanguage.EN -> "Prayer times"; AppLanguage.AR -> "مواقيت الصلاة"; AppLanguage.CKB -> "کاتەکانی نوێژ" },
                             color = foreground, fontWeight = FontWeight.Bold, fontSize = 17.sp
                         )
-                        val displayedLocation = if (gpsLatitude != null && gpsLongitude != null) {
-                            when (language) {
+                        val displayedLocation = when {
+                            gpsLatitude != null && gpsLongitude != null && prayerTimes?.city.orEmpty().isNotBlank() &&
+                                !prayerTimes!!.city.equals("GPS", ignoreCase = true) -> {
+                                val nearest = prayerTimes!!.city
+                                when (language) {
+                                    AppLanguage.EN -> "Near $nearest"
+                                    AppLanguage.AR -> "بالقرب من $nearest"
+                                    AppLanguage.CKB -> "نزیک $nearest"
+                                }
+                            }
+                            gpsLatitude != null && gpsLongitude != null -> when (language) {
                                 AppLanguage.EN -> "Current location"
                                 AppLanguage.AR -> "الموقع الحالي"
                                 AppLanguage.CKB -> "شوێنی ئێستا"
                             }
-                        } else selectedCity
+                            selectedCity.isNotBlank() -> selectedCity
+                            else -> when (language) {
+                                AppLanguage.EN -> "Choose your city"
+                                AppLanguage.AR -> "اختر مدينتك"
+                                AppLanguage.CKB -> "شارەکەت هەڵبژێرە"
+                            }
+                        }
                         val sourceLabel = prayerTimes?.source?.let { prayerSourceLabel(it, language) }.orEmpty()
                         Text(
                             listOf(displayedLocation, sourceLabel).filter { it.isNotBlank() }.joinToString(" • "),
