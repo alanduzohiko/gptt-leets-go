@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
