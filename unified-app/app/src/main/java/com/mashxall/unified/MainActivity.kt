@@ -143,9 +143,14 @@ enum class AppLanguage(val key: String, val label: String) {
 
 enum class AppScreen(val key: String) {
     HOME("home"), QURAN("quran"), AZKAR("azkar"), MORE("more"), SETTINGS("settings"),
-    LIBRARY("library"), WORSHIP("worship"), PRAYER("prayer"),
-    TAFSIR("tafsir"), HADITH("hadith"), AZKAR("azkar"), NAMES("names"), TASBIH("tasbih"),
-    AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
+    PRAYER("prayer"), QIBLA("qibla"), HADITH("hadith"), FARMUDA("farmuda"),
+    NAMES("names"), TASBIH("tasbih"), AUDIO("audio"), BOOKMARKS("bookmarks"),
+    LEXICON("lexicon"), TAFSIR("tafsir"), WORD_BY_WORD("word_by_word"),
+    BACKUP("backup"),
+    // Legacy destinations remain recognized only so old links can be normalized
+    // to More; they are no longer visible as navigation items.
+    LIBRARY("library"), BOOKS("books"), WORSHIP("worship")
+
 }
 
 private data class HomeModule(
