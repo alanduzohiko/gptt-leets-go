@@ -353,9 +353,15 @@ fun MashxallApp(startScreen: String? = null) {
                                 "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
-                                "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = {
-                                    selectedCity = it
-                                    prefs.edit().putString("selected_city", it).apply()
+                                "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = { city ->
+                                    selectedCity = city.name
+                                    prefs.edit()
+                                        .putString("selected_city", city.name)
+                                        .putString("selected_city_country", city.country)
+                                        .putString("manual_city_latitude", city.latitude.toString())
+                                        .putString("manual_city_longitude", city.longitude.toString())
+                                        .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
+                                        .apply()
                                 }, onQibla = { navigateTo("qibla") })
                                 "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
                                     selectedSurah = s; selectedAyah = a
@@ -689,7 +695,7 @@ private fun HomeScreen(
                     ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date, method, asr)
                 else -> ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
                     ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
-                        PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, asr)
+                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date, method, asr)
                     }
             }
         }.getOrNull()
