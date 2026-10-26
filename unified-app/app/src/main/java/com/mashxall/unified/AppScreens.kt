@@ -38,6 +38,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,6 +54,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Explore
@@ -89,7 +92,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.mashxall.unified.data.*
 import com.mashxall.unified.notifications.PrayerAlarmScheduler
 import com.mashxall.unified.widgets.PrayerTimesWidgetProvider
@@ -428,6 +430,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     showSurahList = true
                 },
                 onReaderSettings = { showReaderSettings = true },
+                onPlaySurah = { surahNumber, ayahNumber -> onPlayAudio(surahNumber, ayahNumber) },
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -1322,10 +1325,12 @@ private fun MushafPageViewer(
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
+    onPlaySurah: (Int, Int) -> Unit,
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
@@ -1378,53 +1383,63 @@ private fun MushafPageViewer(
             ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
         }
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
-                Text(tr(language, "previous"), fontSize = 11.sp)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(tr(language, "mushaf_view"), color = Gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(tr(language, "page") + " " + page + " / 604", color = foreground.copy(alpha = 0.6f), fontSize = 10.sp)
-            }
-            OutlinedButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
-                Text(tr(language, "next"), fontSize = 11.sp)
-            }
-            OutlinedButton(onClick = onExitFullscreen) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Exit"
-                        AppLanguage.AR -> "خروج"
-                        AppLanguage.CKB -> "دەرچوون"
-                    }, fontSize = 10.sp
-                )
-            }
-        }
-        Spacer(Modifier.height(7.dp))
+    Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF081C18) else if (sepiaMode) Color(0xFFE4D2A9) else Color(0xFFF1EFE8))) {
+        // Native, compact reader toolbar pinned above the page, like a real
+        // Mushaf app rather than an ordinary scrollable content page.
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 5.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(42.dp)) {
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Color.White)
+            }
+            Column(Modifier.weight(1f).padding(start = 3.dp)) {
+                Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 10.sp)
+            }
+            IconButton(
+                onClick = {
+                    val target = pageVerses.firstOrNull()
+                    if (target != null) onPlaySurah(target.surah, 1)
+                },
+                enabled = !loading && pageVerses.isNotEmpty(),
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play surah" else if (language == AppLanguage.AR) "تشغيل السورة" else "خوێندنەوەی سوورەت", tint = PaleGold, modifier = Modifier.size(25.dp))
+            }
+            IconButton(onClick = onReaderSettings, modifier = Modifier.size(42.dp)) {
+                Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = PaleGold, modifier = Modifier.size(23.dp))
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading, modifier = Modifier.size(37.dp)) {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "previous"), tint = if (page > 1) Color.White else Color.Gray)
+            }
             OutlinedTextField(
                 value = pageInput,
                 onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.width(100.dp),
-                label = { Text(if (language == AppLanguage.EN) "Page" else if (language == AppLanguage.AR) "صفحة" else "پەڕە") },
-                singleLine = true
+                modifier = Modifier.weight(1f),
+                label = { Text(if (language == AppLanguage.EN) "Page" else if (language == AppLanguage.AR) "صفحة" else "پەڕە", fontSize = 10.sp) },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
-            Spacer(Modifier.width(6.dp))
-            Button(onClick = {
-                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
-            }) {
-                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            Button(
+                onClick = { pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange) },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.height(42.dp)
+            ) {
+                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ", fontSize = 11.sp)
             }
-            Spacer(Modifier.width(5.dp))
-            OutlinedButton(onClick = onReaderSettings) {
-                Text(if (language == AppLanguage.EN) "Settings" else if (language == AppLanguage.AR) "الإعدادات" else "ڕێکخستن", fontSize = 10.sp)
+            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading, modifier = Modifier.size(37.dp)) {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "next"), tint = if (page < 604) Color.White else Color.Gray, modifier = Modifier.rotate(180f))
             }
         }
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(4.dp))
+
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(
@@ -1450,6 +1465,23 @@ private fun MushafPageViewer(
                                 translationY = offsetY
                             }
                             .transformable(transformState)
+                            .pointerInput(page, scale) {
+                                var dragTotal = 0f
+                                detectHorizontalDragGestures(
+                                    onDragStart = { dragTotal = 0f },
+                                    onHorizontalDrag = { _, amount ->
+                                        if (scale <= 1.01f) dragTotal += amount
+                                    },
+                                    onDragEnd = {
+                                        if (scale <= 1.01f) {
+                                            if (dragTotal < -72f && page < 604) onPageChange(page + 1)
+                                            else if (dragTotal > 72f && page > 1) onPageChange(page - 1)
+                                        }
+                                        dragTotal = 0f
+                                    },
+                                    onDragCancel = { dragTotal = 0f }
+                                )
+                            }
                             .pointerInput(page, scale, bitmap) {
                                 detectTapGestures(
                                     onDoubleTap = {
@@ -1472,9 +1504,10 @@ private fun MushafPageViewer(
                                                 scope.launch {
                                                     val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
                                                     if (hit != null) {
-                                                 selectedVerse = hit
-                                                 onVerseClick(hit.surah, hit.ayah)
-                                             }
+                                                        selectedVerse = hit
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        onVerseClick(hit.surah, hit.ayah)
+                                                    }
                                                 }
                                             }
                                         }
@@ -1553,6 +1586,7 @@ private fun MushafPageViewer(
                         selected = selectedVerse == verse,
                         onClick = {
                             selectedVerse = verse
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onVerseClick(verse.surah, verse.ayah)
                         },
                         label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
