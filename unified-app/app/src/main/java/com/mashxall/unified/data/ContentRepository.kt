@@ -231,7 +231,7 @@ object ContentRepository {
     internal fun audioItemFromAssetPath(assetPath: String): AudioItem? {
         val filename = assetPath.substringAfterLast('/')
         val lower = filename.lowercase(Locale.ROOT)
-        if (lower == "click.wav" || supportedBundledAudioExtensions.none(lower::endsWith)) return null
+        if (lower == "click.wav" || supportedBundledAudioExtensions.none { extension -> lower.endsWith(extension) }) return null
         val parent = assetPath.substringBeforeLast('/', "")
         return AudioItem(
             assetPath = assetPath,
