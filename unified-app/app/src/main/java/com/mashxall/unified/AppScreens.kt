@@ -4862,8 +4862,11 @@ internal fun requestCurrentLocation(
             finished = true
             cleanup()
             val best = bestLocation
-            if (best != null) onLocation(best)
-            else onError("No fresh location fix. Turn on GPS and try again outdoors.")
+            when {
+                best == null -> onError("NO_FRESH_LOCATION")
+                best.hasAccuracy() && best.accuracy > 1500f -> onError("LOCATION_ACCURACY_TOO_LOW")
+                else -> onLocation(best)
+            }
         }
     }
     timeout = Runnable { finishBest.run() }
@@ -4885,7 +4888,7 @@ internal fun requestCurrentLocation(
                 } else {
                     deferredFinish?.let(mainHandler::removeCallbacks)
                     deferredFinish = Runnable { finishBest.run() }
-                    mainHandler.postDelayed(deferredFinish!!, 3500L)
+                    mainHandler.postDelayed(deferredFinish!!, 6000L)
                 }
             }
             @Deprecated("Deprecated by Android; retained for API 24 compatibility")
@@ -5047,6 +5050,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 AppLanguage.EN -> "Location services are off. Turn them on in Android settings, then retry."
                 AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android ثم أعد المحاولة."
                 AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە و دووبارە هەوڵ بدەوە."
+            }
+            "LOCATION_ACCURACY_TOO_LOW" -> when (language) {
+                AppLanguage.EN -> "Location accuracy is too low; choose a city manually for reliable times."
+                AppLanguage.AR -> "دقة الموقع منخفضة جدًا؛ اختر المدينة يدويًا للحصول على مواقيت موثوقة."
+                AppLanguage.CKB -> "وردی شوێن زۆر کەمە؛ بۆ کاتی دروست شارەکەت بە دەستی هەڵبژێرە."
+            }
+            "NO_FRESH_LOCATION" -> when (language) {
+                AppLanguage.EN -> "No fresh coordinates were received. Choose your city manually."
+                AppLanguage.AR -> "لم تصل إحداثيات حديثة. اختر المدينة يدويًا."
+                AppLanguage.CKB -> "کۆئۆردیناتی نوێ نەگەیشت؛ شارەکەت بە دەستی هەڵبژێرە."
             }
             else -> error
         }
