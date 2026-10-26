@@ -1417,6 +1417,77 @@ echo "PASS: audio libraries are not duplicated into the Library or Worship menus
 
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
+# The 12-hour format is the default, and the same saved preference can switch
+# both Home and the Prayer screen to 24-hour format. Exercise both controls here
+# and restore the requested 12-hour default for the rest of this smoke test.
+time_format_coords=""
+for attempt in $(seq 1 8); do
+  adb shell uiautomator dump /sdcard/mashxall-settings-time-format.xml > "dist/runtime-test/uiautomator-settings-time-format-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings-time-format.xml dist/runtime-test/window-settings-time-format.xml >/dev/null 2>&1 || true
+  time_format_coords="$(python3 - dist/runtime-test/window-settings-time-format.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+has_12 = any(node.attrib.get("text", "").strip() == "12 h" for node in root.iter("node"))
+has_24 = any(node.attrib.get("text", "").strip() == "24 h" for node in root.iter("node"))
+if not (has_12 and has_24):
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() != "24 h":
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -n "$time_format_coords" ]]; then break; fi
+  adb shell input swipe 540 1510 540 500 420 || true
+  sleep 1
+done
+if [[ -z "$time_format_coords" ]]; then
+  echo "FAIL: Settings does not expose both 12-hour and 24-hour time-format choices."
+  cat dist/runtime-test/window-settings-time-format.xml
+  exit 1
+fi
+read -r time24_x time24_y <<< "$time_format_coords"
+adb shell input tap "$time24_x" "$time24_y"
+sleep 2
+adb shell uiautomator dump /sdcard/mashxall-settings-time-24.xml > dist/runtime-test/uiautomator-settings-time-24.txt 2>&1 || true
+adb pull /sdcard/mashxall-settings-time-24.xml dist/runtime-test/window-settings-time-24.xml >/dev/null 2>&1 || true
+time12_coords="$(python3 - dist/runtime-test/window-settings-time-24.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() != "12 h":
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$time12_coords" ]]; then
+  echo "FAIL: switching to 24-hour format hid the 12-hour reset control."
+  cat dist/runtime-test/window-settings-time-24.xml
+  exit 1
+fi
+read -r time12_x time12_y <<< "$time12_coords"
+adb shell input tap "$time12_x" "$time12_y"
+sleep 2
+echo "PASS: Settings exposes both clock formats and restores 12-hour mode as the default."
+
 # Verify the settings card really opens the source-backed reciter library. It
 # must focus reciter selection without autoplaying audio; Adhan controls remain
 # in the dedicated prayer/muezzin settings route.
