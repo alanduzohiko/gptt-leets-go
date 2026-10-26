@@ -297,8 +297,14 @@ fun QuranScreen(
     var selectedQuranFont by rememberSaveable {
         mutableStateOf(prefs.getString("quran_verse_font", "uthmanic_hafs") ?: "uthmanic_hafs")
     }
-    val quranFontFamily = remember(context, selectedQuranFont) {
-        loadQuranFontFamily(context, selectedQuranFont)
+    var quranFontFamily by remember { mutableStateOf(FontFamily.Default) }
+    LaunchedEffect(selectedQuranFont) {
+        // Typeface.createFromAsset can block on cold reads of the original Quran
+        // fonts. Load them off the UI thread so the Mushaf and reader settings
+        // remain responsive on slower Android 11 devices.
+        quranFontFamily = withContext(Dispatchers.IO) {
+            loadQuranFontFamily(context, selectedQuranFont)
+        }
     }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
@@ -1466,12 +1472,20 @@ fun QuranScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(label, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+                                    if (option.id == selectedQuranFont) {
+                                        "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+                                    } else {
+                                        when (language) {
+                                            AppLanguage.EN -> "Select to preview this font"
+                                            AppLanguage.AR -> "اختر الخط لعرض معاينته"
+                                            AppLanguage.CKB -> "هەڵیبژێرە بۆ پیشاندانی نموونەی فۆنت"
+                                        }
+                                    },
                                     color = foreground.copy(alpha = 0.78f),
-                                    fontSize = 17.sp,
-                                    lineHeight = 27.sp,
-                                    fontFamily = remember(option.id) { loadQuranFontFamily(context, option.id) },
-                                    textAlign = TextAlign.End,
+                                    fontSize = 13.sp,
+                                    lineHeight = 22.sp,
+                                    fontFamily = if (option.id == selectedQuranFont) quranFontFamily else FontFamily.Default,
+                                    textAlign = if (option.id == selectedQuranFont) TextAlign.End else TextAlign.Start,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
