@@ -5094,6 +5094,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val calculationMethod = "mwl"
     val asrSchool = "shafi"
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
+    var adhanDays by remember {
+        mutableStateOf(
+            prefs.getStringSet(PrayerAlarmScheduler.KEY_DAYS, null)?.toSet()
+                ?: (Calendar.SUNDAY..Calendar.SATURDAY).map { it.toString() }.toSet()
+        )
+    }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
     var selectedAdhanAsset by rememberSaveable {
         mutableStateOf(prefs.getString("adhan_audio_asset", "") ?: "")
@@ -5313,7 +5319,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, adhanDays, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
+        prefs.edit().putStringSet(PrayerAlarmScheduler.KEY_DAYS, adhanDays).apply()
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
             PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
@@ -5796,6 +5803,47 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 AppLanguage.AR -> "صوت الأذان: $soundLabel"
                                 AppLanguage.CKB -> "دەنگی بانگ: $soundLabel"
                             }, fontSize = 11.sp, maxLines = 1
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Repeat on selected weekdays"
+                            AppLanguage.AR -> "تكرار التنبيه في أيام الأسبوع المحددة"
+                            AppLanguage.CKB -> "دووبارەکردنەوە لە ڕۆژە دیاریکراوەکانی هەفتە"
+                        }, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    val weekdayOptions = listOf(
+                        Calendar.MONDAY to when (language) { AppLanguage.EN -> "Mon"; AppLanguage.AR -> "إثن"; AppLanguage.CKB -> "دووش" },
+                        Calendar.TUESDAY to when (language) { AppLanguage.EN -> "Tue"; AppLanguage.AR -> "ثلا"; AppLanguage.CKB -> "سێ" },
+                        Calendar.WEDNESDAY to when (language) { AppLanguage.EN -> "Wed"; AppLanguage.AR -> "أرب"; AppLanguage.CKB -> "چوار" },
+                        Calendar.THURSDAY to when (language) { AppLanguage.EN -> "Thu"; AppLanguage.AR -> "خمي"; AppLanguage.CKB -> "پێنج" },
+                        Calendar.FRIDAY to when (language) { AppLanguage.EN -> "Fri"; AppLanguage.AR -> "جمع"; AppLanguage.CKB -> "هەین" },
+                        Calendar.SATURDAY to when (language) { AppLanguage.EN -> "Sat"; AppLanguage.AR -> "سبت"; AppLanguage.CKB -> "شەم" },
+                        Calendar.SUNDAY to when (language) { AppLanguage.EN -> "Sun"; AppLanguage.AR -> "أحد"; AppLanguage.CKB -> "یەک" }
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(weekdayOptions, key = { it.first }) { (weekday, label) ->
+                            val dayKey = weekday.toString()
+                            FilterChip(
+                                selected = adhanDays.contains(dayKey),
+                                onClick = {
+                                    val next = if (adhanDays.contains(dayKey)) adhanDays - dayKey else adhanDays + dayKey
+                                    adhanDays = next
+                                    prefs.edit().putStringSet(PrayerAlarmScheduler.KEY_DAYS, next).apply()
+                                },
+                                label = { Text(label, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+                    if (adhanDays.isEmpty()) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "No weekdays selected; no prayer alerts will be scheduled."
+                                AppLanguage.AR -> "لم تُحدَّد أيام؛ لن يتم جدولة تنبيهات الصلاة."
+                                AppLanguage.CKB -> "هیچ ڕۆژێک دیاری نەکراوە؛ ئاگادارکردنەوەی نوێژ دانانرێت."
+                            }, color = Gold, fontSize = 10.sp, lineHeight = 15.sp
                         )
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
