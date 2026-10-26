@@ -5039,6 +5039,14 @@ private fun prayerTimestampForDate(date: Date, clockText: String): Long? {
     }.timeInMillis
 }
 
+private fun hasValidPrayerTimesForScreen(row: PrayerRow): Boolean =
+    listOf(row.fajr, row.sunrise, row.dhuhr, row.asr, row.maghrib, row.isha).all { value ->
+        val parts = value.trim().split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()
+        val minute = parts.getOrNull(1)?.toIntOrNull()
+        hour != null && minute != null && hour in 0..23 && minute in 0..59
+    }
+
 private fun formatPrayerCountdown(remainingMillis: Long): String {
     val totalSeconds = remainingMillis.coerceAtLeast(0L) / 1000L
     val hours = totalSeconds / 3600L
@@ -5060,6 +5068,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
+    var showWeekView by rememberSaveable { mutableStateOf(false) }
+    var weekTimes by remember { mutableStateOf<List<Pair<Date, PrayerRow>>>(emptyList()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
@@ -5076,15 +5086,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
-    // Original Salawati/Noor city timetables are preferred when available.
-    // These saved choices control the astronomical fallback for locations
-    // without a source timetable and also apply to home prayer-time estimates.
-    var calculationMethod by rememberSaveable {
-        mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl")
-    }
-    var asrSchool by rememberSaveable {
-        mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi")
-    }
+    // Match the source-app behavior: source timetable data takes priority. The
+    // fixed astronomical settings are only a last-resort fallback when no source
+    // city timetable is available; the user-facing calculation-method picker is
+    // intentionally omitted so it cannot silently change original timetable data.
+    val calculationMethod = "mwl"
+    val asrSchool = "shafi"
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
     var selectedAdhanAsset by rememberSaveable {
@@ -5126,6 +5133,28 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             city.name.contains(citySearch.trim(), ignoreCase = true) ||
                 city.country.contains(citySearch.trim(), ignoreCase = true)
         }
+    }
+
+    suspend fun loadSelectedCityTimes(targetDate: Date): PrayerRow? {
+        val method = PrayerCalculationMethod.MWL
+        val school = AsrCalculationSchool.SHAFI
+        val lat = gpsLatitude
+        val lon = gpsLongitude
+        if (lat != null && lon != null) {
+            return ContentRepository.loadPrayerTimesAtLocation(context, lat, lon, targetDate, method, school)
+        }
+        val selectedName = selectedCity.trim()
+        if (manualLatitude != null && manualLongitude != null) {
+            val cityTable = if (selectedName.isBlank()) null
+                else ContentRepository.loadPrayerTimes(context, selectedName, targetDate, manualCountry)
+            return cityTable ?: ContentRepository.loadPrayerTimesAtLocation(
+                context, manualLatitude!!, manualLongitude!!, targetDate, method, school
+            )
+        }
+        if (selectedName.isBlank()) return null
+        ContentRepository.loadPrayerTimes(context, selectedName, targetDate, manualCountry)?.let { return it }
+        val city = ContentRepository.findCityByName(context, selectedName, manualCountry) ?: return null
+        return PrayerTimeCalculator.calculate(targetDate, city.latitude, city.longitude, method, school)
     }
 
     val onFix: (Location) -> Unit = { fix ->
@@ -5304,33 +5333,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 val targetDate = Calendar.getInstance().apply {
                     add(Calendar.DAY_OF_YEAR, dayOffset)
                 }.time
-                times = when {
-                    gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, targetDate,
-                        PrayerCalculationMethod.fromId(calculationMethod),
-                        AsrCalculationSchool.fromId(asrSchool)
-                    )
-                    manualLatitude != null && manualLongitude != null -> {
-                        val sourceCityTimes = ContentRepository.loadPrayerTimes(
-                            context, selectedCity, targetDate, manualCountry
-                        )
-                        sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, targetDate,
-                            PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
-                        )
-                    }
-                    else -> {
-                        ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
-                            ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                                PrayerTimeCalculator.calculate(
-                                    targetDate, city.latitude, city.longitude,
-                                    PrayerCalculationMethod.fromId(calculationMethod),
-                                    AsrCalculationSchool.fromId(asrSchool)
-                                )
-                            }
-                    }
-                }
+                times = loadSelectedCityTimes(targetDate)
                 loadedDate = requestedKey
                 loading = false
             }
@@ -5348,34 +5351,28 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 timeInMillis = clockNowMillis
                 add(Calendar.DAY_OF_YEAR, 1)
             }.time
-            tomorrowTimes = when {
-                gpsLatitude != null && gpsLongitude != null ->
-                    ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, tomorrow,
-                        PrayerCalculationMethod.fromId(calculationMethod),
-                        AsrCalculationSchool.fromId(asrSchool)
-                    )
-                manualLatitude != null && manualLongitude != null -> {
-                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                        ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, tomorrow,
-                            PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
-                        )
-                }
-                else -> {
-                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                        ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                            PrayerTimeCalculator.calculate(
-                                tomorrow, city.latitude, city.longitude,
-                                PrayerCalculationMethod.fromId(calculationMethod),
-                                AsrCalculationSchool.fromId(asrSchool)
-                            )
-                        }
-                }
-            }
+            tomorrowTimes = loadSelectedCityTimes(tomorrow)
         }
     }
+    LaunchedEffect(showWeekView, selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, dayOffset) {
+        if (!showWeekView) {
+            weekTimes = emptyList()
+        } else {
+            weekTimes = emptyList()
+            val start = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, dayOffset)
+            }
+            val rows = mutableListOf<Pair<Date, PrayerRow>>()
+            repeat(7) {
+                val date = start.time
+                val row = runCatching { loadSelectedCityTimes(date) }.getOrNull()
+                if (row != null && hasValidPrayerTimesForScreen(row)) rows.add(date to row)
+                start.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            weekTimes = rows
+        }
+    }
+
     val nextPrayerTarget = remember(times, tomorrowTimes, dayOffset, clockNowMillis) {
         val currentTimes = times
         if (dayOffset != 0 || currentTimes == null) {
@@ -5454,6 +5451,31 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
             }
         }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !showWeekView,
+                onClick = { showWeekView = false },
+                label = {
+                    Text(
+                        when (language) { AppLanguage.EN -> "Day"; AppLanguage.AR -> "اليوم"; AppLanguage.CKB -> "ڕۆژ" },
+                        fontSize = 11.sp
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = showWeekView,
+                onClick = { showWeekView = true },
+                label = {
+                    Text(
+                        when (language) { AppLanguage.EN -> "7-day schedule"; AppLanguage.AR -> "جدول ٧ أيام"; AppLanguage.CKB -> "خشتەی ٧ ڕۆژ" },
+                        fontSize = 11.sp
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
         Spacer(Modifier.height(10.dp))
         Card(colors = CardDefaults.cardColors(containerColor = DeepGreen), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
@@ -5510,7 +5532,60 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
         }
         Spacer(Modifier.height(14.dp))
-        if (times == null) LoadingOrEmpty(loading, language, foreground) else {
+        if (showWeekView) {
+            if (weekTimes.isEmpty()) {
+                if (loading) LoadingOrEmpty(true, language, foreground)
+                else Text(
+                    when (language) {
+                        AppLanguage.EN -> "Allow location or choose a city to see the weekly source timetable."
+                        AppLanguage.AR -> "اسمح بالموقع أو اختر مدينة لعرض جدول الأسبوع."
+                        AppLanguage.CKB -> "مۆڵەتی شوێن بدە یان شارێک هەڵبژێرە بۆ بینینی خشتەی هەفتانە."
+                    }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp, lineHeight = 18.sp
+                )
+            } else {
+                val weekLocale = when (language) { AppLanguage.EN -> Locale.ENGLISH; AppLanguage.AR -> Locale("ar"); AppLanguage.CKB -> Locale("ckb") }
+                weekTimes.forEachIndexed { index, pair ->
+                    val (date, row) = pair
+                    val dateLabel = SimpleDateFormat("EEEE, MMM d", weekLocale).format(date)
+                    val dayPrayers = listOf(
+                        tr(language, "fajr") to formatPrayerTime(row.fajr, language, use24Hour),
+                        tr(language, "sunrise") to formatPrayerTime(row.sunrise, language, use24Hour),
+                        tr(language, "dhuhr") to formatPrayerTime(row.dhuhr, language, use24Hour),
+                        tr(language, "asr") to formatPrayerTime(row.asr, language, use24Hour),
+                        tr(language, "maghrib") to formatPrayerTime(row.maghrib, language, use24Hour),
+                        tr(language, "isha") to formatPrayerTime(row.isha, language, use24Hour)
+                    )
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(if (index == 0) 1.dp else 0.5.dp, if (index == 0) Gold.copy(alpha = 0.38f) else foreground.copy(alpha = 0.07f))
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(dateLabel, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text(row.source.substringBefore(" • "), color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, maxLines = 1)
+                            }
+                            Spacer(Modifier.height(7.dp))
+                            dayPrayers.chunked(3).forEach { trio ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    trio.forEach { (label, time) ->
+                                        Column(
+                                            Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(foreground.copy(alpha = 0.035f)).padding(horizontal = 6.dp, vertical = 7.dp)
+                                        ) {
+                                            Text(label, color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 1)
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(time, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                        }
+                                    }
+                                }
+                                if (trio == dayPrayers.take(3)) Spacer(Modifier.height(5.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (times == null) LoadingOrEmpty(loading, language, foreground) else {
             val timeItems = listOf(
                 tr(language, "fajr") to formatPrayerTime(times!!.fajr, language, use24Hour),
                 tr(language, "sunrise") to formatPrayerTime(times!!.sunrise, language, use24Hour),
@@ -5576,79 +5651,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 AppLanguage.CKB -> "شێوازی ١٢ کاتژمێر بنەڕەتە؛ گۆڕینی ئەم هەڵبژاردەیە کارتی سەرەکییش نوێ دەکاتەوە."
             }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
         )
-        Spacer(Modifier.height(14.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Calculation method"
-                        AppLanguage.AR -> "طريقة الحساب"
-                        AppLanguage.CKB -> "شێوازی حسابکردن"
-                    }, color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    items(listOf("mwl", "umm_al_qura", "egypt", "karachi", "isna")) { rule ->
-                        val label = when (rule) {
-                            "umm_al_qura" -> "Umm al-Qura"
-                            "egypt" -> when (language) { AppLanguage.EN -> "Egypt"; AppLanguage.AR -> "مصر"; AppLanguage.CKB -> "مەسر" }
-                            "karachi" -> "Karachi"
-                            "isna" -> "ISNA"
-                            else -> when (language) { AppLanguage.EN -> "MWL"; AppLanguage.AR -> "رابطة العالم الإسلامي"; AppLanguage.CKB -> "یەکێتی جیهانی" }
-                        }
-                        FilterChip(
-                            selected = calculationMethod == rule,
-                            onClick = {
-                                calculationMethod = rule
-                                prefs.edit().putString("prayer_method", rule).apply()
-                            },
-                            label = { Text(label, fontSize = 10.sp, maxLines = 1) }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(7.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "Asr method"
-                            AppLanguage.AR -> "طريقة العصر"
-                            AppLanguage.CKB -> "شێوازی عەسر"
-                        }, color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = asrSchool == "shafi",
-                        onClick = {
-                            asrSchool = "shafi"
-                            prefs.edit().putString("asr_school", "shafi").apply()
-                        },
-                        label = { Text(when (language) { AppLanguage.EN -> "Standard"; AppLanguage.AR -> "الشافعي"; AppLanguage.CKB -> "ستاندارد" }, fontSize = 10.sp) }
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    FilterChip(
-                        selected = asrSchool == "hanafi",
-                        onClick = {
-                            asrSchool = "hanafi"
-                            prefs.edit().putString("asr_school", "hanafi").apply()
-                        },
-                        label = { Text(when (language) { AppLanguage.EN -> "Hanafi"; AppLanguage.AR -> "الحنفي"; AppLanguage.CKB -> "حەنەفی" }, fontSize = 10.sp) }
-                    )
-                }
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Used when no original city timetable is available. Verified source timetables remain preferred."
-                        AppLanguage.AR -> "يُستخدم الخيار عند غياب جدول أصلي للمدينة؛ وتبقى الجداول المصدرية الموثوقة هي الأولوية."
-                        AppLanguage.CKB -> "کاتێک خشتەی ڕەسەنی شار بەردەست نەبێت بەکاردێت؛ خشتە ڕەسەنەکان هەر لە پێشینەدان."
-                    }, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 15.sp
-                )
-            }
-        }
         Spacer(Modifier.height(10.dp))
-        if (dayOffset == 0 && nextPrayerTarget != null) {
+        if (!showWeekView && dayOffset == 0 && nextPrayerTarget != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = DeepGreen),
                 shape = RoundedCornerShape(22.dp),
