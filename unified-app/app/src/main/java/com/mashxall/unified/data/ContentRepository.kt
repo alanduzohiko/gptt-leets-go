@@ -188,6 +188,15 @@ private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.R
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
 }
 
+internal fun parseQuranVerseReference(query: String): Pair<Int, Int>? {
+    val match = Regex("""^\s*(\d{1,3})\s*[:：]\s*(\d{1,3})\s*$""").matchEntire(query)
+        ?: return null
+    val surah = match.groupValues[1].toIntOrNull() ?: return null
+    val ayah = match.groupValues[2].toIntOrNull() ?: return null
+    if (surah !in 1..114 || ayah !in 1..286) return null
+    return surah to ayah
+}
+
 object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
     const val PRAYER_DB = "content/noor_tafsir_1.2.2/base/assets/prayertimes.db"
@@ -737,12 +746,23 @@ object ContentRepository {
         query: String,
         language: String,
         translationKey: String? = null
-    ): List<Ayah> = readQuranRows(
-        context,
-        translationKeyFor(language, translationKey),
-        query.trim(),
-        global = true
-    )
+    ): List<Ayah> {
+        val term = query.trim()
+        val reference = parseQuranVerseReference(term)
+        if (reference != null) {
+            // An exact verse reference should be an indexed lookup into one
+            // surah, not a scan of every Quran row and every translation.
+            val (surah, ayah) = reference
+            return loadAyahs(context, surah, language, translationKey = translationKey)
+                .filter { it.number == ayah }
+        }
+        return readQuranRows(
+            context,
+            translationKeyFor(language, translationKey),
+            term,
+            global = true
+        )
+    }
 
     suspend fun loadTafsir(context: Context, bookId: String, surah: Int, ayah: Int): String = withContext(Dispatchers.IO) {
         val book = tafsirBooks.firstOrNull { it.id == bookId } ?: tafsirBooks.first()
