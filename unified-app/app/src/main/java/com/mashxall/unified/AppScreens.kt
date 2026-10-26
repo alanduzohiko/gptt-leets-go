@@ -4794,8 +4794,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
-    var calculationMethod by rememberSaveable { mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl") }
-    var asrSchool by rememberSaveable { mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi") }
+    // Source timetables from Salawati/Noor take precedence. A fixed fallback
+    // is retained internally only for locations with no source timetable.
+    val calculationMethod = "mwl"
+    val asrSchool = "shafi"
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
     var selectedAdhanAsset by rememberSaveable {
@@ -5272,33 +5274,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
         )
         Spacer(Modifier.height(14.dp))
-        Text(if (language == AppLanguage.EN) "Calculation method" else if (language == AppLanguage.AR) "طريقة الحساب" else "شێوازی حسابکردن", color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(listOf("mwl", "umm_al_qura", "egypt", "karachi", "isna")) { rule ->
-                val label = when (rule) {
-                    "umm_al_qura" -> "Umm al-Qura"
-                    "egypt" -> if (language == AppLanguage.EN) "Egypt" else if (language == AppLanguage.AR) "مصر" else "مەسر"
-                    "karachi" -> "Karachi"
-                    "isna" -> "ISNA"
-                    else -> if (language == AppLanguage.EN) "MWL" else if (language == AppLanguage.AR) "رابطة العالم الإسلامي" else "یەکێتی جیهانی"
-                }
-                FilterChip(selected = calculationMethod == rule, onClick = {
-                    calculationMethod = rule
-                    prefs.edit().putString("prayer_method", rule).apply()
-                }, label = { Text(label, fontSize = 10.sp, maxLines = 1) })
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (language == AppLanguage.EN) "Asr method" else if (language == AppLanguage.AR) "طريقة العصر" else "شێوازی عەسر", color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.weight(1f))
-            FilterChip(selected = asrSchool == "shafi", onClick = {
-                asrSchool = "shafi"; prefs.edit().putString("asr_school", "shafi").apply()
-            }, label = { Text(if (language == AppLanguage.EN) "Standard" else if (language == AppLanguage.AR) "الشافعي" else "ستاندارد", fontSize = 10.sp) })
-            Spacer(Modifier.width(6.dp))
-            FilterChip(selected = asrSchool == "hanafi", onClick = {
-                asrSchool = "hanafi"; prefs.edit().putString("asr_school", "hanafi").apply()
-            }, label = { Text(if (language == AppLanguage.EN) "Hanafi" else if (language == AppLanguage.AR) "الحنفي" else "حەنەفی", fontSize = 10.sp) })
-        }
         Spacer(Modifier.height(10.dp))
         if (dayOffset == 0 && nextPrayerTarget != null) {
             Card(
