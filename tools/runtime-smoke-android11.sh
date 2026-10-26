@@ -271,7 +271,7 @@ for attempt in $(seq 1 20); do
   adb pull /sdcard/mashxall-mushaf-open.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
   if grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-mushaf-fullscreen.xml &&
      grep -q '604' dist/runtime-test/window-mushaf-fullscreen.xml &&
-     grep -Eq 'Exit|خروج|دەرچوون' dist/runtime-test/window-mushaf-fullscreen.xml; then
+     grep -Eq 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-mushaf-fullscreen.xml; then
     mushaf_ready=1
     echo "PASS: selecting Al-Fatiha opened the real 604-page Mushaf (poll $attempt)."
     break
@@ -365,7 +365,7 @@ try:
 except Exception:
     raise SystemExit(0)
 for node in root.iter("node"):
-    if not re.search(r"Exit|خروج|دەرچوون", node.attrib.get("text", ""), re.I):
+    if not re.search(r"Exit|Back|خروج|دەرچوون|گەڕانەوە", node.attrib.get("text", ""), re.I):
         continue
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
     if match:
