@@ -1662,16 +1662,7 @@ object ContentRepository {
      * preference.
      */
     internal fun orderPrayerCandidates(candidates: List<Pair<PrayerRow, Double>>): List<Pair<PrayerRow, Double>> =
-        candidates.sortedWith(
-            compareBy<Pair<PrayerRow, Double>> { it.second }
-                .thenBy {
-                    when {
-                        it.first.source.startsWith("salawati", ignoreCase = true) -> 0
-                        it.first.source.startsWith("noor", ignoreCase = true) -> 1
-                        else -> 2
-                    }
-                }
-        )
+        candidates.sortedBy { it.second }
 
     suspend fun loadPrayerTimes(
         context: Context,
