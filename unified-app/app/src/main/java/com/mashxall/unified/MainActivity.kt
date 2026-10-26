@@ -141,7 +141,8 @@ enum class AppLanguage(val key: String, val label: String) {
 }
 
 enum class AppScreen(val key: String) {
-    HOME("home"), QURAN("quran"), LIBRARY("library"), WORSHIP("worship"), PRAYER("prayer"),
+    HOME("home"), QURAN("quran"), AZKAR("azkar"), MORE("more"), SETTINGS("settings"),
+    LIBRARY("library"), WORSHIP("worship"), PRAYER("prayer"),
     TAFSIR("tafsir"), HADITH("hadith"), AZKAR("azkar"), NAMES("names"), TASBIH("tasbih"),
     AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
@@ -159,7 +160,6 @@ private val homeModules: List<HomeModule> get() = listOf(
     HomeModule(AppScreen.PRAYER, "prayer", "prayer_sub", Icons.Outlined.Schedule, Color(0xFF82B7E8)),
         HomeModule(AppScreen.NAMES, "names", "names_sub", Icons.Outlined.Favorite, Color(0xFFE39FB2)),
     HomeModule(AppScreen.QIBLA, "qibla", "qibla_sub", Icons.Outlined.Explore, Color(0xFF85C4C6)),
-    HomeModule(AppScreen.BOOKS, "books", "books_sub", Icons.Outlined.LibraryBooks, Color(0xFFE1C36D)),
     HomeModule(AppScreen.LEXICON, "lexicon", "lexicon_sub", Icons.Outlined.Search, Color(0xFFB3A2F0)),
     HomeModule(AppScreen.FARMUDA, "farmuda", "farmuda_sub", Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
     HomeModule(AppScreen.TASBIH, "tasbih", "tasbih_sub", Icons.Outlined.Spa, Color(0xFF80C6B1)),
@@ -167,13 +167,13 @@ private val homeModules: List<HomeModule> get() = listOf(
 
 private val textMap = mapOf(
     "ckb" to mapOf(
-        "home" to "سەرەتا", "quran" to "قورئانی پیرۆز", "quran_sub" to "خوێندنەوە و گەڕان", "tafsir" to "تەفسیرو وەرگێڕان", "tafsir_sub" to "چەندین تەفسیر", "hadith" to "فەرموودەکان", "hadith_sub" to "گەڕان لە فەرموودە", "azkar" to "زیکر و دوعاکان", "azkar_sub" to "بەیانی، ئێواران و زیاتر", "prayer" to "کاتەکانی بانگ", "prayer_sub" to "کاتی نوێژ و شار", "audio" to "دەنگ و تلاوەت", "audio_sub" to "فایلە دەنگییە ناوخۆییەکان", "names" to "ناوە پیرۆزەکان", "names_sub" to "٩٩ ناوی خودا", "qibla" to "ئاڕاستەی قیبلە", "qibla_sub" to "ئاڕاستە بەپێی شوێن", "books" to "کتێبخانە", "books_sub" to "کتێب و PDF", "lexicon" to "فەرهەنگی وشەکان", "lexicon_sub" to "مانا و ڕەگی وشە", "word_by_word" to "شیکردنەوەی وشە بە وشە", "word_by_word_sub" to "ڕەگ و ڕێزمانی قورئان", "farmuda" to "فەرموودە و دوعاکان", "farmuda_sub" to "دەق و زانیاری زیادە", "tasbih" to "تەسبیح", "tasbih_sub" to "ژماردنی زیکر", "library" to "کتێبخانەی کتێب", "library_sub" to "کتێب و PDF", "welcome" to "هەموو زانیارییە ئیسلامییەکانت لە شوێنێکدا", "bookmarks" to "نیشانکراوەکان", "bookmarks_sub" to "ئایەتە پاشەکەوتکراوەکان", "surah" to "سوورەت", "ayah" to "ئایەت", "verse" to "ئایەت", "book_online" to "زانیاری کتێب", "mushaf_view" to "مصحەفی پیرۆز", "verse_view" to "ئایەت بە ئایەت", "mushaf_unavailable" to "نەتوانرا پەڕەی مصحف بخوێندرێتەوە", "mushaf_offline" to "٦٠٤ پەڕەی قورئان بەبێ ئینتەرنێت", "no_bookmarks" to "هیچ ئایەتێک نیشان نەکراوە", "no_adhan_audio" to "دەنگی بانگ لەم داتایەدا نەدۆزرایەوە", "page" to "پەڕە", "previous" to "پێشوو", "next" to "دواتر", "open_pdf" to "کردنەوەی PDF", "settings" to "ڕێکخستن", "back" to "گەڕانەوە", "home_title" to "دڵت ڕووناک بکە", "home_hint" to "ئەمڕۆ بە چەند خولەکێک خوێندنەوە دەست پێ بکە", "quick_access" to "دەستگەیشتنی خێرا", "featured" to "پێشنیاری ئەمڕۆ", "continue_reading" to "بەردەوام بە لە خوێندنەوە", "language" to "زمان", "offline" to "زۆربەی زانیارییەکان بەبێ ئینتەرنێت کار دەکەن", "about_data" to "سەرچاوەی داتا و مافەکان", "data_notice" to "هەندێک کتێب پێویستی بە ئینتەرنێت یان شیکردنەوەی تایبەت هەیە.", "search" to "گەڕان...", "choose_surah" to "سوورەت هەڵبژێرە", "select_tafsir" to "تەفسیر هەڵبژێرە", "search_hadith" to "لە فەرموودە بگەڕێ...", "search_words" to "وشە یان ڕەگ بگەڕێ...", "city" to "شار", "select_city" to "شار هەڵبژێرە", "fajr" to "بەیانی", "sunrise" to "هەڵهاتنی خۆر", "dhuhr" to "نیوەڕۆ", "asr" to "عەسر", "maghrib" to "مەغریب", "isha" to "عیشا", "search_azkar" to "لە زیکرەکان بگەڕێ...", "arabic" to "عەرەبی", "translation" to "وەرگێڕان", "reference" to "سەرچاوە", "reset" to "سفرکردنەوە", "play" to "لێدان", "available_data" to "داتای بەردەست", "no_data" to "داتاکان بارنەکراون. تکایە وەشانی data-enabled دروست بکە.", "not_found" to "هیچ ئەنجامێک نەدۆزرایەوە.", "qibla_heading" to "قیبلە لە ڕووی باکوورەوە", "degrees" to "پلە", "library_hint" to "قورئان، حدیث، تەفسیر، کتێب و دەنگ"
+        "more" to "زیاتر", "home" to "سەرەتا", "quran" to "قورئانی پیرۆز", "quran_sub" to "خوێندنەوە و گەڕان", "tafsir" to "تەفسیرو وەرگێڕان", "tafsir_sub" to "چەندین تەفسیر", "hadith" to "فەرموودەکان", "hadith_sub" to "گەڕان لە فەرموودە", "azkar" to "زیکر و دوعاکان", "azkar_sub" to "بەیانی، ئێواران و زیاتر", "prayer" to "کاتەکانی بانگ", "prayer_sub" to "کاتی نوێژ و شار", "audio" to "دەنگ و تلاوەت", "audio_sub" to "فایلە دەنگییە ناوخۆییەکان", "names" to "ناوە پیرۆزەکان", "names_sub" to "٩٩ ناوی خودا", "qibla" to "ئاڕاستەی قیبلە", "qibla_sub" to "ئاڕاستە بەپێی شوێن", "books" to "کتێبخانە", "books_sub" to "کتێب و PDF", "lexicon" to "فەرهەنگی وشەکان", "lexicon_sub" to "مانا و ڕەگی وشە", "word_by_word" to "شیکردنەوەی وشە بە وشە", "word_by_word_sub" to "ڕەگ و ڕێزمانی قورئان", "farmuda" to "فەرموودە و دوعاکان", "farmuda_sub" to "دەق و زانیاری زیادە", "tasbih" to "تەسبیح", "tasbih_sub" to "ژماردنی زیکر", "library" to "کتێبخانەی کتێب", "library_sub" to "کتێب و PDF", "welcome" to "هەموو زانیارییە ئیسلامییەکانت لە شوێنێکدا", "bookmarks" to "نیشانکراوەکان", "bookmarks_sub" to "ئایەتە پاشەکەوتکراوەکان", "surah" to "سوورەت", "ayah" to "ئایەت", "verse" to "ئایەت", "book_online" to "زانیاری کتێب", "mushaf_view" to "مصحەفی پیرۆز", "verse_view" to "ئایەت بە ئایەت", "mushaf_unavailable" to "نەتوانرا پەڕەی مصحف بخوێندرێتەوە", "mushaf_offline" to "٦٠٤ پەڕەی قورئان بەبێ ئینتەرنێت", "no_bookmarks" to "هیچ ئایەتێک نیشان نەکراوە", "no_adhan_audio" to "دەنگی بانگ لەم داتایەدا نەدۆزرایەوە", "page" to "پەڕە", "previous" to "پێشوو", "next" to "دواتر", "open_pdf" to "کردنەوەی PDF", "settings" to "ڕێکخستن", "back" to "گەڕانەوە", "home_title" to "دڵت ڕووناک بکە", "home_hint" to "ئەمڕۆ بە چەند خولەکێک خوێندنەوە دەست پێ بکە", "quick_access" to "دەستگەیشتنی خێرا", "featured" to "پێشنیاری ئەمڕۆ", "continue_reading" to "بەردەوام بە لە خوێندنەوە", "language" to "زمان", "offline" to "زۆربەی زانیارییەکان بەبێ ئینتەرنێت کار دەکەن", "about_data" to "سەرچاوەی داتا و مافەکان", "data_notice" to "هەندێک کتێب پێویستی بە ئینتەرنێت یان شیکردنەوەی تایبەت هەیە.", "search" to "گەڕان...", "choose_surah" to "سوورەت هەڵبژێرە", "select_tafsir" to "تەفسیر هەڵبژێرە", "search_hadith" to "لە فەرموودە بگەڕێ...", "search_words" to "وشە یان ڕەگ بگەڕێ...", "city" to "شار", "select_city" to "شار هەڵبژێرە", "fajr" to "بەیانی", "sunrise" to "هەڵهاتنی خۆر", "dhuhr" to "نیوەڕۆ", "asr" to "عەسر", "maghrib" to "مەغریب", "isha" to "عیشا", "search_azkar" to "لە زیکرەکان بگەڕێ...", "arabic" to "عەرەبی", "translation" to "وەرگێڕان", "reference" to "سەرچاوە", "reset" to "سفرکردنەوە", "play" to "لێدان", "available_data" to "داتای بەردەست", "no_data" to "داتاکان بارنەکراون. تکایە وەشانی data-enabled دروست بکە.", "not_found" to "هیچ ئەنجامێک نەدۆزرایەوە.", "qibla_heading" to "قیبلە لە ڕووی باکوورەوە", "degrees" to "پلە", "library_hint" to "قورئان، حدیث، تەفسیر، کتێب و دەنگ"
     ),
     "ar" to mapOf(
-        "home" to "الرئيسية", "quran" to "القرآن الكريم", "quran_sub" to "قراءة وبحث", "tafsir" to "التفسير والترجمة", "tafsir_sub" to "تفاسير متعددة", "hadith" to "الأحاديث", "hadith_sub" to "البحث في الأحاديث", "azkar" to "الأذكار والأدعية", "azkar_sub" to "الصباح والمساء والمزيد", "prayer" to "مواقيت الصلاة", "prayer_sub" to "المواقيت والمدينة", "audio" to "التلاوات والصوتيات", "audio_sub" to "الملفات الصوتية المحلية", "names" to "أسماء الله الحسنى", "names_sub" to "الأسماء التسعة والتسعون", "qibla" to "اتجاه القبلة", "qibla_sub" to "الاتجاه حسب المدينة", "books" to "المكتبة", "books_sub" to "كتب وملفات PDF", "lexicon" to "معجم الكلمات", "lexicon_sub" to "المعاني والجذور", "word_by_word" to "تفسير كلمة بكلمة", "word_by_word_sub" to "الجذور والتحليل النحوي", "farmuda" to "المأثورات والأدعية", "farmuda_sub" to "أدعية ونصوص إضافية", "tasbih" to "المسبحة", "tasbih_sub" to "عدّ الذكر", "library" to "مكتبة الكتب", "library_sub" to "كتب وملفات PDF", "welcome" to "مكتبتك الإسلامية في مكان واحد", "bookmarks" to "العلامات المرجعية", "bookmarks_sub" to "الآيات المحفوظة", "surah" to "السورة", "ayah" to "الآية", "verse" to "آية", "book_online" to "معلومات الكتاب", "mushaf_view" to "عرض المصحف", "verse_view" to "عرض الآيات", "mushaf_unavailable" to "تعذر فتح صفحة المصحف. تحقق من ملفات البيانات.", "mushaf_offline" to "٦٠٤ صفحة من المصحف تعمل دون إنترنت", "no_bookmarks" to "لا توجد آيات محفوظة بعد", "no_adhan_audio" to "لا توجد ملفات أذان ضمن البيانات المتاحة", "page" to "صفحة", "previous" to "السابق", "next" to "التالي", "open_pdf" to "فتح PDF", "settings" to "الإعدادات", "back" to "رجوع", "home_title" to "أضئ قلبك بالمعرفة", "quick_access" to "وصول سريع", "featured" to "اختيار اليوم", "continue_reading" to "متابعة القراءة", "language" to "اللغة", "offline" to "تعمل معظم المكتبة دون اتصال بالإنترنت", "about_data" to "مصادر البيانات والحقوق", "data_notice" to "بعض الكتب تتطلب الإنترنت أو معالجة خاصة.", "search" to "بحث...", "choose_surah" to "اختر السورة", "select_tafsir" to "اختر التفسير", "search_hadith" to "ابحث في الأحاديث...", "search_words" to "ابحث عن كلمة أو جذر...", "city" to "المدينة", "select_city" to "اختر المدينة", "fajr" to "الفجر", "sunrise" to "الشروق", "dhuhr" to "الظهر", "asr" to "العصر", "maghrib" to "المغرب", "isha" to "العشاء", "search_azkar" to "ابحث في الأذكار...", "arabic" to "العربية", "translation" to "الترجمة", "reference" to "المصدر", "reset" to "إعادة", "play" to "تشغيل", "available_data" to "البيانات المتاحة", "no_data" to "لم تُحمّل البيانات بعد. أنشئ نسخة data-enabled من GitHub Actions.", "not_found" to "لم يتم العثور على نتائج.", "qibla_heading" to "اتجاه القبلة من الشمال", "degrees" to "درجة", "library_hint" to "القرآن، الحديث، التفسير، الكتب والصوتيات"
+        "more" to "المزيد", "home" to "الرئيسية", "quran" to "القرآن الكريم", "quran_sub" to "قراءة وبحث", "tafsir" to "التفسير والترجمة", "tafsir_sub" to "تفاسير متعددة", "hadith" to "الأحاديث", "hadith_sub" to "البحث في الأحاديث", "azkar" to "الأذكار والأدعية", "azkar_sub" to "الصباح والمساء والمزيد", "prayer" to "مواقيت الصلاة", "prayer_sub" to "المواقيت والمدينة", "audio" to "التلاوات والصوتيات", "audio_sub" to "الملفات الصوتية المحلية", "names" to "أسماء الله الحسنى", "names_sub" to "الأسماء التسعة والتسعون", "qibla" to "اتجاه القبلة", "qibla_sub" to "الاتجاه حسب المدينة", "books" to "المكتبة", "books_sub" to "كتب وملفات PDF", "lexicon" to "معجم الكلمات", "lexicon_sub" to "المعاني والجذور", "word_by_word" to "تفسير كلمة بكلمة", "word_by_word_sub" to "الجذور والتحليل النحوي", "farmuda" to "المأثورات والأدعية", "farmuda_sub" to "أدعية ونصوص إضافية", "tasbih" to "المسبحة", "tasbih_sub" to "عدّ الذكر", "library" to "مكتبة الكتب", "library_sub" to "كتب وملفات PDF", "welcome" to "مكتبتك الإسلامية في مكان واحد", "bookmarks" to "العلامات المرجعية", "bookmarks_sub" to "الآيات المحفوظة", "surah" to "السورة", "ayah" to "الآية", "verse" to "آية", "book_online" to "معلومات الكتاب", "mushaf_view" to "عرض المصحف", "verse_view" to "عرض الآيات", "mushaf_unavailable" to "تعذر فتح صفحة المصحف. تحقق من ملفات البيانات.", "mushaf_offline" to "٦٠٤ صفحة من المصحف تعمل دون إنترنت", "no_bookmarks" to "لا توجد آيات محفوظة بعد", "no_adhan_audio" to "لا توجد ملفات أذان ضمن البيانات المتاحة", "page" to "صفحة", "previous" to "السابق", "next" to "التالي", "open_pdf" to "فتح PDF", "settings" to "الإعدادات", "back" to "رجوع", "home_title" to "أضئ قلبك بالمعرفة", "quick_access" to "وصول سريع", "featured" to "اختيار اليوم", "continue_reading" to "متابعة القراءة", "language" to "اللغة", "offline" to "تعمل معظم المكتبة دون اتصال بالإنترنت", "about_data" to "مصادر البيانات والحقوق", "data_notice" to "بعض الكتب تتطلب الإنترنت أو معالجة خاصة.", "search" to "بحث...", "choose_surah" to "اختر السورة", "select_tafsir" to "اختر التفسير", "search_hadith" to "ابحث في الأحاديث...", "search_words" to "ابحث عن كلمة أو جذر...", "city" to "المدينة", "select_city" to "اختر المدينة", "fajr" to "الفجر", "sunrise" to "الشروق", "dhuhr" to "الظهر", "asr" to "العصر", "maghrib" to "المغرب", "isha" to "العشاء", "search_azkar" to "ابحث في الأذكار...", "arabic" to "العربية", "translation" to "الترجمة", "reference" to "المصدر", "reset" to "إعادة", "play" to "تشغيل", "available_data" to "البيانات المتاحة", "no_data" to "لم تُحمّل البيانات بعد. أنشئ نسخة data-enabled من GitHub Actions.", "not_found" to "لم يتم العثور على نتائج.", "qibla_heading" to "اتجاه القبلة من الشمال", "degrees" to "درجة", "library_hint" to "القرآن، الحديث، التفسير، الكتب والصوتيات"
     ),
     "en" to mapOf(
-        "home" to "Home", "quran" to "The Holy Quran", "quran_sub" to "Read and search", "tafsir" to "Tafsir & translation", "tafsir_sub" to "Multiple commentaries", "hadith" to "Hadith", "hadith_sub" to "Search narrations", "azkar" to "Adhkar & duas", "azkar_sub" to "Morning, evening and more", "prayer" to "Prayer times", "prayer_sub" to "Times and city", "audio" to "Recitations & audio", "audio_sub" to "Bundled local media", "names" to "Names of Allah", "names_sub" to "The 99 names", "qibla" to "Qibla direction", "qibla_sub" to "Direction by selected city", "books" to "Book library", "books_sub" to "Books and PDFs", "lexicon" to "Word lexicon", "lexicon_sub" to "Meanings and roots", "word_by_word" to "Word-by-word analysis", "word_by_word_sub" to "Roots and Quranic grammar", "farmuda" to "Supplications & sayings", "farmuda_sub" to "Additional texts and duas", "tasbih" to "Digital tasbih", "tasbih_sub" to "Count remembrance", "library" to "Book library", "library_sub" to "Books and PDFs", "welcome" to "Your Islamic library in one place", "bookmarks" to "Bookmarks", "bookmarks_sub" to "Saved verses", "surah" to "Surah", "ayah" to "Ayah", "verse" to "verses", "book_online" to "Book details", "mushaf_view" to "Mushaf pages", "verse_view" to "Verse list", "mushaf_unavailable" to "Could not read this Mushaf page; verify the bundled data.", "mushaf_offline" to "All 604 Mushaf pages work offline", "no_bookmarks" to "No saved verses yet", "no_adhan_audio" to "No adhan-specific audio was found in the supplied data", "page" to "Page", "previous" to "Previous", "next" to "Next", "open_pdf" to "Open PDF", "settings" to "Settings", "back" to "Back", "home_title" to "Let knowledge light your heart", "quick_access" to "Quick access", "featured" to "Today's pick", "continue_reading" to "Continue reading", "language" to "Language", "offline" to "Most of the library works offline", "about_data" to "Data sources & rights", "data_notice" to "Some books need internet access or format-specific processing.", "search" to "Search...", "choose_surah" to "Choose a surah", "select_tafsir" to "Choose tafsir", "search_hadith" to "Search Hadith...", "search_words" to "Search words or roots...", "city" to "City", "select_city" to "Choose city", "fajr" to "Fajr", "sunrise" to "Sunrise", "dhuhr" to "Dhuhr", "asr" to "Asr", "maghrib" to "Maghrib", "isha" to "Isha", "search_azkar" to "Search adhkar...", "arabic" to "Arabic", "translation" to "Translation", "reference" to "Reference", "reset" to "Reset", "play" to "Play", "available_data" to "Available content", "no_data" to "Content data is not loaded yet. Build the data-enabled variant from GitHub Actions.", "not_found" to "No results found.", "qibla_heading" to "Qibla bearing from north", "degrees" to "degrees", "library_hint" to "Quran, Hadith, tafsir, books and audio"
+        "more" to "More", "home" to "Home", "quran" to "The Holy Quran", "quran_sub" to "Read and search", "tafsir" to "Tafsir & translation", "tafsir_sub" to "Multiple commentaries", "hadith" to "Hadith", "hadith_sub" to "Search narrations", "azkar" to "Adhkar & duas", "azkar_sub" to "Morning, evening and more", "prayer" to "Prayer times", "prayer_sub" to "Times and city", "audio" to "Recitations & audio", "audio_sub" to "Bundled local media", "names" to "Names of Allah", "names_sub" to "The 99 names", "qibla" to "Qibla direction", "qibla_sub" to "Direction by selected city", "books" to "Book library", "books_sub" to "Books and PDFs", "lexicon" to "Word lexicon", "lexicon_sub" to "Meanings and roots", "word_by_word" to "Word-by-word analysis", "word_by_word_sub" to "Roots and Quranic grammar", "farmuda" to "Supplications & sayings", "farmuda_sub" to "Additional texts and duas", "tasbih" to "Digital tasbih", "tasbih_sub" to "Count remembrance", "library" to "Book library", "library_sub" to "Books and PDFs", "welcome" to "Your Islamic library in one place", "bookmarks" to "Bookmarks", "bookmarks_sub" to "Saved verses", "surah" to "Surah", "ayah" to "Ayah", "verse" to "verses", "book_online" to "Book details", "mushaf_view" to "Mushaf pages", "verse_view" to "Verse list", "mushaf_unavailable" to "Could not read this Mushaf page; verify the bundled data.", "mushaf_offline" to "All 604 Mushaf pages work offline", "no_bookmarks" to "No saved verses yet", "no_adhan_audio" to "No adhan-specific audio was found in the supplied data", "page" to "Page", "previous" to "Previous", "next" to "Next", "open_pdf" to "Open PDF", "settings" to "Settings", "back" to "Back", "home_title" to "Let knowledge light your heart", "quick_access" to "Quick access", "featured" to "Today's pick", "continue_reading" to "Continue reading", "language" to "Language", "offline" to "Most of the library works offline", "about_data" to "Data sources & rights", "data_notice" to "Some books need internet access or format-specific processing.", "search" to "Search...", "choose_surah" to "Choose a surah", "select_tafsir" to "Choose tafsir", "search_hadith" to "Search Hadith...", "search_words" to "Search words or roots...", "city" to "City", "select_city" to "Choose city", "fajr" to "Fajr", "sunrise" to "Sunrise", "dhuhr" to "Dhuhr", "asr" to "Asr", "maghrib" to "Maghrib", "isha" to "Isha", "search_azkar" to "Search adhkar...", "arabic" to "Arabic", "translation" to "Translation", "reference" to "Reference", "reset" to "Reset", "play" to "Play", "available_data" to "Available content", "no_data" to "Content data is not loaded yet. Build the data-enabled variant from GitHub Actions.", "not_found" to "No results found.", "qibla_heading" to "Qibla bearing from north", "degrees" to "degrees", "library_hint" to "Quran, Hadith, tafsir, books and audio"
     )
 )
 
@@ -199,6 +199,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun normalizeAppRoute(candidate: String?): String? {
+    val route = when (candidate) {
+        "library", "books", "worship" -> "more"
+        else -> candidate
+    }
+    return route?.takeIf { key ->
+        AppScreen.entries.any { it.key == key } || key == "pdf" || key == "about_data"
+    }
+}
+
 @Composable
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
@@ -208,16 +218,12 @@ fun MashxallApp(startScreen: String? = null) {
     SideEffect { MashxallAppearance.accent = MashxallAppearance.colorFor(accentPalette) }
     var screen by rememberSaveable {
         mutableStateOf(
-            startScreen?.takeIf { candidate ->
-                AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
-            } ?: AppScreen.HOME.key
+            normalizeAppRoute(startScreen) ?: AppScreen.HOME.key
         )
     }
     var navigationStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(startScreen) {
-        val requested = startScreen?.takeIf { candidate ->
-            AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
-        }
+        val requested = normalizeAppRoute(startScreen)
         if (requested != null) {
             screen = requested
             navigationStack = emptyList()
@@ -235,7 +241,7 @@ fun MashxallApp(startScreen: String? = null) {
     var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
-    val rootScreens = setOf("home", "quran", "library", "worship", "prayer")
+    val rootScreens = setOf("home", "quran", "azkar", "more", "settings")
     val isRoot = screen in rootScreens
     val activity = context as? ComponentActivity
     val window = activity?.window
@@ -252,13 +258,14 @@ fun MashxallApp(startScreen: String? = null) {
     }
 
     fun navigateTo(target: String) {
-        if (target == screen) return
-        navigationStack = if (target in rootScreens) {
+        val route = normalizeAppRoute(target) ?: target
+        if (route == screen) return
+        navigationStack = if (route in rootScreens) {
             emptyList()
         } else {
             (navigationStack + screen).takeLast(32)
         }
-        screen = target
+        screen = route
     }
 
     fun navigateBack() {
@@ -266,13 +273,17 @@ fun MashxallApp(startScreen: String? = null) {
             screen = navigationStack.last()
             navigationStack = navigationStack.dropLast(1)
         } else {
-            screen = if (screen in rootScreens) AppScreen.HOME.key else AppScreen.LIBRARY.key
+            screen = AppScreen.HOME.key
         }
         audioStartsAtReciters = false
         audioAutoPlayRequested = false
     }
 
     BackHandler(enabled = !isRoot) { navigateBack() }
+    BackHandler(enabled = isRoot && screen == AppScreen.SETTINGS.key) {
+        screen = AppScreen.HOME.key
+        navigationStack = emptyList()
+    }
 
     val background = if (dark) Ink else Color(0xFFF4F1E7)
     val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
@@ -305,13 +316,13 @@ fun MashxallApp(startScreen: String? = null) {
                             language = language, foreground = foreground, isDark = dark,
                             onLanguage = { language = it; prefs.edit().putString("language", it.key).apply() },
                             onBack = { navigateBack() },
-                            onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot
+                            onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot || screen == AppScreen.SETTINGS.key
                         )
                         Box(Modifier.fillMaxSize()) {
                             when (screen) {
                                 "home" -> HomeScreen(
                                     language, foreground, cardColor, selectedCity,
-                                    onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) },
+                                    onOpen = { target -> navigateTo(target.key) },
                                     onResumeReading = {
                                         // First-time users should still see the surah list;
                                         // resume only after a real Mushaf page was saved.
@@ -365,9 +376,8 @@ fun MashxallApp(startScreen: String? = null) {
                                         navigateTo("pdf")
                                     }
                                 )
-                                "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
-                                "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
-                                "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                "library", "books", "worship" -> MoreScreen(language, foreground, cardColor, ::navigateTo)
+                                "about_data" -> DataSourcesScreen(language, foreground, cardColor)
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = {
                                     selectedCity = it
                                     prefs.edit().putString("selected_city", it).apply()
@@ -421,7 +431,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     navigateTo("quran")
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) })
+                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(target.key) })
                             }
                         }
                     }
@@ -472,22 +482,130 @@ private fun AppHeader(
 }
 
 @Composable
-private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor: Color, foreground: Color, onSelect: (String) -> Unit) {
+private fun BottomNavigationBar(
+    screen: String,
+    language: AppLanguage,
+    cardColor: Color,
+    foreground: Color,
+    onSelect: (String) -> Unit
+) {
     val items = listOf(
         Triple("home", tr(language, "home"), Icons.Outlined.Home),
         Triple("quran", tr(language, "quran"), Icons.Outlined.MenuBook),
-        Triple("library", tr(language, "library"), Icons.Outlined.LibraryBooks),
-        Triple("worship", tr(language, "azkar"), Icons.Outlined.Favorite),
-        Triple("prayer", tr(language, "prayer"), Icons.Outlined.Schedule)
+        Triple("azkar", tr(language, "azkar"), Icons.Outlined.Spa),
+        Triple("more", tr(language, "more"), Icons.Outlined.MoreVert),
+        Triple("settings", tr(language, "settings"), Icons.Outlined.Settings)
     )
-    NavigationBar(containerColor = cardColor, contentColor = foreground, windowInsets = WindowInsets.navigationBars) {
+    NavigationBar(
+        containerColor = cardColor,
+        contentColor = foreground,
+        windowInsets = WindowInsets.navigationBars
+    ) {
         items.forEach { (key, title, icon) ->
             NavigationBarItem(
-                selected = screen == key, onClick = { onSelect(key) },
+                selected = screen == key,
+                onClick = { onSelect(key) },
                 icon = { Icon(icon, contentDescription = title) },
-                label = { Text(title, fontSize = 9.sp, maxLines = 1) }, alwaysShowLabel = true
+                label = { Text(title, fontSize = 9.sp, maxLines = 1) },
+                alwaysShowLabel = true
             )
         }
+    }
+}
+
+private data class MoreDestination(
+    val key: String,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val color: Color
+)
+
+@Composable
+private fun MoreScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    onOpen: (String) -> Unit
+) {
+    val destinations = listOf(
+        MoreDestination("prayer", tr(language, "prayer"), tr(language, "prayer_sub"), Icons.Outlined.Schedule, Color(0xFF82B7E8)),
+        MoreDestination("qibla", tr(language, "qibla"), tr(language, "qibla_sub"), Icons.Outlined.Explore, Color(0xFF85C4C6)),
+        MoreDestination("hadith", tr(language, "hadith"), tr(language, "hadith_sub"), Icons.Outlined.LibraryBooks, Color(0xFFA99AE8)),
+        MoreDestination("farmuda", tr(language, "farmuda"), tr(language, "farmuda_sub"), Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
+        MoreDestination("names", tr(language, "names"), tr(language, "names_sub"), Icons.Outlined.Favorite, Color(0xFFE39FB2)),
+        MoreDestination("tasbih", tr(language, "tasbih"), tr(language, "tasbih_sub"), Icons.Outlined.Spa, Color(0xFF80C6B1)),
+        MoreDestination("audio", tr(language, "audio"), tr(language, "audio_sub"), Icons.Outlined.GraphicEq, Color(0xFF9BC8A2)),
+        MoreDestination("bookmarks", tr(language, "bookmarks"), tr(language, "bookmarks_sub"), Icons.Outlined.BookmarkBorder, Color(0xFFE0B86C)),
+        MoreDestination("lexicon", tr(language, "lexicon"), tr(language, "lexicon_sub"), Icons.Outlined.Search, Color(0xFFB3A2F0)),
+        MoreDestination(
+            "backup",
+            when (language) { AppLanguage.EN -> "Backup & restore"; AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"; AppLanguage.CKB -> "پاشەکەوت و گەڕاندنەوە" },
+            when (language) { AppLanguage.EN -> "Protect personal settings and bookmarks"; AppLanguage.AR -> "حماية الإعدادات والعلامات الشخصية"; AppLanguage.CKB -> "پاراستنی ڕێکخستن و نیشانە تایبەتییەکان" },
+            Icons.Outlined.Tune, Color(0xFF8BAFCF)
+        ),
+        MoreDestination("about_data", tr(language, "about_data"), tr(language, "data_notice"), Icons.Outlined.Language, Color(0xFFC9A44C))
+    )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(
+            tr(language, "more"),
+            color = foreground,
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Prayer, Qibla, audio, study tools and personal utilities"
+                AppLanguage.AR -> "الصلاة والقبلة والصوتيات وأدوات الدراسة والميزات الشخصية"
+                AppLanguage.CKB -> "نوێژ، قیبلە، دەنگ، ئامرازی خوێندنەوە و تایبەتمەندییە کەسییەکان"
+            }, color = foreground.copy(alpha = 0.6f), fontSize = 12.sp, lineHeight = 18.sp
+        )
+        Spacer(Modifier.height(16.dp))
+        destinations.chunked(2).forEachIndexed { rowIndex, pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                pair.forEachIndexed { columnIndex, destination ->
+                    AnimatedVisibility(
+                        visible = true,
+                        modifier = Modifier.weight(1f).padding(bottom = 10.dp),
+                        enter = fadeIn(animationSpec = tween(360, delayMillis = ((rowIndex * 2 + columnIndex) * 24).coerceAtMost(260))) +
+                            slideInVertically(initialOffsetY = { it / 12 }, animationSpec = tween(360, delayMillis = ((rowIndex * 2 + columnIndex) * 24).coerceAtMost(260)))
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().animateContentSize().clickable { onOpen(destination.key) },
+                            colors = CardDefaults.cardColors(containerColor = cardColor),
+                            shape = RoundedCornerShape(21.dp),
+                            border = BorderStroke(0.8.dp, destination.color.copy(alpha = 0.42f))
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth()
+                                    .background(Brush.linearGradient(listOf(destination.color.copy(alpha = 0.13f), cardColor, cardColor)))
+                                    .padding(13.dp)
+                                    .height(116.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Box(
+                                    Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(destination.color.copy(alpha = 0.18f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(destination.icon, contentDescription = null, tint = destination.color, modifier = Modifier.size(24.dp))
+                                }
+                                Column {
+                                    Text(destination.title, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(destination.subtitle, color = foreground.copy(alpha = 0.6f), fontSize = 9.sp, lineHeight = 14.sp, maxLines = 2)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 
