@@ -189,7 +189,16 @@ private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.R
 }
 
 internal fun parseQuranVerseReference(query: String): Pair<Int, Int>? {
-    val match = Regex("""^\s*(\d{1,3})\s*[:：]\s*(\d{1,3})\s*$""").matchEntire(query)
+    val normalized = buildString(query.length) {
+        query.forEach { char ->
+            when (char) {
+                in '٠'..'٩' -> append(('0'.code + (char.code - '٠'.code)).toChar())
+                in '۰'..'۹' -> append(('0'.code + (char.code - '۰'.code)).toChar())
+                else -> append(char)
+            }
+        }
+    }
+    val match = Regex("""^\s*(\d{1,3})\s*[:：]\s*(\d{1,3})\s*$""").matchEntire(normalized)
         ?: return null
     val surah = match.groupValues[1].toIntOrNull() ?: return null
     val ayah = match.groupValues[2].toIntOrNull() ?: return null
