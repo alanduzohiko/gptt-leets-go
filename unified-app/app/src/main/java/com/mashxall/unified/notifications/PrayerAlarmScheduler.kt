@@ -18,6 +18,7 @@ object PrayerAlarmScheduler {
     const val PREFS = "mashxall_preferences"
     const val KEY_ENABLED = "adhan_enabled"
     const val KEY_AUDIO = "adhan_audio_asset"
+    const val KEY_DAYS = "adhan_days_of_week"
     private const val ACTION_ALARM = "com.mashxall.unified.PRAYER_ALARM"
     private const val BASE_REQUEST_CODE = 7400
     private val PRAYERS = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
@@ -37,22 +38,27 @@ object PrayerAlarmScheduler {
             cancelAll(context)
             return
         }
-        // Always retire the previous locations' pending alarms before creating
-        // a fresh set. If the new city has no valid timetable, old-city alarms
-        // must not remain armed.
+        // Cancel alarms from any previously selected city before rebuilding the
+        // next occurrence for each prayer and chosen weekday.
         cancelAll(context)
-        val today = startOfDay(Date(), 0)
-        val tomorrow = startOfDay(Date(), 1)
-        val todayTimes = resolveTimes(context, prefs, today) ?: return
-        val tomorrowTimes = resolveTimes(context, prefs, tomorrow)
         val now = System.currentTimeMillis()
+        val selectedDays = prefs.getStringSet(KEY_DAYS, null)?.toSet()
+        val upcomingRows = mutableMapOf<Int, Pair<Date, PrayerRow?>>()
+        for (offset in 0..8) {
+            val day = startOfDay(Date(), offset)
+            val weekday = Calendar.getInstance().apply { time = day }.get(Calendar.DAY_OF_WEEK)
+            if (!isPrayerDaySelected(selectedDays, weekday)) continue
+            upcomingRows[offset] = day to resolveTimes(context, prefs, day)
+        }
+
         PRAYERS.forEach { code ->
-            val todayTrigger = triggerAt(today, prayerTime(todayTimes, code))
-            if (todayTrigger != null && todayTrigger > now + 3000L) {
-                schedule(context, code, todayTrigger)
-            } else {
-                val tomorrowTrigger = tomorrowTimes?.let { triggerAt(tomorrow, prayerTime(it, code)) }
-                if (tomorrowTrigger != null && tomorrowTrigger > now) schedule(context, code, tomorrowTrigger)
+            for (offset in 0..8) {
+                val (day, row) = upcomingRows[offset] ?: continue
+                val trigger = row?.let { triggerAt(day, prayerTime(it, code)) } ?: continue
+                if (trigger > now + 3000L) {
+                    schedule(context, code, trigger)
+                    break
+                }
             }
         }
     }
@@ -61,9 +67,19 @@ object PrayerAlarmScheduler {
         if (prayerCode !in PRAYERS) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(KEY_ENABLED, false)) return
-        val tomorrow = startOfDay(Date(), 1)
-        val row = resolveTimes(context, prefs, tomorrow) ?: return
-        triggerAt(tomorrow, prayerTime(row, prayerCode))?.let { schedule(context, prayerCode, it) }
+        val selectedDays = prefs.getStringSet(KEY_DAYS, null)?.toSet()
+        val now = System.currentTimeMillis()
+        for (offset in 1..8) {
+            val day = startOfDay(Date(), offset)
+            val weekday = Calendar.getInstance().apply { time = day }.get(Calendar.DAY_OF_WEEK)
+            if (!isPrayerDaySelected(selectedDays, weekday)) continue
+            val row = resolveTimes(context, prefs, day) ?: continue
+            val trigger = triggerAt(day, prayerTime(row, prayerCode)) ?: continue
+            if (trigger > now) {
+                schedule(context, prayerCode, trigger)
+                return
+            }
+        }
     }
 
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
@@ -146,4 +162,11 @@ object PrayerAlarmScheduler {
         "maghrib" -> row.maghrib
         else -> row.isha
     }
+    /** A missing weekday preference means all days for backward compatibility. */
+    internal fun isPrayerDaySelected(selectedDays: Set<String>?, calendarDay: Int): Boolean {
+        if (calendarDay !in Calendar.SUNDAY..Calendar.SATURDAY) return false
+        val effective = selectedDays ?: (Calendar.SUNDAY..Calendar.SATURDAY).map { it.toString() }.toSet()
+        return calendarDay.toString() in effective
+    }
+
 }
