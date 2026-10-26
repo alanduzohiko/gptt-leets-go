@@ -289,6 +289,7 @@ fun QuranScreen(
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
+    var mushafInternalOverlayOpen by remember { mutableStateOf(false) }
     var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
     var mushafSepiaMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_sepia_mode", false)) }
     var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
@@ -343,23 +344,19 @@ fun QuranScreen(
         onDispose { onImmersiveMushaf(false) }
     }
     androidx.activity.compose.BackHandler(
-        enabled = mushafMode || openingMushaf || showReaderSettings || chooseTranslation || chooseSurah
+        enabled = openingMushaf ||
+            (mushafMode && !mushafInternalOverlayOpen &&
+                selectedAyahForSheet == null && !showReaderSettings &&
+                !chooseTranslation && !chooseSurah)
     ) {
-        // Handle the top-most reader layer first. This prevents Android Back from
-        // dismissing reader settings and also leaving the Mushaf in the same press.
-        when {
-            selectedAyahForSheet != null -> selectedAyahForSheet = null
-            showReaderSettings -> showReaderSettings = false
-            chooseTranslation -> chooseTranslation = false
-            chooseSurah -> chooseSurah = false
-            openingMushaf -> {
-                openingMushaf = false
-                showSurahList = true
-            }
-            else -> {
-                mushafMode = false
-                showSurahList = true
-            }
+        // Dialogs and bottom sheets keep their own Android Back handling. The
+        // page viewer only handles Back when no overlay is open.
+        if (openingMushaf) {
+            openingMushaf = false
+            showSurahList = true
+        } else {
+            mushafMode = false
+            showSurahList = true
         }
     }
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
@@ -618,6 +615,7 @@ fun QuranScreen(
                 sepiaMode = mushafSepiaMode,
                 surahTitle = currentSurah?.arabicName.orEmpty(),
                 onPlaySurahAudio = onPlaySurahAudio,
+                onInternalOverlayChanged = { mushafInternalOverlayOpen = it },
                 onPageChange = { requested ->
                     mushafPage = requested.coerceIn(1, 604)
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
@@ -1832,6 +1830,7 @@ private fun MushafPageViewer(
     sepiaMode: Boolean,
     surahTitle: String,
     onPlaySurahAudio: (Int) -> Unit,
+    onInternalOverlayChanged: (Boolean) -> Unit,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
@@ -1991,7 +1990,11 @@ private fun MushafPageViewer(
                     modifier = Modifier.rotate(if (language == AppLanguage.EN) 0f else 180f)
                 )
             }
-            IconButton(onClick = { pageInput = page.toString(); showPagePicker = true }) {
+            IconButton(onClick = {
+                pageInput = page.toString()
+                showPagePicker = true
+                onInternalOverlayChanged(true)
+            }) {
                 Box(
                     Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Gold.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
@@ -2005,17 +2008,29 @@ private fun MushafPageViewer(
                 }, tint = Gold)
             }
             Box {
-                IconButton(onClick = { showReaderMenu = true }) {
+                IconButton(onClick = { showReaderMenu = true; onInternalOverlayChanged(true) }) {
                     Text("⋮", color = Gold, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
-                DropdownMenu(expanded = showReaderMenu, onDismissRequest = { showReaderMenu = false }) {
+                DropdownMenu(expanded = showReaderMenu, onDismissRequest = {
+                    showReaderMenu = false
+                    onInternalOverlayChanged(false)
+                }) {
                     DropdownMenuItem(
                         text = { Text(if (language == AppLanguage.EN) "Go to page" else if (language == AppLanguage.AR) "الانتقال إلى صفحة" else "بڕۆ بۆ پەڕە") },
-                        onClick = { showReaderMenu = false; pageInput = page.toString(); showPagePicker = true }
+                        onClick = {
+                            showReaderMenu = false
+                            pageInput = page.toString()
+                            showPagePicker = true
+                            onInternalOverlayChanged(true)
+                        }
                     )
                     DropdownMenuItem(
                         text = { Text(if (language == AppLanguage.EN) "Reader appearance" else if (language == AppLanguage.AR) "مظهر المصحف" else "ڕووکاری مصحەف") },
-                        onClick = { showReaderMenu = false; onReaderSettings() }
+                        onClick = {
+                            showReaderMenu = false
+                            onInternalOverlayChanged(false)
+                            onReaderSettings()
+                        }
                     )
                 }
             }
@@ -2118,7 +2133,10 @@ private fun MushafPageViewer(
     }
 
     if (showPagePicker) AlertDialog(
-        onDismissRequest = { showPagePicker = false },
+        onDismissRequest = {
+            showPagePicker = false
+            onInternalOverlayChanged(false)
+        },
         title = {
             Text(
                 when (language) {
@@ -2150,12 +2168,16 @@ private fun MushafPageViewer(
             TextButton(onClick = {
                 pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
                 showPagePicker = false
+                onInternalOverlayChanged(false)
             }) {
                 Text(if (language == AppLanguage.EN) "Open page" else if (language == AppLanguage.AR) "فتح الصفحة" else "پەڕە بکەرەوە")
             }
         },
         dismissButton = {
-            TextButton(onClick = { showPagePicker = false }) { Text(tr(language, "back")) }
+            TextButton(onClick = {
+                showPagePicker = false
+                onInternalOverlayChanged(false)
+            }) { Text(tr(language, "back")) }
         }
     )
 }
