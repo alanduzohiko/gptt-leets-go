@@ -5165,30 +5165,38 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
 
     val onFix: (Location) -> Unit = { fix ->
-        // A new fix supersedes the previous location even if its reported accuracy
-        // is a little worse: otherwise a user who moved could stay stuck at stale
-        // coordinates until the new sensor accuracy beats an old measurement.
         locating = false
-        gpsLatitude = fix.latitude
-        gpsLongitude = fix.longitude
-        gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
-        prefs.edit()
-            .putString("gps_latitude", fix.latitude.toString())
-            .putString("gps_longitude", fix.longitude.toString())
-            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
-            .apply()
-        locationMessage = if (fix.hasAccuracy()) {
-            val acc = fix.accuracy.toInt().toString()
-            when (language) {
-                AppLanguage.EN -> "Fresh GPS/network fix; reported accuracy about ±$acc m"
-                AppLanguage.AR -> "تم تحديث الموقع الحالي؛ الدقة التقريبية ±$acc متر"
-                AppLanguage.CKB -> "شوێنی ئێستا نوێکرایەوە؛ وردبینی نزیکەی ±$acc مەتر"
+        if (fix.hasAccuracy() && fix.accuracy > 1500f) {
+            // Do not replace a verified city/fix with a very coarse network estimate.
+            locationMessage = when (language) {
+                AppLanguage.EN -> "This location estimate is too broad (±${fix.accuracy.toInt()} m). Enable precise GPS or choose your city."
+                AppLanguage.AR -> "تقدير الموقع واسع جدًا (±${fix.accuracy.toInt()} متر). فعّل GPS الدقيق أو اختر مدينتك."
+                AppLanguage.CKB -> "ئەم هەڵسەنگاندنی شوێنە زۆر گشتییە (±${fix.accuracy.toInt()} مەتر)؛ GPSی ورد چالاک بکە یان شارەکەت هەڵبژێرە."
             }
         } else {
-            when (language) {
-                AppLanguage.EN -> "Fresh coordinates received; Android did not report accuracy."
-                AppLanguage.AR -> "تم تحديث الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
-                AppLanguage.CKB -> "کۆئۆردیناتی نوێ وەرگیرا، بەڵام وردبینی نەدراوە."
+            // A usable new fix supersedes an older one so moving users do not stay
+            // stuck at stale coordinates.
+            gpsLatitude = fix.latitude
+            gpsLongitude = fix.longitude
+            gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
+            prefs.edit()
+                .putString("gps_latitude", fix.latitude.toString())
+                .putString("gps_longitude", fix.longitude.toString())
+                .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+                .apply()
+            locationMessage = if (fix.hasAccuracy()) {
+                val acc = fix.accuracy.toInt().toString()
+                when (language) {
+                    AppLanguage.EN -> "Fresh GPS/network fix; reported accuracy about ±$acc m"
+                    AppLanguage.AR -> "تم تحديث الموقع الحالي؛ الدقة التقريبية ±$acc متر"
+                    AppLanguage.CKB -> "شوێنی ئێستا نوێکرایەوە؛ وردبینی نزیکەی ±$acc مەتر"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "Fresh coordinates received; Android did not report accuracy."
+                    AppLanguage.AR -> "تم تحديث الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
+                    AppLanguage.CKB -> "کۆئۆردیناتی نوێ وەرگیرا، بەڵام وردبینی نەدراوە."
+                }
             }
         }
     }
