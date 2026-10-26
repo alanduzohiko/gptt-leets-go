@@ -1405,7 +1405,7 @@ fi
 echo "PASS: home prayer-times card, continue-reading resume, and quick access are visible and usable."
 
 check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
-check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
+check_screen worship 'زیاتر|المزيد|More'
 
 # Audio browsing belongs under Settings, not the generic Library/Worship menus.
 if grep -Eiq 'Recitations & audio|التلاوات والصوتيات|دەنگ و تلاوەت' dist/runtime-test/window-library.xml dist/runtime-test/window-worship.xml; then
