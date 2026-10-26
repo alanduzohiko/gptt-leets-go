@@ -5182,7 +5182,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var times by remember { mutableStateOf<PrayerRow?>(null) }
     var tomorrowTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val use24Hour = false
+    var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
     var searchingCities by remember { mutableStateOf(false) }
@@ -5503,6 +5503,33 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Clock format"
+                    AppLanguage.AR -> "تنسيق الساعة"
+                    AppLanguage.CKB -> "شێوازی کاتژمێر"
+                }, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = !use24Hour,
+                onClick = {
+                    use24Hour = false
+                    prefs.edit().putBoolean("time_format_24h", false).apply()
+                },
+                label = { Text("12 h", fontSize = 10.sp) }
+            )
+            Spacer(Modifier.width(6.dp))
+            FilterChip(
+                selected = use24Hour,
+                onClick = {
+                    use24Hour = true
+                    prefs.edit().putBoolean("time_format_24h", true).apply()
+                },
+                label = { Text("24 h", fontSize = 10.sp) }
+            )
+        }
         Card(
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = RoundedCornerShape(18.dp),
