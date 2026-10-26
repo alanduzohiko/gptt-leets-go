@@ -153,7 +153,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-boot-timeout: 900
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none -camera-front none -memory 4096 -cores 4 -partition-size 8192
           script: APK_PATH="unified-app/app/build/outputs/apk/debug/app-debug.apk" bash tools/runtime-smoke-android11.sh
 
       - name: Upload APK and Android 11 runtime results
