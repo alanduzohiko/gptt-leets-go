@@ -4227,7 +4227,7 @@ private fun formatPrayerCountdown(remainingMillis: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (String) -> Unit, onQibla: () -> Unit) {
+fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (City) -> Unit, onQibla: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
@@ -4424,6 +4424,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             val requestedKey = "$todayKey:$dayOffset"
             if (requestedKey != loadedDate) {
                 loading = true
+                times = null
                 val targetDate = Calendar.getInstance().apply {
                     add(Calendar.DAY_OF_YEAR, dayOffset)
                 }.time
@@ -4446,8 +4447,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     else -> {
                         ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
                             ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                                PrayerTimeCalculator.calculate(
-                                    targetDate, city.latitude, city.longitude,
+                                ContentRepository.loadPrayerTimesAtLocation(
+                                    context, city.latitude, city.longitude, targetDate,
                                     PrayerCalculationMethod.fromId(calculationMethod),
                                     AsrCalculationSchool.fromId(asrSchool)
                                 )
@@ -4489,8 +4490,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 else -> {
                     ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
                         ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                            PrayerTimeCalculator.calculate(
-                                tomorrow, city.latitude, city.longitude,
+                            ContentRepository.loadPrayerTimesAtLocation(
+                                context, city.latitude, city.longitude, tomorrow,
                                 PrayerCalculationMethod.fromId(calculationMethod),
                                 AsrCalculationSchool.fromId(asrSchool)
                             )
@@ -4539,42 +4540,31 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { dayOffset = (dayOffset - 1).coerceAtLeast(-366) }, enabled = dayOffset > -366) {
-                    Text("‹", color = Gold, fontSize = 22.sp)
-                }
-                Column(
-                    Modifier.weight(1f).clickable { showDatePicker = true },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Outlined.Schedule, null, tint = Gold, modifier = Modifier.size(22.dp)) }
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        when (language) {
-                            AppLanguage.EN -> if (dayOffset == 0) "Today" else if (dayOffset < 0) "Past date" else "Upcoming date"
-                            AppLanguage.AR -> if (dayOffset == 0) "اليوم" else if (dayOffset < 0) "تاريخ سابق" else "تاريخ قادم"
-                            AppLanguage.CKB -> if (dayOffset == 0) "ئەمڕۆ" else if (dayOffset < 0) "ڕۆژی ڕابردوو" else "ڕۆژی داهاتوو"
-                        }, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                        when (language) { AppLanguage.EN -> "Today's prayer times"; AppLanguage.AR -> "مواقيت صلاة اليوم"; AppLanguage.CKB -> "کاتەکانی نوێژی ئەمڕۆ" },
+                        color = foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp
                     )
-                    Text(displayDateText, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                    Text(
+                        SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(Date(clockNowMillis)),
+                        color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
+                    )
                 }
-                IconButton(onClick = { dayOffset = (dayOffset + 1).coerceAtMost(366) }, enabled = dayOffset < 366) {
-                    Text("›", color = Gold, fontSize = 22.sp)
-                }
-                IconButton(onClick = { showDatePicker = true }) {
-                    Text("▦", color = Gold, fontSize = 19.sp)
-                }
-                if (dayOffset != 0) {
-                    TextButton(onClick = { dayOffset = 0 }) {
-                        Text(when (language) {
-                            AppLanguage.EN -> "Today"
-                            AppLanguage.AR -> "اليوم"
-                            AppLanguage.CKB -> "ئەمڕۆ"
-                        }, fontSize = 10.sp)
-                    }
-                }
+                Text(
+                    when (language) { AppLanguage.EN -> "LIVE"; AppLanguage.AR -> "مباشر"; AppLanguage.CKB -> "زیندوو" },
+                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                )
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -4587,10 +4577,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
                         Text(
                             if (gpsLatitude != null) {
-                                when (language) {
-                                    AppLanguage.EN -> "Current GPS location"
-                                    AppLanguage.AR -> "موقع GPS الحالي"
-                                    AppLanguage.CKB -> "شوێنی GPSی ئێستا"
+                                times?.city?.takeIf { it.isNotBlank() } ?: when (language) {
+                                    AppLanguage.EN -> "Current location"
+                                    AppLanguage.AR -> "الموقع الحالي"
+                                    AppLanguage.CKB -> "شوێنی ئێستا"
                                 }
                             } else selectedCity,
                             color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
@@ -4700,33 +4690,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
         )
         Spacer(Modifier.height(14.dp))
-        Text(if (language == AppLanguage.EN) "Calculation method" else if (language == AppLanguage.AR) "طريقة الحساب" else "شێوازی حسابکردن", color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(listOf("mwl", "umm_al_qura", "egypt", "karachi", "isna")) { rule ->
-                val label = when (rule) {
-                    "umm_al_qura" -> "Umm al-Qura"
-                    "egypt" -> if (language == AppLanguage.EN) "Egypt" else if (language == AppLanguage.AR) "مصر" else "مەسر"
-                    "karachi" -> "Karachi"
-                    "isna" -> "ISNA"
-                    else -> if (language == AppLanguage.EN) "MWL" else if (language == AppLanguage.AR) "رابطة العالم الإسلامي" else "یەکێتی جیهانی"
-                }
-                FilterChip(selected = calculationMethod == rule, onClick = {
-                    calculationMethod = rule
-                    prefs.edit().putString("prayer_method", rule).apply()
-                }, label = { Text(label, fontSize = 10.sp, maxLines = 1) })
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (language == AppLanguage.EN) "Asr method" else if (language == AppLanguage.AR) "طريقة العصر" else "شێوازی عەسر", color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.weight(1f))
-            FilterChip(selected = asrSchool == "shafi", onClick = {
-                asrSchool = "shafi"; prefs.edit().putString("asr_school", "shafi").apply()
-            }, label = { Text(if (language == AppLanguage.EN) "Standard" else if (language == AppLanguage.AR) "الشافعي" else "ستاندارد", fontSize = 10.sp) })
-            Spacer(Modifier.width(6.dp))
-            FilterChip(selected = asrSchool == "hanafi", onClick = {
-                asrSchool = "hanafi"; prefs.edit().putString("asr_school", "hanafi").apply()
-            }, label = { Text(if (language == AppLanguage.EN) "Hanafi" else if (language == AppLanguage.AR) "الحنفي" else "حەنەفی", fontSize = 10.sp) })
-        }
         Spacer(Modifier.height(10.dp))
         if (dayOffset == 0 && nextPrayerTarget != null) {
             Card(
@@ -4872,40 +4835,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         Spacer(Modifier.height(10.dp))
     }
-    if (showDatePicker) DatePickerDialog(
-        onDismissRequest = { showDatePicker = false },
-        confirmButton = {
-            TextButton(onClick = {
-                val selectedMillis = datePickerState.selectedDateMillis
-                if (selectedMillis != null) {
-                    val selectedDate = Instant.ofEpochMilli(selectedMillis).atZone(ZoneOffset.UTC).toLocalDate()
-                    dayOffset = ChronoUnit.DAYS.between(LocalDate.now(), selectedDate).toInt().coerceIn(-366, 366)
-                }
-                showDatePicker = false
-            }) {
-                Text(if (language == AppLanguage.EN) "Apply" else if (language == AppLanguage.AR) "تطبيق" else "جێبەجێکردن")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { showDatePicker = false }) {
-                Text(tr(language, "back"))
-            }
-        }
-    ) {
-        DatePicker(
-            state = datePickerState,
-            title = {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Choose prayer date"
-                        AppLanguage.AR -> "اختر تاريخ المواقيت"
-                        AppLanguage.CKB -> "بەرواری کاتەکانی نوێژ هەڵبژێرە"
-                    }, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp)
-                )
-            },
-            showModeToggle = true
-        )
-    }
     if (chooseCity) AlertDialog(
         onDismissRequest = { chooseCity = false },
         title = { Text(tr(language, "select_city")) },
@@ -4932,17 +4861,22 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
                         Column(
                             Modifier.fillMaxWidth().clickable {
-                                onCity(city.name)
+                                onCity(city)
+                                selectedCity = city.name
                                 gpsLatitude = null
                                 gpsLongitude = null
                                 gpsAccuracy = null
                                 manualLatitude = city.latitude
                                 manualLongitude = city.longitude
+                                times = null
+                                tomorrowTimes = null
+                                loading = true
                                 prefs.edit()
                                     .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
+                                    .putString("selected_city", city.name)
+                                    .putString("selected_city_country", city.country)
                                     .putString("manual_city_latitude", city.latitude.toString())
                                     .putString("manual_city_longitude", city.longitude.toString())
-                                    .putString("selected_city_country", city.country)
                                     .apply()
                                 chooseCity = false
                             }.padding(vertical = 9.dp, horizontal = 4.dp)
