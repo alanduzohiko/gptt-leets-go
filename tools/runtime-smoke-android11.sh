@@ -356,8 +356,18 @@ if ! grep -Eq 'Search reciters by name|ابحث عن قارئ بالاسم|بە 
 fi
 adb shell input keyevent 4
 sleep 2
+# Refresh the page dump after closing settings. A stale snapshot can hide a
+# BackHandler regression by tapping coordinates on the previous screen.
+adb shell uiautomator dump /sdcard/mashxall-mushaf-after-settings.xml > dist/runtime-test/uiautomator-mushaf-after-settings.txt 2>&1 || true
+adb pull /sdcard/mashxall-mushaf-after-settings.xml dist/runtime-test/window-mushaf-after-settings.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-mushaf-after-settings.xml ||
+   ! grep -q '604' dist/runtime-test/window-mushaf-after-settings.xml; then
+  echo "FAIL: dismissing reader settings exited the Mushaf instead of returning to the current page."
+  cat dist/runtime-test/window-mushaf-after-settings.xml
+  exit 1
+fi
 
-verse_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
+verse_coords="$(python3 - dist/runtime-test/window-mushaf-after-settings.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
