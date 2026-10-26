@@ -3586,6 +3586,7 @@ fun AudioScreen(
     var downloadGeneration by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
+    var showAllAdhanAudio by rememberSaveable { mutableStateOf(false) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
@@ -3688,12 +3689,52 @@ fun AudioScreen(
                     AppLanguage.CKB -> "لە مۆبایلەوە هاوردە بکە"
                 }, fontSize = 12.sp)
             }
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FilterChip(
+                    selected = !showAllAdhanAudio,
+                    onClick = { showAllAdhanAudio = false },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Adhan/mosque matches"
+                                AppLanguage.AR -> "الأذان وأصوات المساجد"
+                                AppLanguage.CKB -> "بانگ و دەنگی مزگەوت"
+                            }, fontSize = 10.sp
+                        )
+                    }
+                )
+                FilterChip(
+                    selected = showAllAdhanAudio,
+                    onClick = { showAllAdhanAudio = true },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "All source audio"
+                                AppLanguage.AR -> "كل الصوتيات الأصلية"
+                                AppLanguage.CKB -> "هەموو دەنگە ڕەسەنەکان"
+                            }, fontSize = 10.sp
+                        )
+                    }
+                )
+            }
         }
         if (selectedTab == 0 || selectedTab == 2) {
             val visibleAudio = audio.filter { item ->
                 val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                (selectedTab == 0 || isAdhanAudioAsset(item.title, item.assetPath, item.group)) &&
+                (selectedTab == 0 || showAllAdhanAudio || isAdhanAudioAsset(item.title, item.assetPath, item.group)) &&
                     (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
+            }
+            if (selectedTab == 2) {
+                val detectedAdhanCount = audio.count { isAdhanAudioAsset(it.title, it.assetPath, it.group) }
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "${visibleAudio.size} shown • ${audio.size} total source/custom audio • ${detectedAdhanCount} labelled as adhan or mosque sound"
+                        AppLanguage.AR -> "المعروض ${visibleAudio.size} • إجمالي الصوتيات ${audio.size} • المعرّف منها كأذان/مساجد ${detectedAdhanCount}"
+                        AppLanguage.CKB -> "${visibleAudio.size} پیشان دراوە • کۆی دەنگ ${audio.size} • ${detectedAdhanCount} بە بانگ/مزگەوت ناسێنراوە"
+                    }, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 15.sp
+                )
+                Spacer(Modifier.height(4.dp))
             }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
