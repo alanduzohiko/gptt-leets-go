@@ -318,8 +318,9 @@ for attempt in $(seq 1 20); do
   sleep 3
   adb shell uiautomator dump /sdcard/mashxall-mushaf-open.xml > "dist/runtime-test/uiautomator-mushaf-open-$attempt.txt" 2>&1 || true
   adb pull /sdcard/mashxall-mushaf-open.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
+  # Page counts are localized: English uses 604, Sorani/Arabic may use ٦٠٤.
   if grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-mushaf-fullscreen.xml &&
-     grep -q '604' dist/runtime-test/window-mushaf-fullscreen.xml &&
+     grep -Eq '604|٦٠٤|۶۰۴' dist/runtime-test/window-mushaf-fullscreen.xml &&
      grep -Eq 'Exit|خروج|دەرچوون' dist/runtime-test/window-mushaf-fullscreen.xml; then
     mushaf_ready=1
     echo "PASS: selecting Al-Fatiha opened the real 604-page Mushaf (poll $attempt)."
