@@ -67,6 +67,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -1829,6 +1830,8 @@ private fun MushafPageViewer(
     page: Int,
     darkMode: Boolean,
     sepiaMode: Boolean,
+    surahTitle: String,
+    onPlaySurahAudio: (Int) -> Unit,
     onPageChange: (Int) -> Unit,
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
@@ -1843,17 +1846,39 @@ private fun MushafPageViewer(
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    var showPagePicker by remember { mutableStateOf(false) }
+    var showReaderMenu by remember { mutableStateOf(false) }
+    var savedPageKeys by remember {
+        mutableStateOf(context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+            .getStringSet("mushaf_page_bookmarks", emptySet()).orEmpty().toSet())
+    }
+    var swipeDistance by remember(page) { mutableFloatStateOf(0f) }
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 4f)
-        if (scale > 1.01f) {
-            offsetX += panChange.x
-            offsetY += panChange.y
+        val nextScale = (scale * zoomChange).coerceIn(1f, 4f)
+        if (scale <= 1.01f && nextScale <= 1.01f &&
+            kotlin.math.abs(panChange.x) > kotlin.math.abs(panChange.y) * 1.2f
+        ) {
+            swipeDistance += panChange.x
+            if (swipeDistance < -120f && page < 604) {
+                swipeDistance = 0f
+                onPageChange(page + 1)
+            } else if (swipeDistance > 120f && page > 1) {
+                swipeDistance = 0f
+                onPageChange(page - 1)
+            }
         } else {
-            offsetX = 0f
-            offsetY = 0f
+            swipeDistance = 0f
+            scale = nextScale
+            if (scale > 1.01f) {
+                offsetX += panChange.x
+                offsetY += panChange.y
+            } else {
+                offsetX = 0f
+                offsetY = 0f
+            }
         }
     }
     LaunchedEffect(page) { pageInput = page.toString() }
@@ -1888,53 +1913,98 @@ private fun MushafPageViewer(
             ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
         }
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
-                Text(tr(language, "previous"), fontSize = 11.sp)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(tr(language, "mushaf_view"), color = Gold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(tr(language, "page") + " " + page + " / 604", color = foreground.copy(alpha = 0.6f), fontSize = 10.sp)
-            }
-            OutlinedButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
-                Text(tr(language, "next"), fontSize = 11.sp)
-            }
-            OutlinedButton(onClick = onExitFullscreen) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Exit"
-                        AppLanguage.AR -> "خروج"
-                        AppLanguage.CKB -> "دەرچوون"
-                    }, fontSize = 10.sp
-                )
-            }
-        }
-        Spacer(Modifier.height(7.dp))
+    Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF0C1110) else if (sepiaMode) Color(0xFFF0E1BE) else Color(0xFFF6F3EB)) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = pageInput,
-                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.width(100.dp),
-                label = { Text(if (language == AppLanguage.EN) "Page" else if (language == AppLanguage.AR) "صفحة" else "پەڕە") },
-                singleLine = true
-            )
-            Spacer(Modifier.width(6.dp))
-            Button(onClick = {
-                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
-            }) {
-                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(42.dp)) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = when (language) { AppLanguage.EN -> "Exit Mushaf"; AppLanguage.AR -> "الخروج من المصحف"; AppLanguage.CKB -> "دەرچوون لە مصحەف" },
+                    tint = Gold,
+                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 180f else 0f)
+                )
             }
-            Spacer(Modifier.width(5.dp))
-            OutlinedButton(onClick = onReaderSettings) {
-                Text(if (language == AppLanguage.EN) "Settings" else if (language == AppLanguage.AR) "الإعدادات" else "ڕێکخستن", fontSize = 10.sp)
+            Column(Modifier.weight(1f).padding(start = 3.dp)) {
+                Text(
+                    tr(language, "mushaf_view") + if (surahTitle.isBlank()) "" else " • " + surahTitle,
+                    color = foreground, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1
+                )
+                Text(
+                    tr(language, "page") + " " + page + " / 604",
+                    color = foreground.copy(alpha = 0.62f), fontSize = 10.sp
+                )
+            }
+            IconButton(
+                onClick = {
+                    val pageSurah = pageVerses.firstOrNull()?.surah
+                    onPlaySurahAudio(pageSurah ?: 1)
+                },
+                enabled = pageVerses.isNotEmpty() && !loading
+            ) {
+                Icon(Icons.Outlined.PlayCircle, contentDescription = when (language) {
+                    AppLanguage.EN -> "Play full surah"
+                    AppLanguage.AR -> "تشغيل السورة كاملة"
+                    AppLanguage.CKB -> "لێدانی هەموو سوورەت"
+                }, tint = Gold, modifier = Modifier.size(25.dp))
+            }
+            IconButton(
+                onClick = {
+                    val key = page.toString()
+                    savedPageKeys = if (savedPageKeys.contains(key)) savedPageKeys - key else savedPageKeys + key
+                    context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+                        .edit().putStringSet("mushaf_page_bookmarks", savedPageKeys).apply()
+                    Toast.makeText(context, when {
+                        savedPageKeys.contains(key) && language == AppLanguage.EN -> "Page bookmarked"
+                        savedPageKeys.contains(key) && language == AppLanguage.AR -> "تم حفظ الصفحة"
+                        savedPageKeys.contains(key) -> "پەڕەکە نیشان کرا"
+                        language == AppLanguage.EN -> "Page bookmark removed"
+                        language == AppLanguage.AR -> "تمت إزالة علامة الصفحة"
+                        else -> "نیشانەی پەڕەکە سڕایەوە"
+                    }, Toast.LENGTH_SHORT).show()
+                }
+            ) {
+                Icon(
+                    Icons.Outlined.BookmarkBorder,
+                    contentDescription = if (savedPageKeys.contains(page.toString())) {
+                        if (language == AppLanguage.EN) "Remove page bookmark" else if (language == AppLanguage.AR) "إزالة علامة الصفحة" else "سڕینەوەی نیشانەی پەڕە"
+                    } else {
+                        if (language == AppLanguage.EN) "Bookmark page" else if (language == AppLanguage.AR) "حفظ علامة الصفحة" else "نیشانکردنی پەڕە"
+                    },
+                    tint = if (savedPageKeys.contains(page.toString())) Gold else foreground.copy(alpha = 0.75f)
+                )
+            }
+            IconButton(onClick = { pageInput = page.toString(); showPagePicker = true }) {
+                Box(
+                    Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Gold.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) { Text(page.toString(), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+            }
+            IconButton(onClick = onReaderSettings) {
+                Icon(Icons.Outlined.Tune, contentDescription = when (language) {
+                    AppLanguage.EN -> "Reader settings"
+                    AppLanguage.AR -> "إعدادات المصحف"
+                    AppLanguage.CKB -> "ڕێکخستنەکانی مصحەف"
+                }, tint = Gold)
+            }
+            Box {
+                IconButton(onClick = { showReaderMenu = true }) {
+                    Text("⋮", color = Gold, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                }
+                DropdownMenu(expanded = showReaderMenu, onDismissRequest = { showReaderMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (language == AppLanguage.EN) "Go to page" else if (language == AppLanguage.AR) "الانتقال إلى صفحة" else "بڕۆ بۆ پەڕە") },
+                        onClick = { showReaderMenu = false; pageInput = page.toString(); showPagePicker = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (language == AppLanguage.EN) "Reader appearance" else if (language == AppLanguage.AR) "مظهر المصحف" else "ڕووکاری مصحەف") },
+                        onClick = { showReaderMenu = false; onReaderSettings() }
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(2.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(
@@ -2029,50 +2099,49 @@ private fun MushafPageViewer(
                 }
             }
         }
-        if (pageVerses.isNotEmpty()) {
-            Spacer(Modifier.height(5.dp))
+    }
+
+    if (showPagePicker) AlertDialog(
+        onDismissRequest = { showPagePicker = false },
+        title = {
             Text(
                 when (language) {
-                    AppLanguage.EN -> "Tap a word in the Mushaf or choose a verse to highlight its original bounds."
-                    AppLanguage.AR -> "اضغط على كلمة في المصحف أو اختر آية لإظهار حدودها الأصلية."
-                    AppLanguage.CKB -> "لەسەر وشەیەک دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنوورە ڕەسەنەکەی."
-                },
-                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
+                    AppLanguage.EN -> "Go to Mushaf page"
+                    AppLanguage.AR -> "الانتقال إلى صفحة المصحف"
+                    AppLanguage.CKB -> "بڕۆ بۆ پەڕەی مصحەف"
+                }, color = foreground, fontWeight = FontWeight.Bold
             )
-            selectedVerse?.let { picked ->
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    (if (language == AppLanguage.EN) "Highlighted verse: " else if (language == AppLanguage.AR) "الآية المحددة: " else "ئایەتی دیاریکراو: ") + "${picked.surah}:${picked.ayah}",
-                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                    when (language) {
+                        AppLanguage.EN -> "Enter a page number from 1 to 604."
+                        AppLanguage.AR -> "أدخل رقم صفحة من 1 إلى 604."
+                        AppLanguage.CKB -> "ژمارەی پەڕەیەک لە ١ تا ٦٠٤ بنووسە."
+                    }, color = foreground.copy(alpha = 0.65f), fontSize = 12.sp
+                )
+                OutlinedTextField(
+                    value = pageInput,
+                    onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
+                    label = { Text(if (language == AppLanguage.EN) "Page number" else if (language == AppLanguage.AR) "رقم الصفحة" else "ژمارەی پەڕە") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
-                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
-                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
-                },
-                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
-                    FilterChip(
-                        selected = selectedVerse == verse,
-                        onClick = {
-                            selectedVerse = verse
-                            onVerseClick(verse.surah, verse.ayah)
-                        },
-                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
-                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
-                    )
-                }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
+                showPagePicker = false
+            }) {
+                Text(if (language == AppLanguage.EN) "Open page" else if (language == AppLanguage.AR) "فتح الصفحة" else "پەڕە بکەرەوە")
             }
+        },
+        dismissButton = {
+            TextButton(onClick = { showPagePicker = false }) { Text(tr(language, "back")) }
         }
-        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
+    )
 }
 
 @Composable
