@@ -204,6 +204,15 @@ PY
 }
 check_screen prayer 'کاتەکانی بانگ|Prayer times|مواقيت الصلاة'
 
+# Strictly enforce the requested today-only prayer UI: the screen must not offer
+# calendar selection, previous/next-day navigation, or a multi-day timetable.
+if grep -Eiq '7-day schedule|جدول ٧ أيام|خشتەی ٧ ڕۆژ|Upcoming date|Past date|تاريخ قادم|تاريخ سابق|اختر تاريخ المواقيت|Choose prayer date' dist/runtime-test/window-prayer.xml; then
+  echo "FAIL: the prayer screen still exposes a choice to view prayer times for other days."
+  cat dist/runtime-test/window-prayer.xml
+  exit 1
+fi
+echo "PASS: the prayer screen exposes only today's prayer times, without day/calendar selection."
+
 # The heading can render while a large original timetable DB is still being
 # copied/opened on the first run. Wait for prayer rows instead of treating the
 # initial loading spinner as a missing Fajr label.
@@ -239,20 +248,14 @@ if ! grep -Eq '[0-9]{1,2}:[0-9]{2} (AM|PM|صباحًا|مساءً|پ\.ن|د\.ن)
 fi
 echo "PASS: the prayer screen renders a localized 12-hour clock by default."
 
-# Method and Asr preferences are below the fold. Check the actual selectable
-# controls exist, rather than treating a translated heading as implementation.
-adb shell input swipe 540 1640 540 470 420
-sleep 3
-adb shell uiautomator dump /sdcard/mashxall-prayer-method-settings.xml > dist/runtime-test/uiautomator-prayer-method-settings.txt 2>&1 || true
-adb pull /sdcard/mashxall-prayer-method-settings.xml dist/runtime-test/window-prayer-method-settings.xml >/dev/null 2>&1 || true
-if ! grep -Eq 'Calculation method|طريقة الحساب|شێوازی حسابکردن' dist/runtime-test/window-prayer-method-settings.xml ||
-   ! grep -Eq 'Hanafi|الحنفي|حەنەفی' dist/runtime-test/window-prayer-method-settings.xml ||
-   ! grep -Eq 'ISNA|Umm al-Qura|Karachi|MWL' dist/runtime-test/window-prayer-method-settings.xml; then
-  echo "FAIL: prayer screen does not expose its actual calculation method and Asr school controls."
-  cat dist/runtime-test/window-prayer-method-settings.xml
+# The source timetable is authoritative: assert the screen exposes source
+# information rather than a misleading, free-form calculation-method override.
+if ! grep -Eq 'Source:|المصدر:|سەرچاوە:' dist/runtime-test/window-prayer.xml; then
+  echo "FAIL: prayer times are shown without identifying which verified timetable supplied them."
+  cat dist/runtime-test/window-prayer.xml
   exit 1
 fi
-echo "PASS: calculation method and Asr school choices are available on the prayer screen."
+echo "PASS: prayer times include their source label; timetable data remains authoritative."
 
 check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
 
