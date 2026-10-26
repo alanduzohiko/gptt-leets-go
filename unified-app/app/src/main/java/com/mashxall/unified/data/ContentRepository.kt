@@ -223,6 +223,22 @@ object ContentRepository {
     @Volatile private var cachedMushafIndex: Map<Int, MushafSvgMeta>? = null
     private data class AssetSignature(val sizeBytes: Long, val sha256: String)
     @Volatile private var cachedAssetSignatures: Map<String, AssetSignature>? = null
+    @Volatile private var cachedSourceAudioItems: List<AudioItem>? = null
+
+    private val supportedBundledAudioExtensions = setOf(".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".opus")
+
+    /** Pure path-to-row conversion, also covered by JVM tests. */
+    internal fun audioItemFromAssetPath(assetPath: String): AudioItem? {
+        val filename = assetPath.substringAfterLast('/')
+        val lower = filename.lowercase(Locale.ROOT)
+        if (lower == "click.wav" || supportedBundledAudioExtensions.none(lower::endsWith)) return null
+        val parent = assetPath.substringBeforeLast('/', "")
+        return AudioItem(
+            assetPath = assetPath,
+            title = filename.substringBeforeLast('.').replace('_', ' ').replace('-', ' '),
+            group = parent.substringAfterLast('/')
+        )
+    }
 
     val quranTranslations = listOf(
         QuranTranslation("puxta", "پوختە", "كردي (پۇختە)", "Sorani — Puxta"),
@@ -269,6 +285,18 @@ object ContentRepository {
             val result = buildMap<String, AssetSignature> {
                 context.assets.open("content_catalog.json").bufferedReader(Charsets.UTF_8).use { reader ->
                     val root = JSONObject(reader.readText())
+                    // The extraction manifest already inventories every audio file
+                    // from Noor, Khairah and Salawati. Cache this while reading the
+                    // same manifest for database signatures, rather than walking
+                    // tens of thousands of packaged asset paths during screen entry.
+                    val audioRows = root.optJSONArray("audio") ?: JSONArray()
+                    cachedSourceAudioItems = buildList {
+                        for (index in 0 until audioRows.length()) {
+                            val row = audioRows.optJSONObject(index) ?: continue
+                            val assetPath = row.optString("asset_path")
+                            audioItemFromAssetPath(assetPath)?.let(::add)
+                        }
+                    }.sortedBy { it.title.lowercase(Locale.ROOT) }
                     val rows = root.getJSONArray("files")
                     for (index in 0 until rows.length()) {
                         val row = rows.getJSONObject(index)
@@ -2275,24 +2303,16 @@ object ContentRepository {
         }
     }
 
+    /**
+     * Returns the exact bundled audio inventory recorded during original APK
+     * extraction. Repeated recursive AssetManager.list() calls walked every
+     * packaged file (including databases and generated Mushaf pages) on entry to
+     * PrayerScreen; using the verified catalogue removes that cold-start stall
+     * while preserving every inventoried Noor, Khairah and Salawati audio file.
+     */
     suspend fun loadAudioItems(context: Context): List<AudioItem> = withContext(Dispatchers.IO) {
-        withContext(Dispatchers.Default) {
-            val result = mutableListOf<AudioItem>()
-            fun walk(path: String) {
-                val children = try { context.assets.list(path).orEmpty() } catch (_: Exception) { emptyArray() }
-                for (child in children) {
-                    val full = if (path.isBlank()) child else "$path/$child"
-                    val lower = child.lowercase(Locale.ROOT)
-                    if (lower != "click.wav" && listOf(".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".opus").any { lower.endsWith(it) }) {
-                        result += AudioItem(full, child.substringBeforeLast('.').replace('_', ' ').replace('-', ' '), full.substringBeforeLast('/').substringAfterLast('/'))
-                    } else if (children.isNotEmpty()) {
-                        walk(full)
-                    }
-                }
-            }
-            walk("content")
-            result.sortedBy { it.title.lowercase(Locale.ROOT) }
-        }
+        contentSignatures(context) // parses and validates the manifest once, including the audio inventory
+        cachedSourceAudioItems ?: emptyList()
     }
 
     private val customAdhanExtensions = setOf("mp3", "ogg", "wav", "m4a", "aac", "flac", "opus")
