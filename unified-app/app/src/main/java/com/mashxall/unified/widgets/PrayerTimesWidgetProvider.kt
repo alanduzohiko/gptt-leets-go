@@ -131,7 +131,7 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
             }
             ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
             val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
-            return PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, school)
+            return ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date, method, school)
         }
 
         val today = Date()
