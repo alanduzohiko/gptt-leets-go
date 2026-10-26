@@ -5072,6 +5072,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val use24Hour = false
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
+    var searchingCities by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
@@ -5086,7 +5087,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var gpsAccuracy by remember { mutableStateOf(if (savedGpsIsTooCoarse) null else savedGpsAccuracy) }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
-    val manualCountry = prefs.getString("selected_city_country", "") ?: ""
+    var manualCountry by rememberSaveable { mutableStateOf(prefs.getString("selected_city_country", "") ?: "") }
     // Match the source-app behavior: source timetable data takes priority. The
     // fixed astronomical settings are only a last-resort fallback when no source
     // city timetable is available; the user-facing calculation-method picker is
@@ -5289,8 +5290,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
 
     LaunchedEffect(citySearch) {
+        searchingCities = true
         delay(250L)
         cities = ContentRepository.searchCities(context, citySearch.trim(), limit = 220)
+        searchingCities = false
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -5743,6 +5746,264 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         Spacer(Modifier.height(10.dp))
     }
+
+    if (chooseCity) AlertDialog(
+        onDismissRequest = { chooseCity = false },
+        title = {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Choose your city"
+                    AppLanguage.AR -> "اختر مدينتك"
+                    AppLanguage.CKB -> "شارەکەت هەڵبژێرە"
+                }, color = foreground, fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = citySearch,
+                    onValueChange = { citySearch = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "City or country"
+                                AppLanguage.AR -> "المدينة أو الدولة"
+                                AppLanguage.CKB -> "شار یان وڵات"
+                            }
+                        )
+                    }
+                )
+                Spacer(Modifier.height(9.dp))
+                when {
+                    searchingCities -> Box(
+                        Modifier.fillMaxWidth().height(110.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Gold)
+                    }
+                    visibleCities.isEmpty() -> Box(
+                        Modifier.fillMaxWidth().height(95.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "No matching city. Try another spelling."
+                                AppLanguage.AR -> "لم تُوجد مدينة مطابقة. جرّب كتابة أخرى."
+                                AppLanguage.CKB -> "هیچ شارێکی هاوتا نەدۆزرایەوە؛ شێوازێکی تر بنووسە."
+                            }, color = foreground.copy(alpha = 0.65f), fontSize = 12.sp
+                        )
+                    }
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 370.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(
+                            visibleCities,
+                            key = { city -> city.name + "|" + city.country + "|" + city.latitude.toString() + "|" + city.longitude.toString() }
+                        ) { city ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    // A manual city choice is authoritative until the user
+                                    // explicitly requests a fresh GPS fix.
+                                    gpsLatitude = null
+                                    gpsLongitude = null
+                                    gpsAccuracy = null
+                                    manualLatitude = city.latitude
+                                    manualLongitude = city.longitude
+                                    manualCountry = city.country
+                                    locationMessage = ""
+                                    locating = false
+                                    prefs.edit()
+                                        .remove("gps_latitude")
+                                        .remove("gps_longitude")
+                                        .remove("gps_accuracy")
+                                        .putString("manual_city_latitude", city.latitude.toString())
+                                        .putString("manual_city_longitude", city.longitude.toString())
+                                        .putString("selected_city_country", city.country)
+                                        .putString("selected_city", city.name)
+                                        .putBoolean("selected_city_explicit", true)
+                                        .putBoolean("prayer_location_prompted", true)
+                                        .apply()
+                                    onCity(city.name)
+                                    chooseCity = false
+                                    citySearch = ""
+                                },
+                                colors = CardDefaults.cardColors(containerColor = cardColor),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Outlined.GpsFixed, null, tint = Gold, modifier = Modifier.size(21.dp))
+                                    Spacer(Modifier.width(9.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(city.name, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        if (city.country.isNotBlank()) {
+                                            Text(city.country, color = foreground.copy(alpha = 0.57f), fontSize = 10.sp)
+                                        }
+                                    }
+                                    Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { chooseCity = false; citySearch = "" }) {
+                Text(tr(language, "back"))
+            }
+        }
+    )
+
+    if (chooseAdhanSound) AlertDialog(
+        onDismissRequest = {
+            chooseAdhanSound = false
+            adhanSoundQuery = ""
+            previewingAdhan = ""
+            AudioController.stop()
+        },
+        title = {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Choose adhan sound"
+                    AppLanguage.AR -> "اختر صوت الأذان"
+                    AppLanguage.CKB -> "دەنگی بانگ هەڵبژێرە"
+                }, color = foreground, fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = adhanSoundQuery,
+                    onValueChange = { adhanSoundQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Search adhan / mosque audio"
+                                AppLanguage.AR -> "ابحث في الأذان وأصوات المساجد"
+                                AppLanguage.CKB -> "لە دەنگی بانگ و مزگەوت بگەڕێ"
+                            }
+                        )
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                if (visibleAdhanAssets.isEmpty()) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "No bundled sound matched this search. You can import an audio file from your phone."
+                            AppLanguage.AR -> "لا يوجد ملف صوتي مطابق؛ يمكنك استيراد ملف من هاتفك."
+                            AppLanguage.CKB -> "هیچ دەنگێک نەدۆزرایەوە؛ دەتوانیت فایلێکی دەنگی لە مۆبایلەوە هاوردە بکەیت."
+                        }, color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, lineHeight = 18.sp
+                    )
+                } else LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
+                        val isSelected = sound.assetPath == selectedAdhanAsset
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(if (isSelected) Gold.copy(alpha = 0.11f) else Color.Transparent)
+                                .clickable {
+                                    selectedAdhanAsset = sound.assetPath
+                                    prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
+                                }
+                                .padding(horizontal = 7.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedAdhanAsset = sound.assetPath
+                                    prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
+                                }
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(sound.title, color = foreground, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, maxLines = 2)
+                                Text(sound.group, color = foreground.copy(alpha = 0.52f), fontSize = 9.sp, maxLines = 1)
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (previewingAdhan == sound.assetPath) {
+                                        AudioController.stop()
+                                        previewingAdhan = ""
+                                    } else {
+                                        previewingAdhan = sound.assetPath
+                                        AudioController.play(context, sound.assetPath) { playingNow ->
+                                            previewingAdhan = if (playingNow) sound.assetPath else ""
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    if (previewingAdhan == sound.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
+                                    contentDescription = if (language == AppLanguage.EN) "Preview " + sound.title else if (language == AppLanguage.AR) "معاينة " + sound.title else "گوێگرتن " + sound.title,
+                                    tint = Gold
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(9.dp))
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        AudioController.stop()
+                        previewingAdhan = ""
+                        chooseAdhanSound = false
+                        adhanSoundQuery = ""
+                        customAdhanPicker.launch(arrayOf("audio/*"))
+                    }
+                ) {
+                    Icon(Icons.Outlined.VolumeUp, null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Import an adhan audio file from phone"
+                            AppLanguage.AR -> "استيراد ملف أذان من الهاتف"
+                            AppLanguage.CKB -> "هاوردەکردنی فایلی بانگ لە مۆبایل"
+                        }, fontSize = 11.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                AudioController.stop()
+                previewingAdhan = ""
+                chooseAdhanSound = false
+                adhanSoundQuery = ""
+                prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
+            }) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Use selected sound"
+                        AppLanguage.AR -> "استخدام الصوت المختار"
+                        AppLanguage.CKB -> "دەنگی هەڵبژێردراو بەکاربهێنە"
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                AudioController.stop()
+                previewingAdhan = ""
+                chooseAdhanSound = false
+                adhanSoundQuery = ""
+            }) { Text(tr(language, "back")) }
+        }
+    )
 }
 
 @Composable
