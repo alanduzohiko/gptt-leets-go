@@ -338,14 +338,24 @@ fun QuranScreen(
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
     }
-    androidx.activity.compose.BackHandler(enabled = mushafMode || openingMushaf) {
-        if (selectedAyahForSheet != null) selectedAyahForSheet = null
-        else if (openingMushaf) {
-            openingMushaf = false
-            showSurahList = true
-        } else {
-            mushafMode = false
-            showSurahList = true
+    androidx.activity.compose.BackHandler(
+        enabled = mushafMode || openingMushaf || showReaderSettings || chooseTranslation || chooseSurah
+    ) {
+        // Handle the top-most reader layer first. This prevents Android Back from
+        // dismissing reader settings and also leaving the Mushaf in the same press.
+        when {
+            selectedAyahForSheet != null -> selectedAyahForSheet = null
+            showReaderSettings -> showReaderSettings = false
+            chooseTranslation -> chooseTranslation = false
+            chooseSurah -> chooseSurah = false
+            openingMushaf -> {
+                openingMushaf = false
+                showSurahList = true
+            }
+            else -> {
+                mushafMode = false
+                showSurahList = true
+            }
         }
     }
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
