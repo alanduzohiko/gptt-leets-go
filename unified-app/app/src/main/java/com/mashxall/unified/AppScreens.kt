@@ -4957,9 +4957,15 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
-    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
-    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
-    var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
+    val savedGpsAccuracy = prefs.getString("gps_accuracy", null)?.toFloatOrNull()
+    val savedGpsIsTooCoarse = savedGpsAccuracy != null && savedGpsAccuracy > 1500f
+    var gpsLatitude by remember {
+        mutableStateOf(if (savedGpsIsTooCoarse) null else prefs.getString("gps_latitude", null)?.toDoubleOrNull())
+    }
+    var gpsLongitude by remember {
+        mutableStateOf(if (savedGpsIsTooCoarse) null else prefs.getString("gps_longitude", null)?.toDoubleOrNull())
+    }
+    var gpsAccuracy by remember { mutableStateOf(if (savedGpsIsTooCoarse) null else savedGpsAccuracy) }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
@@ -5113,8 +5119,14 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
 
     LaunchedEffect(Unit) {
+        if (savedGpsIsTooCoarse) {
+            prefs.edit()
+                .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
+                .putBoolean("prayer_location_prompted", false)
+                .apply()
+        }
         val alreadyAsked = prefs.getBoolean("prayer_location_prompted", false)
-        if (!alreadyAsked && gpsLatitude == null && gpsLongitude == null) {
+        if ((!alreadyAsked || savedGpsIsTooCoarse) && gpsLatitude == null && gpsLongitude == null) {
             prefs.edit().putBoolean("prayer_location_prompted", true).apply()
             locateNow()
         }
