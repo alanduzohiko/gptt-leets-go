@@ -22,6 +22,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.GeomagneticField
 import android.os.ParcelFileDescriptor
 import android.content.Intent
 import android.media.MediaPlayer
@@ -80,6 +81,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -5626,91 +5628,28 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 @Composable
 fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var city by remember { mutableStateOf<City?>(null) }
     var azimuth by remember { mutableFloatStateOf(0f) }
     var sensorAvailable by remember { mutableStateOf(false) }
-    val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
-    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
-    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var alignedWasTrue by remember { mutableStateOf(false) }
+    val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+    val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
     val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
     val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
-    var locating by remember { mutableStateOf(false) }
-    var locationMessage by remember { mutableStateOf("") }
-    val onFix: (Location) -> Unit = { fix ->
-        gpsLatitude = fix.latitude
-        gpsLongitude = fix.longitude
-        prefs.edit()
-            .putString("gps_latitude", fix.latitude.toString())
-            .putString("gps_longitude", fix.longitude.toString())
-            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
-            .apply()
-        locating = false
-        locationMessage = if (fix.hasAccuracy()) {
-            when (language) {
-                AppLanguage.EN -> "Location accuracy reported by Android: about ±${fix.accuracy.toInt()} m"
-                AppLanguage.AR -> "دقة الموقع التي يذكرها الهاتف: نحو ±${fix.accuracy.toInt()} متر"
-                AppLanguage.CKB -> "وردبینی شوێن بەپێی مۆبایل: نزیکەی ±${fix.accuracy.toInt()} مەتر"
-            }
-        } else {
-            when (language) {
-                AppLanguage.EN -> "Coordinates received; Android did not report accuracy."
-                AppLanguage.AR -> "تم تحديد الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
-                AppLanguage.CKB -> "کۆئۆردینات وەرگیرا، بەڵام وردبینی نەدراوە."
-            }
-        }
-    }
-    val onLocationError: (String) -> Unit = { error ->
-        locating = false
-        locationMessage = when (error) {
-            "LOCATION_SETTINGS_OPENED" -> when (language) {
-                AppLanguage.EN -> "Location settings opened. Turn on Location, return here, then retry."
-                AppLanguage.AR -> "فُتحت إعدادات الموقع. فعّل الموقع، ثم ارجع إلى التطبيق وأعد المحاولة."
-                AppLanguage.CKB -> "ڕێکخستنەکانی شوێن کرانەوە؛ شوێن چالاک بکە، بگەڕێوە و دووبارە هەوڵ بدەوە."
-            }
-            "LOCATION_SERVICES_OFF" -> when (language) {
-                AppLanguage.EN -> "Location services are off. Turn them on in Android settings, then retry."
-                AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android ثم أعد المحاولة."
-                AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە و دووبارە هەوڵ بدەوە."
-            }
-            else -> error
-        }
-    }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { grants ->
-        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (allowed) {
-            locating = true
-            locationMessage = ""
-            requestCurrentLocation(context, onFix, onLocationError)
-        } else {
-            locationMessage = when (language) {
-                AppLanguage.EN -> "Location permission was not granted; Qibla is using the selected city."
-                AppLanguage.AR -> "لم تمنح إذن الموقع؛ ستُستخدم المدينة المختارة."
-                AppLanguage.CKB -> "مۆڵەتی شوێن نەدرا؛ شاری هەڵبژێردراو بەکاردێت."
-            }
-        }
-    }
-    val locateNow = {
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) {
-            locating = true
-            locationMessage = ""
-            requestCurrentLocation(context, onFix, onLocationError)
-        } else {
-            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-        }
-    }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry) {
+
+    // Qibla shares the verified location already acquired on Home/Prayer.
+    // It deliberately has no second "locate me" button or duplicate permission flow.
+    LaunchedEffect(gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity) {
         city = when {
-            gpsLatitude != null && gpsLongitude != null -> City("GPS", gpsLatitude!!, gpsLongitude!!)
+            gpsLatitude != null && gpsLongitude != null -> City("GPS", gpsLatitude, gpsLongitude)
             manualLatitude != null && manualLongitude != null -> City(selectedCity, manualLatitude, manualLongitude, manualCountry)
             else -> ContentRepository.findCityByName(context, selectedCity, manualCountry)
         }
     }
+
     DisposableEffect(context) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -5749,64 +5688,145 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         }
         onDispose { manager?.unregisterListener(listener) }
     }
-    val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) } ?: 0.0
-    val relativeHeading = ((bearing.toFloat() - azimuth + 540f) % 360f) - 180f
+
+    val bearing = city?.let { qiblaBearing(it.latitude, it.longitude).toFloat() } ?: 0f
+    val magneticDeclination = remember(city) {
+        city?.let { GeomagneticField(it.latitude.toFloat(), it.longitude.toFloat(), 0f, System.currentTimeMillis()).declination } ?: 0f
+    }
+    val trueHeading = (azimuth + magneticDeclination + 360f) % 360f
+    val relativeHeading = ((bearing - trueHeading + 540f) % 360f) - 180f
     val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
         targetValue = relativeHeading,
         animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
         label = "qiblaHeading"
     )
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(tr(language, "qibla"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(28.dp))
-        Box(Modifier.size(260.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(DeepGreen, Color(0xFF071E1A)))), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(160.dp).rotate(animatedHeading))
-            Text("N", color = MainText, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp))
-            Text("🕋", fontSize = 26.sp)
+    val isAligned = sensorAvailable && kotlin.math.abs(relativeHeading) <= 3.5f
+    LaunchedEffect(isAligned) {
+        if (isAligned && !alignedWasTrue) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        alignedWasTrue = isAligned
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(tr(language, "qibla"), color = foreground, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(5.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "True-north corrected compass"
+                AppLanguage.AR -> "بوصلة مصححة إلى الشمال الحقيقي"
+                AppLanguage.CKB -> "کۆمپاس بە ڕاستکردنەوەی باکووری ڕاستەقینە"
+            }, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp
+        )
+        Spacer(Modifier.height(24.dp))
+        Box(
+            Modifier.size(286.dp).clip(CircleShape)
+                .background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF185444), DeepGreen, Color(0xFF071E1A))))
+                .padding(10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                Modifier.fillMaxSize().clip(CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                    val stroke = size.minDimension * 0.018f
+                    drawCircle(color = Gold.copy(alpha = 0.9f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
+                    drawCircle(color = Gold.copy(alpha = 0.16f), radius = size.minDimension * 0.39f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke * 0.7f))
+                    for (index in 0 until 60) {
+                        val angle = Math.toRadians(index * 6.0)
+                        val outer = size.minDimension * 0.45f
+                        val inner = if (index % 5 == 0) size.minDimension * 0.37f else size.minDimension * 0.415f
+                        val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                        val startPoint = androidx.compose.ui.geometry.Offset(
+                            center.x + kotlin.math.sin(angle).toFloat() * inner,
+                            center.y - kotlin.math.cos(angle).toFloat() * inner
+                        )
+                        val endPoint = androidx.compose.ui.geometry.Offset(
+                            center.x + kotlin.math.sin(angle).toFloat() * outer,
+                            center.y - kotlin.math.cos(angle).toFloat() * outer
+                        )
+                        drawLine(
+                            color = if (index % 5 == 0) Gold else Gold.copy(alpha = 0.34f),
+                            start = startPoint,
+                            end = endPoint,
+                            strokeWidth = if (index % 5 == 0) stroke * 0.75f else stroke * 0.35f
+                        )
+                    }
+                }
+                Text("N", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopCenter).padding(top = 22.dp))
+                Text("E", color = Color.White.copy(alpha = 0.72f), fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 22.dp))
+                Text("S", color = Color.White.copy(alpha = 0.72f), fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp))
+                Text("W", color = Color.White.copy(alpha = 0.72f), fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterStart).padding(start = 22.dp))
+                Icon(
+                    Icons.Outlined.Explore, contentDescription = null,
+                    tint = if (isAligned) Color(0xFF8CE3AF) else Gold,
+                    modifier = Modifier.size(178.dp).rotate(animatedHeading)
+                )
+                Box(
+                    Modifier.size(46.dp).clip(CircleShape).background(Color(0xFF091D18)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🕋", fontSize = 24.sp)
+                }
+            }
         }
         Spacer(Modifier.height(24.dp))
-        Text(city?.name ?: selectedCity, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (gpsLatitude != null && gpsLongitude != null) {
+                when (language) { AppLanguage.EN -> "Your current location"; AppLanguage.AR -> "موقعك الحالي"; AppLanguage.CKB -> "شوێنی ئێستات" }
+            } else city?.name ?: selectedCity,
+            color = Gold, fontSize = 15.sp, fontWeight = FontWeight.Bold
+        )
         Spacer(Modifier.height(6.dp))
         Text(
-            if (sensorAvailable) {
-                when (language) {
-                    AppLanguage.CKB -> "ڕووگێڕانی کۆمپاوی مۆبایل چالاکە"
-                    AppLanguage.AR -> "تم تصحيح الاتجاه ببوصلة الهاتف"
-                    AppLanguage.EN -> "Direction calibrated by phone compass"
+            when {
+                isAligned -> when (language) {
+                    AppLanguage.EN -> "You are facing the Qibla"
+                    AppLanguage.AR -> "أنت الآن باتجاه القبلة"
+                    AppLanguage.CKB -> "ئێستا ڕووت لە قیبلەیە"
                 }
-            } else {
-                when (language) {
-                    AppLanguage.CKB -> "ئاڕاستەی گشتی بەپێی شار"
-                    AppLanguage.AR -> "الاتجاه المحسوب حسب إحداثيات المدينة"
-                    AppLanguage.EN -> "Estimated direction from city coordinates"
+                !sensorAvailable -> when (language) {
+                    AppLanguage.EN -> "Hold the phone flat and move it slowly to calibrate the compass."
+                    AppLanguage.AR -> "أمسك الهاتف أفقيًا وحرّكه ببطء لمعايرة البوصلة."
+                    AppLanguage.CKB -> "مۆبایلەکە ئاسۆیی بگرە و بە هێواشی بجوڵێنە بۆ ڕێکخستنی کۆمپاس."
+                }
+                else -> when (language) {
+                    AppLanguage.EN -> "Rotate the phone until the arrow points to the alignment mark."
+                    AppLanguage.AR -> "أدر الهاتف حتى يتجه السهم إلى علامة الاصطفاف."
+                    AppLanguage.CKB -> "مۆبایلەکە بسووڕێنە تا تیرەکە لەگەڵ نیشانەی ڕێککەوتن بگونجێت."
                 }
             },
-            color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, textAlign = TextAlign.Center
+            color = if (isAligned) Color(0xFF8CE3AF) else foreground.copy(alpha = 0.68f),
+            fontSize = 12.sp, lineHeight = 19.sp, textAlign = TextAlign.Center,
+            fontWeight = if (isAligned) FontWeight.Bold else FontWeight.Normal
         )
-        Text(bearing.toInt().toString() + "° " + tr(language, "degrees"), color = foreground, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = locateNow, enabled = !locating) {
-            if (locating) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-            } else {
-                Icon(Icons.Outlined.GpsFixed, null, tint = Gold, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(8.dp))
-            }
+        Spacer(Modifier.height(11.dp))
+        Text(
+            String.format(Locale.US, "%.0f°", bearing) + " • " + tr(language, "degrees"),
+            color = foreground, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold
+        )
+        if (sensorAvailable) {
+            Spacer(Modifier.height(7.dp))
             Text(
-                when (language) {
-                    AppLanguage.EN -> if (locating) "Finding your location…" else "Use my current location"
-                    AppLanguage.AR -> if (locating) "جارٍ تحديد موقعك…" else "استخدم موقعي الحالي"
-                    AppLanguage.CKB -> if (locating) "شوێن دیاری دەکرێت…" else "شوێنی ئێستام بەکاربهێنە"
-                }
+                String.format(Locale.US, "%+.1f°", relativeHeading),
+                color = if (isAligned) Color(0xFF8CE3AF) else foreground.copy(alpha = 0.57f),
+                fontSize = 12.sp
             )
         }
-        if (locationMessage.isNotBlank()) {
-            Spacer(Modifier.height(5.dp))
-            Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 16.sp)
+        if (city == null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "No saved coordinates or selected city are available yet. Open Prayer from More and allow location or choose a city once."
+                    AppLanguage.AR -> "لا توجد إحداثيات محفوظة أو مدينة مختارة. افتح الصلاة من المزيد واسمح بالموقع أو اختر المدينة مرة واحدة."
+                    AppLanguage.CKB -> "هێشتا کۆئۆردینات یان شاری هەڵبژێردراو نییە؛ لە «زیاتر» نوێژ بکەرەوە و جارێک شوێن یان شار دیاری بکە."
+                }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 16.sp, textAlign = TextAlign.Center
+            )
         }
-        Spacer(Modifier.height(12.dp))
-        Text(tr(language, "data_notice"), color = foreground.copy(alpha = 0.52f), fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
+        Spacer(Modifier.height(18.dp))
     }
 }
 
