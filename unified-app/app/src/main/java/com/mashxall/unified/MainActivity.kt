@@ -770,26 +770,34 @@ private fun HomeScreen(
     }
 
     val saveLocationFix: (Location) -> Unit = { fix ->
-        gpsLatitude = fix.latitude
-        gpsLongitude = fix.longitude
-        prefs.edit()
-            .putString("gps_latitude", fix.latitude.toString())
-            .putString("gps_longitude", fix.longitude.toString())
-            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
-            .putBoolean("prayer_location_prompted", true)
-            .apply()
-        locationMessage = if (fix.hasAccuracy()) {
-            val accuracy = fix.accuracy.toInt()
-            when (language) {
-                AppLanguage.EN -> "Location updated • reported accuracy ±$accuracy m"
-                AppLanguage.AR -> "تم تحديث الموقع • الدقة التقريبية ±$accuracy متر"
-                AppLanguage.CKB -> "شوێن نوێکرایەوە • وردبینی نزیکەی ±$accuracy مەتر"
+        if (fix.hasAccuracy() && fix.accuracy > 1500f) {
+            locationMessage = when (language) {
+                AppLanguage.EN -> "The location estimate is too broad (±${fix.accuracy.toInt()} m). Enable precise GPS or choose your city."
+                AppLanguage.AR -> "تقدير الموقع واسع جدًا (±${fix.accuracy.toInt()} متر). فعّل GPS الدقيق أو اختر مدينتك."
+                AppLanguage.CKB -> "ئەم هەڵسەنگاندنی شوێنە زۆر گشتییە (±${fix.accuracy.toInt()} مەتر)؛ GPSی ورد چالاک بکە یان شارەکەت هەڵبژێرە."
             }
         } else {
-            when (language) {
-                AppLanguage.EN -> "Location updated."
-                AppLanguage.AR -> "تم تحديث الموقع."
-                AppLanguage.CKB -> "شوێن نوێکرایەوە."
+            gpsLatitude = fix.latitude
+            gpsLongitude = fix.longitude
+            prefs.edit()
+                .putString("gps_latitude", fix.latitude.toString())
+                .putString("gps_longitude", fix.longitude.toString())
+                .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+                .putBoolean("prayer_location_prompted", true)
+                .apply()
+            locationMessage = if (fix.hasAccuracy()) {
+                val accuracy = fix.accuracy.toInt()
+                when (language) {
+                    AppLanguage.EN -> "Location updated • reported accuracy ±$accuracy m"
+                    AppLanguage.AR -> "تم تحديث الموقع • الدقة التقريبية ±$accuracy متر"
+                    AppLanguage.CKB -> "شوێن نوێکرایەوە • وردبینی نزیکەی ±$accuracy مەتر"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "Location updated."
+                    AppLanguage.AR -> "تم تحديث الموقع."
+                    AppLanguage.CKB -> "شوێن نوێکرایەوە."
+                }
             }
         }
     }
