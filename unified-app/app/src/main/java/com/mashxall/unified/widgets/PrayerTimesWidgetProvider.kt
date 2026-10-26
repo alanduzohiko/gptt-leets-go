@@ -12,6 +12,7 @@ import com.mashxall.unified.MainActivity
 import com.mashxall.unified.R
 import com.mashxall.unified.data.AsrCalculationSchool
 import com.mashxall.unified.data.ContentRepository
+import com.mashxall.unified.data.explicitPrayerCityOrNull
 import com.mashxall.unified.data.PrayerCalculationMethod
 import com.mashxall.unified.data.PrayerRow
 import com.mashxall.unified.data.PrayerTimeCalculator
@@ -117,10 +118,13 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         val gpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
         val manualLat = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLon = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
-        val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
+        val cityName = explicitPrayerCityOrNull(
+            prefs.getString("selected_city", null),
+            prefs.getBoolean("selected_city_explicit", false)
+        ) ?: return null
         val countryName = prefs.getString("selected_city_country", "") ?: ""
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
-        val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
+        val method = PrayerCalculationMethod.fromId("mwl")
+        val school = AsrCalculationSchool.fromId("shafi")
 
         suspend fun rowFor(date: Date): PrayerRow? {
             if (gpsLat != null && gpsLon != null) {
