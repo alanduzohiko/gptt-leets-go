@@ -2,6 +2,7 @@ package com.mashxall.unified
 
 import android.content.Context
 import android.text.Html
+import androidx.compose.animation.animateContentSize
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.app.AlarmManager
@@ -66,6 +67,7 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -75,11 +77,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.border
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -119,6 +123,7 @@ import kotlin.math.sin
 import kotlin.math.tan
 
 private val Gold: Color get() = MashxallAppearance.accent
+private val PaleGold = Color(0xFFF4E5B4)
 private val DeepGreen = Color(0xFF103D32)
 private val MainText = Color(0xFFF6F2E6)
 private val CardDark = Color(0xFF102B25)
@@ -4895,8 +4900,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
                         Column(
                             Modifier.fillMaxWidth().clickable {
+                                // The parent owns the selected city and updates it via onCity.
                                 onCity(city)
-                                selectedCity = city.name
                                 gpsLatitude = null
                                 gpsLongitude = null
                                 gpsAccuracy = null
