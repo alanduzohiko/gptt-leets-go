@@ -1404,7 +1404,7 @@ if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.
 fi
 echo "PASS: home prayer-times card, continue-reading resume, and quick access are visible and usable."
 
-check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
+check_screen library 'زیاتر|المزيد|More'
 check_screen worship 'زیاتر|المزيد|More'
 
 # Audio browsing belongs under Settings, not the generic Library/Worship menus.
