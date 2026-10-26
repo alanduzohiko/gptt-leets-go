@@ -253,6 +253,7 @@ fun QuranScreen(
     onBookmark: (Int, Int) -> Unit,
     onOpenVerse: (Int, Int) -> Unit = { _, _ -> },
     onPlayAudio: (Int, Int) -> Unit = { _, _ -> },
+    onPlaySurahAudio: (Int) -> Unit = {},
     onImmersiveMushaf: (Boolean) -> Unit = {},
     resumeLastMushaf: Boolean = false,
     onResumeMushafHandled: () -> Unit = {},
@@ -614,6 +615,8 @@ fun QuranScreen(
                 page = mushafPage,
                 darkMode = mushafDarkMode,
                 sepiaMode = mushafSepiaMode,
+                surahTitle = currentSurah?.arabicName.orEmpty(),
+                onPlaySurahAudio = onPlaySurahAudio,
                 onPageChange = { requested ->
                     mushafPage = requested.coerceIn(1, 604)
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
