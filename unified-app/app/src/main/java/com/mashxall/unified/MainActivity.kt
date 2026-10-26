@@ -1082,172 +1082,82 @@ private fun sourceLibraryDescription(id: String, language: AppLanguage): String 
 }
 
 @Composable
-fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
-    val context = LocalContext.current
-    var inventory by remember { mutableStateOf<SourceInventorySummary?>(null) }
-    var inventoryError by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        val result = runCatching { withContext(Dispatchers.IO) { readSourceInventory(context) } }
-        inventory = result.getOrNull()
-        inventoryError = result.isFailure
-    }
-
+private fun DataSourcesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
+    val sources = listOf(
+        Triple(
+            when (language) { AppLanguage.EN -> "Quran & recitation"; AppLanguage.AR -> "القرآن والتلاوات"; AppLanguage.CKB -> "قورئان و تلاوەت" },
+            when (language) {
+                AppLanguage.EN -> "The bundled 604-page graphic Mushaf, surah and verse index, translations, tafsir links and reciter metadata."
+                AppLanguage.AR -> "المصحف الرسومي المضمّن من 604 صفحات، وفهرس السور والآيات والترجمات والتفاسير وبيانات القراء."
+                AppLanguage.CKB -> "مصحەفی گرافیکی ٦٠٤ پەڕەیی، فهرستی سوورەت و ئایەت، وەرگێڕان، تەفسیر و زانیاری قورئان‌خوێن."
+            }, Icons.Outlined.MenuBook
+        ),
+        Triple(
+            when (language) { AppLanguage.EN -> "Tafsir Noor"; AppLanguage.AR -> "تفسير نور"; AppLanguage.CKB -> "تەفسیری نوور" },
+            when (language) {
+                AppLanguage.EN -> "Noor commentary and its bundled prayer and city-reference database where supplied by the source bundle."
+                AppLanguage.AR -> "تفاسير نور وقاعدة مواقيت الصلاة والمدن المرفقة حيث توفرها حزمة المصدر."
+                AppLanguage.CKB -> "تەفسیری نوور و بنکەدراوەی کاتی نوێژ و شارەکان بەو ڕادەیەی لە سەرچاوەدا هەیە."
+            }, Icons.Outlined.AutoStories
+        ),
+        Triple(
+            when (language) { AppLanguage.EN -> "Khairah"; AppLanguage.AR -> "خيرة"; AppLanguage.CKB -> "خێرە" },
+            when (language) {
+                AppLanguage.EN -> "The packaged supplication, remembrance and religious-content records from the supplied app data."
+                AppLanguage.AR -> "بيانات الأدعية والأذكار والمحتوى الديني المضمّنة من مصدر التطبيق."
+                AppLanguage.CKB -> "تۆمارەکانی دوعا، زیکر و ناوەڕۆکی ئایینیی هێنراو لە سەرچاوەی ئەپەکە."
+            }, Icons.Outlined.Spa
+        ),
+        Triple(
+            when (language) { AppLanguage.EN -> "Salawati"; AppLanguage.AR -> "صلواتي"; AppLanguage.CKB -> "صلواتی" },
+            when (language) {
+                AppLanguage.EN -> "The source city/location catalogue, fixed prayer timetables, and dependent-city rules are used before astronomical fallback."
+                AppLanguage.AR -> "فهرس المدن والمواقع وجداول الصلاة الثابتة وعلاقات المدن التابعة، قبل اللجوء إلى الحساب الفلكي."
+                AppLanguage.CKB -> "فهرستی شار و شوێن، خشتەی کاتی نوێژی سەرچاوە و یاسای شارە وابەستەکان پێش حسابی ئەستێرەناسی بەکاردێت."
+            }, Icons.Outlined.Schedule
+        )
+    )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "about_data"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(7.dp))
         Text(
             when (language) {
-                AppLanguage.EN -> "Live inventory of the original bundled source libraries. Counts are read from the catalogue packaged with this app, not typed into this screen."
-                AppLanguage.AR -> "جرد مباشر لمكتبات المصادر الأصلية المرفقة. تُقرأ الأعداد من فهرس الملفات المضمّن داخل التطبيق، لا من أرقام مكتوبة يدويًا."
-                AppLanguage.CKB -> "پێڕستی ڕاستەوخۆی کتێبخانە ڕەسەنە ناوخۆییەکان. ژمارەکان لە فهرستی ناو ئەپەکەوە دەخوێندرێنەوە، نەک ژمارەی نووسراو بە دەست."
-            }, color = foreground.copy(alpha = 0.63f), fontSize = 12.sp, lineHeight = 19.sp
+                AppLanguage.EN -> "This page lists the original sources that are bundled into Mashxall. Individual features only appear when their underlying source data is present."
+                AppLanguage.AR -> "تعرض هذه الصفحة المصادر الأصلية المضمّنة في مەشخەڵ. لا تُعرض ميزة على أنها متاحة إلا بوجود بياناتها الفعلية."
+                AppLanguage.CKB -> "ئەم پەڕەیە سەرچاوە ڕەسەنەکانی ناو مەشخەڵ پیشان دەدات؛ تایبەتمەندی تەنها کاتێک بەردەستە کە داتای ڕاستەقینەی هەبێت."
+            }, color = foreground.copy(alpha = 0.63f), fontSize = 12.sp, lineHeight = 20.sp
         )
         Spacer(Modifier.height(16.dp))
-
-        when {
-            inventory == null && !inventoryError -> Box(Modifier.fillMaxWidth().height(90.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Gold)
-            }
-            inventoryError -> Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "The bundled content catalogue could not be read. The app will not claim that source data is available when it cannot verify the catalogue."
-                        AppLanguage.AR -> "تعذّرت قراءة فهرس المحتوى المرفق؛ لن يدّعي التطبيق توفر البيانات إذا لم يتمكن من التحقق من الفهرس."
-                        AppLanguage.CKB -> "نەتوانرا فهرستی ناوەڕۆکی ناوخۆیی بخوێندرێتەوە؛ ئەپەکە بەبێ پشتڕاستکردنەوە بانگەشەی بەردەستبوونی داتا ناکات."
-                    }, color = foreground, fontSize = 12.sp, lineHeight = 19.sp, modifier = Modifier.padding(15.dp)
-                )
-            }
-            inventory != null -> {
-                val data = inventory!!
-                val metrics = listOf(
-                    Triple(data.sourceApps.toString(), when (language) { AppLanguage.EN -> "Source apps"; AppLanguage.AR -> "تطبيقات المصدر"; AppLanguage.CKB -> "ئەپەی سەرچاوە" }, Icons.Outlined.LibraryBooks),
-                    Triple(data.databases.toString(), when (language) { AppLanguage.EN -> "SQLite databases"; AppLanguage.AR -> "قواعد SQLite"; AppLanguage.CKB -> "بنکەدراوەی SQLite" }, Icons.Outlined.LibraryBooks),
-                    Triple(data.mushafSvgPages.toString(), when (language) { AppLanguage.EN -> "Mushaf pages"; AppLanguage.AR -> "صفحات المصحف"; AppLanguage.CKB -> "پەڕەکانی مصحەف" }, Icons.Outlined.MenuBook),
-                    Triple(data.files.toString(), when (language) { AppLanguage.EN -> "Bundled files"; AppLanguage.AR -> "الملفات المرفقة"; AppLanguage.CKB -> "فایلە ناوخۆییەکان" }, Icons.Outlined.AutoStories),
-                    Triple(data.audioFiles.toString(), when (language) { AppLanguage.EN -> "Audio files"; AppLanguage.AR -> "ملفات صوتية"; AppLanguage.CKB -> "فایلە دەنگییەکان" }, Icons.Outlined.GraphicEq),
-                    Triple(data.fontFiles.toString(), when (language) { AppLanguage.EN -> "Fonts"; AppLanguage.AR -> "الخطوط"; AppLanguage.CKB -> "فۆنتەکان" }, Icons.Outlined.MenuBook),
-                    Triple(data.pdfDocuments.toString(), "PDF", Icons.Outlined.AutoStories),
-                    Triple(String.format(Locale.US, "%.1f", data.totalContentBytes / 1_000_000.0), "MB source assets", Icons.Outlined.LibraryBooks)
-                )
-                metrics.chunked(2).forEach { pair ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        pair.forEach { (value, label, icon) ->
-                            Card(
-                                modifier = Modifier.weight(1f).padding(bottom = 1.dp),
-                                colors = CardDefaults.cardColors(containerColor = cardColor),
-                                shape = RoundedCornerShape(18.dp),
-                                border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.16f))
-                            ) {
-                                Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(icon, null, tint = Gold, modifier = Modifier.size(19.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(label, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 14.sp)
-                                    }
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(value, color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                        if (pair.size == 1) Spacer(Modifier.weight(1f))
-                    }
-                }
-
-                Spacer(Modifier.height(17.dp))
-                Text(
-                    when (language) { AppLanguage.EN -> "SOURCE LIBRARIES"; AppLanguage.AR -> "مكتبات المصدر"; AppLanguage.CKB -> "کتێبخانەی سەرچاوەکان" },
-                    color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
-                )
-                Spacer(Modifier.height(8.dp))
-                data.sources.forEach { source ->
-                    val title = sourceLibraryTitle(source.id, language)
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                        colors = CardDefaults.cardColors(containerColor = cardColor),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
-                    ) {
-                        Column(Modifier.padding(15.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(title, color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        String.format(Locale.US, "%.1f MB • %d splits", source.sizeBytes / 1_000_000.0, source.splitCount),
-                                        color = foreground.copy(alpha = 0.56f), fontSize = 10.sp
-                                    )
-                                }
-                                Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(23.dp))
-                            }
-                            Spacer(Modifier.height(9.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
-                                listOf(
-                                    source.fileCount to if (language == AppLanguage.EN) "files" else if (language == AppLanguage.AR) "ملفات" else "فایل",
-                                    source.databaseCount to if (language == AppLanguage.EN) "DB" else "DB",
-                                    source.audioCount to if (language == AppLanguage.EN) "audio" else if (language == AppLanguage.AR) "صوت" else "دەنگ",
-                                    source.fontCount to if (language == AppLanguage.EN) "fonts" else if (language == AppLanguage.AR) "خطوط" else "فۆنت",
-                                    source.pdfCount to "PDF"
-                                ).forEach { (count, label) ->
-                                    Surface(color = foreground.copy(alpha = 0.04f), shape = RoundedCornerShape(9.dp)) {
-                                        Text("$count $label", color = foreground.copy(alpha = 0.76f), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp))
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Text(sourceLibraryDescription(source.id, language), color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 19.sp)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "SHA-256: " + source.sha256.take(16) + "…",
-                                color = foreground.copy(alpha = 0.48f), fontSize = 9.sp
-                            )
-                        }
-                    }
-                }
-
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "Packaging and edition notes"
-                                AppLanguage.AR -> "ملاحظات الحزم والطبعة"
-                                AppLanguage.CKB -> "تێبینییەکانی حەزم و چاپ"
-                            }, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "The source bundle fingerprint is ${data.bundleSha256.take(20)}… The current graphical Mushaf is the supplied 604-page edition. The Tajweed PDF is a study guide; the source bundle does not include a second full coloured Tajweed-page set. Some complete reciter streams use network URLs and are not all stored offline."
-                                AppLanguage.AR -> "بصمة حزمة المصدر ${data.bundleSha256.take(20)}… المصحف الرسومي الحالي هو الطبعة المرفقة ذات 604 صفحات. ملف PDF للتجويد دليل دراسة، ولا تحتوي الحزمة على مجموعة ثانية كاملة من صفحات تجويد ملوّنة. بعض تلاوات القراء الكاملة تعتمد على روابط الإنترنت وليست كلها مخزنة دون اتصال."
-                                AppLanguage.CKB -> "ناسنامەی حەزمی سەرچاوە ${data.bundleSha256.take(20)}… مصحەفی گرافیکی ئێستا هەمان چاپی ناوخۆیی ٦٠٤ پەڕەیە. PDFی تەجوید ڕێنمای خوێندنەوەیە؛ حەزمەکە کۆمەڵەی دووەمی تەواوی پەڕەی تەجویدی ڕەنگاوڕەنگ ناگرێت. هەندێک تلاوەتی تەواو بە لینکی ئینتەرنێت کاردەکات و هەمووی ناوخۆیی نییە."
-                            }, color = foreground.copy(alpha = 0.7f), fontSize = 11.sp, lineHeight = 18.sp
-                        )
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Card(
-                    Modifier.fillMaxWidth().clickable { onOpen(AppScreen.BOOKS) },
-                    colors = CardDefaults.cardColors(containerColor = cardColor),
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.24f))
-                ) {
-                    Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(24.dp))
-                        }
-                        Spacer(Modifier.width(11.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(tr(language, "books"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                when (language) { AppLanguage.EN -> "Open the 94-book catalogue and bundled PDFs"; AppLanguage.AR -> "افتح فهرس الكتب الـ94 وملفات PDF المرفقة"; AppLanguage.CKB -> "فهرستی ٩٤ کتێب و PDFە ناوخۆییەکان بکەرەوە" },
-                                color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
-                            )
-                        }
-                        Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+        sources.forEach { (title, description, icon) ->
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.2f))
+            ) {
+                Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.Top) {
+                    Box(
+                        Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.13f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(icon, contentDescription = null, tint = Gold, modifier = Modifier.size(24.dp)) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, color = foreground, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(Modifier.height(5.dp))
+                        Text(description, color = foreground.copy(alpha = 0.67f), fontSize = 11.sp, lineHeight = 18.sp)
                     }
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Important: this audit screen is informational. Prayer accuracy still depends on matching the user's real coordinates or the exact city/country selection."
+                AppLanguage.AR -> "مهم: هذه صفحة معلومات عن المصادر؛ دقة الصلاة تعتمد على إحداثيات المستخدم الفعلية أو اختيار المدينة والدولة بدقة."
+                AppLanguage.CKB -> "گرنگ: ئەم پەڕەیە بۆ زانیارییە؛ وردی کاتی نوێژ بە کۆئۆردیناتی ڕاستەقینە یان هەڵبژاردنی دروستی شار و وڵاتەوە پەیوەستە."
+            }, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp, lineHeight = 16.sp
+        )
+        Spacer(Modifier.height(18.dp))
     }
 }
 
