@@ -1913,7 +1913,7 @@ private fun MushafPageViewer(
             ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
         }
     }
-    Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF0C1110) else if (sepiaMode) Color(0xFFF0E1BE) else Color(0xFFF6F3EB)) {
+    Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF0C1110) else if (sepiaMode) Color(0xFFF0E1BE) else Color(0xFFF6F3EB))) {
         Row(
             Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 3.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1973,6 +1973,22 @@ private fun MushafPageViewer(
                         if (language == AppLanguage.EN) "Bookmark page" else if (language == AppLanguage.AR) "حفظ علامة الصفحة" else "نیشانکردنی پەڕە"
                     },
                     tint = if (savedPageKeys.contains(page.toString())) Gold else foreground.copy(alpha = 0.75f)
+                )
+            }
+            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = when (language) { AppLanguage.EN -> "Previous page"; AppLanguage.AR -> "الصفحة السابقة"; AppLanguage.CKB -> "پەڕەی پێشوو" },
+                    tint = if (page > 1) Gold else foreground.copy(alpha = 0.24f),
+                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 180f else 0f)
+                )
+            }
+            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = when (language) { AppLanguage.EN -> "Next page"; AppLanguage.AR -> "الصفحة التالية"; AppLanguage.CKB -> "پەڕەی دواتر" },
+                    tint = if (page < 604) Gold else foreground.copy(alpha = 0.24f),
+                    modifier = Modifier.rotate(if (language == AppLanguage.EN) 0f else 180f)
                 )
             }
             IconButton(onClick = { pageInput = page.toString(); showPagePicker = true }) {
