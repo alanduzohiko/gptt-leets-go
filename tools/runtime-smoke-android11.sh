@@ -40,24 +40,45 @@ if [[ "$package_ready" -ne 1 ]]; then
 fi
 
 adb logcat -c
+# A 200+ MiB APK can overflow the emulator's temporary install path when
+# --no-streaming pushes a second copy into /data/local/tmp. Use streaming and
+# capture storage/service diagnostics if PackageManager restarts during install.
+adb shell df -h /data > dist/runtime-test/storage-before-install.txt 2>&1 || true
 install_success=0
 for attempt in 1 2 3; do
-  echo "Install attempt $attempt/3" | tee -a dist/runtime-test/install.txt
-  if timeout --foreground 300s "$ADB_BIN" install --no-streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
+  echo "Install attempt $attempt/3 (streaming)" | tee -a dist/runtime-test/install.txt
+  if timeout --foreground 360s "$ADB_BIN" install --streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
     install_success=1
     break
   fi
-  if grep -q "Can't find service: package" dist/runtime-test/install.txt; then
-    echo "PackageManager transiently unavailable; waiting 15 seconds before retry." | tee -a dist/runtime-test/install.txt
-    sleep 15
+  if grep -Eqi "Can't find service: package|Failure calling service package|Broken pipe|INSTALL_FAILED_INSUFFICIENT_STORAGE" dist/runtime-test/install.txt; then
+    echo "PackageManager/storage failure detected; collecting state and retrying after a 20-second recovery window." | tee -a dist/runtime-test/install.txt
+    adb shell df -h /data > "dist/runtime-test/storage-after-install-$attempt.txt" 2>&1 || true
+    adb shell service list > "dist/runtime-test/services-after-install-$attempt.txt" 2>&1 || true
+    adb logcat -d -v threadtime > "dist/runtime-test/logcat-install-attempt-$attempt.txt" || true
+    sleep 20
+    adb wait-for-device || true
+    for package_retry in $(seq 1 8); do
+      if timeout --foreground 15s "$ADB_BIN" shell pm list packages >/dev/null 2>&1; then
+        break
+      fi
+      sleep 5
+    done
   else
     break
   fi
 done
 if [[ "$install_success" -ne 1 ]]; then
   adb shell getprop > dist/runtime-test/getprop.txt || true
+  adb shell df -h > dist/runtime-test/storage-final.txt 2>&1 || true
   adb shell service list > dist/runtime-test/services.txt 2>&1 || true
   adb logcat -d -v threadtime > dist/runtime-test/logcat.txt || true
+  echo "=== Install transcript ==="
+  tail -n 160 dist/runtime-test/install.txt || true
+  echo "=== Data partition ==="
+  cat dist/runtime-test/storage-final.txt || true
+  echo "=== Package service failures ==="
+  grep -Ei "PackageManager|PackageInstaller|FATAL EXCEPTION|OutOfMemory|No space left|SQLite|INSTALL_FAILED" dist/runtime-test/logcat.txt | tail -n 160 || true
   exit 1
 fi
 
