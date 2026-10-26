@@ -297,7 +297,7 @@ fun QuranScreen(
     var selectedQuranFont by rememberSaveable {
         mutableStateOf(prefs.getString("quran_verse_font", "uthmanic_hafs") ?: "uthmanic_hafs")
     }
-    var quranFontFamily by remember { mutableStateOf(FontFamily.Default) }
+    var quranFontFamily by remember { mutableStateOf<FontFamily>(FontFamily.Default) }
     LaunchedEffect(selectedQuranFont) {
         // Typeface.createFromAsset can block on cold reads of the original Quran
         // fonts. Load them off the UI thread so the Mushaf and reader settings
