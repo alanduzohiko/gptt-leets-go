@@ -294,6 +294,15 @@ fun MashxallApp(startScreen: String? = null) {
     }
 
     BackHandler(enabled = !isRoot) { navigateBack() }
+    // Android navigation should return from a root tab to Home rather than
+    // unexpectedly closing the application from Quran, Adhkar or More.
+    BackHandler(enabled = isRoot && screen != AppScreen.HOME.key && screen != AppScreen.SETTINGS.key) {
+        screen = AppScreen.HOME.key
+        navigationStack = emptyList()
+        audioStartsAtReciters = false
+        audioAutoPlayRequested = false
+        audioWholeSurahRequested = false
+    }
     BackHandler(enabled = isRoot && screen == AppScreen.SETTINGS.key) {
         screen = AppScreen.HOME.key
         navigationStack = emptyList()
@@ -334,7 +343,12 @@ fun MashxallApp(startScreen: String? = null) {
                             onSettings = { navigateTo(AppScreen.SETTINGS.key) }, showBack = !isRoot || screen == AppScreen.SETTINGS.key
                         )
                         Box(Modifier.fillMaxSize()) {
-                            when (screen) {
+                            androidx.compose.animation.Crossfade(
+                                targetState = screen,
+                                animationSpec = tween(durationMillis = 180),
+                                label = "native-route-transition"
+                            ) { route ->
+                            when (route) {
                                 "home" -> HomeScreen(
                                     language, foreground, cardColor, selectedCity,
                                     onOpen = { target -> navigateTo(target.key) },
@@ -459,6 +473,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(target.key) })
+                            }
                             }
                         }
                     }
