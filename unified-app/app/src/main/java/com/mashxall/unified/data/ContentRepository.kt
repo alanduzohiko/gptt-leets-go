@@ -1506,7 +1506,6 @@ object ContentRepository {
             val sql = """
                 SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
                 FROM location l
-                JOIN prayer_time pt ON pt.location_id=l._id
                 LEFT JOIN country ON country._id=l.country_id
                 WHERE $where
                 GROUP BY l._id
