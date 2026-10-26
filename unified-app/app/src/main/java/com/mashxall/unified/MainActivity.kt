@@ -713,7 +713,7 @@ private fun HomeScreen(
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
-    val use24Hour = false
+    var use24Hour by remember { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     val savedGpsAccuracyMeters = prefs.getString("gps_accuracy", null)?.toFloatOrNull()
     val savedGpsIsTooCoarse = savedGpsAccuracyMeters != null && savedGpsAccuracyMeters > 1500f
     var gpsLatitude by remember {
@@ -733,6 +733,7 @@ private fun HomeScreen(
             clockNow = System.currentTimeMillis()
             manualCityLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
             manualCityLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
+            use24Hour = prefs.getBoolean("time_format_24h", false)
             delay(60_000L)
         }
     }
@@ -1407,6 +1408,51 @@ private fun SettingsScreen(
                     )
                 }
                 FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) { AppLanguage.EN -> "TIME FORMAT"; AppLanguage.AR -> "تنسيق الوقت"; AppLanguage.CKB -> "شێوازی کات" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+            Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Schedule, null, tint = Gold, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Prayer time display"
+                            AppLanguage.AR -> "عرض مواقيت الصلاة"
+                            AppLanguage.CKB -> "پیشاندانی کاتەکانی نوێژ"
+                        }, color = foreground, fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "12-hour is the default and updates Home and Prayer screens."
+                            AppLanguage.AR -> "نظام 12 ساعة هو الافتراضي ويُطبّق على الرئيسية ومواقيت الصلاة."
+                            AppLanguage.CKB -> "شێوازی ١٢ کاتژمێر بنەڕەتە و لە سەرەکی و نوێژیشدا جێبەجێ دەبێت."
+                        }, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
+                FilterChip(
+                    selected = !use24Hour,
+                    onClick = {
+                        use24Hour = false
+                        prefs.edit().putBoolean("time_format_24h", false).apply()
+                    },
+                    label = { Text("12 h") }
+                )
+                Spacer(Modifier.width(5.dp))
+                FilterChip(
+                    selected = use24Hour,
+                    onClick = {
+                        use24Hour = true
+                        prefs.edit().putBoolean("time_format_24h", true).apply()
+                    },
+                    label = { Text("24 h") }
+                )
             }
         }
         Spacer(Modifier.height(20.dp))
