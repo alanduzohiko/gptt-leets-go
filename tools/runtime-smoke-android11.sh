@@ -1257,6 +1257,67 @@ echo "PASS: home prayer-times card, continue-reading resume, and quick access ar
 
 check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
+
+# Audio browsing belongs under Settings, not the generic Library/Worship menus.
+if grep -Eiq 'Recitations & audio|التلاوات والصوتيات|دەنگ و تلاوەت' dist/runtime-test/window-library.xml dist/runtime-test/window-worship.xml; then
+  echo "FAIL: a separate general audio-library menu remains outside Settings."
+  grep -Ein 'Recitations & audio|التلاوات والصوتيات|دەنگ و تلاوەت' dist/runtime-test/window-library.xml dist/runtime-test/window-worship.xml || true
+  exit 1
+fi
+echo "PASS: audio libraries are not duplicated into the Library or Worship menus."
+
+check_screen settings 'ڕێکخستن|الإعدادات|Settings'
+
+# Verify the settings card really opens the source-backed reciter library. It
+# must focus reciter selection without autoplaying audio; Adhan controls remain
+# in the dedicated prayer/muezzin settings route.
+audio_setting_coords=""
+for attempt in $(seq 1 10); do
+  rm -f dist/runtime-test/window-settings.xml
+  adb shell uiautomator dump /sdcard/mashxall-settings-audio-action.xml > "dist/runtime-test/uiautomator-settings-audio-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings-audio-action.xml dist/runtime-test/window-settings.xml >/dev/null 2>&1 || true
+  audio_setting_coords="$(python3 - dist/runtime-test/window-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Reciters & recitations|مكتبة القراء والتلاوات|کتێبخانەی قورئان‌خوێن و تلاوەت", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -n "$audio_setting_coords" ]]; then break; fi
+  adb shell input swipe 540 1550 540 480 420 || true
+  sleep 2
+done
+if [[ -z "$audio_setting_coords" ]]; then
+  echo "FAIL: Settings does not expose a Reciters & recitations entry."
+  cat dist/runtime-test/window-settings.xml
+  exit 1
+fi
+read -r audio_settings_x audio_settings_y <<< "$audio_setting_coords"
+adb shell input tap "$audio_settings_x" "$audio_settings_y"
+sleep 6
+adb shell uiautomator dump /sdcard/mashxall-audio-from-settings.xml > dist/runtime-test/uiautomator-audio-from-settings.txt 2>&1 || true
+adb pull /sdcard/mashxall-audio-from-settings.xml dist/runtime-test/window-audio-from-settings.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'Recitations & audio|التلاوات والصوتيات|دەنگ و تلاوەت' dist/runtime-test/window-audio-from-settings.xml ||
+   ! grep -Eq 'Reciters|القارئين|قورئان‌خوێن|Search reciters|ابحث عن قارئ|بە ناوی قورئان‌خوێن بگەڕێ' dist/runtime-test/window-audio-from-settings.xml; then
+  echo "FAIL: the Settings reciter action did not open the reciter library without autoplay."
+  cat dist/runtime-test/window-audio-from-settings.xml
+  exit 1
+fi
+echo "PASS: the Settings reciter action opens the reciter library as a management screen."
+
+# Reopen Settings so the following Quran-reader configuration test starts from a clean route.
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
 # The global Settings entry must open the real Quran reader settings dialog,
