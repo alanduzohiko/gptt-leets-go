@@ -3573,6 +3573,11 @@ fun AudioScreen(
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
+    var reciterModeFilter by rememberSaveable { mutableIntStateOf(0) }
+    var reciterFavoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var reciterFavoriteIds by remember {
+        mutableStateOf(prefs.getStringSet("favorite_reciter_ids", emptySet()).orEmpty().toSet())
+    }
     val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
@@ -3716,8 +3721,18 @@ fun AudioScreen(
             }
         } else {
             val visibleReciters = reciters.filter { reciter ->
-                (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
-            }
+                val matchesMode = when (reciterModeFilter) {
+                    1 -> reciter.audioType == 0
+                    2 -> reciter.audioType == 1
+                    else -> true
+                }
+                val matchesFavourite = !reciterFavoritesOnly || reciterFavoriteIds.contains(reciter.id.toString())
+                matchesMode && matchesFavourite &&
+                    (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+            }.sortedWith(
+                compareByDescending<Reciter> { it.id == preferredReciterId }
+                    .thenBy { it.nameEnglish.ifBlank { it.nameArabic }.lowercase(Locale.ROOT) }
+            )
             Text(
                 if (language == AppLanguage.EN) {
                     if (preferredVerseReciter != null) "Your preferred verse-by-verse reciter will start automatically when you open this screen from a Quran verse."
@@ -3731,6 +3746,39 @@ fun AudioScreen(
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
             )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${reciters.size} source reciters • ${reciters.count { it.audioType == 0 }} verse-by-verse • ${reciters.count { it.audioType == 1 }} full-surah"
+                    AppLanguage.AR -> "${reciters.size} قارئ من المصدر • ${reciters.count { it.audioType == 0 }} آية بآية • ${reciters.count { it.audioType == 1 }} سورة كاملة"
+                    AppLanguage.CKB -> "${reciters.size} قورئان‌خوێنی سەرچاوە • ${reciters.count { it.audioType == 0 }} ئایەت بە ئایەت • ${reciters.count { it.audioType == 1 }} سوورەتی تەواو"
+                }, color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, lineHeight = 15.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(listOf(0, 1, 2, 3)) { filter ->
+                    FilterChip(
+                        selected = if (filter == 3) reciterFavoritesOnly else !reciterFavoritesOnly && reciterModeFilter == filter,
+                        onClick = {
+                            if (filter == 3) {
+                                reciterFavoritesOnly = !reciterFavoritesOnly
+                            } else {
+                                reciterFavoritesOnly = false
+                                reciterModeFilter = filter
+                            }
+                        },
+                        label = {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> listOf("All", "Verse-by-verse", "Full surah", "Favourites")[filter]
+                                    AppLanguage.AR -> listOf("الكل", "آية بآية", "السورة كاملة", "المفضلة")[filter]
+                                    AppLanguage.CKB -> listOf("هەموو", "ئایەت بە ئایەت", "سوورەتی تەواو", "دڵخوازەکان")[filter]
+                                }, fontSize = 10.sp
+                            )
+                        }
+                    )
+                }
+            }
             Spacer(Modifier.height(7.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -3780,6 +3828,30 @@ fun AudioScreen(
                     },
                     color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
                 )
+                                TextButton(
+                                    onClick = {
+                                        val key = reciter.id.toString()
+                                        reciterFavoriteIds = if (reciterFavoriteIds.contains(key)) {
+                                            reciterFavoriteIds - key
+                                        } else {
+                                            reciterFavoriteIds + key
+                                        }
+                                        prefs.edit().putStringSet("favorite_reciter_ids", reciterFavoriteIds).apply()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(25.dp)
+                                ) {
+                                    Text(
+                                        if (reciterFavoriteIds.contains(reciter.id.toString())) {
+                                            if (language == AppLanguage.EN) "★ Saved reciter" else if (language == AppLanguage.AR) "★ قارئ محفوظ" else "★ قورئان‌خوێنی پاشەکەوتکراو"
+                                        } else {
+                                            if (language == AppLanguage.EN) "☆ Add to favourites" else if (language == AppLanguage.AR) "☆ أضف للمفضلة" else "☆ زیادکردن بۆ دڵخوازەکان"
+                                        },
+                                        color = if (reciterFavoriteIds.contains(reciter.id.toString())) Gold else foreground.copy(alpha = 0.56f),
+                                        fontSize = 9.sp,
+                                        maxLines = 1
+                                    )
+                                }
                                 if (reciter.audioType == 0) {
                                     TextButton(
                                         onClick = {
