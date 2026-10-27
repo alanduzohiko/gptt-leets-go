@@ -1068,6 +1068,16 @@ if ! grep -Eq 'دەستگەیشتنی خێرا|وصول سريع|Quick access' d
   cat dist/runtime-test/window-home.xml
   exit 1
 fi
+# Prayer tiles fill most of a phone-height viewport. Scroll the real Home screen
+# so Continue reading is actually on-screen before reading its UIAutomator bounds.
+adb shell input swipe 540 1510 540 650 450
+sleep 3
+dump_fresh_hierarchy /sdcard/mashxall-home-scrolled.xml dist/runtime-test/window-home-scrolled.xml dist/runtime-test/uiautomator-home-scrolled.txt
+if ! grep -Eq 'بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading' dist/runtime-test/window-home-scrolled.xml; then
+  echo "FAIL: Continue reading is not visible after scrolling below prayer times."
+  cat dist/runtime-test/window-home-scrolled.xml
+  exit 1
+fi
 resume_coords="$(python3 - dist/runtime-test/window-home.xml <<'PY'
 import re
 import sys
