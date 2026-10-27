@@ -152,8 +152,8 @@ data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String,
 
 /** Remove source-database playback suffixes from the name shown to users. */
 internal fun reciterDisplayName(value: String): String = value
-    .replace(Regex("""\\s*\\((?:بێ بچڕان|gapless)\\)""", RegexOption.IGNORE_CASE), "")
-    .replace(Regex("""\\s+"""), " ")
+    .replace(Regex("""\s*\((?:بێ بچڕان|gapless)\)""", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("""\s+"""), " ")
     .trim()
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
