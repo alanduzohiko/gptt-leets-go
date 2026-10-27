@@ -1229,7 +1229,7 @@ private fun SettingsScreen(
             ),
             Triple(
                 when (language) { AppLanguage.EN -> "Prayer & location"; AppLanguage.AR -> "الصلاة والموقع"; AppLanguage.CKB -> "نوێژ و شوێن" },
-                when (language) { AppLanguage.EN -> "City, GPS permission, calculation method and adhan alerts"; AppLanguage.AR -> "المدينة وإذن GPS وطريقة الحساب وتنبيهات الأذان"; AppLanguage.CKB -> "شار، مۆڵەتی GPS، شێوازی حساب و ئاگادارکردنەوەی بانگ" },
+                when (language) { AppLanguage.EN -> "Original Salawati timetables, device location and adhan alerts"; AppLanguage.AR -> "جداول صلواتي الأصلية وموقع الهاتف وتنبيهات الأذان"; AppLanguage.CKB -> "خشتە ڕەسەنەکانی صەڵەواتی، شوێنی مۆبایل و ئاگادارکردنەوەی بانگ" },
                 Icons.Outlined.Schedule to onPrayer
             ),
             Triple(
