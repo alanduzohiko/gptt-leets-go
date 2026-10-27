@@ -3007,8 +3007,23 @@ fun AudioScreen(
     }
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
-        reciters = ContentRepository.loadReciters(context)
+        val loadedReciters = ContentRepository.loadReciters(context)
+        reciters = loadedReciters
         surahs = ContentRepository.loadSurahs(context)
+        // The Quran's play control must do useful work on first use. When a
+        // user has not chosen a favourite yet, use the first available
+        // verse-by-verse source and persist it like an explicit selection.
+        if (preferredReciterId < 0) {
+            loadedReciters.firstOrNull { it.audioType == 0 }?.let { firstAvailable ->
+                preferredReciterId = firstAvailable.id
+                prefs.edit().putInt("preferred_reciter_id", firstAvailable.id).apply()
+            }
+        } else if (loadedReciters.none { it.id == preferredReciterId && it.audioType == 0 }) {
+            loadedReciters.firstOrNull { it.audioType == 0 }?.let { firstAvailable ->
+                preferredReciterId = firstAvailable.id
+                prefs.edit().putInt("preferred_reciter_id", firstAvailable.id).apply()
+            }
+        }
         loading = false
     }
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
