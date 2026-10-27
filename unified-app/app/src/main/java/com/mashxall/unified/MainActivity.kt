@@ -149,6 +149,19 @@ enum class AppScreen(val key: String) {
     AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
+/** Preserve an explicit city choice instead of prompting for GPS on every empty GPS state. */
+internal fun shouldAutoRequestLocation(
+    gpsLatitude: Double?,
+    gpsLongitude: Double?,
+    selectedCity: String,
+    manualLatitude: Double?,
+    manualLongitude: Double?
+): Boolean {
+    val hasGpsFix = gpsLatitude != null && gpsLongitude != null
+    val hasManualCity = selectedCity.isNotBlank() && manualLatitude != null && manualLongitude != null
+    return !hasGpsFix && !hasManualCity
+}
+
 private data class HomeModule(
     val screen: AppScreen, val titleKey: String, val subtitleKey: String,
     val icon: ImageVector, val color: Color
@@ -823,10 +836,9 @@ private fun HomeScreen(
         // An explicit city choice is authoritative until the user taps "Use my
         // location". Do not silently replace a manually selected Kurdistan city
         // with GPS just because the saved GPS coordinates are empty.
-        val hasManualCity = selectedCity.isNotBlank() &&
-            prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
-            prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
-        if ((gpsLatitude == null || gpsLongitude == null) && !hasManualCity) {
+        val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
+        val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
+        if (shouldAutoRequestLocation(gpsLatitude, gpsLongitude, selectedCity, manualLatitude, manualLongitude)) {
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
