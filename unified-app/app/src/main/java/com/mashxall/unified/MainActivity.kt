@@ -226,7 +226,17 @@ fun MashxallApp(startScreen: String? = null) {
     var resumeMushafRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
     var audioAutoPlayRequested by rememberSaveable { mutableStateOf(false) }
-    var selectedCity by rememberSaveable { mutableStateOf(prefs.getString("selected_city", "Erbil") ?: "Erbil") }
+    var selectedCity by rememberSaveable {
+        mutableStateOf(
+            prefs.getString("selected_city", null)?.takeIf { saved ->
+                saved.isNotBlank() && (
+                    !saved.equals("Erbil", ignoreCase = true) ||
+                        (prefs.getString("manual_city_latitude", null) != null &&
+                            prefs.getString("manual_city_longitude", null) != null)
+                    )
+            } ?: ""
+        )
+    }
     var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -765,9 +775,18 @@ private fun HomeScreen(
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     LaunchedEffect(Unit) {
-        if (!prefs.getBoolean("prayer_location_prompted", false) && gpsLatitude == null && gpsLongitude == null) {
-            prefs.edit().putBoolean("prayer_location_prompted", true).apply()
-            requestHomeLocation()
+        if (gpsLatitude == null || gpsLongitude == null) {
+            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
+            if (fine || coarse) {
+                // A stale/empty saved fix should not silently leave the app on a
+                // hard-coded city. Reacquire the real device location instead.
+                requestHomeLocation()
+            } else if (!previouslyPrompted) {
+                prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+                requestHomeLocation()
+            }
         }
     }
 
@@ -806,7 +825,13 @@ private fun HomeScreen(
                                 AppLanguage.AR -> "الموقع الحالي"
                                 AppLanguage.CKB -> "شوێنی ئێستا"
                             }
-                        } else selectedCity
+                        } else selectedCity.ifBlank {
+                            when (language) {
+                                AppLanguage.EN -> "Location not set"
+                                AppLanguage.AR -> "لم يُحدَّد الموقع"
+                                AppLanguage.CKB -> "شوێن دیاری نەکراوە"
+                            }
+                        }
                         val sourceLabel = prayerTimes?.source?.let { prayerSourceLabel(it, language) }.orEmpty()
                         Text(
                             listOf(displayedLocation, sourceLabel).filter { it.isNotBlank() }.joinToString(" • "),
@@ -821,10 +846,17 @@ private fun HomeScreen(
                         androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
                     }
                     prayerEntries.isEmpty() -> Text(
-                        when (language) {
-                            AppLanguage.EN -> "Choose your city or allow location access to load prayer times."
-                            AppLanguage.AR -> "اختر مدينتك أو اسمح بالوصول إلى الموقع لعرض المواقيت."
-                            AppLanguage.CKB -> "شارەکەت هەڵبژێرە یان مۆڵەتی شوێن بدە بۆ پیشاندانی کاتەکان."
+                        when {
+                            gpsLatitude != null && gpsLongitude != null -> when (language) {
+                                AppLanguage.EN -> "No verified Salawati timetable was found near these coordinates. Refresh location or choose a nearby supported city; the app will not invent times."
+                                AppLanguage.AR -> "لم يُعثر على جدول صلواتي موثوق قريب من هذه الإحداثيات. حدّث الموقع أو اختر مدينة قريبة مدعومة؛ لن يخمّن التطبيق أوقاتًا."
+                                AppLanguage.CKB -> "خشتەی پشتڕاستکراوەی صەڵەواتی لە نزیک ئەم کۆئۆردیناتانەدا نەدۆزرایەوە؛ شوێن نوێ بکەرەوە یان شاریەکی نزیک هەڵبژێرە."
+                            }
+                            else -> when (language) {
+                                AppLanguage.EN -> "Allow location access to load the original prayer timetable for your area."
+                                AppLanguage.AR -> "اسمح بالوصول إلى الموقع لتحميل جدول الصلاة الأصلي لمنطقتك."
+                                AppLanguage.CKB -> "مۆڵەتی شوێن بدە بۆ بارکردنی خشتەی ڕەسەنی نوێژ بۆ ناوچەکەت."
+                            }
                         }, color = foreground.copy(alpha = 0.68f), fontSize = 12.sp, lineHeight = 19.sp
                     )
                     else -> prayerEntries.chunked(3).forEach { trio ->
