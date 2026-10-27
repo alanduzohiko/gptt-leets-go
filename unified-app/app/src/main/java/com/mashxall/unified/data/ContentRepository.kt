@@ -149,6 +149,12 @@ data class WordItem(
 private data class WordTypeInfo(val tag: String, val english: String, val arabic: String, val ckb: String, val color: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
 data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
+
+/** Remove source-database playback suffixes from the name shown to users. */
+internal fun reciterDisplayName(value: String): String = value
+    .replace(Regex("""\\s*\\((?:بێ بچڕان|gapless)\\)""", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("""\\s+"""), " ")
+    .trim()
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
 private data class SalawatiAzkarText(val ckb: String, val english: String, val reference: String)
@@ -2058,7 +2064,7 @@ object ContentRepository {
         queryDb(context, QURAN_DB, emptyList()) { db ->
             db.rawQuery("SELECT id,name,name_english,audiotype,url,q_order FROM audio ORDER BY q_order,name", null).use { c ->
                 buildList {
-                    while (c.moveToNext()) add(Reciter(c.int("id"), c.string("name"), c.string("name_english"), c.int("audiotype"), c.string("url"), c.int("q_order")))
+                    while (c.moveToNext()) add(Reciter(c.int("id"), reciterDisplayName(c.string("name")), reciterDisplayName(c.string("name_english")), c.int("audiotype"), c.string("url"), c.int("q_order")))
                 }
             }
         }
