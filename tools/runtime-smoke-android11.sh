@@ -42,6 +42,28 @@ dump_fresh_hierarchy() {
   return 1
 }
 
+find_ui_bounds() {
+  python3 - "$1" "$2" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(sys.argv[2], re.I)
+for node in root.iter("node"):
+    labels = [node.attrib.get("text", "").strip(), node.attrib.get("content-desc", "").strip()]
+    if not any(label and pattern.search(label) for label in labels):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+}
+
 # On slow Android 11 CI emulators, sys.boot_completed may become 1 before
 # PackageManager's Binder service is registered. Confirm that package queries
 # actually work before using adb install, and collect useful diagnostics if it
@@ -390,17 +412,73 @@ if ! grep -Eqi 'Go to Mushaf page|الانتقال إلى صفحة في المص
   cat dist/runtime-test/window-page-jump-dialog.xml
   exit 1
 fi
+# Enter page 2 in the dialog instead of merely opening and dismissing it.
+page_input_coords="$(python3 - dist/runtime-test/window-page-jump-dialog.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("class", "") != "android.widget.EditText":
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$page_input_coords" ]]; then
+  echo "FAIL: page-jump dialog did not expose its editable page-number field."
+  cat dist/runtime-test/window-page-jump-dialog.xml
+  exit 1
+fi
+read -r page_input_x page_input_y <<< "$page_input_coords"
+adb shell input tap "$page_input_x" "$page_input_y"
+adb shell input keyevent 123
+adb shell input keyevent 67
+adb shell input text 2
 adb shell input keyevent 4
 sleep 2
-dump_fresh_hierarchy /sdcard/mashxall-page-jump-dismissed.xml dist/runtime-test/window-mushaf-fullscreen.xml dist/runtime-test/uiautomator-page-jump-dismissed.txt
+dump_fresh_hierarchy /sdcard/mashxall-page-jump-ready.xml dist/runtime-test/window-page-jump-ready.xml dist/runtime-test/uiautomator-page-jump-ready.txt
+go_coords="$(find_ui_bounds dist/runtime-test/window-page-jump-ready.xml '^(Go|اذهب|بڕۆ)$')"
+if [[ -z "$go_coords" ]]; then
+  echo "FAIL: entering page 2 did not leave the page-jump dialog with an accessible Go button."
+  cat dist/runtime-test/window-page-jump-ready.xml
+  exit 1
+fi
+read -r go_x go_y <<< "$go_coords"
+adb shell input tap "$go_x" "$go_y"
+sleep 5
+dump_fresh_hierarchy /sdcard/mashxall-mushaf-page-2.xml dist/runtime-test/window-mushaf-page-2.xml dist/runtime-test/uiautomator-mushaf-page-2.txt
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+2[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-page-2.xml ||
+   ! grep -Eqi 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-mushaf-page-2.xml ||
+   grep -Eqi 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-mushaf-page-2.xml; then
+  echo "FAIL: confirming page 2 did not navigate to live fullscreen Mushaf page 2."
+  cat dist/runtime-test/window-mushaf-page-2.xml
+  exit 1
+fi
+previous_coords="$(find_ui_bounds dist/runtime-test/window-mushaf-page-2.xml '^(Previous|السابق|السابقة|پێشوو)$')"
+if [[ -z "$previous_coords" ]]; then
+  echo "FAIL: previous-page control is not accessible after jumping to page 2."
+  cat dist/runtime-test/window-mushaf-page-2.xml
+  exit 1
+fi
+read -r previous_x previous_y <<< "$previous_coords"
+adb shell input tap "$previous_x" "$previous_y"
+sleep 4
+dump_fresh_hierarchy /sdcard/mashxall-page-jump-return.xml dist/runtime-test/window-mushaf-fullscreen.xml dist/runtime-test/uiautomator-page-jump-return.txt
 if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml ||
    ! grep -Eqi 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-mushaf-fullscreen.xml ||
    grep -Eqi 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-mushaf-fullscreen.xml; then
-  echo "FAIL: closing page jump did not leave the live app on fullscreen Mushaf page 1."
+  echo "FAIL: previous-page control did not return to live fullscreen Mushaf page 1 after jumping to page 2."
   cat dist/runtime-test/window-mushaf-fullscreen.xml
   exit 1
 fi
-echo "PASS: page-jump dialog closes back to the same live fullscreen page."
+echo "PASS: page-jump dialog navigates directly to page 2, and the previous-page button returns to page 1."
 
 # Verify the fresh hierarchy still describes a live fullscreen Mushaf before tapping its verse button.
 if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml ||
