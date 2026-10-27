@@ -391,7 +391,11 @@ fun MashxallApp(startScreen: String? = null) {
                                     resumeLastMushaf = resumeMushafRequested,
                                     onResumeMushafHandled = { resumeMushafRequested = false },
                                     openSettingsOnEntry = quranSettingsRequested,
-                                    onSettingsRequestConsumed = { quranSettingsRequested = false }
+                                    onSettingsRequestConsumed = { quranSettingsRequested = false },
+                                    onOpenPdf = { path ->
+                                        selectedPdf = path
+                                        navigateTo("pdf")
+                                    }
                                 )
                                 "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
                                 "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }

@@ -1010,6 +1010,40 @@ if [[ -n "$quran_settings_coords" ]]; then
     exit 1
   fi
   echo "PASS: global Settings opens the dedicated Quran settings with grouped categories."
+
+  tajwid_guide_coords="$(python3 - dist/runtime-test/window-quran-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+pattern = re.compile(r"Open Tajweed guide|فتح دليل التجويد|دلیلی تەجوید بکەرەوە", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+raise SystemExit(0)
+PY
+)"
+  if [[ -n "$tajwid_guide_coords" ]]; then
+    read -r tajwid_x tajwid_y <<< "$tajwid_guide_coords"
+    adb shell input tap "$tajwid_x" "$tajwid_y"
+    sleep 5
+    adb shell uiautomator dump /sdcard/mashxall-tajwid-guide.xml > dist/runtime-test/uiautomator-tajwid-guide.txt 2>&1 || true
+    adb pull /sdcard/mashxall-tajwid-guide.xml dist/runtime-test/window-tajwid-guide.xml >/dev/null 2>&1 || true
+    if ! grep -Eqi 'tajwid|tajweed|تجويد' dist/runtime-test/window-tajwid-guide.xml ||
+       ! grep -Eq ' / [0-9]+' dist/runtime-test/window-tajwid-guide.xml; then
+      echo "FAIL: the source Tajweed guide button did not open a rendered PDF page."
+      cat dist/runtime-test/window-tajwid-guide.xml
+      exit 1
+    fi
+    echo "PASS: the bundled source Tajweed guide opens in the native PDF reader."
+  else
+    echo "INFO: no source PDF filename was identified as a Tajweed guide; no inactive button was displayed."
+  fi
 else
   echo "FAIL: the global Settings screen did not expose the Quran reader settings action."
   cat dist/runtime-test/window-settings.xml
