@@ -264,7 +264,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showSheetWordStudy by remember { mutableStateOf(false) }
     var sheetWords by remember { mutableStateOf<List<WordItem>>(emptyList()) }
     var sheetWordLoading by remember { mutableStateOf(false) }
-    var sheetAudioPlaying by remember { mutableStateOf(false) }
     LaunchedEffect(mushafMode) { onImmersiveMushaf(mushafMode) }
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
@@ -338,7 +337,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             sheetWords = emptyList()
             showSheetHadith = false
             showSheetWordStudy = false
-            sheetAudioPlaying = false
             return@LaunchedEffect
         }
         sheetLoading = true
@@ -1148,6 +1146,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             ) {
                 val target = selectedAyahForSheet!!
                 val surah = surahs.firstOrNull { it.number == target.first }
+                val activeReaderForVerse = readerReciters.firstOrNull { it.id == preferredReaderReciterId }
+                    ?: readerReciters.firstOrNull { it.audioType == 0 }
+                    ?: readerReciters.firstOrNull()
+                val versePlayActionLabel = when {
+                    activeReaderForVerse?.audioType == 0 -> when (language) {
+                        AppLanguage.EN -> "Play from this ayah to end"
+                        AppLanguage.AR -> "تشغيل من هذه الآية إلى نهاية السورة"
+                        AppLanguage.CKB -> "لەو ئایەتەوە تا کۆتایی سوورەت بخوێنەوە"
+                    }
+                    activeReaderForVerse != null -> when (language) {
+                        AppLanguage.EN -> "Play full surah"
+                        AppLanguage.AR -> "تشغيل السورة كاملة"
+                        AppLanguage.CKB -> "تەواوی سوورەت بخوێنەوە"
+                    }
+                    else -> when (language) {
+                        AppLanguage.EN -> "Choose reciter to play"
+                        AppLanguage.AR -> "اختر قارئًا للتشغيل"
+                        AppLanguage.CKB -> "قورئان‌خوێن هەڵبژێرە بۆ لێدان"
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -1214,30 +1232,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             OutlinedButton(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    if (sheetAudioPlaying) {
-                                        AudioController.stop()
-                                        sheetAudioPlaying = false
-                                    } else {
-                                        scope.launch {
-                                            val reciters = ContentRepository.loadReciters(context)
-                                            val savedId = prefs.getInt("preferred_reciter_id", -1)
-                                            val chosen = reciters.firstOrNull { it.id == savedId }
-                                                ?: reciters.firstOrNull { it.audioType == 0 }
-                                                ?: reciters.firstOrNull()
-                                            if (chosen == null) {
-                                                Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                val url = ContentRepository.reciterSampleUrl(chosen, target.first, target.second)
-                                                sheetAudioPlaying = true
-                                                AudioController.playRemote(context, url) { isPlaying -> sheetAudioPlaying = isPlaying }
-                                            }
-                                        }
-                                    }
+                                    // Share the Quran screen's sequential playback/download route.
+                                    onPlayAudio(target.first, target.second)
+                                    selectedAyahForSheet = null
                                 }
                             ) {
-                                Icon(if (sheetAudioPlaying) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Outlined.PlayCircle, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(3.dp))
-                                Text(if (language == AppLanguage.EN) "Play" else if (language == AppLanguage.AR) "تشغيل" else "لێدان", fontSize = 10.sp)
+                                Text(versePlayActionLabel, fontSize = 9.sp, lineHeight = 12.sp)
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -1418,6 +1420,7 @@ private fun MushafPageViewer(
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    var showPageJumpDialog by rememberSaveable { mutableStateOf(false) }
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
@@ -1467,15 +1470,43 @@ private fun MushafPageViewer(
         // Native, compact reader toolbar pinned above the page, like a real
         // Mushaf app rather than an ordinary scrollable content page.
         Row(
-            Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 5.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 3.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(42.dp)) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Color.White)
+            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Color.White, modifier = Modifier.size(19.dp))
             }
-            Column(Modifier.weight(1f).padding(start = 3.dp)) {
-                Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
-                Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 10.sp)
+            IconButton(
+                onClick = {
+                    if (page > 1) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onPageChange(page - 1)
+                    }
+                },
+                enabled = page > 1 && !loading,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "previous"), tint = if (page > 1) Color.White else Color.Gray, modifier = Modifier.size(19.dp))
+            }
+            Column(
+                Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                    .clickable { showPageJumpDialog = true }
+                    .padding(start = 2.dp, end = 1.dp, top = 2.dp, bottom = 2.dp)
+            ) {
+                Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
+                Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 9.sp, maxLines = 1)
+            }
+            IconButton(
+                onClick = {
+                    if (page < 604) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onPageChange(page + 1)
+                    }
+                },
+                enabled = page < 604 && !loading,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "next"), tint = if (page < 604) Color.White else Color.Gray, modifier = Modifier.rotate(180f).size(19.dp))
             }
             val toolbarVerse = selectedVerse ?: pageVerses.firstOrNull()
             TextButton(
@@ -1486,11 +1517,11 @@ private fun MushafPageViewer(
                     }
                 },
                 enabled = !loading && toolbarVerse != null,
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                modifier = Modifier.height(40.dp)
+                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                modifier = Modifier.height(36.dp)
             ) {
                 Text(
-                    toolbarVerse?.let { "${it.surah}:${it.ayah}" } ?: "—",
+                    toolbarVerse?.let { target -> target.surah.toString() + ":" + target.ayah.toString() } ?: "—",
                     color = if (toolbarVerse != null) PaleGold else Color.Gray,
                     fontSize = 9.sp,
                     maxLines = 1
@@ -1502,9 +1533,9 @@ private fun MushafPageViewer(
                     if (target != null) onPlaySurah(target.surah, 1)
                 },
                 enabled = !loading && pageVerses.isNotEmpty(),
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.size(34.dp)
             ) {
-                Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play surah" else if (language == AppLanguage.AR) "تشغيل السورة" else "خوێندنەوەی سوورەت", tint = PaleGold, modifier = Modifier.size(25.dp))
+                Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play surah from beginning" else if (language == AppLanguage.AR) "تشغيل السورة من البداية" else "سوورەت لە سەرەتاوە بخوێنەوە", tint = PaleGold, modifier = Modifier.size(21.dp))
             }
             IconButton(
                 onClick = {
@@ -1524,39 +1555,12 @@ private fun MushafPageViewer(
                     }
                 },
                 enabled = !loading && pageVerses.isNotEmpty(),
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.size(34.dp)
             ) {
-                Icon(Icons.Outlined.BookmarkBorder, contentDescription = if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت", tint = PaleGold, modifier = Modifier.size(22.dp))
+                Icon(Icons.Outlined.BookmarkBorder, contentDescription = if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت", tint = PaleGold, modifier = Modifier.size(19.dp))
             }
-            IconButton(onClick = onReaderSettings, modifier = Modifier.size(42.dp)) {
-                Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = PaleGold, modifier = Modifier.size(23.dp))
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading, modifier = Modifier.size(37.dp)) {
-                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "previous"), tint = if (page > 1) Color.White else Color.Gray)
-            }
-            OutlinedTextField(
-                value = pageInput,
-                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.weight(1f),
-                label = { Text(if (language == AppLanguage.EN) "Page" else if (language == AppLanguage.AR) "صفحة" else "پەڕە", fontSize = 10.sp) },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-            Button(
-                onClick = { pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange) },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                modifier = Modifier.height(42.dp)
-            ) {
-                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ", fontSize = 11.sp)
-            }
-            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading, modifier = Modifier.size(37.dp)) {
-                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "next"), tint = if (page < 604) Color.White else Color.Gray, modifier = Modifier.rotate(180f))
+            IconButton(onClick = onReaderSettings, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = PaleGold, modifier = Modifier.size(19.dp))
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -1685,6 +1689,71 @@ private fun MushafPageViewer(
             }
         }
     }
+    if (showPageJumpDialog) AlertDialog(
+        onDismissRequest = { showPageJumpDialog = false },
+        title = {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Go to Mushaf page"
+                    AppLanguage.AR -> "الانتقال إلى صفحة في المصحف"
+                    AppLanguage.CKB -> "بڕۆ بۆ پەڕەیەکی مصحەف"
+                },
+                color = foreground, fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Enter a page number from 1 to 604."
+                        AppLanguage.AR -> "أدخل رقم صفحة من 1 إلى 604."
+                        AppLanguage.CKB -> "ژمارەی پەڕەیەک لە ١ تا ٦٠٤ بنووسە."
+                    },
+                    color = foreground.copy(alpha = 0.66f), fontSize = 12.sp
+                )
+                OutlinedTextField(
+                    value = pageInput,
+                    onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Page number"
+                                AppLanguage.AR -> "رقم الصفحة"
+                                AppLanguage.CKB -> "ژمارەی پەڕە"
+                            }
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.ui.text.input.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    isError = pageInput.isNotBlank() && pageInput.toIntOrNull()?.let { it !in 1..604 } != false,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = pageInput.toIntOrNull()?.let { it in 1..604 } == true,
+                onClick = {
+                    pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let { destination ->
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onPageChange(destination)
+                        showPageJumpDialog = false
+                    }
+                }
+            ) {
+                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { showPageJumpDialog = false }) {
+                Text(if (language == AppLanguage.EN) "Cancel" else if (language == AppLanguage.AR) "إلغاء" else "هەڵوەشاندنەوە")
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+
 }
 
 @Composable

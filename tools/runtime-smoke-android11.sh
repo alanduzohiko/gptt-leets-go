@@ -332,6 +332,52 @@ if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*60
 fi
 echo "PASS: left-to-right finger swipe returns to page 1."
 
+# The page number on the single top bar should open a validated page-jump dialog.
+page_label_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"(?:پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$page_label_coords" ]]; then
+  echo "FAIL: page indicator in the top toolbar is not accessible."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  exit 1
+fi
+read -r page_label_x page_label_y <<< "$page_label_coords"
+adb shell input tap "$page_label_x" "$page_label_y"
+sleep 2
+adb shell uiautomator dump /sdcard/mashxall-page-jump-dialog.xml > dist/runtime-test/uiautomator-page-jump-dialog.txt 2>&1 || true
+adb pull /sdcard/mashxall-page-jump-dialog.xml dist/runtime-test/window-page-jump-dialog.xml >/dev/null 2>&1 || true
+if ! grep -Eqi 'Go to Mushaf page|الانتقال إلى صفحة في المصحف|بڕۆ بۆ پەڕەیەکی مصحەف' dist/runtime-test/window-page-jump-dialog.xml; then
+  echo "FAIL: tapping the page indicator did not open the direct page-jump dialog."
+  cat dist/runtime-test/window-page-jump-dialog.xml
+  exit 1
+fi
+adb shell input keyevent 4
+sleep 2
+adb shell uiautomator dump /sdcard/mashxall-page-jump-dismissed.xml > dist/runtime-test/uiautomator-page-jump-dismissed.txt 2>&1 || true
+adb pull /sdcard/mashxall-page-jump-dismissed.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: dismissing the page-jump dialog did not return to the same Mushaf page."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  exit 1
+fi
+echo "PASS: page indicator opens a direct page-jump dialog without leaving the Mushaf."
+
 verse_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
 import re
 import sys
