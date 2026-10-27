@@ -820,13 +820,18 @@ private fun HomeScreen(
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     LaunchedEffect(Unit) {
-        if (gpsLatitude == null || gpsLongitude == null) {
+        // An explicit city choice is authoritative until the user taps "Use my
+        // location". Do not silently replace a manually selected Kurdistan city
+        // with GPS just because the saved GPS coordinates are empty.
+        val hasManualCity = selectedCity.isNotBlank() &&
+            prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
+            prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+        if ((gpsLatitude == null || gpsLongitude == null) && !hasManualCity) {
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
             if (fine || coarse) {
-                // A stale/empty saved fix should not silently leave the app on a
-                // hard-coded city. Reacquire the real device location instead.
+                // No usable GPS fix and no manual selection: attempt a fresh fix.
                 requestHomeLocation()
             } else if (!previouslyPrompted) {
                 prefs.edit().putBoolean("prayer_location_prompted", true).apply()
