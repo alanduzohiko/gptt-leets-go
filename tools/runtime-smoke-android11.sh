@@ -139,7 +139,8 @@ adb emu geo fix 45.44 35.56 || true
 
 check_screen() {
   local route="$1"
-  local expected_title="$2"
+  # Some routes validate their own body after navigation, so their caller intentionally omits a heading regex.
+  local expected_title="${2:-.}"
   local file="dist/runtime-test/window-${route}.xml"
 
   echo "=== Runtime screen smoke: ${route} ==="
