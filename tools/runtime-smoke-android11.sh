@@ -375,6 +375,41 @@ adb shell input keyevent 4 || true
 sleep 3
 adb shell uiautomator dump /sdcard/mashxall-mushaf-restored.xml > dist/runtime-test/uiautomator-mushaf-restored.txt 2>&1 || true
 adb pull /sdcard/mashxall-mushaf-restored.xml dist/runtime-test/window-mushaf-sheet-dismissed.xml >/dev/null 2>&1 || true
+bookmark_coords="$(python3 - dist/runtime-test/window-mushaf-sheet-dismissed.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    label = node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")
+    if not re.search(r"Bookmark verse|حفظ علامة للآية|نیشانەکردنی ئایەت", label, re.I):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$bookmark_coords" ]]; then
+  echo "FAIL: Mushaf bookmark button is not accessible after the verse sheet closes."
+  cat dist/runtime-test/window-mushaf-sheet-dismissed.xml
+  exit 1
+fi
+read -r bookmark_x bookmark_y <<< "$bookmark_coords"
+adb shell input tap "$bookmark_x" "$bookmark_y"
+sleep 2
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-after-mushaf-bookmark.xml 2>/dev/null || true
+if ! grep -q '<string>1:1</string>' dist/runtime-test/preferences-after-mushaf-bookmark.xml; then
+  echo "FAIL: pressing the Mushaf bookmark control did not persist verse 1:1."
+  cat dist/runtime-test/preferences-after-mushaf-bookmark.xml || true
+  exit 1
+fi
+echo "PASS: the Mushaf bookmark control persists the selected verse."
+
 exit_coords="$(python3 - dist/runtime-test/window-mushaf-sheet-dismissed.xml <<'PY'
 import re
 import sys
@@ -384,7 +419,8 @@ try:
 except Exception:
     raise SystemExit(0)
 for node in root.iter("node"):
-    if not re.search(r"Exit|Back|خروج|دەرچوون|گەڕانەوە", node.attrib.get("text", ""), re.I):
+    label = node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")
+    if not re.search(r"Exit|Back|خروج|دەرچوون|گەڕانەوە", label, re.I):
         continue
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
     if match:

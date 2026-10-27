@@ -32,6 +32,11 @@ import android.widget.Toast
 import coil.compose.SubcomposeAsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -164,6 +169,35 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
+private fun ReaderSettingsCategoryCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    foreground: Color,
+    cardColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.20f))
+    ) {
+        Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Gold, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(subtitle, color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
+            }
+            Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
+        }
+    }
+}
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}) {
     val context = LocalContext.current
@@ -188,6 +222,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
+    var readerSettingsSection by rememberSaveable { mutableStateOf("overview") }
     var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
     var mushafSepiaMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_sepia_mode", false)) }
     var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
@@ -204,8 +239,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     LaunchedEffect(Unit) {
         readerReciters = ContentRepository.loadReciters(context)
-        if (preferredReaderReciterId == -1) {
-            preferredReaderReciterId = readerReciters.firstOrNull { it.audioType == 0 }?.id ?: -1
+        if (preferredReaderReciterId == -1 || readerReciters.none { it.id == preferredReaderReciterId }) {
+            preferredReaderReciterId = readerReciters.firstOrNull { it.audioType == 0 }?.id
+                ?: readerReciters.firstOrNull()?.id ?: -1
             if (preferredReaderReciterId > 0) {
                 prefs.edit().putInt("preferred_reciter_id", preferredReaderReciterId).apply()
             }
@@ -435,7 +471,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     mushafMode = false
                     showSurahList = true
                 },
-                onReaderSettings = { showReaderSettings = true },
+                onReaderSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
                 onPlaySurah = { surahNumber, ayahNumber -> onPlayAudio(surahNumber, ayahNumber) },
                 onBookmarkVerse = { surahNumber, ayahNumber -> onBookmark(surahNumber, ayahNumber) },
                 onVerseClick = { surahNumber, ayahNumber ->
@@ -461,7 +497,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp
                             )
                         }
-                        TextButton(onClick = { showReaderSettings = true }) {
+                        TextButton(onClick = { readerSettingsSection = "overview"; showReaderSettings = true }) {
                             Text("⚙", color = Gold, fontSize = 24.sp)
                         }
                     }
@@ -876,203 +912,222 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     )
 
 
-    if (showReaderSettings) AlertDialog(
-        onDismissRequest = { showReaderSettings = false },
-        title = {
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Quran reader settings"
-                    AppLanguage.AR -> "إعدادات قارئ القرآن"
-                    AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان"
-                }, color = foreground, fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            LazyColumn(Modifier.heightIn(max = 470.dp)) {
-                item {
-                    Text(
-                        when (language) { AppLanguage.EN -> "DEFAULT TRANSLATION"; AppLanguage.AR -> "الترجمة الافتراضية"; AppLanguage.CKB -> "وەرگێڕانی بنەڕەت" },
-                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
-                    )
-                }
-                items(ContentRepository.quranTranslations, key = { "reader-translation-" + it.id }) { choice ->
-                    val label = when (language) {
-                        AppLanguage.CKB -> choice.ckb
-                        AppLanguage.AR -> choice.arabic
-                        AppLanguage.EN -> choice.english
+    if (showReaderSettings) Dialog(
+        onDismissRequest = { showReaderSettings = false; readerSettingsSection = "overview" }
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).heightIn(min = 430.dp, max = 730.dp),
+            shape = RoundedCornerShape(26.dp), color = cardColor,
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f)), shadowElevation = 16.dp
+        ) {
+            Column(Modifier.fillMaxWidth().padding(17.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (readerSettingsSection != "overview") IconButton(onClick = { readerSettingsSection = "overview" }) {
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Gold)
                     }
-                    Row(
-                        Modifier.fillMaxWidth().clickable {
-                            translationKey = choice.id
-                            prefs.edit().putString("quran_translation", choice.id).apply()
-                        }.padding(vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = translationKey == choice.id, onClick = {
-                            translationKey = choice.id
-                            prefs.edit().putString("quran_translation", choice.id).apply()
-                        })
-                        Spacer(Modifier.width(5.dp))
-                        Text(label, color = foreground, fontSize = 12.sp)
-                    }
-                }
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Divider(color = Gold.copy(alpha = 0.25f))
-                    Spacer(Modifier.height(9.dp))
-                    Text(
-                        when (language) { AppLanguage.EN -> "DEFAULT TAFSIR"; AppLanguage.AR -> "التفسير الافتراضي"; AppLanguage.CKB -> "تەفسیرى بنەڕەت" },
-                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
-                    )
-                }
-                items(ContentRepository.tafsirBooks, key = { "reader-tafsir-" + it.id }) { book ->
-                    val label = when (language) {
-                        AppLanguage.CKB -> book.labelCkb
-                        AppLanguage.AR -> book.labelAr
-                        AppLanguage.EN -> book.labelEn
-                    }
-                    Row(
-                        Modifier.fillMaxWidth().clickable {
-                            selectedTafsirBook = book.id
-                            prefs.edit().putString("quran_tafsir_book", book.id).apply()
-                        }.padding(vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = selectedTafsirBook == book.id, onClick = {
-                            selectedTafsirBook = book.id
-                            prefs.edit().putString("quran_tafsir_book", book.id).apply()
-                        })
-                        Spacer(Modifier.width(5.dp))
-                        Text(label, color = foreground, fontSize = 12.sp)
-                    }
-                }
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Divider(color = Gold.copy(alpha = 0.25f))
-                    Spacer(Modifier.height(9.dp))
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "DEFAULT VERSE-BY-VERSE RECITER"
-                            AppLanguage.AR -> "القارئ الافتراضي آيةً بآية"
-                            AppLanguage.CKB -> "قورئان‌خوێنی بنەڕەت بۆ ئایەت بە ئایەت"
-                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
-                    )
-                    if (readerReciters.isEmpty()) {
-                        Text(tr(language, "loading"), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
-                    }
-                }
-                items(readerReciters.filter { it.audioType == 0 }, key = { "reader-reciter-" + it.id }) { reciter ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable {
-                            preferredReaderReciterId = reciter.id
-                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
-                        }.padding(vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = preferredReaderReciterId == reciter.id,
-                            onClick = {
-                                preferredReaderReciterId = reciter.id
-                                prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
-                            }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) { AppLanguage.EN -> "Quran reader settings"; AppLanguage.AR -> "إعدادات قارئ القرآن"; AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان" },
+                            color = foreground, fontSize = 19.sp, fontWeight = FontWeight.Bold
                         )
-                        Spacer(Modifier.width(5.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
-                        }
-                    }
-                }
-                item {
-                    Spacer(Modifier.height(9.dp))
-                    Divider(color = Gold.copy(alpha = 0.25f))
-                    Spacer(Modifier.height(9.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Night reading mode"
-                                    AppLanguage.AR -> "وضع القراءة الليلي"
-                                    AppLanguage.CKB -> "دۆخی خوێندنەوەی شەوانە"
-                                }, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Invert paper and ink on the page-based Mushaf"
-                                    AppLanguage.AR -> "عكس لون الورق والحبر داخل المصحف الرسومي"
-                                    AppLanguage.CKB -> "ڕەنگی کاغەز و مەرەکەب لە مصحەفی گرافیکیدا بگۆڕە"
-                                }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
-                            )
-                        }
-                        Switch(
-                            checked = mushafDarkMode,
-                            onCheckedChange = {
-                                mushafDarkMode = it
-                                if (it) mushafSepiaMode = false
-                                prefs.edit()
-                                    .putBoolean("mushaf_dark_mode", it)
-                                    .putBoolean("mushaf_sepia_mode", mushafSepiaMode)
-                                    .apply()
-                            }
+                        Text(
+                            when (readerSettingsSection) {
+                                "translation" -> if (language == AppLanguage.EN) "Choose the default translation" else if (language == AppLanguage.AR) "اختر الترجمة الافتراضية" else "وەرگێڕانی بنەڕەت هەڵبژێرە"
+                                "tafsir" -> if (language == AppLanguage.EN) "Choose the default tafsir" else if (language == AppLanguage.AR) "اختر التفسير الافتراضي" else "تەفسیری بنەڕەت هەڵبژێرە"
+                                "reciters" -> if (language == AppLanguage.EN) "Choose the reciter and playback mode" else if (language == AppLanguage.AR) "اختر القارئ وطريقة التشغيل" else "قورئان‌خوێن و شێوازی لێدان هەڵبژێرە"
+                                "appearance" -> if (language == AppLanguage.EN) "Mushaf appearance and gestures" else if (language == AppLanguage.AR) "مظهر المصحف والإيماءات" else "ڕووکاری مصحەف و جووڵەکان"
+                                else -> if (language == AppLanguage.EN) "Options grouped by task" else if (language == AppLanguage.AR) "خيارات مرتبة حسب الوظيفة" else "هەڵبژاردەکان بەپێی ئەرک ڕێکخراون"
+                            },
+                            color = foreground.copy(alpha = 0.62f), fontSize = 11.sp
                         )
                     }
-                    Spacer(Modifier.height(9.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
+                    TextButton(onClick = { showReaderSettings = false; readerSettingsSection = "overview" }) {
+                        Text("×", color = Gold, fontSize = 25.sp)
+                    }
+                }
+                Spacer(Modifier.height(9.dp))
+                Divider(color = Gold.copy(alpha = 0.25f))
+                Spacer(Modifier.height(11.dp))
+                when (readerSettingsSection) {
+                    "overview" -> {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Open a section to change just those options. Your choices are saved on this device."
+                                AppLanguage.AR -> "افتح القسم المطلوب لتعديل خياراته فقط. تُحفظ اختياراتك على هذا الجهاز."
+                                AppLanguage.CKB -> "بەشێک بکەرەوە بۆ ڕێکخستنی هەڵبژاردەکانی. هەڵبژاردەکانت لەم مۆبایلەدا دەپارێزرێن."
+                            }, color = foreground.copy(alpha = 0.65f), fontSize = 12.sp, lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        val categories = listOf(
+                            Triple("appearance",
+                                (if (language == AppLanguage.EN) "Mushaf & reading appearance" else if (language == AppLanguage.AR) "المصحف ومظهر القراءة" else "مصحەف و ڕووکاری خوێندنەوە") to
+                                (if (language == AppLanguage.EN) "Night mode, warm paper, text size and gestures" else if (language == AppLanguage.AR) "الوضع الليلي والورق الدافئ وحجم النص والإيماءات" else "دۆخی شەوانە، کاغەزی گەرم، قەبارەی دەق و جووڵەکان"),
+                                Icons.Outlined.AutoStories),
+                            Triple("translation",
+                                (if (language == AppLanguage.EN) "Translations" else if (language == AppLanguage.AR) "الترجمات" else "وەرگێڕانەکان") to
+                                (if (language == AppLanguage.EN) "Choose the translation shown with an ayah" else if (language == AppLanguage.AR) "اختر الترجمة التي تظهر مع الآية" else "وەرگێڕانی هاوڕێی ئایەت هەڵبژێرە"),
+                                Icons.Outlined.Language),
+                            Triple("tafsir",
+                                (if (language == AppLanguage.EN) "Tafsir" else if (language == AppLanguage.AR) "التفسير" else "تەفسیر") to
+                                (if (language == AppLanguage.EN) "Choose the commentary opened for an ayah" else if (language == AppLanguage.AR) "اختر التفسير الذي يفتح عند اختيار الآية" else "تەفسیری ئایەت هەڵبژێرە"),
+                                Icons.Outlined.MenuBook),
+                            Triple("reciters",
+                                (if (language == AppLanguage.EN) "Reciter & playback mode" else if (language == AppLanguage.AR) "القارئ وطريقة التشغيل" else "قورئان‌خوێن و شێوازی لێدان") to
+                                (if (language == AppLanguage.EN) "Verse-by-verse or full-surah recordings" else if (language == AppLanguage.AR) "تسجيل آية بآية أو السورة كاملة" else "تۆماری ئایەت بە ئایەت یان سوورەتی تەواو"),
+                                Icons.Outlined.GraphicEq)
+                        )
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 4.dp)) {
+                            items(categories, key = { it.first }) { category ->
+                                ReaderSettingsCategoryCard(category.second.first, category.second.second, category.third, foreground, cardColor) {
+                                    readerSettingsSection = category.first
+                                }
+                            }
+                            item {
+                                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.16f))) {
+                                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+                                        Icon(Icons.Outlined.Info, null, tint = Gold, modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(if (language == AppLanguage.EN) "Mushaf editions & Tajweed" else if (language == AppLanguage.AR) "طبعات المصحف والتجويد" else "چاپەکانی مصحەف و تەجوید", color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                if (language == AppLanguage.EN) "This build contains the original 604-page Mushaf. Extra editions and colored Tajweed need verified source files; no inactive switches are shown."
+                                                else if (language == AppLanguage.AR) "تتضمن هذه النسخة المصحف الأصلي ذا 604 صفحات. تحتاج الطبعات الإضافية والتجويد الملوّن إلى ملفات مصدر موثوقة؛ لن تظهر مفاتيح لا تعمل."
+                                                else "ئەم وەشانە مصحەفی ڕەسەنی ٦٠٤ پەڕەی تێدایە. چاپی زیاتر و تەجویدی ڕەنگاوڕەنگ پێویستیان بە فایلە پشتڕاستکراوەکانە؛ دوگمەی بێ‌کارکردن نیشان نادرێت.",
+                                                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "translation" -> {
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(ContentRepository.quranTranslations, key = { "reader-translation-" + it.id }) { choice ->
+                                val label = when (language) { AppLanguage.CKB -> choice.ckb; AppLanguage.AR -> choice.arabic; AppLanguage.EN -> choice.english }
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable { translationKey = choice.id; prefs.edit().putString("quran_translation", choice.id).apply() },
+                                    colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp),
+                                    border = BorderStroke(1.dp, if (translationKey == choice.id) Gold else Gold.copy(alpha = 0.12f))
+                                ) {
+                                    Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(label, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            if (translationKey == choice.id) Text(if (language == AppLanguage.EN) "Selected" else if (language == AppLanguage.AR) "محددة" else "هەڵبژێردراوە", color = Gold, fontSize = 10.sp)
+                                        }
+                                        RadioButton(selected = translationKey == choice.id, onClick = { translationKey = choice.id; prefs.edit().putString("quran_translation", choice.id).apply() })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "tafsir" -> {
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(ContentRepository.tafsirBooks, key = { "reader-tafsir-" + it.id }) { book ->
+                                val label = when (language) { AppLanguage.CKB -> book.labelCkb; AppLanguage.AR -> book.labelAr; AppLanguage.EN -> book.labelEn }
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable { selectedTafsirBook = book.id; prefs.edit().putString("quran_tafsir_book", book.id).apply() },
+                                    colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp),
+                                    border = BorderStroke(1.dp, if (selectedTafsirBook == book.id) Gold else Gold.copy(alpha = 0.12f))
+                                ) {
+                                    Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(label, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            if (selectedTafsirBook == book.id) Text(if (language == AppLanguage.EN) "Selected" else if (language == AppLanguage.AR) "محدد" else "هەڵبژێردراوە", color = Gold, fontSize = 10.sp)
+                                        }
+                                        RadioButton(selected = selectedTafsirBook == book.id, onClick = { selectedTafsirBook = book.id; prefs.edit().putString("quran_tafsir_book", book.id).apply() })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "reciters" -> {
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            item {
+                                Text(if (language == AppLanguage.EN) "VERSE-BY-VERSE" else if (language == AppLanguage.AR) "آيةً بآية" else "ئایەت بە ئایەت", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(if (language == AppLanguage.EN) "Per-ayah sources can play from your chosen verse through the end of the surah." else if (language == AppLanguage.AR) "يمكن أن تبدأ المصادر ذات التسجيل المنفصل من الآية المختارة حتى نهاية السورة." else "سەرچاوەی ئایەت بە ئایەت لە ئایەتی هەڵبژێردراوەوە دەخوێنێتەوە تا کۆتایی سوورەت.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
+                                Spacer(Modifier.height(6.dp))
+                            }
+                            items(readerReciters.filter { it.audioType == 0 }, key = { "verse-reciter-" + it.id }) { reciter ->
+                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                    Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
+                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
+                                    }
+                                }
+                            }
+                            item {
+                                Spacer(Modifier.height(5.dp))
+                                Text(if (language == AppLanguage.EN) "FULL-SURAH RECORDINGS" else if (language == AppLanguage.AR) "تسجيلات السورة كاملة" else "تۆمارەکانی سوورەتی تەواو", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(if (language == AppLanguage.EN) "Full-surah sources start from the beginning because separate ayah timestamps are not provided." else if (language == AppLanguage.AR) "تبدأ تسجيلات السورة الكاملة من بدايتها لعدم توفر توقيتات منفصلة للآيات." else "تۆماری تەواوی سوورەت لە سەرەتایەوە دەست پێدەکات، چونکە کاتی جیاوازی ئایەتەکان بەردەست نییە.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
+                                Spacer(Modifier.height(6.dp))
+                            }
+                            items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
+                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                    Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
+                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
+                                    }
+                                }
+                            }
+                            if (readerReciters.isEmpty()) item { Text(tr(language, "loading"), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp) }
+                        }
+                    }
+                    "appearance" -> {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            Text(if (language == AppLanguage.EN) "Included edition: original 604-page Mushaf." else if (language == AppLanguage.AR) "النسخة المضمّنة: المصحف الأصلي ذو 604 صفحات." else "وەشانی بەردەست: مصحەفی ڕەسەنی ٦٠٤ پەڕە.", color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
+                            Spacer(Modifier.height(12.dp))
+                            Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(if (language == AppLanguage.EN) "Night reading mode" else if (language == AppLanguage.AR) "وضع القراءة الليلي" else "دۆخی خوێندنەوەی شەوانە", color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(if (language == AppLanguage.EN) "Invert paper and ink colours" else if (language == AppLanguage.AR) "اعكس لون الورق والحبر" else "ڕەنگی کاغەز و مەرەکەب بگۆڕە", color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
+                                    }
+                                    Switch(checked = mushafDarkMode, onCheckedChange = { mushafDarkMode = it; if (it) mushafSepiaMode = false; prefs.edit().putBoolean("mushaf_dark_mode", it).putBoolean("mushaf_sepia_mode", mushafSepiaMode).apply() })
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(if (language == AppLanguage.EN) "Warm paper / sepia" else if (language == AppLanguage.AR) "الورق الدافئ / سيبيا" else "کاغەزی گەرم / سێپیا", color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(if (language == AppLanguage.EN) "Soft cream tone for long reading" else if (language == AppLanguage.AR) "لون كريمي هادئ للقراءة الطويلة" else "ڕەنگی کرێمی نەرم بۆ خوێندنەوەی درێژ", color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
+                                    }
+                                    Switch(checked = mushafSepiaMode, onCheckedChange = { mushafSepiaMode = it; if (it) mushafDarkMode = false; prefs.edit().putBoolean("mushaf_sepia_mode", it).putBoolean("mushaf_dark_mode", mushafDarkMode).apply() })
+                                }
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Text(if (language == AppLanguage.EN) "VERSE PANEL TEXT SIZE" else if (language == AppLanguage.AR) "حجم خط لوحة الآية" else "قەبارەی دەقی ئایەت", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Slider(value = verseTextScale, onValueChange = { verseTextScale = it; prefs.edit().putFloat("quran_verse_text_scale", it).apply() }, valueRange = 0.8f..1.6f, steps = 7)
+                            Text(String.format(Locale.US, "%.0f%%", verseTextScale * 100f), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                            Spacer(Modifier.height(14.dp))
+                            Divider(color = Gold.copy(alpha = 0.18f))
+                            Spacer(Modifier.height(10.dp))
+                            Text(if (language == AppLanguage.EN) "Gestures" else if (language == AppLanguage.AR) "الإيماءات" else "جووڵەکان", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Warm paper / sepia"
-                                    AppLanguage.AR -> "الورق الدافئ / سيبيا"
-                                    AppLanguage.CKB -> "کاغەزی گەرم / سێپیا"
-                                }, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "A soft cream page tone for long reading"
-                                    AppLanguage.AR -> "لون كريمي هادئ للقراءة الطويلة"
-                                    AppLanguage.CKB -> "ڕەنگێکی کرێمی نەرم بۆ خوێندنەوەی درێژ"
-                                }, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                                if (language == AppLanguage.EN) "Swipe right-to-left for the next Mushaf page, left-to-right for the previous page. Pinch to zoom, drag when zoomed, and double-tap to zoom in or reset."
+                                else if (language == AppLanguage.AR) "اسحب من اليمين إلى اليسار للصفحة التالية، ومن اليسار إلى اليمين للسابقة. قرّب بإصبعين للتكبير، واسحب عند التكبير، واضغط مرتين للتكبير أو إعادة الحجم."
+                                else "بۆ پەڕەی دواتر لە ڕاستەوە بۆ چەپ بسڕەوە، بۆ پەڕەی پێشوو لە چەپەوە بۆ ڕاست. بە دوو پەنجە گەورە بکە و دووجار پەنجە لێبدە بۆ گەورەکردن یان گەڕاندنەوە.",
+                                color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 18.sp
                             )
                         }
-                        Switch(
-                            checked = mushafSepiaMode,
-                            onCheckedChange = {
-                                mushafSepiaMode = it
-                                if (it) mushafDarkMode = false
-                                prefs.edit()
-                                    .putBoolean("mushaf_sepia_mode", it)
-                                    .putBoolean("mushaf_dark_mode", mushafDarkMode)
-                                    .apply()
-                            }
-                        )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        when (language) { AppLanguage.EN -> "VERSE TEXT SIZE"; AppLanguage.AR -> "حجم خط الآية"; AppLanguage.CKB -> "قەبارەی دەقی ئایەت" },
-                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
-                    )
-                    Slider(
-                        value = verseTextScale,
-                        onValueChange = {
-                            verseTextScale = it
-                            prefs.edit().putFloat("quran_verse_text_scale", it).apply()
-                        },
-                        valueRange = 0.8f..1.6f,
-                        steps = 7
-                    )
-                    Text(
-                        String.format(Locale.US, "%.0f%%", verseTextScale * 100f),
-                        color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
-                    )
+                    else -> readerSettingsSection = "overview"
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { showReaderSettings = false }) {
-                Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+                Spacer(Modifier.height(11.dp))
+                Divider(color = Gold.copy(alpha = 0.20f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { showReaderSettings = false; readerSettingsSection = "overview" }) {
+                        Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (readerSettingsSection != "overview") OutlinedButton(onClick = { readerSettingsSection = "overview" }) {
+                        Text(if (language == AppLanguage.EN) "All settings" else if (language == AppLanguage.AR) "كل الإعدادات" else "هەموو ڕێکخستنەکان")
+                    }
+                }
             }
         }
-    )
+    }
 
     if (selectedAyahForSheet != null) {
         ModalBottomSheet(
@@ -1099,7 +1154,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
                         )
                     }
-                    TextButton(onClick = { showReaderSettings = true }) { Text("⚙", color = Gold, fontSize = 22.sp) }
+                    TextButton(onClick = { readerSettingsSection = "overview"; showReaderSettings = true }) { Text("⚙", color = Gold, fontSize = 22.sp) }
                 }
                 Spacer(Modifier.height(11.dp))
                 when {
@@ -1158,8 +1213,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         scope.launch {
                                             val reciters = ContentRepository.loadReciters(context)
                                             val savedId = prefs.getInt("preferred_reciter_id", -1)
-                                            val chosen = reciters.firstOrNull { it.id == savedId && it.audioType == 0 }
+                                            val chosen = reciters.firstOrNull { it.id == savedId }
                                                 ?: reciters.firstOrNull { it.audioType == 0 }
+                                                ?: reciters.firstOrNull()
                                             if (chosen == null) {
                                                 Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
                                             } else {
@@ -1216,7 +1272,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             item {
                                 FilterChip(
-                                    selected = false, onClick = { showReaderSettings = true },
+                                    selected = false, onClick = { readerSettingsSection = "overview"; showReaderSettings = true },
                                     label = { Text(if (language == AppLanguage.EN) "Translation / tafsir" else if (language == AppLanguage.AR) "الترجمة / التفسير" else "وەرگێڕان / تەفسیر", fontSize = 10.sp) }
                                 )
                             }
@@ -1339,6 +1395,11 @@ private fun MushafPageViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val pageReveal = remember { Animatable(1f) }
+    LaunchedEffect(page) {
+        pageReveal.snapTo(0.94f)
+        pageReveal.animateTo(1f, animationSpec = tween(220))
+    }
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
@@ -1437,7 +1498,19 @@ private fun MushafPageViewer(
             IconButton(
                 onClick = {
                     val target = selectedVerse ?: pageVerses.firstOrNull()
-                    if (target != null) onBookmarkVerse(target.surah, target.ayah)
+                    if (target != null) {
+                        onBookmarkVerse(target.surah, target.ayah)
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        Toast.makeText(
+                            context,
+                            when (language) {
+                                AppLanguage.EN -> "Bookmark saved for " + target.surah + ":" + target.ayah
+                                AppLanguage.AR -> "حُفظت علامة للآية " + target.surah + ":" + target.ayah
+                                AppLanguage.CKB -> "ئایەت نیشانە کرا " + target.surah + ":" + target.ayah
+                            },
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 },
                 enabled = !loading && pageVerses.isNotEmpty(),
                 modifier = Modifier.size(42.dp)
@@ -1501,7 +1574,7 @@ private fun MushafPageViewer(
                                 translationX = offsetX
                                 translationY = offsetY
                             }
-                            .transformable(transformState)
+                            .transformable(transformState, canPan = { scale > 1.01f })
                             .pointerInput(page, scale) {
                                 var dragTotal = 0f
                                 detectHorizontalDragGestures(
@@ -1511,8 +1584,15 @@ private fun MushafPageViewer(
                                     },
                                     onDragEnd = {
                                         if (scale <= 1.01f) {
-                                            if (dragTotal < -72f && page < 604) onPageChange(page + 1)
-                                            else if (dragTotal > 72f && page > 1) onPageChange(page - 1)
+                                            val nextPage = when {
+                                                dragTotal < -72f && page < 604 -> page + 1
+                                                dragTotal > 72f && page > 1 -> page - 1
+                                                else -> page
+                                            }
+                                            if (nextPage != page) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                onPageChange(nextPage)
+                                            }
                                         }
                                         dragTotal = 0f
                                     },
@@ -1562,7 +1642,11 @@ private fun MushafPageViewer(
                                 sepiaMode -> ColorFilter.colorMatrix(MushafSepiaColorMatrix)
                                 else -> null
                             },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                alpha = pageReveal.value
+                                scaleX = 0.985f + pageReveal.value * 0.015f
+                                scaleY = 0.985f + pageReveal.value * 0.015f
+                            }
                         )
                         if (verseRects.isNotEmpty()) {
                             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
@@ -3032,13 +3116,8 @@ fun AudioScreen(
         // The Quran's play control must do useful work on first use. When a
         // user has not chosen a favourite yet, use the first available
         // verse-by-verse source and persist it like an explicit selection.
-        if (preferredReciterId < 0) {
-            loadedReciters.firstOrNull { it.audioType == 0 }?.let { firstAvailable ->
-                preferredReciterId = firstAvailable.id
-                prefs.edit().putInt("preferred_reciter_id", firstAvailable.id).apply()
-            }
-        } else if (loadedReciters.none { it.id == preferredReciterId && it.audioType == 0 }) {
-            loadedReciters.firstOrNull { it.audioType == 0 }?.let { firstAvailable ->
+        if (preferredReciterId < 0 || loadedReciters.none { it.id == preferredReciterId }) {
+            (loadedReciters.firstOrNull { it.audioType == 0 } ?: loadedReciters.firstOrNull())?.let { firstAvailable ->
                 preferredReciterId = firstAvailable.id
                 prefs.edit().putInt("preferred_reciter_id", firstAvailable.id).apply()
             }
@@ -3046,7 +3125,7 @@ fun AudioScreen(
         loading = false
     }
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
-        val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
+        val preferred = reciters.firstOrNull { it.id == preferredReciterId }
         if (autoPlayRequested && focusReciters && preferred != null && surahs.isNotEmpty()) {
             val surahNumber = initialSurah.coerceIn(1, 114)
             val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
@@ -3204,25 +3283,23 @@ fun AudioScreen(
                                     },
                                     color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
                                 )
-                                if (reciter.audioType == 0) {
-                                    TextButton(
-                                        onClick = {
-                                            preferredReciterId = reciter.id
-                                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                TextButton(
+                                    onClick = {
+                                        preferredReciterId = reciter.id
+                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(25.dp)
+                                ) {
+                                    Text(
+                                        if (preferredReciterId == reciter.id) {
+                                            if (language == AppLanguage.EN) "★ Preferred reciter" else if (language == AppLanguage.AR) "★ القارئ المفضّل" else "★ قورئان‌خوێنی دڵخواز"
+                                        } else {
+                                            if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
                                         },
-                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
-                                        modifier = Modifier.height(25.dp)
-                                    ) {
-                                        Text(
-                                            if (preferredReciterId == reciter.id) {
-                                                if (language == AppLanguage.EN) "★ Preferred reciter" else if (language == AppLanguage.AR) "★ القارئ المفضّل" else "★ قورئان‌خوێنی دڵخواز"
-                                            } else {
-                                                if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
-                                            },
-                                            color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
-                                            fontSize = 9.sp, maxLines = 1
-                                        )
-                                    }
+                                        color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
+                                        fontSize = 9.sp, maxLines = 1
+                                    )
                                 }
                                 Text(
                                     when {
@@ -3241,10 +3318,8 @@ fun AudioScreen(
                                         AudioController.stop()
                                         playing = ""
                                     } else {
-                                        if (reciter.audioType == 0) {
-                                            preferredReciterId = reciter.id
-                                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
-                                        }
+                                        preferredReciterId = reciter.id
+                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
                                         playing = playKey
                                         autoPlayKey = playKey
                                         AudioController.playSequence(context, sources) { state -> if (!state) playing = "" }
