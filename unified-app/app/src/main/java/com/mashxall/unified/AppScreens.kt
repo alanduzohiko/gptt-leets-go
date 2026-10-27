@@ -2858,6 +2858,120 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+
+private fun reciterOfflineFile(context: Context, reciter: Reciter, surah: Int, ayah: Int = 1): File {
+    val reciterDir = File(File(context.filesDir, "reciter-audio"), reciter.id.toString())
+    val chapter = surah.coerceIn(1, 114)
+    return if (reciter.audioType == 0) {
+        File(File(reciterDir, "surah-%03d".format(Locale.US, chapter)), "ayah-%03d.mp3".format(Locale.US, ayah.coerceAtLeast(1)))
+    } else {
+        File(reciterDir, "surah-%03d.mp3".format(Locale.US, chapter))
+    }
+}
+
+private fun isReciterSurahOffline(context: Context, reciter: Reciter, surah: Int, ayahCount: Int): Boolean {
+    if (reciter.audioType != 0) return reciterOfflineFile(context, reciter, surah).let { it.isFile && it.length() > 512L }
+    if (ayahCount < 1) return false
+    return (1..ayahCount).all { ayah ->
+        reciterOfflineFile(context, reciter, surah, ayah).let { it.isFile && it.length() > 512L }
+    }
+}
+
+private fun reciterAudioSequence(
+    context: Context,
+    reciter: Reciter,
+    surah: Int,
+    startingAyah: Int,
+    ayahCount: Int
+): List<String> {
+    if (reciter.audioType != 0) {
+        val local = reciterOfflineFile(context, reciter, surah)
+        return listOf(if (local.isFile && local.length() > 512L) "local:${local.absolutePath}" else ContentRepository.reciterSampleUrl(reciter, surah, 1))
+    }
+    if (ayahCount < 1) return emptyList()
+    val start = startingAyah.coerceIn(1, ayahCount)
+    return (start..ayahCount).map { ayah ->
+        val local = reciterOfflineFile(context, reciter, surah, ayah)
+        if (local.isFile && local.length() > 512L) "local:${local.absolutePath}"
+        else ContentRepository.reciterSampleUrl(reciter, surah, ayah)
+    }
+}
+
+private suspend fun downloadReciterSurah(
+    context: Context,
+    reciter: Reciter,
+    surah: Int,
+    ayahCount: Int,
+    onProgress: (Int, Int) -> Unit
+) = withContext(Dispatchers.IO) {
+    val chapter = surah.coerceIn(1, 114)
+    if (reciter.audioType == 0) {
+        require(ayahCount > 0) { "The source did not provide this surah's verse count." }
+        for (ayah in 1..ayahCount) {
+            val destination = reciterOfflineFile(context, reciter, chapter, ayah)
+            if (!destination.isFile || destination.length() <= 512L) {
+                downloadReciterFile(ContentRepository.reciterSampleUrl(reciter, chapter, ayah), destination)
+            }
+            withContext(Dispatchers.Main) { onProgress(ayah, ayahCount) }
+        }
+    } else {
+        val destination = reciterOfflineFile(context, reciter, chapter)
+        if (!destination.isFile || destination.length() <= 512L) {
+            downloadReciterFile(ContentRepository.reciterSampleUrl(reciter, chapter, 1), destination)
+        }
+        withContext(Dispatchers.Main) { onProgress(1, 1) }
+    }
+}
+
+private fun downloadReciterFile(url: String, destination: File) {
+    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 15_000
+        readTimeout = 60_000
+        instanceFollowRedirects = true
+        setRequestProperty("User-Agent", "Mashxall Android")
+    }
+    val temporary = File(destination.parentFile, destination.name + ".part")
+    try {
+        destination.parentFile?.mkdirs()
+        if (temporary.exists()) temporary.delete()
+        connection.connect()
+        val code = connection.responseCode
+        if (code !in 200..299) throw java.io.IOException("The audio server returned HTTP $code.")
+        if (connection.contentLengthLong > 100L * 1024L * 1024L) {
+            throw java.io.IOException("This audio file is larger than the supported download limit.")
+        }
+        if (connection.contentType.orEmpty().contains("text/html", ignoreCase = true)) {
+            throw java.io.IOException("The audio source returned a web page instead of audio.")
+        }
+        var total = 0L
+        connection.inputStream.use { input ->
+            temporary.outputStream().buffered(64 * 1024).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > 100L * 1024L * 1024L) {
+                        throw java.io.IOException("The audio file exceeded the supported download limit.")
+                    }
+                    output.write(buffer, 0, count)
+                }
+            }
+        }
+        if (total <= 512L || !temporary.isFile) {
+            throw java.io.IOException("The audio source returned an empty or incomplete file.")
+        }
+        if (destination.exists()) destination.delete()
+        if (!temporary.renameTo(destination)) {
+            temporary.copyTo(destination, overwrite = true)
+            temporary.delete()
+        }
+    } finally {
+        if (temporary.exists()) temporary.delete()
+        connection.disconnect()
+    }
+}
+
 @Composable
 fun AudioScreen(
     language: AppLanguage,
@@ -2870,8 +2984,13 @@ fun AudioScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
+    var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
+    var downloadingTracks by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var offlineRevision by remember { mutableIntStateOf(0) }
+    var audioNotice by rememberSaveable { mutableStateOf("") }
     var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
     val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
@@ -2889,21 +3008,21 @@ fun AudioScreen(
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
         reciters = ContentRepository.loadReciters(context)
+        surahs = ContentRepository.loadSurahs(context)
         loading = false
     }
-    LaunchedEffect(reciters, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
+    LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
-        if (autoPlayRequested && focusReciters && preferred != null) {
-            val url = ContentRepository.reciterSampleUrl(
-                preferred,
-                initialSurah.coerceIn(1, 114),
-                initialAyah.coerceAtLeast(1)
-            )
-            val key = "$url|${initialSurah}|${initialAyah}"
-            if (autoPlayKey != key) {
+        if (autoPlayRequested && focusReciters && preferred != null && surahs.isNotEmpty()) {
+            val surahNumber = initialSurah.coerceIn(1, 114)
+            val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
+            val startAyah = initialAyah.coerceIn(1, ayahCount)
+            val sources = reciterAudioSequence(context, preferred, surahNumber, startAyah, ayahCount)
+            val key = "${preferred.id}|${surahNumber}|${startAyah}"
+            if (autoPlayKey != key && sources.isNotEmpty()) {
                 autoPlayKey = key
-                playing = url
-                AudioController.playRemote(context, url) { state ->
+                playing = key
+                AudioController.playSequence(context, sources) { state ->
                     if (!state) playing = ""
                 }
             }
@@ -2933,6 +3052,9 @@ fun AudioScreen(
         }
         Spacer(Modifier.height(7.dp))
         SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
+        if (audioNotice.isNotBlank()) {
+            Text(audioNotice, color = Gold, fontSize = 11.sp, lineHeight = 16.sp)
+        }
         if (selectedTab == 0 || selectedTab == 2) {
             val adhanKeywords = listOf(
                 "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
@@ -3007,11 +3129,27 @@ fun AudioScreen(
             else if (visibleReciters.isEmpty()) LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visibleReciters, key = { it.id }) { reciter ->
-                    val url = ContentRepository.reciterSampleUrl(
-                        reciter,
-                        surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1,
-                        ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                    )
+                    val surahNumber = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
+                    val surahAyahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
+                    val startingAyah = ayahText.toIntOrNull()?.coerceIn(1, surahAyahCount.coerceAtLeast(1)) ?: 1
+                    val playKey = "${reciter.id}|${surahNumber}|${startingAyah}"
+                    val downloadKey = "${reciter.id}|${surahNumber}"
+                    val downloadProgress = downloadingTracks[downloadKey]
+                    val localComplete = remember(reciter.id, reciter.audioType, surahNumber, surahAyahCount, offlineRevision) {
+                        isReciterSurahOffline(context, reciter, surahNumber, surahAyahCount)
+                    }
+                    val sources = remember(reciter.id, reciter.audioType, surahNumber, startingAyah, surahAyahCount, offlineRevision) {
+                        reciterAudioSequence(context, reciter, surahNumber, startingAyah, surahAyahCount)
+                    }
+                    val playLabel = if (reciter.audioType == 0) {
+                        if (language == AppLanguage.EN) "Play from verse $startingAyah to end of surah"
+                        else if (language == AppLanguage.AR) "تشغيل من الآية $startingAyah حتى نهاية السورة"
+                        else "لە ئایەتی $startingAyah تا کۆتایی سوورەت بخوێنەوە"
+                    } else {
+                        if (language == AppLanguage.EN) "Play full surah"
+                        else if (language == AppLanguage.AR) "تشغيل السورة كاملة"
+                        else "خوێندنەوەی تەواوی سوورەت"
+                    }
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
@@ -3022,16 +3160,16 @@ fun AudioScreen(
                                 Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
                                 Text(
-                    when {
-                        reciter.audioType == 0 && language == AppLanguage.EN -> "Verse-by-verse"
-                        reciter.audioType == 0 && language == AppLanguage.AR -> "آية بآية"
-                        reciter.audioType == 0 -> "ئایەت بە ئایەت"
-                        language == AppLanguage.EN -> "Surah audio"
-                        language == AppLanguage.AR -> "صوت السورة"
-                        else -> "دەنگی سوورەت"
-                    },
-                    color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
-                )
+                                    when {
+                                        reciter.audioType == 0 && language == AppLanguage.EN -> "Verse-by-verse • sequence playback"
+                                        reciter.audioType == 0 && language == AppLanguage.AR -> "آية بآية • تشغيل متتابع"
+                                        reciter.audioType == 0 -> "ئایەت بە ئایەت • لێدانی بەردەوام"
+                                        language == AppLanguage.EN -> "Full-surah recording"
+                                        language == AppLanguage.AR -> "تسجيل السورة كاملة"
+                                        else -> "تۆماری تەواوی سوورەت"
+                                    },
+                                    color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
+                                )
                                 if (reciter.audioType == 0) {
                                     TextButton(
                                         onClick = {
@@ -3048,27 +3186,77 @@ fun AudioScreen(
                                                 if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
                                             },
                                             color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
-                                            fontSize = 9.sp,
-                                            maxLines = 1
+                                            fontSize = 9.sp, maxLines = 1
                                         )
                                     }
                                 }
+                                Text(
+                                    when {
+                                        downloadProgress != null -> if (language == AppLanguage.EN) "Downloading audio $downloadProgress" else if (language == AppLanguage.AR) "جارٍ تنزيل الصوت $downloadProgress" else "دەنگ دادەگیرێت $downloadProgress"
+                                        localComplete -> if (language == AppLanguage.EN) "Saved offline • full surah" else if (language == AppLanguage.AR) "محفوظ دون اتصال • السورة كاملة" else "بەبێ ئینتەرنێت پارێزراوە • سوورەتی تەواو"
+                                        else -> if (language == AppLanguage.EN) "Download for offline playback" else if (language == AppLanguage.AR) "تنزيل للتشغيل دون إنترنت" else "داگرتن بۆ لێدان بەبێ ئینتەرنێت"
+                                    },
+                                    color = if (downloadProgress != null || localComplete) Gold else foreground.copy(alpha = 0.55f),
+                                    fontSize = 9.sp, maxLines = 2
+                                )
                             }
-                            IconButton(onClick = {
-                                if (reciter.audioType == 0) {
-                                    preferredReciterId = reciter.id
-                                    prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                            IconButton(
+                                enabled = sources.isNotEmpty(),
+                                onClick = {
+                                    if (playing == playKey) {
+                                        AudioController.stop()
+                                        playing = ""
+                                    } else {
+                                        if (reciter.audioType == 0) {
+                                            preferredReciterId = reciter.id
+                                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                        }
+                                        playing = playKey
+                                        autoPlayKey = playKey
+                                        AudioController.playSequence(context, sources) { state -> if (!state) playing = "" }
+                                    }
                                 }
-                                if (playing == url) {
-                                    AudioController.stop()
-                                    playing = ""
-                                } else {
-                                    playing = url
-                                    autoPlayKey = "$url|${initialSurah}|${initialAyah}"
-                                    AudioController.playRemote(context, url) { state -> if (!state) playing = "" }
+                            ) {
+                                Icon(
+                                    if (playing == playKey) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
+                                    contentDescription = playLabel, tint = Gold, modifier = Modifier.size(29.dp)
+                                )
+                            }
+                            IconButton(
+                                enabled = downloadProgress == null && surahAyahCount > 0,
+                                onClick = {
+                                    if (localComplete) {
+                                        audioNotice = if (language == AppLanguage.EN) "This surah is already saved for offline playback."
+                                            else if (language == AppLanguage.AR) "هذه السورة محفوظة بالفعل للتشغيل دون إنترنت."
+                                            else "ئەم سوورەتە پێشتر بۆ لێدانی بەبێ ئینتەرنێت پارێزراوە."
+                                    } else {
+                                        audioNotice = ""
+                                        downloadingTracks = downloadingTracks + (downloadKey to "0")
+                                        scope.launch {
+                                            try {
+                                                downloadReciterSurah(context, reciter, surahNumber, surahAyahCount) { done, total ->
+                                                    downloadingTracks = downloadingTracks + (downloadKey to "$done/$total")
+                                                }
+                                                offlineRevision++
+                                                audioNotice = if (language == AppLanguage.EN) "${reciter.nameEnglish}: surah ${surahNumber} is saved for offline playback."
+                                                    else if (language == AppLanguage.AR) "تم حفظ السورة ${surahNumber} من ${reciter.nameArabic} للتشغيل دون إنترنت."
+                                                    else "سوورەتی ${surahNumber} بە دەنگی ${reciter.nameArabic} بۆ لێدانی بەبێ ئینتەرنێت پارێزرا."
+                                            } catch (_: Exception) {
+                                                audioNotice = if (language == AppLanguage.EN) "Download failed or the source does not provide every audio file. Check the connection and try again."
+                                                    else if (language == AppLanguage.AR) "تعذّر التنزيل أو أن المصدر لا يوفر كل المقاطع. تحقّق من الاتصال ثم حاول مجددًا."
+                                                    else "داگرتن سەرکەوتوو نەبوو یان هەموو فایلەکان لە سەرچاوەکەدا نیین؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
+                                            } finally {
+                                                downloadingTracks = downloadingTracks - downloadKey
+                                            }
+                                        }
+                                    }
                                 }
-                            }) {
-                                Icon(if (playing == url) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(29.dp))
+                            ) {
+                                when {
+                                    downloadProgress != null -> CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
+                                    localComplete -> Icon(Icons.Outlined.CheckCircle, contentDescription = if (language == AppLanguage.EN) "Saved offline" else if (language == AppLanguage.AR) "محفوظ دون اتصال" else "بەبێ ئینتەرنێت پارێزراوە", tint = Color(0xFF62C995), modifier = Modifier.size(24.dp))
+                                    else -> Icon(Icons.Outlined.Download, contentDescription = if (language == AppLanguage.EN) "Download full surah" else if (language == AppLanguage.AR) "تنزيل السورة كاملة" else "داگرتنی تەواوی سوورەت", tint = Gold, modifier = Modifier.size(24.dp))
+                                }
                             }
                         }
                     }
@@ -3080,11 +3268,74 @@ fun AudioScreen(
 
 private object AudioController {
     private var player: MediaPlayer? = null
+    private var playbackGeneration: Int = 0
 
     fun stop() {
+        playbackGeneration += 1
         try { player?.stop() } catch (_: Exception) {}
         try { player?.release() } catch (_: Exception) {}
         player = null
+    }
+
+    fun playSequence(context: Context, sources: List<String>, callback: (Boolean) -> Unit) {
+        stop()
+        if (sources.isEmpty()) {
+            callback(false)
+            return
+        }
+        val generation = playbackGeneration
+        fun playAt(index: Int) {
+            if (generation != playbackGeneration) return
+            if (index >= sources.size) {
+                callback(false)
+                return
+            }
+            try {
+                val source = sources[index]
+                val next = MediaPlayer()
+                player = next
+                if (source.startsWith("local:")) next.setDataSource(source.removePrefix("local:"))
+                else next.setDataSource(source)
+                next.setOnPreparedListener { prepared ->
+                    if (generation != playbackGeneration) {
+                        runCatching { prepared.release() }
+                        return@setOnPreparedListener
+                    }
+                    prepared.start()
+                    if (index == 0) callback(true)
+                }
+                next.setOnCompletionListener { completed ->
+                    if (generation != playbackGeneration) {
+                        runCatching { completed.release() }
+                        return@setOnCompletionListener
+                    }
+                    runCatching { completed.release() }
+                    if (player === completed) player = null
+                    playAt(index + 1)
+                }
+                next.setOnErrorListener { failed, _, _ ->
+                    runCatching { failed.release() }
+                    if (generation == playbackGeneration) {
+                        player = null
+                        callback(false)
+                        Toast.makeText(
+                            context,
+                            if (languageHint(context) == "en") "A recitation segment could not be played. Check the connection or download the surah." else "تعذر تشغيل مقطع من التلاوة؛ تحقق من الاتصال أو نزّل السورة.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        stop()
+                    }
+                    true
+                }
+                next.prepareAsync()
+            } catch (_: Exception) {
+                if (generation == playbackGeneration) {
+                    callback(false)
+                    stop()
+                }
+            }
+        }
+        playAt(0)
     }
 
     fun play(context: Context, assetPath: String, callback: (Boolean) -> Unit) {
