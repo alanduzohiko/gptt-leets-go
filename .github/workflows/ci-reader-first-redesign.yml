@@ -33,7 +33,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android-validation:
@@ -160,3 +160,19 @@ jobs:
             dist/runtime-test/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish verified APK download
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/redesign/reader-first-mashxall'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="mashxall-android-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" \
+            Mashxall-Redesign-debug.apk apk-sha256.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Mashxall Android 11 build ${GITHUB_RUN_NUMBER}" \
+            --notes "Native Android debug APK built from commit ${GITHUB_SHA}. Unit tests, lint, APK signature/archive verification, and the Android 11 runtime screen checks passed in GitHub Actions." \
+            --prerelease
