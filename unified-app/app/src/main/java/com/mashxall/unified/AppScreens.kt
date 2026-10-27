@@ -1724,7 +1724,7 @@ private fun MushafPageViewer(
                         )
                     },
                     singleLine = true,
-                    keyboardOptions = androidx.compose.ui.text.input.KeyboardOptions(
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                     ),
                     isError = pageInput.isNotBlank() && pageInput.toIntOrNull()?.let { it !in 1..604 } != false,
