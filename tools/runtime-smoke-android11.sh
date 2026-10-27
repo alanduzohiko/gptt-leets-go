@@ -1079,7 +1079,7 @@ if ! grep -Eq 'بەردەوام بە لە خوێندنەوە|متابعة الق
   cat dist/runtime-test/window-home-scrolled.xml
   exit 1
 fi
-resume_coords="$(python3 - dist/runtime-test/window-home.xml <<'PY'
+resume_coords="$(python3 - dist/runtime-test/window-home-scrolled.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -1100,15 +1100,14 @@ for node in root.iter("node"):
 PY
 )"
 if [[ -z "$resume_coords" ]]; then
-  echo "FAIL: Continue reading shortcut has no tappable UI bounds."
-  cat dist/runtime-test/window-home.xml
+  echo "FAIL: Continue reading shortcut has no tappable UI bounds in the scrolled home hierarchy."
+  cat dist/runtime-test/window-home-scrolled.xml
   exit 1
 fi
 read -r resume_x resume_y <<< "$resume_coords"
 adb shell input tap "$resume_x" "$resume_y"
 sleep 7
-adb shell uiautomator dump /sdcard/mashxall-home-resume.xml > dist/runtime-test/uiautomator-home-resume.txt 2>&1 || true
-adb pull /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml dist/runtime-test/uiautomator-home-resume.txt
 if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.xml ||
    ! grep -q '604' dist/runtime-test/window-home-resume.xml; then
   echo "FAIL: Continue reading did not resume the saved 604-page graphic Mushaf."
