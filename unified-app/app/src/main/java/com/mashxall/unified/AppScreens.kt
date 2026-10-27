@@ -130,6 +130,23 @@ import kotlin.math.sin
 import kotlin.math.tan
 
 private val Gold: Color get() = MashxallAppearance.accent
+
+// Do not classify a recitation as adhan merely because its reciter is famous.
+// These terms identify adhan/iqama/mosque audio in the source title, folder or group.
+private val adhanAudioKeywords = listOf(
+    "adhan", "adhān", "athan", "athaan", "athān", "azan", "azaan",
+    "muezzin", "muadhin", "mu'adhin", "mu’adhin", "muazzin", "muazin",
+    "call_to_prayer", "call-to-prayer", "calltoprayer",
+    "mosque", "masjid", "iqama", "iqamah", "takbir", "takbeer"
+)
+
+internal fun isAdhanAudioDescriptor(title: String, assetPath: String, group: String): Boolean {
+    val descriptor = "$title $assetPath $group".lowercase(Locale.ROOT)
+    return adhanAudioKeywords.any { keyword -> descriptor.contains(keyword) }
+}
+
+private fun isAdhanAudio(item: AudioItem): Boolean =
+    isAdhanAudioDescriptor(item.title, item.assetPath, item.group)
 private val PaleGold = Color(0xFFF4E5B4)
 private val DeepGreen = Color(0xFF103D32)
 private val MainText = Color(0xFFF6F2E6)
@@ -3333,15 +3350,11 @@ fun AudioScreen(
             Text(audioNotice, color = Gold, fontSize = 11.sp, lineHeight = 16.sp)
         }
         if (selectedTab == 0 || selectedTab == 2) {
-            val adhanKeywords = listOf(
-                "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
-                "mecca", "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
-                "majid", "mansur", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan"
-            )
             val visibleAudio = audio.filter { item ->
-                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                (selectedTab == 0 || adhanKeywords.any { name.contains(it) }) &&
-                    (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
+                (selectedTab == 0 || isAdhanAudio(item)) &&
+                    (audioQuery.isBlank() ||
+                        (item.title + " " + item.assetPath + " " + item.group)
+                            .contains(audioQuery.trim(), ignoreCase = true))
             }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -4932,28 +4945,36 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val currentLocalDateKey = remember(clockNowMillis) {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNowMillis))
     }
-    val visibleAdhanAssets = remember(adhanAssets, adhanSoundQuery) {
-        if (adhanSoundQuery.isBlank()) adhanAssets else adhanAssets.filter { sound ->
+    val availableAdhanAssets = remember(adhanAssets) {
+        adhanAssets.filter(::isAdhanAudio)
+    }
+    val visibleAdhanAssets = remember(availableAdhanAssets, adhanSoundQuery) {
+        if (adhanSoundQuery.isBlank()) availableAdhanAssets else availableAdhanAssets.filter { sound ->
             (sound.title + " " + sound.group + " " + sound.assetPath)
                 .contains(adhanSoundQuery.trim(), ignoreCase = true)
         }
     }
     LaunchedEffect(Unit) {
-        // Keep the full original audio inventory available; file-name filtering
-        // must never hide an audio asset from the user's explicit selection.
         adhanAssets = ContentRepository.loadAudioItems(context)
-        val preferredKeywords = listOf(
-            "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah", "mecca",
-            "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
-            "mshari", "peshawa", "ramazan", "mansur"
-        )
-        if (adhanAssets.none { it.assetPath == selectedAdhanAsset }) {
-            val recommended = adhanAssets.firstOrNull { sound ->
-                val label = (sound.title + " " + sound.assetPath + " " + sound.group).lowercase(Locale.ROOT)
-                preferredKeywords.any(label::contains)
-            } ?: adhanAssets.firstOrNull()
+        val currentlySelectedIsAdhan = adhanAssets.any {
+            it.assetPath == selectedAdhanAsset && isAdhanAudio(it)
+        }
+        if (!currentlySelectedIsAdhan) {
+            // Never silently schedule a Quran recitation as an adhan. Prefer
+            // a source file explicitly identified as adhan/iqama/mosque audio.
+            val recommended = adhanAssets.firstOrNull(::isAdhanAudio)
             selectedAdhanAsset = recommended?.assetPath.orEmpty()
-            prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
+            val editor = prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset)
+            if (recommended == null && adhanEnabled) {
+                adhanEnabled = false
+                editor.putBoolean("adhan_enabled", false)
+                adhanMessage = when (language) {
+                    AppLanguage.EN -> "No verified adhan sound was found in the bundled audio. Prayer alerts were turned off to avoid playing a Quran recitation as adhan."
+                    AppLanguage.AR -> "لم يُعثر على ملف أذان موثوق ضمن الصوتيات المرفقة؛ أُوقفت التنبيهات لتجنّب تشغيل تلاوة قرآنية بدل الأذان."
+                    AppLanguage.CKB -> "لە فایلە دەنگییە ناوخۆییەکاندا دەنگی بانگی پشتڕاستکراوە نەدۆزرایەوە؛ ئاگادارکردنەوەکان ناچالاک کران بۆ ئەوەی تلاوەی قورئان وەک بانگ پەخش نەکرێت."
+                }
+            }
+            editor.apply()
         }
     }
     LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
