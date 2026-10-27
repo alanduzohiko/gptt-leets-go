@@ -1131,8 +1131,7 @@ if [[ -n "$quran_settings_coords" ]]; then
   read -r quran_settings_x quran_settings_y <<< "$quran_settings_coords"
   adb shell input tap "$quran_settings_x" "$quran_settings_y"
   sleep 4
-  adb shell uiautomator dump /sdcard/mashxall-quran-settings.xml > dist/runtime-test/uiautomator-quran-settings.txt 2>&1 || true
-  adb pull /sdcard/mashxall-quran-settings.xml dist/runtime-test/window-quran-settings.xml >/dev/null 2>&1 || true
+  dump_fresh_hierarchy /sdcard/mashxall-quran-settings.xml dist/runtime-test/window-quran-settings.xml dist/runtime-test/uiautomator-quran-settings.txt
   if ! grep -Eqi 'Translations|الترجمات|وەرگێڕانەکان' dist/runtime-test/window-quran-settings.xml ||
      ! grep -Eqi 'Tafsir|التفسير|تەفسیر' dist/runtime-test/window-quran-settings.xml ||
      ! grep -Eqi 'Reciter|القارئ|قورئان‌خوێن' dist/runtime-test/window-quran-settings.xml ||
