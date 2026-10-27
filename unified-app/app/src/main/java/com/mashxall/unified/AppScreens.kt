@@ -60,6 +60,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
@@ -436,6 +437,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 },
                 onReaderSettings = { showReaderSettings = true },
                 onPlaySurah = { surahNumber, ayahNumber -> onPlayAudio(surahNumber, ayahNumber) },
+                onBookmarkVerse = { surahNumber, ayahNumber -> onBookmark(surahNumber, ayahNumber) },
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -1331,6 +1333,7 @@ private fun MushafPageViewer(
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
     onPlaySurah: (Int, Int) -> Unit,
+    onBookmarkVerse: (Int, Int) -> Unit,
     onVerseClick: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -1411,6 +1414,16 @@ private fun MushafPageViewer(
                 modifier = Modifier.size(42.dp)
             ) {
                 Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play surah" else if (language == AppLanguage.AR) "تشغيل السورة" else "خوێندنەوەی سوورەت", tint = PaleGold, modifier = Modifier.size(25.dp))
+            }
+            IconButton(
+                onClick = {
+                    val target = selectedVerse ?: pageVerses.firstOrNull()
+                    if (target != null) onBookmarkVerse(target.surah, target.ayah)
+                },
+                enabled = !loading && pageVerses.isNotEmpty(),
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(Icons.Outlined.BookmarkBorder, contentDescription = if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت", tint = PaleGold, modifier = Modifier.size(22.dp))
             }
             IconButton(onClick = onReaderSettings, modifier = Modifier.size(42.dp)) {
                 Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = PaleGold, modifier = Modifier.size(23.dp))
@@ -1557,50 +1570,6 @@ private fun MushafPageViewer(
                 }
             }
         }
-        if (pageVerses.isNotEmpty()) {
-            Spacer(Modifier.height(5.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Tap a word in the Mushaf or choose a verse to highlight its original bounds."
-                    AppLanguage.AR -> "اضغط على كلمة في المصحف أو اختر آية لإظهار حدودها الأصلية."
-                    AppLanguage.CKB -> "لەسەر وشەیەک دەست لێبدە یان ئایەتێک هەڵبژێرە بۆ نیشاندانی سنوورە ڕەسەنەکەی."
-                },
-                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
-            )
-            selectedVerse?.let { picked ->
-                Text(
-                    (if (language == AppLanguage.EN) "Highlighted verse: " else if (language == AppLanguage.AR) "الآية المحددة: " else "ئایەتی دیاریکراو: ") + "${picked.surah}:${picked.ayah}",
-                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Verses on this page • ${pageVerses.size}"
-                    AppLanguage.AR -> "آيات هذه الصفحة • ${pageVerses.size}"
-                    AppLanguage.CKB -> "ئایەتەکانی ئەم پەڕەیە • ${pageVerses.size}"
-                },
-                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth()
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(pageVerses, key = { "${it.surah}:${it.ayah}" }) { verse ->
-                    FilterChip(
-                        selected = selectedVerse == verse,
-                        onClick = {
-                            selectedVerse = verse
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onVerseClick(verse.surah, verse.ayah)
-                        },
-                        label = { Text("${verse.surah}:${verse.ayah}", fontSize = 10.sp) },
-                        leadingIcon = { Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(13.dp)) }
-                    )
-                }
-            }
-        }
-        Text(tr(language, "mushaf_offline"), color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -4635,9 +4604,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 Text(
                     if (gpsLatitude != null) {
                         when (language) {
-                            AppLanguage.EN -> "Nearby original city timetables are used when available; otherwise times are calculated from GPS coordinates."
-                            AppLanguage.AR -> "يُستخدم جدول المدينة الأصلية القريبة عند توفره، وإلا تُحسب المواقيت من إحداثيات GPS."
-                            AppLanguage.CKB -> "خشتەی شاری نزیک بەکاردێت ئەگەر هەبێت؛ ئەگەرنا کاتەکان بە کۆئۆردیناتی GPS حساب دەکرێن."
+                            AppLanguage.EN -> "Only verified original Salawati timetables are shown. If no supported timetable is nearby, Mashxall reports that honestly instead of guessing."
+                            AppLanguage.AR -> "يعرض التطبيق جداول صلواتي الأصلية الموثوقة فقط. وإذا لم يوجد جدول مدعوم قريب، فسيُظهر ذلك بدل تخمين المواقيت."
+                            AppLanguage.CKB -> "تەنها خشتە ڕەسەن و پشتڕاستکراوەکانی صەڵەواتی پیشان دەدرێن؛ ئەگەر خشتەیەکی پشتگیریکراوی نزیک نەبێت، ئەوە ڕوون دەکرێتەوە و کات ناخرێتەوە."
                         }
                     } else {
                         when (language) {
