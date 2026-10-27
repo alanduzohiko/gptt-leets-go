@@ -1405,6 +1405,25 @@ private fun MushafPageViewer(
                 Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                 Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 10.sp)
             }
+            val toolbarVerse = selectedVerse ?: pageVerses.firstOrNull()
+            TextButton(
+                onClick = {
+                    toolbarVerse?.let { target ->
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onVerseClick(target.surah, target.ayah)
+                    }
+                },
+                enabled = !loading && toolbarVerse != null,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                modifier = Modifier.height(40.dp)
+            ) {
+                Text(
+                    toolbarVerse?.let { "${it.surah}:${it.ayah}" } ?: "—",
+                    color = if (toolbarVerse != null) PaleGold else Color.Gray,
+                    fontSize = 9.sp,
+                    maxLines = 1
+                )
+            }
             IconButton(
                 onClick = {
                     val target = pageVerses.firstOrNull()
@@ -5288,16 +5307,38 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         }
     }
     LaunchedEffect(Unit) {
-        if (gpsLatitude == null || gpsLongitude == null) {
-            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            if (fine || coarse) {
-                locating = true
-                requestCurrentLocation(context, onFix, onLocationError)
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            // A fresh fix is requested on entry so Qibla does not keep pointing
+            // from stale coordinates saved before the user moved.
+            locating = true
+            locationMessage = ""
+            requestCurrentLocation(context, onFix, onLocationError)
+        } else {
+            // When location permission was revoked, use the explicitly saved
+            // city instead of continuing to trust stale GPS coordinates.
+            gpsLatitude = null
+            gpsLongitude = null
+            prefs.edit().remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy").apply()
+            if (manualLatitude == null || manualLongitude == null) {
+                if (selectedCity.isBlank()) {
+                    qiblaPermissionLauncher.launch(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    )
+                } else {
+                    locationMessage = when (language) {
+                        AppLanguage.EN -> "Using the saved city because current location is unavailable."
+                        AppLanguage.AR -> "يُستخدم موقع المدينة المحفوظة لأن الموقع الحالي غير متاح."
+                        AppLanguage.CKB -> "چونکە شوێنی ئێستا بەردەست نییە، شوێنی شاری پاشەکەوتکراو بەکاردێت."
+                    }
+                }
             } else {
-                qiblaPermissionLauncher.launch(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                )
+                locationMessage = when (language) {
+                    AppLanguage.EN -> "Using the saved city because current location permission is off."
+                    AppLanguage.AR -> "يُستخدم موقع المدينة المحفوظة لأن إذن الموقع متوقف."
+                    AppLanguage.CKB -> "بەهۆی ناچالاکبوونی مۆڵەتی شوێنەوە، شوێنی شاری پاشەکەوتکراو بەکاردێت."
+                }
             }
         }
     }
