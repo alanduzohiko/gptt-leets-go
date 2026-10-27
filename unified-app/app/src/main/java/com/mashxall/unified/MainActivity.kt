@@ -711,6 +711,12 @@ internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boo
     return String.format(Locale.US, "%d:%s %s", hour12, minute, marker)
 }
 
+internal fun shouldClearSavedGpsFix(
+    hasLocationPermission: Boolean,
+    latitude: Double?,
+    longitude: Double?
+): Boolean = !hasLocationPermission && (latitude != null || longitude != null)
+
 @Composable
 private fun HomeScreen(
     language: AppLanguage,
@@ -820,13 +826,31 @@ private fun HomeScreen(
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasLocationPermission = fine || coarse
+        if (shouldClearSavedGpsFix(hasLocationPermission, gpsLatitude, gpsLongitude)) {
+            // A saved coordinate is not the "current location" after the user
+            // revokes Android's location permission. Fall back to the saved city
+            // timetable rather than silently showing a stale GPS position.
+            gpsLatitude = null
+            gpsLongitude = null
+            prefs.edit()
+                .remove("gps_latitude")
+                .remove("gps_longitude")
+                .remove("gps_accuracy")
+                .apply()
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Location permission is off; showing the selected city instead."
+                AppLanguage.AR -> "إذن الموقع متوقف؛ ستُعرض مواقيت المدينة المختارة بدل الموقع القديم."
+                AppLanguage.CKB -> "مۆڵەتی شوێن ناچالاکە؛ کاتی شاری هەڵبژێردراو پیشان دەدرێت، نەک شوێنی کۆن."
+            }
+        }
         if (gpsLatitude == null || gpsLongitude == null) {
-            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
-            if (fine || coarse) {
-                // A stale/empty saved fix should not silently leave the app on a
-                // hard-coded city. Reacquire the real device location instead.
+            if (hasLocationPermission) {
+                // The permission is available but no current fix is stored:
+                // reacquire it instead of falling back to a hard-coded city.
                 requestHomeLocation()
             } else if (!previouslyPrompted) {
                 prefs.edit().putBoolean("prayer_location_prompted", true).apply()

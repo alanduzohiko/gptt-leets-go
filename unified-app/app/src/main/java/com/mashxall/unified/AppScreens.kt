@@ -4892,6 +4892,24 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
 
     LaunchedEffect(Unit) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (shouldClearSavedGpsFix(fine || coarse, gpsLatitude, gpsLongitude)) {
+            // Do not treat old coordinates as a live fix after permission revocation.
+            gpsLatitude = null
+            gpsLongitude = null
+            gpsAccuracy = null
+            prefs.edit()
+                .remove("gps_latitude")
+                .remove("gps_longitude")
+                .remove("gps_accuracy")
+                .apply()
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Location permission is off; using the selected city until you enable it again."
+                AppLanguage.AR -> "إذن الموقع متوقف؛ ستُستخدم المدينة المختارة حتى تفعيل الإذن مجددًا."
+                AppLanguage.CKB -> "مۆڵەتی شوێن ناچالاکە؛ تا چالاککردنەوەی مۆڵەت، شاری هەڵبژێردراو بەکاردێت."
+            }
+        }
         val alreadyAsked = prefs.getBoolean("prayer_location_prompted", false)
         if (!alreadyAsked && gpsLatitude == null && gpsLongitude == null) {
             prefs.edit().putBoolean("prayer_location_prompted", true).apply()
