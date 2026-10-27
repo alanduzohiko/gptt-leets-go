@@ -220,7 +220,7 @@ private fun ReaderSettingsCategoryCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}, onOpenPdf: (String) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -244,6 +244,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
     var readerSettingsSection by rememberSaveable { mutableStateOf("overview") }
+    var tajwidGuidePath by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        tajwidGuidePath = runCatching {
+            ContentRepository.loadPdfPaths(context).firstOrNull { path ->
+                val normalized = path.lowercase(Locale.ROOT)
+                normalized.contains("tajwid") ||
+                    normalized.contains("tajweed") ||
+                    normalized.contains("tajwīd") ||
+                    normalized.contains("تجويد")
+            }
+        }.getOrNull()
+    }
     LaunchedEffect(openSettingsOnEntry) {
         if (openSettingsOnEntry) {
             readerSettingsSection = "overview"
@@ -1014,17 +1026,42 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                             item {
                                 Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.16f))) {
-                                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-                                        Icon(Icons.Outlined.Info, null, tint = Gold, modifier = Modifier.size(20.dp))
-                                        Spacer(Modifier.width(10.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(if (language == AppLanguage.EN) "Mushaf editions & Tajweed" else if (language == AppLanguage.AR) "طبعات المصحف والتجويد" else "چاپەکانی مصحەف و تەجوید", color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                            Text(
-                                                if (language == AppLanguage.EN) "This build contains the original 604-page Mushaf. Extra editions and colored Tajweed need verified source files; no inactive switches are shown."
-                                                else if (language == AppLanguage.AR) "تتضمن هذه النسخة المصحف الأصلي ذا 604 صفحات. تحتاج الطبعات الإضافية والتجويد الملوّن إلى ملفات مصدر موثوقة؛ لن تظهر مفاتيح لا تعمل."
-                                                else "ئەم وەشانە مصحەفی ڕەسەنی ٦٠٤ پەڕەی تێدایە. چاپی زیاتر و تەجویدی ڕەنگاوڕەنگ پێویستیان بە فایلە پشتڕاستکراوەکانە؛ دوگمەی بێ‌کارکردن نیشان نادرێت.",
-                                                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
-                                            )
+                                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(verticalAlignment = Alignment.Top) {
+                                            Icon(Icons.Outlined.Info, null, tint = Gold, modifier = Modifier.size(20.dp))
+                                            Spacer(Modifier.width(10.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(if (language == AppLanguage.EN) "Mushaf editions & Tajweed" else if (language == AppLanguage.AR) "طبعات المصحف والتجويد" else "چاپەکانی مصحەف و تەجوید", color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                                Text(
+                                                    if (tajwidGuidePath != null) {
+                                                        if (language == AppLanguage.EN) "The original 604-page Mushaf is included. A source Tajweed learning guide is available below; it is not a second Mushaf or a colored Tajweed layer inside the page."
+                                                        else if (language == AppLanguage.AR) "المصحف الأصلي ذو 604 صفحات متاح. يوجد أدناه دليل تعليمي للتجويد من ملفات المصدر؛ وهو ليس مصحفًا ثانيًا ولا طبقة تجويد ملوّنة داخل الصفحات."
+                                                        else "مصحەفی ڕەسەنی ٦٠٤ پەڕە بەردەستە. لە خوارەوە ڕێنمای فێرکاری تەجوید لە فایلەکانی سەرچاوە هەیە؛ ئەمە مصحەفێکی دووەم یان چینێکی تەجویدی ڕەنگاوڕەنگ لە ناو پەڕەکاندا نییە."
+                                                    } else {
+                                                        if (language == AppLanguage.EN) "This build contains the original 604-page Mushaf. Extra editions and colored Tajweed need verified source files; no inactive switches are shown."
+                                                        else if (language == AppLanguage.AR) "تتضمن هذه النسخة المصحف الأصلي ذا 604 صفحات. تحتاج الطبعات الإضافية والتجويد الملوّن إلى ملفات مصدر موثوقة؛ لن تظهر مفاتيح لا تعمل."
+                                                        else "ئەم وەشانە مصحەفی ڕەسەنی ٦٠٤ پەڕەی تێدایە. چاپی زیاتر و تەجویدی ڕەنگاوڕەنگ پێویستیان بە فایلە پشتڕاستکراوەکانە؛ دوگمەی بێ‌کارکردن نیشان نادرێت."
+                                                    },
+                                                    color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
+                                                )
+                                            }
+                                        }
+                                        tajwidGuidePath?.let { guidePath ->
+                                            OutlinedButton(
+                                                onClick = { onOpenPdf(guidePath) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(17.dp))
+                                                Spacer(Modifier.width(7.dp))
+                                                Text(
+                                                    when (language) {
+                                                        AppLanguage.EN -> "Open Tajweed guide"
+                                                        AppLanguage.AR -> "فتح دليل التجويد"
+                                                        AppLanguage.CKB -> "دلیلی تەجوید بکەرەوە"
+                                                    },
+                                                    fontSize = 11.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }
