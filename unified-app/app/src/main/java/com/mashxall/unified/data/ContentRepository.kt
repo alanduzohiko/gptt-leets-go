@@ -2181,7 +2181,7 @@ object ContentRepository {
             .replace(Regex("[-._]+"), " ")
             .split(Regex("\\s+"))
             .filter { it.isNotBlank() }
-            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase(Locale.ROOT) } }
+            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
 
 
     fun reciterSampleUrl(reciter: Reciter, surah: Int, ayah: Int): String {
