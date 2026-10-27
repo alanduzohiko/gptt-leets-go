@@ -1464,15 +1464,31 @@ object ContentRepository {
         val pageLimit = limit.coerceIn(20, 300)
         val pattern = "%$term%"
         val where = if (term.isBlank()) {
+            // First-open results deliberately prioritise Iraqi Kurdistan instead
+            // of filling the limited picker with unrelated Iraqi cities. Typing
+            // a search still searches the full Salawati location catalogue.
             """
             (
-                lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%'
-                OR lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
-                OR lower(l.name) LIKE '%halabja%' OR lower(l.name) LIKE '%erbil%'
-                OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%kirkuk%'
-                OR lower(l.name) LIKE '%baghdad%' OR lower(l.name) LIKE '%duhok%'
-                OR lower(l.name) LIKE '%mosul%' OR lower(l.name) LIKE '%basra%'
-                OR lower(l.name) LIKE '%najaf%' OR lower(l.name) LIKE '%karbala%'
+                (lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%')
+                AND (
+                    lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
+                    OR lower(l.name) LIKE '%silêmanî%' OR lower(l.name) LIKE '%slêmanî%'
+                    OR lower(l.name) LIKE '%halabja%' OR lower(l.name) LIKE '%erbil%'
+                    OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%duhok%'
+                    OR lower(l.name) LIKE '%dohuk%' OR lower(l.name) LIKE '%zaxo%'
+                    OR lower(l.name) LIKE '%zakho%' OR lower(l.name) LIKE '%rania%'
+                    OR lower(l.name) LIKE '%ranya%' OR lower(l.name) LIKE '%chamchamal%'
+                    OR lower(l.name) LIKE '%koya%' OR lower(l.name) LIKE '%koysinjaq%'
+                    OR lower(l.name) LIKE '%shaqlawa%' OR lower(l.name) LIKE '%soran%'
+                    OR lower(l.name) LIKE '%akre%' OR lower(l.name) LIKE '%aqra%'
+                    OR lower(l.name) LIKE '%qaradagh%' OR lower(l.name) LIKE '%karadagh%'
+                    OR lower(l.name) LIKE '%darbandikhan%' OR lower(l.name) LIKE '%penjwen%'
+                    OR lower(l.name) LIKE '%sidakan%' OR lower(l.name) LIKE '%kalak%'
+                    OR lower(l.name) LIKE '%dukan%' OR lower(l.name) LIKE '%qaladze%'
+                    OR lower(l.name) LIKE '%qaladiza%' OR lower(l.name) LIKE '%sharbazher%'
+                    OR lower(l.name) LIKE '%harir%' OR lower(l.name) LIKE '%barzan%'
+                    OR lower(l.name) LIKE '%barderash%' OR lower(l.name) LIKE '%kirkuk%'
+                )
             )
             """.trimIndent()
         } else "(l.name LIKE ? OR country.name LIKE ?)"
