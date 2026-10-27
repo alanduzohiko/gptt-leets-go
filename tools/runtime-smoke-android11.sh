@@ -18,6 +18,30 @@ adb() {
 
 adb wait-for-device
 
+# Never let a failed UIAutomator dump reuse stale XML from a previous screen.
+dump_fresh_hierarchy() {
+  local remote_path="$1"
+  local local_path="$2"
+  local diagnostic_path="$3"
+  local attempt
+  rm -f "$local_path"
+  for attempt in 1 2 3; do
+    adb shell rm -f "$remote_path" >/dev/null 2>&1 || true
+    if adb shell uiautomator dump "$remote_path" > "$diagnostic_path" 2>&1 &&
+       adb pull "$remote_path" "$local_path" > "$diagnostic_path.pull" 2>&1 &&
+       test -s "$local_path"; then
+      return 0
+    fi
+    rm -f "$local_path"
+    sleep 2
+    adb wait-for-device >/dev/null 2>&1 || true
+  done
+  echo "FAIL: could not obtain a fresh UI hierarchy at $local_path."
+  cat "$diagnostic_path" 2>/dev/null || true
+  cat "$diagnostic_path.pull" 2>/dev/null || true
+  return 1
+}
+
 # On slow Android 11 CI emulators, sys.boot_completed may become 1 before
 # PackageManager's Binder service is registered. Confirm that package queries
 # actually work before using adb install, and collect useful diagnostics if it
@@ -312,8 +336,7 @@ fi
 # Confirm the direction and operation of finger swipes on the actual Mushaf image.
 adb shell input swipe 900 800 180 800 350
 sleep 4
-adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-forward.xml > dist/runtime-test/uiautomator-mushaf-swipe-forward.txt 2>&1 || true
-adb pull /sdcard/mashxall-mushaf-swipe-forward.xml dist/runtime-test/window-mushaf-swipe-forward.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-mushaf-swipe-forward.xml dist/runtime-test/window-mushaf-swipe-forward.xml dist/runtime-test/uiautomator-mushaf-swipe-forward.txt
 if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+2[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-forward.xml; then
   echo "FAIL: right-to-left swipe did not advance the Mushaf from page 1 to page 2."
   cat dist/runtime-test/window-mushaf-swipe-forward.xml
@@ -323,14 +346,15 @@ echo "PASS: right-to-left finger swipe advances the Mushaf to page 2."
 
 adb shell input swipe 180 800 900 800 350
 sleep 4
-adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-back.xml > dist/runtime-test/uiautomator-mushaf-swipe-back.txt 2>&1 || true
-adb pull /sdcard/mashxall-mushaf-swipe-back.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
-if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml; then
-  echo "FAIL: left-to-right swipe did not return the Mushaf from page 2 to page 1."
+dump_fresh_hierarchy /sdcard/mashxall-mushaf-swipe-back.xml dist/runtime-test/window-mushaf-fullscreen.xml dist/runtime-test/uiautomator-mushaf-swipe-back.txt
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   ! grep -Eqi 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   grep -Eqi 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: return swipe did not leave the live app on fullscreen Mushaf page 1."
   cat dist/runtime-test/window-mushaf-fullscreen.xml
   exit 1
 fi
-echo "PASS: left-to-right finger swipe returns to page 1."
+echo "PASS: return swipe yields a fresh fullscreen page 1 hierarchy."
 
 # The page number on the single top bar should open a validated page-jump dialog.
 page_label_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
@@ -360,8 +384,7 @@ fi
 read -r page_label_x page_label_y <<< "$page_label_coords"
 adb shell input tap "$page_label_x" "$page_label_y"
 sleep 2
-adb shell uiautomator dump /sdcard/mashxall-page-jump-dialog.xml > dist/runtime-test/uiautomator-page-jump-dialog.txt 2>&1 || true
-adb pull /sdcard/mashxall-page-jump-dialog.xml dist/runtime-test/window-page-jump-dialog.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-page-jump-dialog.xml dist/runtime-test/window-page-jump-dialog.xml dist/runtime-test/uiautomator-page-jump-dialog.txt
 if ! grep -Eqi 'Go to Mushaf page|الانتقال إلى صفحة في المصحف|بڕۆ بۆ پەڕەیەکی مصحەف' dist/runtime-test/window-page-jump-dialog.xml; then
   echo "FAIL: tapping the page indicator did not open the direct page-jump dialog."
   cat dist/runtime-test/window-page-jump-dialog.xml
@@ -369,14 +392,24 @@ if ! grep -Eqi 'Go to Mushaf page|الانتقال إلى صفحة في المص
 fi
 adb shell input keyevent 4
 sleep 2
-adb shell uiautomator dump /sdcard/mashxall-page-jump-dismissed.xml > dist/runtime-test/uiautomator-page-jump-dismissed.txt 2>&1 || true
-adb pull /sdcard/mashxall-page-jump-dismissed.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
-if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml; then
-  echo "FAIL: dismissing the page-jump dialog did not return to the same Mushaf page."
+dump_fresh_hierarchy /sdcard/mashxall-page-jump-dismissed.xml dist/runtime-test/window-mushaf-fullscreen.xml dist/runtime-test/uiautomator-page-jump-dismissed.txt
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   ! grep -Eqi 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   grep -Eqi 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: closing page jump did not leave the live app on fullscreen Mushaf page 1."
   cat dist/runtime-test/window-mushaf-fullscreen.xml
   exit 1
 fi
-echo "PASS: page indicator opens a direct page-jump dialog without leaving the Mushaf."
+echo "PASS: page-jump dialog closes back to the same live fullscreen page."
+
+# Verify the fresh hierarchy still describes a live fullscreen Mushaf before tapping its verse button.
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   ! grep -Eqi 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-mushaf-fullscreen.xml ||
+   grep -Eqi 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: app was not on fresh fullscreen Mushaf page 1 before verse action tap."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  exit 1
+fi
 
 verse_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
 import re
@@ -405,8 +438,7 @@ fi
 read -r verse_x verse_y <<< "$verse_coords"
 adb shell input tap "$verse_x" "$verse_y"
 sleep 7
-adb shell uiautomator dump /sdcard/mashxall-quran-verse-actions.xml > dist/runtime-test/uiautomator-quran-verse-actions.txt 2>&1 || true
-adb pull /sdcard/mashxall-quran-verse-actions.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-quran-verse-actions.xml dist/runtime-test/window-quran.xml dist/runtime-test/uiautomator-quran-verse-actions.txt
 if ! python3 - dist/runtime-test/window-quran.xml <<'PY'
 import re
 import sys
