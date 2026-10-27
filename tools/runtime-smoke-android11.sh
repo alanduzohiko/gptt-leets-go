@@ -843,7 +843,9 @@ check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
 check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
-check_screen home 'کاتەکانی نوێژ|مواقيت الصلاة|Prayer times'
+# Identify Home by its own continue-reading action, not by the prayer-times title,
+# which is also present when the Prayer route is accidentally still on screen.
+check_screen home 'بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading'
 
 # Verify the new home hierarchy: live prayer times first, a resume-last-Mushaf
 # action, and quick access beneath it. Tapping "Continue reading" must re-open
