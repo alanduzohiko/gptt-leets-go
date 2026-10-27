@@ -147,6 +147,9 @@ internal fun isAdhanAudioDescriptor(title: String, assetPath: String, group: Str
 
 private fun isAdhanAudio(item: AudioItem): Boolean =
     isAdhanAudioDescriptor(item.title, item.assetPath, item.group)
+
+internal fun reciterAudioModeMatches(audioType: Int, playbackMode: Int): Boolean =
+    if (playbackMode == 0) audioType == 0 else audioType != 0
 private val PaleGold = Color(0xFFF4E5B4)
 private val DeepGreen = Color(0xFF103D32)
 private val MainText = Color(0xFFF6F2E6)
@@ -268,7 +271,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             preferredReaderReciterId = readerReciters.firstOrNull { it.audioType == 0 }?.id
                 ?: readerReciters.firstOrNull()?.id ?: -1
             if (preferredReaderReciterId > 0) {
-                prefs.edit().putInt("preferred_reciter_id", preferredReaderReciterId).apply()
+                val defaultReaderMode = if (readerReciters.firstOrNull { it.id == preferredReaderReciterId }?.audioType == 0) 0 else 1
+                prefs.edit()
+                    .putInt("preferred_reciter_id", preferredReaderReciterId)
+                    .putInt("preferred_audio_mode", defaultReaderMode)
+                    .apply()
             }
         }
     }
@@ -1072,10 +1079,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Spacer(Modifier.height(6.dp))
                             }
                             items(readerReciters.filter { it.audioType == 0 }, key = { "verse-reciter-" + it.id }) { reciter ->
-                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).putInt("preferred_audio_mode", if (reciter.audioType == 0) 0 else 1).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
-                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
+                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).putInt("preferred_audio_mode", if (reciter.audioType == 0) 0 else 1).apply() })
                                     }
                                 }
                             }
@@ -1086,10 +1093,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Spacer(Modifier.height(6.dp))
                             }
                             items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
-                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).putInt("preferred_audio_mode", if (reciter.audioType == 0) 0 else 1).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
-                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
+                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).putInt("preferred_audio_mode", if (reciter.audioType == 0) 0 else 1).apply() })
                                     }
                                 }
                             }
@@ -3276,6 +3283,9 @@ fun AudioScreen(
     var offlineRevision by remember { mutableIntStateOf(0) }
     var audioNotice by rememberSaveable { mutableStateOf("") }
     var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
+    var preferredAudioMode by rememberSaveable {
+        mutableIntStateOf(prefs.getInt("preferred_audio_mode", 0).coerceIn(0, 1))
+    }
     val preferredReciter = reciters.firstOrNull { it.id == preferredReciterId }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
@@ -3294,16 +3304,50 @@ fun AudioScreen(
         val loadedReciters = ContentRepository.loadReciters(context)
         reciters = loadedReciters
         surahs = ContentRepository.loadSurahs(context)
-        // The Quran's play control must do useful work on first use. When a
-        // user has not chosen a favourite yet, use the first available
-        // verse-by-verse source and persist it like an explicit selection.
-        if (preferredReciterId < 0 || loadedReciters.none { it.id == preferredReciterId }) {
-            (loadedReciters.firstOrNull { it.audioType == 0 } ?: loadedReciters.firstOrNull())?.let { firstAvailable ->
-                preferredReciterId = firstAvailable.id
-                prefs.edit().putInt("preferred_reciter_id", firstAvailable.id).apply()
-            }
+        val savedReader = loadedReciters.firstOrNull { it.id == preferredReciterId }
+        val desiredMode = if (prefs.contains("preferred_audio_mode")) {
+            preferredAudioMode
+        } else {
+            savedReader?.let { if (it.audioType == 0) 0 else 1 } ?: 0
+        }
+        // Keep a saved reciter when it supports the selected mode. Otherwise
+        // choose a real source that does, and persist both settings together.
+        val chosen = savedReader?.takeIf { reciterAudioModeMatches(it.audioType, desiredMode) }
+            ?: loadedReciters.firstOrNull { reciterAudioModeMatches(it.audioType, desiredMode) }
+            ?: loadedReciters.firstOrNull()
+        chosen?.let { reader ->
+            preferredAudioMode = if (reader.audioType == 0) 0 else 1
+            preferredReciterId = reader.id
+            prefs.edit()
+                .putInt("preferred_audio_mode", preferredAudioMode)
+                .putInt("preferred_reciter_id", reader.id)
+                .apply()
         }
         loading = false
+    }
+    val selectPlaybackMode: (Int) -> Unit = { requestedMode ->
+        val normalizedMode = requestedMode.coerceIn(0, 1)
+        val compatible = reciters.firstOrNull {
+            it.id == preferredReciterId && reciterAudioModeMatches(it.audioType, normalizedMode)
+        } ?: reciters.firstOrNull { reciterAudioModeMatches(it.audioType, normalizedMode) }
+        if (compatible == null) {
+            audioNotice = when (language) {
+                AppLanguage.EN -> "No bundled reciter supports that recording mode."
+                AppLanguage.AR -> "لا يوجد قارئ مضمّن يدعم نمط التسجيل هذا."
+                AppLanguage.CKB -> "هیچ قورئان‌خوێنێکی ناوخۆیی ئەم شێوازی تۆمارکردنە پشتیوانی ناکات."
+            }
+        } else {
+            AudioController.stop()
+            playing = ""
+            autoPlayKey = ""
+            preferredAudioMode = normalizedMode
+            preferredReciterId = compatible.id
+            prefs.edit()
+                .putInt("preferred_audio_mode", normalizedMode)
+                .putInt("preferred_reciter_id", compatible.id)
+                .apply()
+            audioNotice = ""
+        }
     }
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId }
@@ -3382,7 +3426,8 @@ fun AudioScreen(
             }
         } else {
             val visibleReciters = reciters.filter { reciter ->
-                (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+                reciterAudioModeMatches(reciter.audioType, preferredAudioMode) &&
+                    (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
             }
             Text(
                 if (language == AppLanguage.EN) {
@@ -3397,6 +3442,58 @@ fun AudioScreen(
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
             )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "PLAYBACK MODE"
+                    AppLanguage.AR -> "نمط التشغيل"
+                    AppLanguage.CKB -> "شێوازی لێدان"
+                },
+                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = preferredAudioMode == 0,
+                    onClick = { selectPlaybackMode(0) },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Verse by verse"
+                                AppLanguage.AR -> "آية بآية"
+                                AppLanguage.CKB -> "ئایەت بە ئایەت"
+                            },
+                            fontSize = 10.sp, maxLines = 1
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = preferredAudioMode == 1,
+                    onClick = { selectPlaybackMode(1) },
+                    label = {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Full surah"
+                                AppLanguage.AR -> "السورة كاملة"
+                                AppLanguage.CKB -> "سوورەتی تەواو"
+                            },
+                            fontSize = 10.sp, maxLines = 1
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }} compatible reciters in this mode."
+                    AppLanguage.AR -> "عدد القراء المتوافقين مع هذا النمط: ${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }}."
+                    AppLanguage.CKB -> "ژمارەی قورئان‌خوێنە گونجاوەکان لەم شێوازەدا: ${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }}."
+                },
+                color = foreground.copy(alpha = 0.52f), fontSize = 10.sp
+            )
             Spacer(Modifier.height(7.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -3406,7 +3503,7 @@ fun AudioScreen(
                     label = { Text(tr(language, "surah")) },
                     singleLine = true
                 )
-                OutlinedTextField(
+                if (preferredAudioMode == 0) OutlinedTextField(
                     value = ayahText,
                     onValueChange = { ayahText = it.filter(Char::isDigit).take(3) },
                     modifier = Modifier.weight(1f),
@@ -3462,8 +3559,12 @@ fun AudioScreen(
                                 )
                                 TextButton(
                                     onClick = {
+                                        preferredAudioMode = if (reciter.audioType == 0) 0 else 1
                                         preferredReciterId = reciter.id
-                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                        prefs.edit()
+                                            .putInt("preferred_audio_mode", preferredAudioMode)
+                                            .putInt("preferred_reciter_id", reciter.id)
+                                            .apply()
                                     },
                                     contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
                                     modifier = Modifier.height(25.dp)
@@ -3495,8 +3596,12 @@ fun AudioScreen(
                                         AudioController.stop()
                                         playing = ""
                                     } else {
+                                        preferredAudioMode = if (reciter.audioType == 0) 0 else 1
                                         preferredReciterId = reciter.id
-                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                        prefs.edit()
+                                            .putInt("preferred_audio_mode", preferredAudioMode)
+                                            .putInt("preferred_reciter_id", reciter.id)
+                                            .apply()
                                         playing = playKey
                                         autoPlayKey = playKey
                                         AudioController.playSequence(context, sources) { state -> if (!state) playing = "" }
