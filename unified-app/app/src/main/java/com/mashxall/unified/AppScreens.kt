@@ -5134,20 +5134,24 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 times = null
                 val targetDate = Date()
                 times = when {
-                    gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, targetDate
+                    gpsLatitude != null && gpsLongitude != null ->
+                        ContentRepository.loadPrayerTimesAtLocation(
+                            context, gpsLatitude!!, gpsLongitude!!, targetDate
+                        )
                     manualLatitude != null && manualLongitude != null -> {
                         val sourceCityTimes = ContentRepository.loadPrayerTimes(
                             context, selectedCity, targetDate, manualCountry
                         )
                         sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
                             context, manualLatitude!!, manualLongitude!!, targetDate
+                        )
                     }
                     else -> {
                         ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
                             ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
                                 ContentRepository.loadPrayerTimesAtLocation(
                                     context, city.latitude, city.longitude, targetDate
+                                )
                             }
                     }
                 }
@@ -5166,21 +5170,24 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             add(Calendar.DAY_OF_YEAR, 1)
         }.time
         tomorrowTimes = when {
-                gpsLatitude != null && gpsLongitude != null ->
-                    ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, tomorrow
-                manualLatitude != null && manualLongitude != null -> {
-                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                        ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, tomorrow
-                }
-                else -> {
-                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                        ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                            ContentRepository.loadPrayerTimesAtLocation(
-                                context, city.latitude, city.longitude, tomorrow
-                        }
-                }
+            gpsLatitude != null && gpsLongitude != null ->
+                ContentRepository.loadPrayerTimesAtLocation(
+                    context, gpsLatitude!!, gpsLongitude!!, tomorrow
+                )
+            manualLatitude != null && manualLongitude != null -> {
+                ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                    ?: ContentRepository.loadPrayerTimesAtLocation(
+                        context, manualLatitude!!, manualLongitude!!, tomorrow
+                    )
+            }
+            else -> {
+                ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                    ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                        ContentRepository.loadPrayerTimesAtLocation(
+                            context, city.latitude, city.longitude, tomorrow
+                        )
+                    }
+            }
         }
     }
     val nextPrayerTarget = remember(times, tomorrowTimes, clockNowMillis) {
