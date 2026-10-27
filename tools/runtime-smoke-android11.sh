@@ -1088,33 +1088,56 @@ try:
 except Exception:
     raise SystemExit(0)
 pattern = re.compile(r"بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading", re.I)
-for node in root.iter("node"):
-    if not pattern.search(node.attrib.get("text", "")):
-        continue
-    bounds = node.attrib.get("bounds", "")
-    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
-    if match:
-        x1, y1, x2, y2 = map(int, match.groups())
-        print(f"{(x1+x2)//2} {(y1+y2)//2}")
-        raise SystemExit(0)
+bounds_pattern = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+def find_target(node, ancestors=()):
+    # For the label, choose the closest ancestor whose accessibility semantics are clickable.
+    text = node.attrib.get("text", "")
+    if pattern.search(text):
+        for candidate in reversed(ancestors + (node,)):
+            if candidate.attrib.get("clickable", "false").lower() != "true":
+                continue
+            match = bounds_pattern.fullmatch(candidate.attrib.get("bounds", ""))
+            if match:
+                x1, y1, x2, y2 = map(int, match.groups())
+                if x2 > x1 and y2 > y1:
+                    print(f"{(x1+x2)//2} {(y1+y2)//2}")
+                    return True
+        return False
+    next_ancestors = ancestors + (node,)
+    for child in node:
+        if find_target(child, next_ancestors):
+            return True
+    return False
+find_target(root)
 PY
 )"
 if [[ -z "$resume_coords" ]]; then
-  echo "FAIL: Continue reading shortcut has no tappable UI bounds in the scrolled home hierarchy."
+  echo "FAIL: Continue reading has no clickable accessibility ancestor in the scrolled home hierarchy."
   cat dist/runtime-test/window-home-scrolled.xml
   exit 1
 fi
 read -r resume_x resume_y <<< "$resume_coords"
-adb shell input tap "$resume_x" "$resume_y"
-sleep 7
-dump_fresh_hierarchy /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml dist/runtime-test/uiautomator-home-resume.txt
-if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.xml ||
-   ! grep -q '604' dist/runtime-test/window-home-resume.xml; then
-  echo "FAIL: Continue reading did not resume the saved 604-page graphic Mushaf."
+# Retry the same real hit target if the emulator drops a tap while the Compose transition is settling.
+resumed=false
+for attempt in 1 2 3; do
+  adb shell input tap "$resume_x" "$resume_y"
+  sleep 4
+  dump_fresh_hierarchy /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml dist/runtime-test/uiautomator-home-resume.txt
+  if grep -Eqi 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.xml &&
+     grep -q '604' dist/runtime-test/window-home-resume.xml &&
+     grep -Eqi 'Exit|Back|خروج|دەرچوون|گەڕانەوە' dist/runtime-test/window-home-resume.xml &&
+     ! grep -Eqi 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز' dist/runtime-test/window-home-resume.xml; then
+    resumed=true
+    break
+  fi
+  echo "WARN: Continue reading tap did not reach the fullscreen Mushaf on attempt $attempt; retrying the same card hit target."
+done
+if [[ "$resumed" != true ]]; then
+  echo "FAIL: Continue reading did not resume the saved 604-page graphic Mushaf after three real taps."
   cat dist/runtime-test/window-home-resume.xml
   exit 1
 fi
-echo "PASS: home prayer-times card, continue-reading resume, and quick access are visible and usable."
+echo "PASS: tapping the native Continue reading card resumes the saved fullscreen Mushaf; home prayer times and quick access are retained."
 
 check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'

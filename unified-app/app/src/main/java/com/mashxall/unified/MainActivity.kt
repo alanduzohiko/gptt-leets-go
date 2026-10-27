@@ -976,7 +976,8 @@ private fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
         Card(
-            modifier = Modifier.fillMaxWidth().clickable { onResumeReading() },
+            onClick = onResumeReading,
+            modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = RoundedCornerShape(20.dp),
             border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.34f))
