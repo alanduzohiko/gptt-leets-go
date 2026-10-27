@@ -151,6 +151,9 @@ private val MushafSepiaColorMatrix = ColorMatrix(
     )
 )
 
+internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
+    if (mode == "full") 1 else requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
+
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -3198,6 +3201,9 @@ fun AudioScreen(
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
+    var playbackMode by rememberSaveable {
+        mutableStateOf(if (prefs.getString("reciter_playback_mode", "verse") == "full") "full" else "verse")
+    }
     LaunchedEffect(initialSurah, initialAyah, focusReciters, focusAdhan) {
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
@@ -3219,14 +3225,14 @@ fun AudioScreen(
         }
         loading = false
     }
-    LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId) {
+    LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId, playbackMode) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId }
         if (autoPlayRequested && focusReciters && preferred != null && surahs.isNotEmpty()) {
             val surahNumber = initialSurah.coerceIn(1, 114)
             val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
-            val startAyah = initialAyah.coerceIn(1, ayahCount)
+            val startAyah = resolveReciterStartAyah(playbackMode, initialAyah, ayahCount)
             val sources = reciterAudioSequence(context, preferred, surahNumber, startAyah, ayahCount)
-            val key = "${preferred.id}|${surahNumber}|${startAyah}"
+            val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}"
             if (autoPlayKey != key && sources.isNotEmpty()) {
                 autoPlayKey = key
                 playing = key
@@ -3300,7 +3306,11 @@ fun AudioScreen(
             }
         } else {
             val visibleReciters = reciters.filter { reciter ->
-                (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl).contains(audioQuery, ignoreCase = true)
+                val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
+                    .contains(audioQuery, ignoreCase = true)
+                // A selected-verse start needs individual ayah files. Full-surah
+                // mode can use either a complete-surah file or a verse sequence.
+                matchesSearch && (playbackMode == "full" || reciter.audioType == 0)
             }
             Text(
                 if (language == AppLanguage.EN) {
@@ -3333,14 +3343,67 @@ fun AudioScreen(
                 )
             }
             Spacer(Modifier.height(7.dp))
+            Text(
+                if (language == AppLanguage.EN) "PLAYBACK MODE" else if (language == AppLanguage.AR) "طريقة التشغيل" else "شێوازی لێدان",
+                color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = playbackMode == "full",
+                    onClick = {
+                        playbackMode = "full"
+                        prefs.edit().putString("reciter_playback_mode", "full").apply()
+                        AudioController.stop()
+                        playing = ""
+                        autoPlayKey = ""
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = {
+                        Text(
+                            if (language == AppLanguage.EN) "Full surah" else if (language == AppLanguage.AR) "السورة كاملة" else "سوورەتی تەواو",
+                            fontSize = 11.sp
+                        )
+                    }
+                )
+                FilterChip(
+                    selected = playbackMode == "verse",
+                    onClick = {
+                        playbackMode = "verse"
+                        prefs.edit().putString("reciter_playback_mode", "verse").apply()
+                        AudioController.stop()
+                        playing = ""
+                        autoPlayKey = ""
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = {
+                        Text(
+                            if (language == AppLanguage.EN) "From selected ayah" else if (language == AppLanguage.AR) "من الآية المحددة" else "لە ئایەتی هەڵبژێردراوەوە",
+                            fontSize = 11.sp
+                        )
+                    }
+                )
+            }
+            Text(
+                when {
+                    playbackMode == "full" && language == AppLanguage.EN -> "Starts at the beginning; verse-by-verse recordings are played in sequence."
+                    playbackMode == "full" && language == AppLanguage.AR -> "يبدأ من أول السورة؛ وتُشغَّل التسجيلات المنفصلة للآيات بالتتابع."
+                    playbackMode == "full" -> "لە سەرەتای سوورەتەوە دەست پێدەکات؛ تۆمارەکانی ئایەتەکان بە ڕیز لێدەدرێن."
+                    language == AppLanguage.EN -> "Starts at the chosen ayah and continues to the end; only recordings with separate ayah files are shown."
+                    language == AppLanguage.AR -> "يبدأ من الآية المختارة حتى نهاية السورة؛ وتُعرض التسجيلات ذات الملفات المنفصلة للآيات فقط."
+                    else -> "لە ئایەتی هەڵبژێردراوەوە تا کۆتایی سوورەت دەڕوات؛ تەنها سەرچاوەکانی فایلە جیاوازەکانی ئایەت پیشان دەدرێن."
+                },
+                color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+            )
+            Spacer(Modifier.height(7.dp))
             if (reciters.isEmpty()) LoadingOrEmpty(loading, language, foreground)
             else if (visibleReciters.isEmpty()) LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visibleReciters, key = { it.id }) { reciter ->
                     val surahNumber = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
                     val surahAyahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
-                    val startingAyah = ayahText.toIntOrNull()?.coerceIn(1, surahAyahCount.coerceAtLeast(1)) ?: 1
-                    val playKey = "${reciter.id}|${surahNumber}|${startingAyah}"
+                    val requestedAyah = ayahText.toIntOrNull() ?: 1
+                    val startingAyah = resolveReciterStartAyah(playbackMode, requestedAyah, surahAyahCount)
+                    val playKey = "${reciter.id}|${surahNumber}|${startingAyah}|${playbackMode}"
                     val downloadKey = "${reciter.id}|${surahNumber}"
                     val downloadProgress = downloadingTracks[downloadKey]
                     val localComplete = remember(reciter.id, reciter.audioType, surahNumber, surahAyahCount, offlineRevision) {
@@ -3349,14 +3412,14 @@ fun AudioScreen(
                     val sources = remember(reciter.id, reciter.audioType, surahNumber, startingAyah, surahAyahCount, offlineRevision) {
                         reciterAudioSequence(context, reciter, surahNumber, startingAyah, surahAyahCount)
                     }
-                    val playLabel = if (reciter.audioType == 0) {
-                        if (language == AppLanguage.EN) "Play from verse $startingAyah to end of surah"
-                        else if (language == AppLanguage.AR) "تشغيل من الآية $startingAyah حتى نهاية السورة"
-                        else "لە ئایەتی $startingAyah تا کۆتایی سوورەت بخوێنەوە"
-                    } else {
+                    val playLabel = if (playbackMode == "full") {
                         if (language == AppLanguage.EN) "Play full surah"
                         else if (language == AppLanguage.AR) "تشغيل السورة كاملة"
                         else "خوێندنەوەی تەواوی سوورەت"
+                    } else {
+                        if (language == AppLanguage.EN) "Play from verse $startingAyah to end of surah"
+                        else if (language == AppLanguage.AR) "تشغيل من الآية $startingAyah حتى نهاية السورة"
+                        else "لە ئایەتی $startingAyah تا کۆتایی سوورەت بخوێنەوە"
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3369,9 +3432,12 @@ fun AudioScreen(
                                 Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
                                 Text(
                                     when {
-                                        reciter.audioType == 0 && language == AppLanguage.EN -> "Verse-by-verse • sequence playback"
-                                        reciter.audioType == 0 && language == AppLanguage.AR -> "آية بآية • تشغيل متتابع"
-                                        reciter.audioType == 0 -> "ئایەت بە ئایەت • لێدانی بەردەوام"
+                                        playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.EN -> "Full surah • sequential ayah playback"
+                                        playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.AR -> "السورة كاملة • تشغيل الآيات بالتتابع"
+                                        playbackMode == "full" && reciter.audioType == 0 -> "سوورەتی تەواو • لێدانی یەک لە دوای یەکی ئایەتەکان"
+                                        playbackMode == "verse" && language == AppLanguage.EN -> "Verse-by-verse • starts at selected ayah"
+                                        playbackMode == "verse" && language == AppLanguage.AR -> "آية بآية • يبدأ من الآية المحددة"
+                                        playbackMode == "verse" -> "ئایەت بە ئایەت • دەستپێک لە ئایەتی هەڵبژێردراو"
                                         language == AppLanguage.EN -> "Full-surah recording"
                                         language == AppLanguage.AR -> "تسجيل السورة كاملة"
                                         else -> "تۆماری تەواوی سوورەت"
