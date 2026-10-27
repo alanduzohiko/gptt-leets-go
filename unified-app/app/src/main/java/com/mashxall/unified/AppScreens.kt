@@ -200,7 +200,7 @@ private fun ReaderSettingsCategoryCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -224,6 +224,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var showReaderSettings by remember { mutableStateOf(false) }
     var readerSettingsSection by rememberSaveable { mutableStateOf("overview") }
+    LaunchedEffect(openSettingsOnEntry) {
+        if (openSettingsOnEntry) {
+            readerSettingsSection = "overview"
+            showReaderSettings = true
+            onSettingsRequestConsumed()
+        }
+    }
     var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
     var mushafSepiaMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_sepia_mode", false)) }
     var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
@@ -2408,6 +2415,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 @OptIn(ExperimentalMaterial3Api::class)
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_azkar_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -2618,8 +2626,15 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             AppLanguage.AR -> ""
             AppLanguage.EN -> item.english
         }
-        var count by remember(item.id) { mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0)) }
+        var count by remember(item.id) {
+            mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0).coerceIn(0, item.count.coerceAtLeast(1)))
+        }
         val targetCount = item.count.coerceAtLeast(1)
+        val countPulse = remember(item.id) { Animatable(1f) }
+        LaunchedEffect(count) {
+            countPulse.snapTo(0.94f)
+            countPulse.animateTo(1f, animationSpec = tween(160))
+        }
         val isFavorite = favoriteIds.contains(item.id.toString())
         ModalBottomSheet(
             onDismissRequest = { selectedItem = null },
@@ -2656,7 +2671,11 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             color = foreground.copy(alpha = 0.65f), fontSize = 12.sp
                         )
                         Spacer(Modifier.height(5.dp))
-                        Text("$count / $targetCount", color = Gold, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "$count / $targetCount",
+                            color = Gold, fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.graphicsLayer { scaleX = countPulse.value; scaleY = countPulse.value }
+                        )
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {
@@ -2665,14 +2684,42 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }) {
                                 Text(if (language == AppLanguage.EN) "Reset" else if (language == AppLanguage.AR) "إعادة" else "سفر")
                             }
-                            Button(onClick = {
-                                count = if (count + 1 >= targetCount) 0 else count + 1
-                                progressPrefs.edit().putInt(item.id.toString(), count).apply()
-                            }) {
+                            Button(
+                                enabled = count < targetCount,
+                                onClick = {
+                                    val nextCount = (count + 1).coerceAtMost(targetCount)
+                                    count = nextCount
+                                    progressPrefs.edit().putInt(item.id.toString(), nextCount).apply()
+                                    haptic.performHapticFeedback(
+                                        if (nextCount >= targetCount) HapticFeedbackType.LongPress
+                                        else HapticFeedbackType.TextHandleMove
+                                    )
+                                }
+                            ) {
                                 Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(5.dp))
-                                Text(if (language == AppLanguage.EN) "Count" else if (language == AppLanguage.AR) "تسبيح" else "ژماردن")
+                                Text(
+                                    when {
+                                        count >= targetCount && language == AppLanguage.EN -> "Completed"
+                                        count >= targetCount && language == AppLanguage.AR -> "اكتمل"
+                                        count >= targetCount -> "تەواو بوو"
+                                        language == AppLanguage.EN -> "Count"
+                                        language == AppLanguage.AR -> "تسبيح"
+                                        else -> "ژماردن"
+                                    }
+                                )
                             }
+                        }
+                        if (count >= targetCount) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Target reached — reset to start another round."
+                                    AppLanguage.AR -> "اكتمل العدد — أعد التصفير لبدء دورة أخرى."
+                                    AppLanguage.CKB -> "ژمارەکە تەواو بوو — سفر بکەرەوە بۆ دەستپێکردنی خولێکی نوێ."
+                                },
+                                color = Gold, fontSize = 11.sp, textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -2884,7 +2931,16 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var presets by remember { mutableStateOf(emptyList<TasbihPreset>()) }
     var selectedId by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_preset_id", 3)) }
     var count by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_count_3", 0)) }
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var totalCount by rememberSaveable {
+        val initialPreset = prefs.getInt("tasbih_preset_id", 3)
+        mutableIntStateOf(prefs.getInt("tasbih_total_$initialPreset", prefs.getInt("tasbih_count_$initialPreset", 0)))
+    }
+    val haptic = LocalHapticFeedback.current
+    val tapPulse = remember { Animatable(1f) }
+    LaunchedEffect(count) {
+        tapPulse.snapTo(0.95f)
+        tapPulse.animateTo(1f, animationSpec = tween(130))
+    }
     val selected = presets.firstOrNull { it.id == selectedId }
 
     LaunchedEffect(Unit) {
@@ -2893,6 +2949,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
     LaunchedEffect(selectedId, presets) {
         count = prefs.getInt("tasbih_count_$selectedId", 0)
+        totalCount = prefs.getInt("tasbih_total_$selectedId", count)
         prefs.edit().putInt("tasbih_preset_id", selectedId).apply()
     }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2945,8 +3002,19 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF1E7259), DeepGreen, CardDark))
             ).clickable {
                 count += 1
-                prefs.edit().putInt("tasbih_count_$selectedId", count).putInt("tasbih_count", count).apply()
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                totalCount += 1
+                prefs.edit()
+                    .putInt("tasbih_count_$selectedId", count)
+                    .putInt("tasbih_total_$selectedId", totalCount)
+                    .putInt("tasbih_count", count)
+                    .apply()
+                haptic.performHapticFeedback(
+                    if (selected?.targetCount?.let { count >= it } == true) HapticFeedbackType.LongPress
+                    else HapticFeedbackType.TextHandleMove
+                )
+            }.graphicsLayer {
+                scaleX = tapPulse.value
+                scaleY = tapPulse.value
             },
             contentAlignment = Alignment.Center
         ) {
@@ -2955,10 +3023,32 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 Text(if (language == AppLanguage.EN) "TAP TO COUNT" else if (language == AppLanguage.AR) "اضغط للعدّ" else "بۆ ژماردن لێی بدە", color = Gold, fontSize = 10.sp, letterSpacing = 1.4.sp)
             }
         }
-        Spacer(Modifier.height(23.dp))
+        Spacer(Modifier.height(9.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "All-time count: $totalCount"
+                AppLanguage.AR -> "إجمالي التسبيحات: $totalCount"
+                AppLanguage.CKB -> "کۆی ژمارەکان: $totalCount"
+            },
+            color = foreground.copy(alpha = 0.63f), fontSize = 11.sp
+        )
+        Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { count = 0; prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply() }) { Text(tr(language, "reset")) }
-            OutlinedButton(onClick = { count = 0; prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply() }) {
+            OutlinedButton(onClick = {
+                count = 0
+                totalCount = 0
+                prefs.edit()
+                    .putInt("tasbih_count_$selectedId", 0)
+                    .putInt("tasbih_total_$selectedId", 0)
+                    .putInt("tasbih_count", 0)
+                    .apply()
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }) { Text(tr(language, "reset")) }
+            OutlinedButton(onClick = {
+                count = 0
+                prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply()
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }) {
                 Text(if (language == AppLanguage.EN) "New round" else if (language == AppLanguage.AR) "دورة جديدة" else "خولێکی نوێ")
             }
         }

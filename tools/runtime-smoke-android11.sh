@@ -309,6 +309,29 @@ if grep -Eq 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز'
   exit 1
 fi
 
+# Confirm the direction and operation of finger swipes on the actual Mushaf image.
+adb shell input swipe 900 800 180 800 350
+sleep 4
+adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-forward.xml > dist/runtime-test/uiautomator-mushaf-swipe-forward.txt 2>&1 || true
+adb pull /sdcard/mashxall-mushaf-swipe-forward.xml dist/runtime-test/window-mushaf-swipe-forward.xml >/dev/null 2>&1 || true
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+2[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-forward.xml; then
+  echo "FAIL: right-to-left swipe did not advance the Mushaf from page 1 to page 2."
+  cat dist/runtime-test/window-mushaf-swipe-forward.xml
+  exit 1
+fi
+echo "PASS: right-to-left finger swipe advances the Mushaf to page 2."
+
+adb shell input swipe 180 800 900 800 350
+sleep 4
+adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-back.xml > dist/runtime-test/uiautomator-mushaf-swipe-back.txt 2>&1 || true
+adb pull /sdcard/mashxall-mushaf-swipe-back.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml; then
+  echo "FAIL: left-to-right swipe did not return the Mushaf from page 2 to page 1."
+  cat dist/runtime-test/window-mushaf-fullscreen.xml
+  exit 1
+fi
+echo "PASS: left-to-right finger swipe returns to page 1."
+
 verse_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
 import re
 import sys
@@ -876,6 +899,44 @@ echo "PASS: home prayer-times card, continue-reading resume, and quick access ar
 check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
+
+quran_settings_coords="$(python3 - dist/runtime-test/window-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+pattern = re.compile(r"Quran reader settings|إعدادات قارئ القرآن|ڕێکخستنەکانی خوێندنەوەی قورئان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+raise SystemExit(0)
+PY
+)"
+if [[ -n "$quran_settings_coords" ]]; then
+  read -r quran_settings_x quran_settings_y <<< "$quran_settings_coords"
+  adb shell input tap "$quran_settings_x" "$quran_settings_y"
+  sleep 4
+  adb shell uiautomator dump /sdcard/mashxall-quran-settings.xml > dist/runtime-test/uiautomator-quran-settings.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-settings.xml dist/runtime-test/window-quran-settings.xml >/dev/null 2>&1 || true
+  if ! grep -Eqi 'Translations|الترجمات|وەرگێڕانەکان' dist/runtime-test/window-quran-settings.xml ||
+     ! grep -Eqi 'Tafsir|التفسير|تەفسیر' dist/runtime-test/window-quran-settings.xml ||
+     ! grep -Eqi 'Reciter|القارئ|قورئان‌خوێن' dist/runtime-test/window-quran-settings.xml ||
+     ! grep -Eqi 'Mushaf|المصحف|مصحەف' dist/runtime-test/window-quran-settings.xml; then
+    echo "FAIL: the global Quran-settings card did not open all four grouped settings categories."
+    cat dist/runtime-test/window-quran-settings.xml
+    exit 1
+  fi
+  echo "PASS: global Settings opens the dedicated Quran settings with grouped categories."
+else
+  echo "FAIL: the global Settings screen did not expose the Quran reader settings action."
+  cat dist/runtime-test/window-settings.xml
+  exit 1
+fi
 
 assert_visible_body_text() {
   local route="$1"
