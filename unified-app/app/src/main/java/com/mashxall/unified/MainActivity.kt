@@ -750,19 +750,17 @@ private fun HomeScreen(
             delay(60_000L)
         }
     }
-    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("prayer_method", "mwl"), prefs.getString("asr_school", "shafi"), prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
         loadingTimes = true
         val date = Date(clockNow)
         val country = prefs.getString("selected_city_country", "") ?: ""
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl") ?: "mwl")
-        val asr = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi") ?: "shafi")
         prayerTimes = runCatching {
             when {
                 gpsLatitude != null && gpsLongitude != null ->
-                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date, method, asr)
+                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
                 else -> ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
                     ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
-                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date, method, asr)
+                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date)
                     }
             }
         }.getOrNull()

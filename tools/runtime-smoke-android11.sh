@@ -274,6 +274,14 @@ if [[ "$fajr_visible" -ne 1 ]]; then
   exit 1
 fi
 
+if grep -Eqi 'calculation method|method of calculation|طريقة الحساب|طريقة حساب الصلاة|select date|choose date|date picker|اختيار التاريخ|اختر التاريخ|اختيار اليوم|day selector' dist/runtime-test/window-prayer.xml; then
+  echo "FAIL: prayer screen still exposes a date/day selector or prayer calculation method."
+  cat dist/runtime-test/window-prayer.xml
+  exit 1
+fi
+echo "PASS: prayer screen shows source timetables without date/day or calculation-method controls."
+
+
 check_screen quran 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran'
 
 # The redesigned Quran entry is a surah list. Select Al-Fatiha, enter the
