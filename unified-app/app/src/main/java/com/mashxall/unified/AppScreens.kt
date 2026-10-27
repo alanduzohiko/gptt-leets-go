@@ -5036,15 +5036,38 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         }
     }
 
-    // The app already asks for location on first use. The Qibla screen may refresh
-    // a granted permission automatically, but it does not add a redundant location
-    // selection button or ask the user to choose a second location.
-    LaunchedEffect(Unit) {
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if ((gpsLatitude == null || gpsLongitude == null) && (fine || coarse)) {
+    // Qibla uses the same Android device location as prayer times; it never asks
+    // the user to choose a second, conflicting location inside this screen.
+    val qiblaPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (allowed) {
             locating = true
+            locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
+        } else {
+            locating = false
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Location permission is needed to point the compass accurately toward Qibla."
+                AppLanguage.AR -> "يلزم إذن الموقع لتوجيه البوصلة نحو القبلة بدقة."
+                AppLanguage.CKB -> "بۆ ئاراستەکردنی دروستی کۆمپاوس بەرەو قیبلە، مۆڵەتی شوێن پێویستە."
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (gpsLatitude == null || gpsLongitude == null) {
+            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fine || coarse) {
+                locating = true
+                requestCurrentLocation(context, onFix, onLocationError)
+            } else {
+                qiblaPermissionLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                )
+            }
         }
     }
 
@@ -5095,9 +5118,9 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         onDispose { manager?.unregisterListener(listener) }
     }
 
-    val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) } ?: 0.0
-    val relativeHeading = ((bearing.toFloat() - azimuth + 540f) % 360f) - 180f
-    val aligned = sensorAvailable && city != null && kotlin.math.abs(relativeHeading) <= 5f
+    val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) }
+    val relativeHeading = bearing?.let { ((it.toFloat() - azimuth + 540f) % 360f) - 180f } ?: 0f
+    val aligned = sensorAvailable && bearing != null && kotlin.math.abs(relativeHeading) <= 5f
     val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
         targetValue = relativeHeading,
         animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
@@ -5151,13 +5174,21 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                 }
                 Spacer(Modifier.height(18.dp))
                 Text(
-                    city?.name?.let { if (it == "GPS") when (language) { AppLanguage.EN -> "Current location"; AppLanguage.AR -> "الموقع الحالي"; AppLanguage.CKB -> "شوێنی ئێستا" } else it } ?: selectedCity,
+                    city?.name?.let { if (it == "GPS") when (language) { AppLanguage.EN -> "Current location"; AppLanguage.AR -> "الموقع الحالي"; AppLanguage.CKB -> "شوێنی ئێستا" } else it } ?: when (language) {
+                        AppLanguage.EN -> "Location unavailable"
+                        AppLanguage.AR -> "الموقع غير متاح"
+                        AppLanguage.CKB -> "شوێن بەردەست نییە"
+                    },
                     color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    String.format(Locale.US, "%.1f°", bearing) + " • " + tr(language, "qibla_heading"),
-                    color = foreground, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold
+                    bearing?.let { String.format(Locale.US, "%.1f°", it) + " • " + tr(language, "qibla_heading") } ?: when (language) {
+                        AppLanguage.EN -> "Allow location to calculate direction"
+                        AppLanguage.AR -> "اسمح بالموقع لحساب الاتجاه"
+                        AppLanguage.CKB -> "مۆڵەتی شوێن بدە بۆ حسابکردنی ئاراستە"
+                    },
+                    color = foreground, fontSize = if (bearing != null) 28.sp else 15.sp, fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(Modifier.height(15.dp))
                 Surface(
@@ -5174,6 +5205,11 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                         Spacer(Modifier.width(9.dp))
                         Text(
                             when {
+                                bearing == null -> when (language) {
+                                    AppLanguage.EN -> "Location is required before the compass can point to Qibla."
+                                    AppLanguage.AR -> "يجب تحديد موقع الهاتف أولًا كي تشير البوصلة إلى القبلة."
+                                    AppLanguage.CKB -> "پێش ئەوەی کۆمپاوس بەرەو قیبلە ئاماژە بکات، دەبێت شوێنی مۆبایل دیاری بێت."
+                                }
                                 aligned -> when (language) {
                                     AppLanguage.EN -> "Correct direction — you're facing Qibla"
                                     AppLanguage.AR -> "الاتجاه صحيح — أنت تواجه القبلة"
