@@ -14,6 +14,7 @@ import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
 import org.json.JSONArray
 import org.json.JSONObject
+import com.mashxall.unified.R
 import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -148,7 +149,18 @@ data class WordItem(
 )
 private data class WordTypeInfo(val tag: String, val english: String, val arabic: String, val ckb: String, val color: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
-data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
+data class Reciter(
+    val id: Int,
+    val nameArabic: String,
+    val nameEnglish: String,
+    val audioType: Int,
+    val baseUrl: String,
+    val order: Int,
+    val catalogSource: String = "bundled",
+    val recordingLabel: String = "",
+    val surahTotal: Int = 114,
+    val sourceLicense: String = "bundled"
+)
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
 private data class SalawatiAzkarText(val ckb: String, val english: String, val reference: String)
@@ -2055,19 +2067,132 @@ object ContentRepository {
     }
 
     suspend fun loadReciters(context: Context): List<Reciter> = withContext(Dispatchers.IO) {
-        queryDb(context, QURAN_DB, emptyList()) { db ->
+        val bundled = queryDb(context, QURAN_DB, emptyList()) { db ->
             db.rawQuery("SELECT id,name,name_english,audiotype,url,q_order FROM audio ORDER BY q_order,name", null).use { c ->
                 buildList {
-                    while (c.moveToNext()) add(Reciter(c.int("id"), c.string("name"), c.string("name_english"), c.int("audiotype"), c.string("url"), c.int("q_order")))
+                    while (c.moveToNext()) {
+                        add(Reciter(
+                            c.int("id"), c.string("name"), c.string("name_english"),
+                            c.int("audiotype"), c.string("url"), c.int("q_order")
+                        ))
+                    }
                 }
             }
         }
+        // This index contains URL metadata only. Audio stays on the original providers.
+        bundled + loadOnlineReciterCatalog(context)
     }
+
+    private fun readReciterCatalog(context: Context, resourceId: Int): JSONObject? =
+        runCatching {
+            context.resources.openRawResource(resourceId).bufferedReader(Charsets.UTF_8).use {
+                JSONObject(it.readText())
+            }
+        }.getOrNull()
+
+    private fun loadOnlineReciterCatalog(context: Context): List<Reciter> = runCatching {
+        buildList {
+            var sequence = 0
+            val mp3Rows = readReciterCatalog(context, R.raw.mp3quran_reciters)?.optJSONArray("reciters")
+                ?: JSONArray()
+            for (index in 0 until mp3Rows.length()) {
+                val row = mp3Rows.optJSONObject(index) ?: continue
+                val name = row.optString("name").trim()
+                val server = row.optString("server").trim()
+                val recording = row.optString("recitation").trim()
+                if (name.isBlank() || !server.startsWith("https://") || row.optInt("surah_total") != 114) continue
+                sequence += 1
+                add(Reciter(
+                    id = -10_000 - index,
+                    nameArabic = name,
+                    nameEnglish = "MP3Quran · " + recording,
+                    audioType = 1,
+                    baseUrl = server,
+                    order = 100_000 + sequence,
+                    catalogSource = "mp3quran",
+                    recordingLabel = recording,
+                    surahTotal = 114,
+                    sourceLicense = "unknown"
+                ))
+            }
+
+            // Do not create per-ayah links for translations or editions whose verse numbering
+            // is not verified against the Hafs IDs in this app's Quran data.
+            val everyRows = readReciterCatalog(context, R.raw.everyayah_recitations)?.optJSONArray("recitations")
+                ?: JSONArray()
+            for (index in 0 until everyRows.length()) {
+                val row = everyRows.optJSONObject(index) ?: continue
+                val folder = row.optString("id").trim()
+                val name = row.optString("name").trim()
+                if (folder.isBlank() || folder.contains('/') || folder.contains('\\') || name.isBlank()) continue
+                sequence += 1
+                val bitrate = row.optInt("bitrate_kbps")
+                add(Reciter(
+                    id = -20_000 - index,
+                    nameArabic = name,
+                    nameEnglish = "EveryAyah · " + bitrate + " kbps",
+                    audioType = 0,
+                    baseUrl = "https://everyayah.com/data/$folder/",
+                    order = 200_000 + sequence,
+                    catalogSource = "everyayah",
+                    recordingLabel = "Verse by verse · " + bitrate + " kbps",
+                    surahTotal = 114,
+                    sourceLicense = "unknown"
+                ))
+            }
+
+            // This provider's source index publishes full-surah audio for non-commercial use.
+            val networkRoot = readReciterCatalog(context, R.raw.islamic_network_surah)
+                ?.optJSONObject("bitrates")
+            if (networkRoot != null) {
+                val bitrateKeys = mutableListOf<String>()
+                val bitrateIterator = networkRoot.keys()
+                while (bitrateIterator.hasNext()) bitrateKeys += bitrateIterator.next()
+                for (bitrate in bitrateKeys.sorted()) {
+                    val editions = networkRoot.optJSONObject(bitrate) ?: continue
+                    val editionKeys = mutableListOf<String>()
+                    val editionIterator = editions.keys()
+                    while (editionIterator.hasNext()) editionKeys += editionIterator.next()
+                    for (edition in editionKeys.sorted()) {
+                        if (!edition.startsWith("ar.") || edition.contains("traduit", ignoreCase = true)) continue
+                        if (editions.optInt(edition) != 114) continue
+                        val readableName = humanizeAudioEdition(edition)
+                        sequence += 1
+                        add(Reciter(
+                            id = -30_000 - sequence,
+                            nameArabic = readableName,
+                            nameEnglish = "Islamic Network · " + bitrate + " kbps",
+                            audioType = 1,
+                            baseUrl = "https://cdn.islamic.network/quran/audio-surah/$bitrate/$edition/",
+                            order = 300_000 + sequence,
+                            catalogSource = "islamic-network",
+                            recordingLabel = "Full surah · " + bitrate + " kbps",
+                            surahTotal = 114,
+                            sourceLicense = "non-commercial"
+                        ))
+                    }
+                }
+            }
+        }
+    }.getOrElse { emptyList() }
+
+    private fun humanizeAudioEdition(edition: String): String =
+        edition.removePrefix("ar.")
+            .replace(Regex("[-._]+"), " ")
+            .split(Regex("\\s+"))
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase(Locale.ROOT) } }
+
 
     fun reciterSampleUrl(reciter: Reciter, surah: Int, ayah: Int): String {
         val base = reciter.baseUrl.trimEnd('/') + "/"
-        val fileName = if (reciter.audioType == 0) "%03d%03d.mp3".format(Locale.US, surah.coerceIn(1, 114), ayah.coerceAtLeast(1))
-            else "%03d.mp3".format(Locale.US, surah.coerceIn(1, 114))
+        val chapter = surah.coerceIn(1, 114)
+        if (reciter.catalogSource == "islamic-network") return base + chapter + ".mp3"
+        val fileName = if (reciter.audioType == 0) {
+            "%03d%03d.mp3".format(Locale.US, chapter, ayah.coerceAtLeast(1))
+        } else {
+            "%03d.mp3".format(Locale.US, chapter)
+        }
         return base + fileName
     }
 

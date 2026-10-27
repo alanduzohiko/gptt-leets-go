@@ -3525,11 +3525,20 @@ fun AudioScreen(
             }
             Text(
                 when (language) {
-                    AppLanguage.EN -> "${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }} compatible reciters in this mode."
-                    AppLanguage.AR -> "عدد القراء المتوافقين مع هذا النمط: ${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }}."
-                    AppLanguage.CKB -> "ژمارەی قورئان‌خوێنە گونجاوەکان لەم شێوازەدا: ${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }}."
+                    AppLanguage.EN -> "${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }} compatible recitation editions in this mode."
+                    AppLanguage.AR -> "عدد إصدارات التلاوة المتوافقة مع هذا النمط: ${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }}."
+                    AppLanguage.CKB -> "ژمارەی وەشانی تلاوەتە گونجاوەکان لەم شێوازەدا: ${reciters.count { reciterAudioModeMatches(it.audioType, preferredAudioMode) }}."
                 },
                 color = foreground.copy(alpha = 0.52f), fontSize = 10.sp
+            )
+
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "Online catalog metadata: risan/quran-json (CC BY-SA 4.0). MP3Quran and EveryAyah terms were not identified in that catalog; Islamic Network metadata states non-commercial use. Audio streams from the providers rather than being bundled."
+                    AppLanguage.AR -> "بيانات الفهرس الإلكتروني من risan/quran-json بترخيص CC BY-SA 4.0. لم تُحدَّد في ذلك الفهرس شروط مضيفي MP3Quran وEveryAyah؛ وتذكر بيانات Islamic Network الاستخدام غير التجاري. الصوت يُبث من مصادره الأصلية ولا يُضمَّن داخل التطبيق."
+                    AppLanguage.CKB -> "زانیاری فهرستی ئۆنلاین لە risan/quran-json ـە بە مۆڵەتی CC BY-SA 4.0. مەرجی MP3Quran وEveryAyah لەو فهرستەدا دیاری نەکراوە؛ زانیاری Islamic Network بەکارهێنانی ناتجارەتی دەڵێت. دەنگەکان لە سەرچاوە ڕەسەنەکانیانەوە پەخش دەکرێن."
+                },
+                color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, lineHeight = 13.sp
             )
             Spacer(Modifier.height(7.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -3594,6 +3603,28 @@ fun AudioScreen(
                                     },
                                     color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
                                 )
+                                if (reciter.catalogSource != "bundled") {
+                                    Text(
+                                        when (reciter.catalogSource) {
+                                            "mp3quran" -> when (language) {
+                                                AppLanguage.EN -> "Online stream · MP3Quran · host reuse terms not identified"
+                                                AppLanguage.AR -> "بث عبر الإنترنت · MP3Quran · شروط إعادة الاستخدام غير محددة"
+                                                AppLanguage.CKB -> "پەخشی ئۆنلاین · MP3Quran · مەرجی بەکارهێنانەوە دیاری نەکراوە"
+                                            }
+                                            "everyayah" -> when (language) {
+                                                AppLanguage.EN -> "Online stream · EveryAyah · host terms not identified"
+                                                AppLanguage.AR -> "بث عبر الإنترنت · EveryAyah · شروط المضيف غير محددة"
+                                                AppLanguage.CKB -> "پەخشی ئۆنلاین · EveryAyah · مەرجەکانی سەرچاوە دیاری نەکراوە"
+                                            }
+                                            else -> when (language) {
+                                                AppLanguage.EN -> "Online stream · Islamic Network · non-commercial terms"
+                                                AppLanguage.AR -> "بث عبر الإنترنت · Islamic Network · شروط غير تجارية"
+                                                AppLanguage.CKB -> "پەخشی ئۆنلاین · Islamic Network · بەکارهێنانی ناتجارەتی"
+                                            }
+                                        },
+                                        color = foreground.copy(alpha = 0.48f), fontSize = 8.sp, lineHeight = 11.sp
+                                    )
+                                }
                                 TextButton(
                                     onClick = {
                                         preferredAudioMode = if (reciter.audioType == 0) 0 else 1
