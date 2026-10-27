@@ -62,6 +62,7 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LibraryBooks
@@ -234,6 +235,7 @@ fun MashxallApp(startScreen: String? = null) {
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var resumeMushafRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
+    var audioStartsAtAdhan by rememberSaveable { mutableStateOf(false) }
     var audioAutoPlayRequested by rememberSaveable { mutableStateOf(false) }
     var selectedCity by rememberSaveable {
         mutableStateOf(
@@ -410,6 +412,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "audio" -> AudioScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
                                     focusReciters = audioStartsAtReciters,
+                                    focusAdhan = audioStartsAtAdhan,
                                     autoPlayRequested = audioAutoPlayRequested
                                 )
                                 "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
@@ -435,6 +438,12 @@ fun MashxallApp(startScreen: String? = null) {
                                     prefs.edit().putString("language", it.key).apply()
                                 }, onDataInfo = { navigateTo("about_data") }, onBackup = { navigateTo("backup") }, onAudio = {
                                     audioStartsAtReciters = true
+                                    audioStartsAtAdhan = false
+                                    audioAutoPlayRequested = false
+                                    navigateTo("audio")
+                                }, onAdhan = {
+                                    audioStartsAtReciters = false
+                                    audioStartsAtAdhan = true
                                     audioAutoPlayRequested = false
                                     navigateTo("audio")
                                 }, onPrayer = { navigateTo("prayer") }, onQuran = { navigateTo("quran") })
@@ -1111,6 +1120,7 @@ private fun SettingsScreen(
     onDataInfo: () -> Unit,
     onBackup: () -> Unit,
     onAudio: () -> Unit,
+    onAdhan: () -> Unit,
     onPrayer: () -> Unit,
     onQuran: () -> Unit
 ) {
@@ -1225,9 +1235,14 @@ private fun SettingsScreen(
                 Icons.Outlined.Schedule to onPrayer
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Reciters & adhan library"; AppLanguage.AR -> "مكتبة القراء والمؤذنين"; AppLanguage.CKB -> "کتێبخانەی قورئان‌خوێن و موئەزین" },
-                when (language) { AppLanguage.EN -> "Browse included audio and available reciters"; AppLanguage.AR -> "تصفّح الصوتيات والقراء المتاحين"; AppLanguage.CKB -> "گەڕان لە دەنگ و قورئان‌خوێنە بەردەستەکان" },
+                when (language) { AppLanguage.EN -> "Quran reciters"; AppLanguage.AR -> "قرّاء القرآن"; AppLanguage.CKB -> "قورئان‌خوێنەکان" },
+                when (language) { AppLanguage.EN -> "Choose a reciter and full-surah or verse-by-verse playback"; AppLanguage.AR -> "اختر القارئ والتشغيل آيةً بآية أو السورة كاملة"; AppLanguage.CKB -> "قورئان‌خوێن و لێدانی ئایەت بە ئایەت یان سوورەتی تەواو هەڵبژێرە" },
                 Icons.Outlined.GraphicEq to onAudio
+            ),
+            Triple(
+                when (language) { AppLanguage.EN -> "Adhan & muezzins"; AppLanguage.AR -> "الأذان والمؤذنون"; AppLanguage.CKB -> "بانگ و موئەزینەکان" },
+                when (language) { AppLanguage.EN -> "Open the separate adhan and mosque-audio collection"; AppLanguage.AR -> "افتح مجموعة الأذان وأصوات المساجد بشكل مستقل"; AppLanguage.CKB -> "کۆمەڵەی بانگ و دەنگی مزگەوت بە جیاوازی بکەرەوە" },
+                Icons.Outlined.NotificationsActive to onAdhan
             ),
             Triple(
                 when (language) { AppLanguage.EN -> "Backup & restore"; AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"; AppLanguage.CKB -> "پاشەکەوتکردن و گەڕاندنەوە" },

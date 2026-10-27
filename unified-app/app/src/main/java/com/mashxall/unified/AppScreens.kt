@@ -37,6 +37,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -1378,6 +1379,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
 
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
     language: AppLanguage,
@@ -1396,11 +1398,13 @@ private fun MushafPageViewer(
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val pageReveal = remember { Animatable(1f) }
-    LaunchedEffect(page) {
-        pageReveal.snapTo(0.94f)
-        pageReveal.animateTo(1f, animationSpec = tween(220))
-    }
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(bitmap) {
+        if (bitmap != null) {
+            pageReveal.snapTo(0.94f)
+            pageReveal.animateTo(1f, animationSpec = tween(220))
+        }
+    }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
     var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
@@ -3083,6 +3087,7 @@ fun AudioScreen(
     initialSurah: Int = 1,
     initialAyah: Int = 1,
     focusReciters: Boolean = false,
+    focusAdhan: Boolean = false,
     autoPlayRequested: Boolean = false
 ) {
     val context = LocalContext.current
@@ -3095,18 +3100,18 @@ fun AudioScreen(
     var offlineRevision by remember { mutableIntStateOf(0) }
     var audioNotice by rememberSaveable { mutableStateOf("") }
     var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
-    val preferredVerseReciter = reciters.firstOrNull { it.id == preferredReciterId && it.audioType == 0 }
+    val preferredReciter = reciters.firstOrNull { it.id == preferredReciterId }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(if (focusReciters) 1 else 0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(if (focusAdhan) 2 else if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
-    LaunchedEffect(initialSurah, initialAyah, focusReciters) {
+    LaunchedEffect(initialSurah, initialAyah, focusReciters, focusAdhan) {
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
-        selectedTab = if (focusReciters) 1 else 0
+        selectedTab = if (focusAdhan) 2 else if (focusReciters) 1 else 0
     }
     LaunchedEffect(Unit) {
         audio = ContentRepository.loadAudioItems(context)
@@ -3209,13 +3214,13 @@ fun AudioScreen(
             }
             Text(
                 if (language == AppLanguage.EN) {
-                    if (preferredVerseReciter != null) "Your preferred verse-by-verse reciter will start automatically when you open this screen from a Quran verse."
+                    if (preferredReciter != null) "Your saved reciter will be used when you open audio playback from a Quran verse."
                     else "Streaming needs internet. Choose a verse-by-verse reciter below; it will be remembered and the Quran play button can use it next time."
                 } else if (language == AppLanguage.AR) {
-                    if (preferredVerseReciter != null) "سيبدأ قارئك المفضّل الذي يدعم تشغيل الآيات تلقائيًا عند فتح هذه الشاشة من آية في القرآن."
+                    if (preferredReciter != null) "سيُستخدم القارئ الذي اخترته عند فتح التشغيل الصوتي من آية في القرآن."
                     else "البث يحتاج إلى الإنترنت. اختر قارئًا يدعم تشغيل الآيات أدناه؛ سيُحفظ اختيارك لزر تشغيل الآية لاحقًا."
                 } else {
-                    if (preferredVerseReciter != null) "کاتێک لەم شاشەیە لە ئایەتێکی قورئانەوە بکەیتەوە، قورئان‌خوێنی دڵخواز کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی دەکات خۆکارانە دەست پێدەکات."
+                    if (preferredReciter != null) "کاتێک لە ئایەتێکی قورئانەوە پەخش دەست پێدەکەیت، ئەو قورئان‌خوێنەی هەڵتبژاردووە بەکاردێت."
                     else "بۆ پەخش ئینتەرنێت پێویستە. قورئان‌خوێنێک هەڵبژێرە کە خوێندنەوەی ئایەت بە ئایەت پشتیوانی بکات؛ دواتر دوگمەی گوێگرتن ئەوە بەکاردهێنێت."
                 },
                 color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
