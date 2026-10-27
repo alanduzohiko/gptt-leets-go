@@ -552,8 +552,7 @@ echo "PASS: tapping verse 1:1 opens its verse text and contextual actions inside
 # Dismiss the verse sheet, then exit the Mushaf back to the surah list.
 adb shell input keyevent 4 || true
 sleep 3
-adb shell uiautomator dump /sdcard/mashxall-mushaf-restored.xml > dist/runtime-test/uiautomator-mushaf-restored.txt 2>&1 || true
-adb pull /sdcard/mashxall-mushaf-restored.xml dist/runtime-test/window-mushaf-sheet-dismissed.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-mushaf-restored.xml dist/runtime-test/window-mushaf-sheet-dismissed.xml dist/runtime-test/uiautomator-mushaf-restored.txt
 bookmark_coords="$(python3 - dist/runtime-test/window-mushaf-sheet-dismissed.xml <<'PY'
 import re
 import sys
@@ -616,8 +615,7 @@ fi
 read -r exit_x exit_y <<< "$exit_coords"
 adb shell input tap "$exit_x" "$exit_y"
 sleep 5
-adb shell uiautomator dump /sdcard/mashxall-quran-restored.xml > dist/runtime-test/uiautomator-quran-restored.txt 2>&1 || true
-adb pull /sdcard/mashxall-quran-restored.xml dist/runtime-test/window-quran-restored.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-quran-restored.xml dist/runtime-test/window-quran-restored.xml dist/runtime-test/uiautomator-quran-restored.txt
 if ! grep -Eq 'قورئانی پیرۆز|القرآن الكريم|The Holy Quran' dist/runtime-test/window-quran-restored.xml; then
   echo "FAIL: exiting the Mushaf did not return to the surah list."
   cat dist/runtime-test/window-quran-restored.xml
@@ -687,8 +685,7 @@ fi
 read -r article_x article_y <<< "$article_coords"
 adb shell input tap "$article_x" "$article_y"
 sleep 5
-adb shell uiautomator dump /sdcard/mashxall-hadith-articles.xml > dist/runtime-test/uiautomator-hadith-articles.txt || true
-adb pull /sdcard/mashxall-hadith-articles.xml dist/runtime-test/window-hadith-articles.xml >/dev/null || true
+dump_fresh_hierarchy /sdcard/mashxall-hadith-articles.xml dist/runtime-test/window-hadith-articles.xml dist/runtime-test/uiautomator-hadith-articles.txt
 if ! grep -Eq 'سیفەتەکانی شکۆ و گەورەیی|صفات الجلال والعظمة|Attributes of Majesty and Greatness' dist/runtime-test/window-hadith-articles.xml; then
   echo "FAIL: the source Hadith articles did not render their localized title."
   cat dist/runtime-test/window-hadith-articles.xml
@@ -738,8 +735,7 @@ fi
 read -r article_detail_x article_detail_y <<< "$article_detail_coords"
 adb shell input tap "$article_detail_x" "$article_detail_y"
 sleep 5
-adb shell uiautomator dump /sdcard/mashxall-hadith-article-detail.xml > dist/runtime-test/uiautomator-hadith-article-detail.txt 2>&1 || true
-adb pull /sdcard/mashxall-hadith-article-detail.xml dist/runtime-test/window-hadith-article-detail.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-hadith-article-detail.xml dist/runtime-test/window-hadith-article-detail.xml dist/runtime-test/uiautomator-hadith-article-detail.txt
 # Verify the full article body in the detail sheet before scrolling: long source
 # narrations naturally place the copy control below the first viewport.
 if ! grep -Eq 'سیفەتەکانی شکۆ و گەورەیی|صفات الجلال والعظمة|Attributes of Majesty and Greatness' dist/runtime-test/window-hadith-article-detail.xml; then
@@ -885,8 +881,7 @@ fi
 read -r farmuda_x farmuda_y <<< "$farmuda_detail_coords"
 adb shell input tap "$farmuda_x" "$farmuda_y"
 sleep 5
-adb shell uiautomator dump /sdcard/mashxall-farmuda-detail.xml > dist/runtime-test/uiautomator-farmuda-detail.txt 2>&1 || true
-adb pull /sdcard/mashxall-farmuda-detail.xml dist/runtime-test/window-farmuda-detail.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-farmuda-detail.xml dist/runtime-test/window-farmuda-detail.xml dist/runtime-test/uiautomator-farmuda-detail.txt
 if ! grep -Eq 'SORANI KURDISH|الكردية السورانية|کوردی سۆرانی|ARABIC|النص العربي|دەقی عەرەبی' dist/runtime-test/window-farmuda-detail.xml; then
   echo "FAIL: opening a Farmuda entry did not expose its source-language detail content."
   cat dist/runtime-test/window-farmuda-detail.xml
@@ -953,8 +948,7 @@ fi
 read -r azkar_category_x azkar_category_y <<< "$azkar_category_coords"
 adb shell input tap "$azkar_category_x" "$azkar_category_y"
 sleep 5
-adb shell uiautomator dump /sdcard/mashxall-azkar-items.xml > dist/runtime-test/uiautomator-azkar-items.txt 2>&1 || true
-adb pull /sdcard/mashxall-azkar-items.xml dist/runtime-test/window-azkar-items.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-azkar-items.xml dist/runtime-test/window-azkar-items.xml dist/runtime-test/uiautomator-azkar-items.txt
 
 azkar_item_coords="$(python3 - dist/runtime-test/window-azkar-items.xml <<'PY'
 import re
@@ -984,8 +978,7 @@ fi
 read -r azkar_item_x azkar_item_y <<< "$azkar_item_coords"
 adb shell input tap "$azkar_item_x" "$azkar_item_y"
 sleep 5
-adb shell uiautomator dump /sdcard/mashxall-azkar-detail.xml > dist/runtime-test/uiautomator-azkar-detail.txt 2>&1 || true
-adb pull /sdcard/mashxall-azkar-detail.xml dist/runtime-test/window-azkar.xml >/dev/null 2>&1 || true
+dump_fresh_hierarchy /sdcard/mashxall-azkar-detail.xml dist/runtime-test/window-azkar.xml dist/runtime-test/uiautomator-azkar-detail.txt
 if ! grep -Eq 'Repetitions|عدد التكرارات|ژمارەی دووبارەکردنەوە' dist/runtime-test/window-azkar.xml; then
   echo "FAIL: tapping an Adhkar item did not open its dedicated detail and repetition counter."
   cat dist/runtime-test/window-azkar.xml
