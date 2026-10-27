@@ -47,10 +47,29 @@ for attempt in 1 2 3; do
     install_success=1
     break
   fi
-  if grep -q "Can't find service: package" dist/runtime-test/install.txt; then
-    echo "PackageManager transiently unavailable; waiting 15 seconds before retry." | tee -a dist/runtime-test/install.txt
-    sleep 15
+
+  # The Android 11 emulator can briefly lose PackageManager's Binder pipe
+  # after a slow cold boot. Treat these signatures as transient installation
+  # failures and recover/re-check the device before spending the next attempt.
+  if grep -Eqi "Can't find service: package|Failure calling service package|Broken pipe|device offline|Could not access the Package Manager" dist/runtime-test/install.txt; then
+    echo "Transient PackageManager/ADB failure detected; reconnecting and rechecking PackageManager before retry." | tee -a dist/runtime-test/install.txt
+    timeout --foreground 20s "$ADB_BIN" reconnect device >> dist/runtime-test/install.txt 2>&1 || true
+    timeout --foreground 30s "$ADB_BIN" wait-for-device >> dist/runtime-test/install.txt 2>&1 || true
+    package_ready=0
+    for package_attempt in $(seq 1 12); do
+      if timeout --foreground 15s "$ADB_BIN" shell pm list packages >/dev/null 2>dist/runtime-test/package-manager-retry-check.txt; then
+        package_ready=1
+        echo "PackageManager recovered after retry check $package_attempt." | tee -a dist/runtime-test/install.txt
+        break
+      fi
+      sleep 5
+    done
+    if [[ "$package_ready" -ne 1 ]]; then
+      echo "PackageManager did not recover during the bounded retry window." | tee -a dist/runtime-test/install.txt
+    fi
+    if [[ "$attempt" -lt 3 ]]; then sleep 10; fi
   else
+    echo "Installation failed for a non-transient reason; not retrying blindly." | tee -a dist/runtime-test/install.txt
     break
   fi
 done
