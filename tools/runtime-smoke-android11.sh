@@ -995,7 +995,67 @@ echo "PASS: Adhkar categories open a list, and an individual remembrance opens i
 check_screen names 'ناوە پیرۆزەکان|أسماء الله الحسنى|Names of Allah'
 check_screen tasbih 'تەسبیح|المسبحة|Digital tasbih'
 check_screen audio 'دەنگ و تلاوەت|التلاوات والصوتيات|Recitations & audio'
-check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
+
+# Verify that the Quran reader exposes a true mode choice, not just text that
+# says "verse by verse" or "full surah". Check both UI filtering and persistence.
+reciters_tab_coords="$(find_ui_bounds dist/runtime-test/window-audio.xml '^(Reciters|القرّاء|قورئان‌خوێنەکان)$')"
+if [[ -z "$reciters_tab_coords" ]]; then
+  echo "FAIL: Audio screen did not expose a separate Quran-reciter tab."
+  cat dist/runtime-test/window-audio.xml
+  exit 1
+fi
+read -r reciters_tab_x reciters_tab_y <<< "$reciters_tab_coords"
+adb shell input tap "$reciters_tab_x" "$reciters_tab_y"
+sleep 3
+dump_fresh_hierarchy /sdcard/mashxall-audio-reciter-mode.xml dist/runtime-test/window-audio-reciter-mode.xml dist/runtime-test/uiautomator-audio-reciter-mode.txt
+if ! grep -Eqi 'Verse by verse|آية بآية|ئایەت بە ئایەت' dist/runtime-test/window-audio-reciter-mode.xml ||
+   ! grep -Eqi 'Full surah|السورة كاملة|سوورەتی تەواو' dist/runtime-test/window-audio-reciter-mode.xml; then
+  echo "FAIL: Reciters tab did not expose both playback modes."
+  cat dist/runtime-test/window-audio-reciter-mode.xml
+  exit 1
+fi
+
+full_mode_coords="$(find_ui_bounds dist/runtime-test/window-audio-reciter-mode.xml '^(Full surah|السورة كاملة|سوورەتی تەواو)$')"
+if [[ -z "$full_mode_coords" ]]; then
+  echo "FAIL: Full-surah mode chip is not accessible."
+  cat dist/runtime-test/window-audio-reciter-mode.xml
+  exit 1
+fi
+read -r full_mode_x full_mode_y <<< "$full_mode_coords"
+adb shell input tap "$full_mode_x" "$full_mode_y"
+sleep 3
+dump_fresh_hierarchy /sdcard/mashxall-audio-full-mode.xml dist/runtime-test/window-audio-full-mode.xml dist/runtime-test/uiautomator-audio-full-mode.txt
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-full-audio-mode.xml 2>/dev/null || true
+if ! grep -Eq 'preferred_audio_mode" value="1"' dist/runtime-test/preferences-full-audio-mode.xml ||
+   ! grep -Eqi 'Full-surah recording|تسجيل السورة كاملة|تۆماری تەواوی سوورەت' dist/runtime-test/window-audio-full-mode.xml; then
+  echo "FAIL: selecting Full surah did not persist mode 1 and render compatible full-surah reciters."
+  cat dist/runtime-test/preferences-full-audio-mode.xml
+  cat dist/runtime-test/window-audio-full-mode.xml
+  exit 1
+fi
+echo "PASS: selecting Full surah persists the preference and filters compatible reciters."
+
+verse_mode_coords="$(find_ui_bounds dist/runtime-test/window-audio-full-mode.xml '^(Verse by verse|آية بآية|ئایەت بە ئایەت)$')"
+if [[ -z "$verse_mode_coords" ]]; then
+  echo "FAIL: Verse-by-verse mode chip is not accessible after switching to full-surah mode."
+  cat dist/runtime-test/window-audio-full-mode.xml
+  exit 1
+fi
+read -r verse_mode_x verse_mode_y <<< "$verse_mode_coords"
+adb shell input tap "$verse_mode_x" "$verse_mode_y"
+sleep 3
+dump_fresh_hierarchy /sdcard/mashxall-audio-verse-mode.xml dist/runtime-test/window-audio-verse-mode.xml dist/runtime-test/uiautomator-audio-verse-mode.txt
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-verse-audio-mode.xml 2>/dev/null || true
+if ! grep -Eq 'preferred_audio_mode" value="0"' dist/runtime-test/preferences-verse-audio-mode.xml ||
+   ! grep -Eqi 'Verse-by-verse|آية بآية|ئایەت بە ئایەت' dist/runtime-test/window-audio-verse-mode.xml; then
+  echo "FAIL: selecting Verse by verse did not persist mode 0 and render compatible verse-by-verse reciters."
+  cat dist/runtime-test/preferences-verse-audio-mode.xml
+  cat dist/runtime-test/window-audio-verse-mode.xml
+  exit 1
+fi
+echo "PASS: selecting Verse by verse persists the preference and filters compatible reciters."
+
+check_screen lexicon
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
 check_screen backup 'پاشەکەوتکردن و گەڕاندنەوە|النسخ الاحتياطي والاستعادة|Backup & restore'
