@@ -79,7 +79,10 @@ object PrayerAlarmScheduler {
         if (manualLatitude != null && manualLongitude != null) {
             return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude, manualLongitude, date, method, school)
         }
-        val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
+        val cityName = selectedCityForAlarm(
+            prefs.getString("selected_city", null),
+            hasManualCoordinates = manualLatitude != null && manualLongitude != null
+        ) ?: return null
         val countryName = prefs.getString("selected_city_country", "") ?: ""
         ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
         val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
@@ -141,4 +144,22 @@ object PrayerAlarmScheduler {
         "maghrib" -> row.maghrib
         else -> row.isha
     }
+}
+
+
+/**
+ * Resolve an explicitly selected city for scheduled alarms.
+ *
+ * MainActivity treats "Erbil" without saved manual coordinates as the old
+ * implicit default, not as a user choice. Keep scheduled alarms consistent:
+ * without a fresh GPS fix, saved city coordinates, or an explicit non-default
+ * city, return no source rather than silently scheduling for Erbil.
+ */
+internal fun selectedCityForAlarm(
+    savedCity: String?,
+    hasManualCoordinates: Boolean
+): String? {
+    val city = savedCity?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    if (city.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) return null
+    return city
 }
