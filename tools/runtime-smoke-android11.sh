@@ -456,7 +456,7 @@ whole = " ".join(texts)
 normalized = normalize(whole)
 has_ayah = "بسم الله الرحمن الرحيم" in normalized or "الحمد لله رب العالمين" in normalized
 has_actions = any(re.search(r"Copy|نسخ|کۆپی", value, re.I) for value in texts) and any(
-    re.search(r"Play|تشغيل|لێدان", value, re.I) for value in texts
+    re.search(r"Play|تشغيل|لێدان|بخوێنەوە|خوێندنەوە", value, re.I) for value in texts
 )
 if has_ayah and has_actions:
     raise SystemExit(0)
