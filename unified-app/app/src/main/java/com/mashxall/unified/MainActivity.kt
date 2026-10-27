@@ -12,6 +12,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.SideEffect
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
@@ -728,6 +731,7 @@ private fun HomeScreen(
     onResumeReading: () -> Unit = { onOpen(AppScreen.QURAN) }
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
@@ -736,6 +740,7 @@ private fun HomeScreen(
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
+    var initialLocationCheckCompleted by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -858,6 +863,47 @@ private fun HomeScreen(
                 requestHomeLocation()
             }
         }
+        initialLocationCheckCompleted = true
+    }
+
+    // HomeScreen can stay composed while the user visits Android Settings.
+    // Re-check permission on every return so revoked permissions cannot leave
+    // stale GPS coordinates masquerading as the current location.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && initialLocationCheckCompleted) {
+                val fine = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                val coarse = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                val hasLocationPermission = fine || coarse
+                if (shouldClearSavedGpsFix(hasLocationPermission, gpsLatitude, gpsLongitude)) {
+                    gpsLatitude = null
+                    gpsLongitude = null
+                    prefs.edit()
+                        .remove("gps_latitude")
+                        .remove("gps_longitude")
+                        .remove("gps_accuracy")
+                        .apply()
+                    locationMessage = when (language) {
+                        AppLanguage.EN -> "Location permission is off; showing the selected city instead."
+                        AppLanguage.AR -> "إذن الموقع متوقف؛ ستُعرض مواقيت المدينة المختارة بدل الموقع القديم."
+                        AppLanguage.CKB -> "مۆڵەتی شوێن ناچالاکە؛ کاتی شاری هەڵبژێردراو پیشان دەدرێت، نەک شوێنی کۆن."
+                    }
+                } else if (
+                    hasLocationPermission &&
+                    (gpsLatitude == null || gpsLongitude == null)
+                ) {
+                    // The user may have enabled location permission in Android
+                    // Settings. Obtain a new fix instead of using an old city.
+                    requestCurrentLocation(context, saveLocationFix, handleLocationError)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val prayerEntries = prayerTimes?.let { times ->
