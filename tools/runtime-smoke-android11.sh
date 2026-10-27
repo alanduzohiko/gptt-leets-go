@@ -365,7 +365,7 @@ try:
     root = ET.parse(sys.argv[1]).getroot()
 except Exception:
     raise SystemExit(0)
-pattern = re.compile(r"(?:پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604", re.I)
+pattern = re.compile(r"(?:پەڕە|صفحة|Page)\s+1\s*/\s*604", re.I)
 for node in root.iter("node"):
     if not pattern.search(node.attrib.get("text", "")):
         continue
