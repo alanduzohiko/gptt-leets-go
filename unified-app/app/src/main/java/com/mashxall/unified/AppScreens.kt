@@ -532,6 +532,24 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         label = { Text(if (language == AppLanguage.EN) "Without diacritics" else if (language == AppLanguage.AR) "بلا تشكيل" else "بێ حەرەکات", fontSize = 10.sp) }
                     )
                 }
+                if (coloredTajweed) {
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        when {
+                            tajweedLoading && language == AppLanguage.EN -> "Loading colour-coded Tajweed…"
+                            tajweedLoading && language == AppLanguage.AR -> "جارٍ تحميل التجويد الملوّن…"
+                            tajweedLoading -> "تەجویدی ڕەنگاوڕەنگ دادەگیرێت…"
+                            tajweedMessage.isNotBlank() -> tajweedMessage
+                            else -> when (language) {
+                                AppLanguage.EN -> "Tajweed colours apply in this verse-text view. Switch to the page Mushaf for the original printed layout."
+                                AppLanguage.AR -> "ألوان التجويد تظهر في عرض نص الآيات؛ انتقل إلى المصحف المصوّر لعرض الصفحات الأصلية."
+                                AppLanguage.CKB -> "ڕەنگەکانی تەجوید لەم پێشان‌دانی دەقی ئایەتە؛ بۆ ڕووکاری ڕەسەنی پەڕەی مصحەف، مصحەفی پەڕەیی هەڵبژێرە."
+                            }
+                        },
+                        color = if (tajweedAyahs.isNotEmpty()) Gold else foreground.copy(alpha = 0.58f),
+                        fontSize = 9.sp, lineHeight = 14.sp
+                    )
+                }
             }
         }
         }
@@ -1237,6 +1255,38 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Text(if (language == AppLanguage.EN) "Included edition: original 604-page Mushaf." else if (language == AppLanguage.AR) "النسخة المضمّنة: المصحف الأصلي ذو 604 صفحات." else "وەشانی بەردەست: مصحەفی ڕەسەنی ٦٠٤ پەڕە.", color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
                             Spacer(Modifier.height(12.dp))
+                            Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.22f))) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            if (language == AppLanguage.EN) "Colored Tajweed in verse text"
+                                            else if (language == AppLanguage.AR) "التجويد الملوّن في نص الآيات"
+                                            else "تەجویدی ڕەنگاوڕەنگ لە دەقی ئایەت",
+                                            color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                                        )
+                                        Spacer(Modifier.height(3.dp))
+                                        Text(
+                                            if (language == AppLanguage.EN) "Loads the tagged text for the selected surah online on first use and keeps a private cache for offline reading. The printed page image stays unchanged."
+                                            else if (language == AppLanguage.AR) "يحمّل نص التجويد للسورة من الإنترنت عند أول استخدام ويحتفظ بنسخة خاصة للقراءة دون إنترنت. لا يغيّر صورة صفحات المصحف."
+                                            else "لە یەکەم بەکارهێنان دەقی تەجویدی سوورەتەکە لە ئۆنلاین دادەگیرێت و لە ناو ئەپەکەدا دەپارێزرێت؛ وێنەی پەڕەی مصحەف ناگۆڕێت.",
+                                            color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                                        )
+                                    }
+                                    Switch(
+                                        checked = coloredTajweed,
+                                        onCheckedChange = { enabled ->
+                                            coloredTajweed = enabled
+                                            prefs.edit().putBoolean("quran_colored_tajweed", enabled).apply()
+                                            if (!enabled) {
+                                                tajweedAyahs = emptyMap()
+                                                tajweedLoadedSurah = 0
+                                                tajweedMessage = ""
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
                             Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
