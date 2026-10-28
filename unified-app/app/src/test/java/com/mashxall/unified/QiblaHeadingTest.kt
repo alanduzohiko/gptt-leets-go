@@ -25,6 +25,7 @@ class QiblaHeadingTest {
 
     @Test
     fun shortestTurnAcrossZeroCanAlsoBeNegative() {
-        assertEquals(-5f, qiblaRelativeHeading(350f, 5f, 0f), 0.001f)
+        // From 5° to a 350° target, the shortest turn is 15° counter-clockwise.
+        assertEquals(-15f, qiblaRelativeHeading(350f, 5f, 0f), 0.001f)
     }
 }
