@@ -1141,6 +1141,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     }
                                 }
                             }
+                            }
                             if (readerPlaybackMode == "full" && readerReciters.none { it.audioType != 0 }) {
                                 item {
                                     Text(
