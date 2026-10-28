@@ -248,6 +248,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var preferredReaderReciterId by rememberSaveable {
         mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1))
     }
+    var readerPlaybackMode by rememberSaveable {
+        mutableStateOf(if (prefs.getString("reciter_playback_mode", "verse") == "full") "full" else "verse")
+    }
     LaunchedEffect(Unit) {
         readerReciters = ContentRepository.loadReciters(context)
         if (preferredReaderReciterId == -1 || readerReciters.none { it.id == preferredReaderReciterId }) {
@@ -1055,9 +1058,65 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     "reciters" -> {
                         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             item {
-                                Text(if (language == AppLanguage.EN) "VERSE-BY-VERSE" else if (language == AppLanguage.AR) "آيةً بآية" else "ئایەت بە ئایەت", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(if (language == AppLanguage.EN) "Per-ayah sources can play from your chosen verse through the end of the surah." else if (language == AppLanguage.AR) "يمكن أن تبدأ المصادر ذات التسجيل المنفصل من الآية المختارة حتى نهاية السورة." else "سەرچاوەی ئایەت بە ئایەت لە ئایەتی هەڵبژێردراوەوە دەخوێنێتەوە تا کۆتایی سوورەت.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
+                                Text(
+                                    if (language == AppLanguage.EN) "PLAYBACK MODE"
+                                    else if (language == AppLanguage.AR) "طريقة التشغيل"
+                                    else "شێوازی لێدان",
+                                    color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                                    FilterChip(
+                                        selected = readerPlaybackMode == "full",
+                                        onClick = {
+                                            readerPlaybackMode = "full"
+                                            prefs.edit().putString("reciter_playback_mode", "full").apply()
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        label = {
+                                            Text(
+                                                if (language == AppLanguage.EN) "Full surah"
+                                                else if (language == AppLanguage.AR) "السورة كاملة"
+                                                else "سوورەتی تەواو",
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    )
+                                    FilterChip(
+                                        selected = readerPlaybackMode == "verse",
+                                        onClick = {
+                                            readerPlaybackMode = "verse"
+                                            prefs.edit().putString("reciter_playback_mode", "verse").apply()
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        label = {
+                                            Text(
+                                                if (language == AppLanguage.EN) "From selected ayah"
+                                                else if (language == AppLanguage.AR) "من الآية المحددة"
+                                                else "لە ئایەتی هەڵبژێردراوەوە",
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    )
+                                }
+                                Text(
+                                    when {
+                                        readerPlaybackMode == "full" && language == AppLanguage.EN -> "Starts at ayah 1. Ayah-by-ayah recordings play in sequence; full-surah recordings play as one track."
+                                        readerPlaybackMode == "full" && language == AppLanguage.AR -> "يبدأ من الآية الأولى؛ تُشغَّل تسجيلات الآيات بالتتابع، أما التسجيل الكامل فيعمل كمقطع واحد."
+                                        readerPlaybackMode == "full" -> "لە ئایەتی یەکەمەوە دەست پێدەکات؛ تۆمارەکانی ئایەت بە ڕیز لێدەدرێن، تۆماری تەواوی سوورەتیش وەک یەک دەنگ لێدەدرێت."
+                                        language == AppLanguage.EN -> "Starts at the chosen ayah and continues to the end; only reciters with individual ayah files are listed."
+                                        language == AppLanguage.AR -> "يبدأ من الآية المختارة حتى نهاية السورة؛ وتُعرض فقط المصادر ذات ملفات الآيات المنفصلة."
+                                        else -> "لە ئایەتی هەڵبژێردراوەوە تا کۆتایی سوورەت دەخوێنێتەوە؛ تەنها سەرچاوەکانی فایلە جیاوازەکانی ئایەت پیشان دەدرێن."
+                                    },
+                                    color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp
+                                )
                                 Spacer(Modifier.height(6.dp))
+                                Text(
+                                    if (language == AppLanguage.EN) "RECITERS WITH INDIVIDUAL AYAH FILES"
+                                    else if (language == AppLanguage.AR) "القرّاء ذوو ملفات الآيات المنفصلة"
+                                    else "قورئان‌خوێنەکانی فایلە جیاوازەکانی ئایەت",
+                                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                                )
                             }
                             items(readerReciters.filter { it.audioType == 0 }, key = { "verse-reciter-" + it.id }) { reciter ->
                                 Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
@@ -1067,18 +1126,29 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     }
                                 }
                             }
-                            item {
-                                Spacer(Modifier.height(5.dp))
-                                Text(if (language == AppLanguage.EN) "FULL-SURAH RECORDINGS" else if (language == AppLanguage.AR) "تسجيلات السورة كاملة" else "تۆمارەکانی سوورەتی تەواو", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(if (language == AppLanguage.EN) "Full-surah sources start from the beginning because separate ayah timestamps are not provided." else if (language == AppLanguage.AR) "تبدأ تسجيلات السورة الكاملة من بدايتها لعدم توفر توقيتات منفصلة للآيات." else "تۆماری تەواوی سوورەت لە سەرەتایەوە دەست پێدەکات، چونکە کاتی جیاوازی ئایەتەکان بەردەست نییە.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
-                                Spacer(Modifier.height(6.dp))
-                            }
-                            items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
+                            if (readerPlaybackMode == "full") {
+                                item {
+                                    Spacer(Modifier.height(5.dp))
+                                    Text(if (language == AppLanguage.EN) "FULL-SURAH RECORDINGS" else if (language == AppLanguage.AR) "تسجيلات السورة كاملة" else "تۆمارەکانی سوورەتی تەواو", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(if (language == AppLanguage.EN) "These tracks start at the beginning of the surah; use the mode above to choose whether playback starts at the first ayah or at your selected ayah." else if (language == AppLanguage.AR) "تبدأ هذه التسجيلات من أول السورة؛ استخدم الخيار أعلاه لتحديد طريقة التشغيل." else "ئەم تۆمارانە لە سەرەتای سوورەتەوە دەست پێدەکەن؛ لە سەرەوە شێوازی لێدان هەڵبژێرە.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
+                                    Spacer(Modifier.height(6.dp))
+                                }
+                                items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
                                 Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
                                         RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
                                     }
+                                }
+                            }
+                            if (readerPlaybackMode == "full" && readerReciters.none { it.audioType != 0 }) {
+                                item {
+                                    Text(
+                                        if (language == AppLanguage.EN) "No full-surah-only sources are available in the supplied catalogue."
+                                        else if (language == AppLanguage.AR) "لا توجد مصادر مقتصرة على تسجيل السورة كاملة في الفهرس المرفق."
+                                        else "لە فهرستی بەردەستدا سەرچاوەی تایبەت بە تۆماری تەواوی سوورەت نییە.",
+                                        color = foreground.copy(alpha = 0.6f), fontSize = 11.sp, lineHeight = 17.sp
+                                    )
                                 }
                             }
                             if (readerReciters.isEmpty()) item { Text(tr(language, "loading"), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp) }
