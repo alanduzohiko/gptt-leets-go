@@ -757,8 +757,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                         }
                         Spacer(Modifier.height(6.dp))
+                        val taggedAyah = tajweedAyahs[verse.number]
+                            .takeIf { coloredTajweed && !showUnvowelled && tajweedLoadedSurah == verse.surah }
+                        val displayedAyah = remember(
+                            verse.surah, verse.number, taggedAyah, showUnvowelled, verse.arabic, verse.arabicWithoutHarakat, foreground
+                        ) {
+                            if (!taggedAyah.isNullOrBlank()) {
+                                TajweedText.annotate(taggedAyah, darkMode = foreground.red > 0.5f)
+                            } else {
+                                androidx.compose.ui.text.AnnotatedString(
+                                    if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic
+                                )
+                            }
+                        }
                         Text(
-                            if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic,
+                            text = displayedAyah,
                             color = foreground, fontSize = (23f * verseTextScale).sp, lineHeight = (39f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
                         )
                         if (verse.hasHadith) {
