@@ -1998,8 +1998,6 @@ object ContentRepository {
         latitude: Double,
         longitude: Double,
         date: Date = Date(),
-        method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
-        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
         staticRadiusKm: Double = 7.0
     ): PrayerRow? = withContext(Dispatchers.IO) {
         val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
@@ -2007,7 +2005,7 @@ object ContentRepository {
             .mapNotNull { row ->
                 val rowLat = row.latitude ?: return@mapNotNull null
                 val rowLon = row.longitude ?: return@mapNotNull null
-                val distance = PrayerTimeCalculator.distanceKm(latitude, longitude, rowLat, rowLon)
+                val distance = PrayerLocationMath.distanceKm(latitude, longitude, rowLat, rowLon)
                 if (distance <= staticRadiusKm) row to distance else null
             }
             .sortedBy { it.second }
