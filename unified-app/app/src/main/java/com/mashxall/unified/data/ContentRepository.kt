@@ -36,6 +36,65 @@ data class Ayah(
     val surahNameArabic: String = "",
     val surahNameEnglish: String = ""
 )
+
+data class QuranTextEdition(
+    val id: String,
+    val nameEnglish: String,
+    val nameArabic: String,
+    val nameCkb: String,
+    val source: String,
+    val sourceRevision: String,
+    val licenseUrl: String
+)
+
+data class QuranScriptVerse(val id: Int, val text: String)
+
+object QuranTextEditions {
+    const val ORIGINAL = "uthmani"
+    const val QPC_HAFS = "qpc-hafs"
+    const val HAFS_NASTALIQ = "hafs-nastaliq"
+
+    val alternatives = listOf(
+        QuranTextEdition(
+            id = QPC_HAFS,
+            nameEnglish = "QPC Hafs (Madinah script)",
+            nameArabic = "حفص — خط مصحف المدينة",
+            nameCkb = "حەفص — خەتی مصحەفی مەدینە",
+            source = "Qur'anpedia.net / quran-json",
+            sourceRevision = "8528abfcb55d808562ae9675217c07890322178f",
+            licenseUrl = "https://api.quranpedia.net/dumps/LICENSE.md"
+        ),
+        QuranTextEdition(
+            id = HAFS_NASTALIQ,
+            nameEnglish = "Hafs Nastaliq (Indo-Pak text)",
+            nameArabic = "حفص — خط النستعليق (النص الهندي الباكستاني)",
+            nameCkb = "حەفص — خەتی نەستەعلیق (هندۆ-پاکی)",
+            source = "Qur'anpedia.net / quran-json",
+            sourceRevision = "a8b5918b0c6f636e61a0cb57fb3366667e45d712",
+            licenseUrl = "https://api.quranpedia.net/dumps/LICENSE.md"
+        )
+    )
+
+    fun find(id: String): QuranTextEdition? = alternatives.firstOrNull { it.id == id }
+}
+
+/**
+ * Validate a complete one-chapter Hafs text payload before it can be cached or
+ * shown beside the app's existing verse numbering. This intentionally rejects
+ * partial/misidentified scripts instead of silently pairing wrong ayahs.
+ */
+internal fun validateQuranScriptChapter(
+    chapterId: Int,
+    expectedChapter: Int,
+    expectedAyahCount: Int,
+    verses: List<QuranScriptVerse>
+): Map<Int, String>? {
+    if (chapterId != expectedChapter || expectedChapter !in 1..114 || expectedAyahCount !in 1..286) return null
+    if (verses.size != expectedAyahCount) return null
+    if (verses.map { it.id } != (1..expectedAyahCount).toList()) return null
+    if (verses.any { it.text.isBlank() }) return null
+    return verses.associate { it.id to it.text }
+}
 data class AyahHadith(
     val id: Int,
     val collectionCode: String,
@@ -754,6 +813,97 @@ object ContentRepository {
                 item.arabicWithoutHarakat.contains(term, true) ||
                 item.translation.contains(term, true) ||
                 item.number.toString() == term
+        }
+    }
+
+    /**
+     * Load an alternate *text script* for one Hafs surah. These are not page
+     * images and must never replace the original 604-page graphic Mushaf.
+     * The first successful fetch is cached in private storage and then works
+     * offline. Only script IDs with the same Hafs verse numbering are allowed.
+     */
+    suspend fun loadQuranScriptAyahs(
+        context: Context,
+        scriptId: String,
+        surah: Int,
+        expectedAyahCount: Int
+    ): Map<Int, String> = withContext(Dispatchers.IO) {
+        if (QuranTextEditions.find(scriptId) == null || surah !in 1..114 || expectedAyahCount !in 1..286) {
+            return@withContext emptyMap()
+        }
+        val script = QuranTextEditions.find(scriptId) ?: return@withContext emptyMap()
+        val cacheDir = File(File(context.filesDir, "quran-text-editions"), "${script.id}-${script.sourceRevision.take(8)}")
+        val cacheFile = File(cacheDir, "surah-%03d.json".format(Locale.US, surah))
+
+        fun decode(raw: String): Map<Int, String>? = runCatching {
+            val root = JSONObject(raw)
+            val chapterId = root.optInt("id", -1)
+            val rows = root.optJSONArray("verses") ?: return@runCatching null
+            val verses = buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.optJSONObject(index) ?: return@runCatching null
+                    add(QuranScriptVerse(row.optInt("id", -1), row.optString("text", "")))
+                }
+            }
+            validateQuranScriptChapter(chapterId, surah, expectedAyahCount, verses)
+        }.getOrNull()
+
+        val cached = runCatching {
+            if (cacheFile.isFile && cacheFile.length() in 32L..5L * 1024L * 1024L) {
+                decode(cacheFile.readText(Charsets.UTF_8))
+            } else null
+        }.getOrNull()
+        if (cached != null) return@withContext cached
+
+        var connection: HttpURLConnection? = null
+        try {
+            val url = "https://quran-json.risanb.com/text/${script.id}/chapters/$surah.json"
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 12_000
+                readTimeout = 25_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "Mashxall Android")
+            }
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                Log.w("MashxallQuranScripts", "Text script source returned HTTP $code for ${script.id} surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            if (connection.contentLengthLong > 5L * 1024L * 1024L) {
+                Log.w("MashxallQuranScripts", "Text script response exceeded 5 MiB for ${script.id} surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            val raw = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            if (raw.toByteArray(Charsets.UTF_8).size > 5 * 1024 * 1024) {
+                Log.w("MashxallQuranScripts", "Text script response exceeded 5 MiB for ${script.id} surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            val decoded = decode(raw)
+            if (decoded == null) {
+                Log.w("MashxallQuranScripts", "Text script response was incomplete or misnumbered for ${script.id} surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            runCatching {
+                cacheDir.mkdirs()
+                val temporary = File(cacheDir, cacheFile.name + ".part")
+                temporary.writeText(raw, Charsets.UTF_8)
+                if (cacheFile.exists()) cacheFile.delete()
+                if (!temporary.renameTo(cacheFile)) {
+                    temporary.copyTo(cacheFile, overwrite = true)
+                    temporary.delete()
+                }
+            }.onFailure { error ->
+                Log.w("MashxallQuranScripts", "Could not cache ${script.id} surah $surah", error)
+            }
+            decoded
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            Log.w("MashxallQuranScripts", "Could not load ${script.id} surah $surah", error)
+            cached ?: emptyMap()
+        } finally {
+            connection?.disconnect()
         }
     }
 
