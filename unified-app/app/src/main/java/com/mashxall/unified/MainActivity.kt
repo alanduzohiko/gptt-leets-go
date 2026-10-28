@@ -32,9 +32,15 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,6 +103,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
@@ -120,6 +129,32 @@ private val Emerald = Color(0xFF19725A)
 private val PaleGold = Color(0xFFF4E5B4)
 private val SoftText = Color(0xFFB9CDC5)
 private val Panel = Color(0xFF102B25)
+
+/**
+ * Native press response for large navigation cards: slight spring scale, the
+ * standard Material ripple, and a light haptic acknowledgement on activation.
+ */
+private fun Modifier.premiumPress(onClick: () -> Unit): Modifier = composed {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.975f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "mashxallCardPressScale"
+    )
+    val haptic = LocalHapticFeedback.current
+    graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }.clickable(
+        interactionSource = interactionSource,
+        indication = LocalIndication.current,
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        }
+    )
+}
 
 internal object MashxallAppearance {
     var accent by mutableStateOf(Color(0xFFC9A44C))
@@ -623,7 +658,7 @@ private fun MoreScreen(
                                 Card(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
                                         .animateContentSize()
-                                        .clickable {
+                                        .premiumPress {
                                             val target = if (module.screen == AppScreen.LIBRARY) AppScreen.LIBRARY else module.screen
                                             onOpen(target)
                                         },
@@ -966,7 +1001,7 @@ private fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
         Card(
-            modifier = Modifier.fillMaxWidth().clickable { onResumeReading() },
+            modifier = Modifier.fillMaxWidth().premiumPress { onResumeReading() },
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = RoundedCornerShape(20.dp),
             border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.34f))
@@ -1006,7 +1041,7 @@ private fun HomeScreen(
                             slideInVertically(initialOffsetY = { height -> height / 7 }, animationSpec = tween(durationMillis = 520, delayMillis = delayMillis))
                     ) {
                         Card(
-                            modifier = Modifier.fillMaxWidth().clickable { onOpen(module.screen) }.animateContentSize(),
+                            modifier = Modifier.fillMaxWidth().animateContentSize().premiumPress { onOpen(module.screen) },
                             shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = cardColor),
                             border = BorderStroke(0.8.dp, module.color.copy(alpha = 0.42f))
                         ) {
