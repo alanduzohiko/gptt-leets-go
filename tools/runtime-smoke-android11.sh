@@ -398,9 +398,17 @@ fi
 read -r verse_x verse_y <<< "$verse_coords"
 adb shell input tap "$verse_x" "$verse_y"
 sleep 7
-adb shell uiautomator dump /sdcard/mashxall-quran-verse-actions.xml > dist/runtime-test/uiautomator-quran-verse-actions.txt 2>&1 || true
-adb pull /sdcard/mashxall-quran-verse-actions.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
-if ! python3 - dist/runtime-test/window-quran.xml <<'PY'
+
+# Never allow the old surah-list hierarchy to masquerade as the result of a
+# failed uiautomator dump. Start from fresh local/remote paths and retry the
+# capture itself before declaring a real interaction failure.
+verse_actions_ok=0
+for attempt in $(seq 1 3); do
+  rm -f dist/runtime-test/window-quran.xml
+  adb shell rm -f /sdcard/mashxall-quran-verse-actions.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-quran-verse-actions.xml > "dist/runtime-test/uiautomator-quran-verse-actions-$attempt.txt" 2>&1 || true
+  if adb pull /sdcard/mashxall-quran-verse-actions.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 &&
+     python3 - dist/runtime-test/window-quran.xml <<'PY'
 import re
 import sys
 import unicodedata
@@ -421,16 +429,25 @@ has_actions = any(re.search(r"Copy|نسخ|کۆپی", value, re.I) for value in t
 )
 if has_ayah and has_actions:
     raise SystemExit(0)
-print("Visible text nodes did not include both the verse and its copy/play actions.")
+print("Fresh hierarchy did not yet include both the verse and copy/play actions.")
 print("\n".join(f"({len(value)}) {value[:160]}" for value in sorted(texts, key=len, reverse=True)[:15]))
 raise SystemExit(1)
 PY
-then
+  then
+    verse_actions_ok=1
+    echo "PASS: tapping verse 1:1 opens its verse text and contextual actions (capture attempt $attempt)."
+    break
+  fi
+  echo "WARN: verse-action panel not confirmed from fresh hierarchy (attempt $attempt/3); retrying hierarchy capture."
+  sleep 2
+done
+if [[ "$verse_actions_ok" -ne 1 ]]; then
   echo "FAIL: tapping verse 1:1 did not open the unified verse-action panel with verse text, copy and playback."
-  cat dist/runtime-test/window-quran.xml
+  cat dist/runtime-test/window-quran.xml 2>/dev/null || true
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-quran-verse-actions-failure.txt || true
+  grep -E 'MashxallMushaf|FATAL EXCEPTION|AndroidRuntime|Input dispatching timed out|ANR in com\\.mashxall' dist/runtime-test/logcat-quran-verse-actions-failure.txt | tail -n 100 || true
   exit 1
 fi
-echo "PASS: tapping verse 1:1 opens its verse text and contextual actions inside the Mushaf."
 
 # Dismiss the verse sheet, then exit the Mushaf back to the surah list.
 adb shell input keyevent 4 || true
