@@ -151,6 +151,12 @@ private val MushafSepiaColorMatrix = ColorMatrix(
     )
 )
 
+internal object ReaderPlaybackSettings {
+    var mode by mutableStateOf("verse")
+
+    fun normalize(value: String?): String = if (value == "full") "full" else "verse"
+}
+
 internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
     if (mode == "full") 1 else requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
 
@@ -256,10 +262,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var preferredReaderReciterId by rememberSaveable {
         mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1))
     }
-    var readerPlaybackMode by rememberSaveable {
-        mutableStateOf(if (prefs.getString("reciter_playback_mode", "verse") == "full") "full" else "verse")
-    }
+    val readerPlaybackMode = ReaderPlaybackSettings.mode
     LaunchedEffect(Unit) {
+        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
         readerReciters = ContentRepository.loadReciters(context)
         if (preferredReaderReciterId == -1 || readerReciters.none { it.id == preferredReaderReciterId }) {
             preferredReaderReciterId = readerReciters.firstOrNull { it.audioType == 0 }?.id
@@ -1084,7 +1089,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     FilterChip(
                                         selected = readerPlaybackMode == "full",
                                         onClick = {
-                                            readerPlaybackMode = "full"
+                                            ReaderPlaybackSettings.mode = "full"
                                             prefs.edit().putString("reciter_playback_mode", "full").apply()
                                         },
                                         modifier = Modifier.weight(1f),
@@ -1100,7 +1105,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     FilterChip(
                                         selected = readerPlaybackMode == "verse",
                                         onClick = {
-                                            readerPlaybackMode = "verse"
+                                            ReaderPlaybackSettings.mode = "verse"
                                             prefs.edit().putString("reciter_playback_mode", "verse").apply()
                                         },
                                         modifier = Modifier.weight(1f),
@@ -3287,15 +3292,14 @@ fun AudioScreen(
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
-    var playbackMode by rememberSaveable {
-        mutableStateOf(if (prefs.getString("reciter_playback_mode", "verse") == "full") "full" else "verse")
-    }
+    val playbackMode = ReaderPlaybackSettings.mode
     LaunchedEffect(initialSurah, initialAyah, focusReciters, focusAdhan) {
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
         selectedTab = if (focusAdhan) 2 else if (focusReciters) 1 else 0
     }
     LaunchedEffect(Unit) {
+        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
         audio = ContentRepository.loadAudioItems(context)
         val loadedReciters = ContentRepository.loadReciters(context)
         reciters = loadedReciters
@@ -3444,7 +3448,7 @@ fun AudioScreen(
                 FilterChip(
                     selected = playbackMode == "full",
                     onClick = {
-                        playbackMode = "full"
+                        ReaderPlaybackSettings.mode = "full"
                         prefs.edit().putString("reciter_playback_mode", "full").apply()
                         AudioController.stop()
                         playing = ""
@@ -3461,7 +3465,7 @@ fun AudioScreen(
                 FilterChip(
                     selected = playbackMode == "verse",
                     onClick = {
-                        playbackMode = "verse"
+                        ReaderPlaybackSettings.mode = "verse"
                         prefs.edit().putString("reciter_playback_mode", "verse").apply()
                         AudioController.stop()
                         playing = ""
