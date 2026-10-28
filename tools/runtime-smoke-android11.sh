@@ -1043,6 +1043,113 @@ if [[ -n "$quran_settings_coords" ]]; then
     exit 1
   fi
   echo "PASS: global Settings opens the dedicated Quran settings with grouped categories."
+
+  reciter_settings_coords="$(python3 - dist/runtime-test/window-quran-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"قورئان.?خوێن و شێوازی لێدان|القارئ وطريقة التشغيل|Reciter & playback mode", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$reciter_settings_coords" ]]; then
+    echo "FAIL: Quran reader settings do not expose the Reciter & playback mode category."
+    cat dist/runtime-test/window-quran-settings.xml
+    exit 1
+  fi
+  read -r reciter_settings_x reciter_settings_y <<< "$reciter_settings_coords"
+  adb shell input tap "$reciter_settings_x" "$reciter_settings_y"
+  sleep 4
+  adb shell uiautomator dump /sdcard/mashxall-quran-reciter-settings.xml > dist/runtime-test/uiautomator-quran-reciter-settings.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-reciter-settings.xml dist/runtime-test/window-quran-reciter-settings.xml >/dev/null 2>&1 || true
+  if ! grep -Eq 'شێوازی لێدان|طريقة التشغيل|PLAYBACK MODE' dist/runtime-test/window-quran-reciter-settings.xml ||
+     ! grep -Eq 'لە ئایەتی هەڵبژێردراوەوە|من الآية المحددة|From selected ayah' dist/runtime-test/window-quran-reciter-settings.xml ||
+     ! grep -Eq 'سوورەتی تەواو|السورة كاملة|Full surah' dist/runtime-test/window-quran-reciter-settings.xml; then
+    echo "FAIL: Quran reader settings do not expose both playback modes."
+    cat dist/runtime-test/window-quran-reciter-settings.xml
+    exit 1
+  fi
+
+  quran_full_mode_coords="$(python3 - dist/runtime-test/window-quran-reciter-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"سوورەتی تەواو|السورة كاملة|Full surah", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$quran_full_mode_coords" ]]; then
+    echo "FAIL: Full surah mode was not tappable inside Quran reader settings."
+    cat dist/runtime-test/window-quran-reciter-settings.xml
+    exit 1
+  fi
+  read -r quran_full_x quran_full_y <<< "$quran_full_mode_coords"
+  adb shell input tap "$quran_full_x" "$quran_full_y"
+  sleep 2
+  adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-quran-full-mode.xml 2>/dev/null || true
+  if ! grep -Eq '<string name="reciter_playback_mode">full</string>' dist/runtime-test/preferences-quran-full-mode.xml; then
+    echo "FAIL: Full surah mode did not persist from Quran reader settings."
+    cat dist/runtime-test/preferences-quran-full-mode.xml
+    exit 1
+  fi
+  echo "PASS: Quran reader settings can select and persist Full surah mode."
+
+  quran_ayah_mode_coords="$(python3 - dist/runtime-test/window-quran-reciter-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"لە ئایەتی هەڵبژێردراوەوە|من الآية المحددة|From selected ayah", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$quran_ayah_mode_coords" ]]; then
+    echo "FAIL: selected-ayah mode was not tappable inside Quran reader settings."
+    cat dist/runtime-test/window-quran-reciter-settings.xml
+    exit 1
+  fi
+  read -r quran_ayah_x quran_ayah_y <<< "$quran_ayah_mode_coords"
+  adb shell input tap "$quran_ayah_x" "$quran_ayah_y"
+  sleep 2
+  adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-quran-ayah-mode.xml 2>/dev/null || true
+  if ! grep -Eq '<string name="reciter_playback_mode">verse</string>' dist/runtime-test/preferences-quran-ayah-mode.xml; then
+    echo "FAIL: selected-ayah mode did not persist from Quran reader settings."
+    cat dist/runtime-test/preferences-quran-ayah-mode.xml
+    exit 1
+  fi
+  echo "PASS: Quran reader settings can select and persist From selected ayah."
 else
   echo "FAIL: the global Settings screen did not expose the Quran reader settings action."
   cat dist/runtime-test/window-settings.xml
