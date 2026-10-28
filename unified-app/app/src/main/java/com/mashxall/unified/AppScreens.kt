@@ -154,6 +154,14 @@ private val MushafSepiaColorMatrix = ColorMatrix(
 internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
     if (mode == "full") 1 else requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
 
+/** Ensure selected-ayah mode never retains a reciter that only has full-surah tracks. */
+internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: List<Reciter>): Int? {
+    val current = reciters.firstOrNull { it.id == currentId }
+    if (current != null && (mode != "verse" || current.audioType == 0)) return current.id
+    return reciters.firstOrNull { it.audioType == 0 }?.id
+        ?: if (mode == "full") reciters.firstOrNull()?.id else null
+}
+
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -259,6 +267,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             if (preferredReaderReciterId > 0) {
                 prefs.edit().putInt("preferred_reciter_id", preferredReaderReciterId).apply()
             }
+        }
+    }
+    LaunchedEffect(readerReciters, readerPlaybackMode, preferredReaderReciterId) {
+        val compatible = resolveCompatibleReciterId(readerPlaybackMode, preferredReaderReciterId, readerReciters)
+        if (compatible != null && compatible != preferredReaderReciterId) {
+            preferredReaderReciterId = compatible
+            prefs.edit().putInt("preferred_reciter_id", compatible).apply()
         }
     }
     var selectedAyahForSheet by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -1130,7 +1145,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 item {
                                     Spacer(Modifier.height(5.dp))
                                     Text(if (language == AppLanguage.EN) "FULL-SURAH RECORDINGS" else if (language == AppLanguage.AR) "تسجيلات السورة كاملة" else "تۆمارەکانی سوورەتی تەواو", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Text(if (language == AppLanguage.EN) "These tracks start at the beginning of the surah; use the mode above to choose whether playback starts at the first ayah or at your selected ayah." else if (language == AppLanguage.AR) "تبدأ هذه التسجيلات من أول السورة؛ استخدم الخيار أعلاه لتحديد طريقة التشغيل." else "ئەم تۆمارانە لە سەرەتای سوورەتەوە دەست پێدەکەن؛ لە سەرەوە شێوازی لێدان هەڵبژێرە.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
+                                    Text(if (language == AppLanguage.EN) "These recordings always start at the beginning of the surah. Select an individual-ayah reciter if you need to start at a chosen ayah." else if (language == AppLanguage.AR) "تبدأ هذه التسجيلات دائمًا من أول السورة؛ اختر قارئًا بملفات آيات منفصلة إذا أردت البدء من آية محددة." else "ئەم تۆمارانە هەمیشە لە سەرەتای سوورەتەوە دەست پێدەکەن؛ ئەگەر دەتەوێت لە ئایەتێکی دیاریکراوەوە دەست پێبکەیت، قورئان‌خوێنێک هەڵبژێرە کە فایلەکانی ئایەت بە جیاوازی هەبن.", color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp)
                                     Spacer(Modifier.height(6.dp))
                                 }
                                 items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
@@ -3295,6 +3310,13 @@ fun AudioScreen(
             }
         }
         loading = false
+    }
+    LaunchedEffect(reciters, playbackMode, preferredReciterId) {
+        val compatible = resolveCompatibleReciterId(playbackMode, preferredReciterId, reciters)
+        if (compatible != null && compatible != preferredReciterId) {
+            preferredReciterId = compatible
+            prefs.edit().putInt("preferred_reciter_id", compatible).apply()
+        }
     }
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId, playbackMode) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId }
