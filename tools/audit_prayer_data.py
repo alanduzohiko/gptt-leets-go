@@ -278,7 +278,7 @@ def audit(noor_path: Path, salawati_path: Path) -> dict[str, Any]:
             "All source SQLite connections are opened read-only.",
             "GPS timetable matching uses bounding-box candidates followed by haversine distance ordering.",
             "Dependent Salawati locations use the source-linked base location when the original database marks them as dependent.",
-            "The solar calculation remains a fallback when no nearby source timetable is available.",
+            "Prayer-time resolution returns unavailable rather than calculating replacement times when no valid nearby Salawati timetable exists.",
         ],
     }
 
