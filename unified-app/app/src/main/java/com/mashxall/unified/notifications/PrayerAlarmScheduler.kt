@@ -5,11 +5,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.mashxall.unified.data.AsrCalculationSchool
 import com.mashxall.unified.data.ContentRepository
-import com.mashxall.unified.data.PrayerCalculationMethod
 import com.mashxall.unified.data.PrayerRow
-import com.mashxall.unified.data.PrayerTimeCalculator
+import com.mashxall.unified.data.PrayerLocationMath
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -76,12 +74,10 @@ object PrayerAlarmScheduler {
     }
 
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
-        val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
         val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
         if (gpsLatitude != null && gpsLongitude != null) {
-            return ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude, gpsLongitude, date, method, school)
+            return ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude, gpsLongitude, date)
         }
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
@@ -91,11 +87,11 @@ object PrayerAlarmScheduler {
 
         if (hasManualCoordinates) {
             ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
-            return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude!!, manualLongitude!!, date, method, school)
+            return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude!!, manualLongitude!!, date)
         }
         ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
         val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
-        return ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date, method, school)
+        return ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date)
     }
 
     private fun schedule(context: Context, code: String, whenMillis: Long) {
