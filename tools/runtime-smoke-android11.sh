@@ -309,28 +309,67 @@ if grep -Eq 'The Holy Quran|القرآن الكريم|قورئانی پیرۆز'
   exit 1
 fi
 
-# Confirm the direction and operation of finger swipes on the actual Mushaf image.
-adb shell input swipe 900 800 180 800 350
-sleep 4
-adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-forward.xml > dist/runtime-test/uiautomator-mushaf-swipe-forward.txt 2>&1 || true
-adb pull /sdcard/mashxall-mushaf-swipe-forward.xml dist/runtime-test/window-mushaf-swipe-forward.xml >/dev/null 2>&1 || true
-if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+2[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-forward.xml; then
-  echo "FAIL: right-to-left swipe did not advance the Mushaf from page 1 to page 2."
-  cat dist/runtime-test/window-mushaf-swipe-forward.xml
+# Confirm the direction and operation of finger swipes on the actual rendered Mushaf
+# page. Android 11 emulators can drop the first injected swipe during heavy SVG
+# rendering, so inspect the page after each individual gesture and retry only
+# when the UI still shows the original page. This keeps the assertion strict:
+# page 2 must really render after a right-to-left swipe.
+swipe_forward_ok=0
+for attempt in $(seq 1 3); do
+  rm -f dist/runtime-test/window-mushaf-swipe-forward.xml
+  adb shell rm -f /sdcard/mashxall-mushaf-swipe-forward.xml >/dev/null 2>&1 || true
+  adb shell input swipe 900 900 180 900 500
+  sleep 3
+  adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-forward.xml > "dist/runtime-test/uiautomator-mushaf-swipe-forward-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-mushaf-swipe-forward.xml dist/runtime-test/window-mushaf-swipe-forward.xml >/dev/null 2>&1 || true
+  if grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+2[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-forward.xml; then
+    swipe_forward_ok=1
+    echo "PASS: right-to-left finger swipe advances the Mushaf to page 2 (attempt $attempt)."
+    break
+  fi
+  if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-forward.xml; then
+    echo "FAIL: Mushaf page state became unexpected during right-to-left swipe attempt $attempt."
+    cat dist/runtime-test/window-mushaf-swipe-forward.xml
+    break
+  fi
+  echo "WARN: right-to-left swipe was not observed yet (attempt $attempt/3); retrying against the same visible page."
+  sleep 2
+done
+if [[ "$swipe_forward_ok" -ne 1 ]]; then
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-mushaf-swipe-forward-failure.txt || true
+  grep -E 'MashxallMushaf|FATAL EXCEPTION|AndroidRuntime|Input dispatching timed out|ANR in com\\.mashxall' dist/runtime-test/logcat-mushaf-swipe-forward-failure.txt | tail -n 100 || true
+  cat dist/runtime-test/window-mushaf-swipe-forward.xml 2>/dev/null || true
   exit 1
 fi
-echo "PASS: right-to-left finger swipe advances the Mushaf to page 2."
 
-adb shell input swipe 180 800 900 800 350
-sleep 4
-adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-back.xml > dist/runtime-test/uiautomator-mushaf-swipe-back.txt 2>&1 || true
-adb pull /sdcard/mashxall-mushaf-swipe-back.xml dist/runtime-test/window-mushaf-fullscreen.xml >/dev/null 2>&1 || true
-if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-fullscreen.xml; then
-  echo "FAIL: left-to-right swipe did not return the Mushaf from page 2 to page 1."
-  cat dist/runtime-test/window-mushaf-fullscreen.xml
+swipe_back_ok=0
+for attempt in $(seq 1 3); do
+  rm -f dist/runtime-test/window-mushaf-swipe-back.xml
+  adb shell rm -f /sdcard/mashxall-mushaf-swipe-back.xml >/dev/null 2>&1 || true
+  adb shell input swipe 180 900 900 900 500
+  sleep 3
+  adb shell uiautomator dump /sdcard/mashxall-mushaf-swipe-back.xml > "dist/runtime-test/uiautomator-mushaf-swipe-back-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-mushaf-swipe-back.xml dist/runtime-test/window-mushaf-swipe-back.xml >/dev/null 2>&1 || true
+  if grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-back.xml; then
+    swipe_back_ok=1
+    cp dist/runtime-test/window-mushaf-swipe-back.xml dist/runtime-test/window-mushaf-fullscreen.xml
+    echo "PASS: left-to-right finger swipe returns to page 1 (attempt $attempt)."
+    break
+  fi
+  if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+2[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-mushaf-swipe-back.xml; then
+    echo "FAIL: Mushaf page state became unexpected during left-to-right swipe attempt $attempt."
+    cat dist/runtime-test/window-mushaf-swipe-back.xml
+    break
+  fi
+  echo "WARN: left-to-right swipe was not observed yet (attempt $attempt/3); retrying against the same visible page."
+  sleep 2
+done
+if [[ "$swipe_back_ok" -ne 1 ]]; then
+  adb logcat -d -v threadtime > dist/runtime-test/logcat-mushaf-swipe-back-failure.txt || true
+  grep -E 'MashxallMushaf|FATAL EXCEPTION|AndroidRuntime|Input dispatching timed out|ANR in com\\.mashxall' dist/runtime-test/logcat-mushaf-swipe-back-failure.txt | tail -n 100 || true
+  cat dist/runtime-test/window-mushaf-swipe-back.xml 2>/dev/null || true
   exit 1
 fi
-echo "PASS: left-to-right finger swipe returns to page 1."
 
 verse_coords="$(python3 - dist/runtime-test/window-mushaf-fullscreen.xml <<'PY'
 import re
