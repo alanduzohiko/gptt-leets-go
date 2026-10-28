@@ -3563,7 +3563,7 @@ fun AudioScreen(
                     }
                 }
             }
-        }        } else {
+        } else {
             val visibleReciters = reciters.filter { reciter ->
                 val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
                     .contains(audioQuery, ignoreCase = true)
