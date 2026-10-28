@@ -10,11 +10,8 @@ import android.os.Build
 import android.widget.RemoteViews
 import com.mashxall.unified.MainActivity
 import com.mashxall.unified.R
-import com.mashxall.unified.data.AsrCalculationSchool
 import com.mashxall.unified.data.ContentRepository
-import com.mashxall.unified.data.PrayerCalculationMethod
 import com.mashxall.unified.data.PrayerRow
-import com.mashxall.unified.data.PrayerTimeCalculator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -122,21 +119,19 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
             prefs.getString("selected_city", ""), hasManualCoordinates
         ).orEmpty()
         val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
-        val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
 
         suspend fun rowFor(date: Date): PrayerRow? {
             if (gpsLat != null && gpsLon != null) {
-                return ContentRepository.loadPrayerTimesAtLocation(context, gpsLat, gpsLon, date, method, school)
+                return ContentRepository.loadPrayerTimesAtLocation(context, gpsLat, gpsLon, date)
             }
             if (cityName.isBlank()) return null
             if (hasManualCoordinates) {
                 ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
-                return ContentRepository.loadPrayerTimesAtLocation(context, manualLat!!, manualLon!!, date, method, school)
+                return ContentRepository.loadPrayerTimesAtLocation(context, manualLat!!, manualLon!!, date)
             }
             ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
             val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
-            return ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date, method, school)
+            return ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date)
         }
 
         val today = Date()
