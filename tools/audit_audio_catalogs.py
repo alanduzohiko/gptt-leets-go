@@ -16,7 +16,6 @@ REQUIRED_RECITERS = {
     "yasser al-dosari",
     "islam sobhi",
 }
-CC_BY_SA = "https://creativecommons.org/licenses/by-sa/4.0/"
 ADHAN_PREFIX = "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/"
 
 
@@ -39,8 +38,10 @@ def audit_reciters(path: Path) -> None:
     records = data.get("records")
     if not isinstance(records, list) or len(records) != RECITER_EXPECTED:
         fail(f"reciter record count must be {RECITER_EXPECTED}")
-    if data.get("catalog_license_url") != CC_BY_SA:
-        fail("reciter metadata attribution/license URL is missing or changed")
+    if data.get("catalog_license_status") != "unknown":
+        fail("MP3Quran metadata license status must remain explicitly unknown unless the source provides terms")
+    if data.get("catalog_license_url") != "https://mp3quran.net/eng/":
+        fail("MP3Quran source link is missing or changed")
     ids = [item.get("numeric_id") for item in records]
     if any(not isinstance(value, int) or value <= 0 for value in ids) or len(ids) != len(set(ids)):
         fail("reciter numeric IDs must be positive and unique")
