@@ -175,7 +175,6 @@ private val homeModules: List<HomeModule> get() = listOf(
     HomeModule(AppScreen.PRAYER, "prayer", "prayer_sub", Icons.Outlined.Schedule, Color(0xFF82B7E8)),
         HomeModule(AppScreen.NAMES, "names", "names_sub", Icons.Outlined.Favorite, Color(0xFFE39FB2)),
     HomeModule(AppScreen.QIBLA, "qibla", "qibla_sub", Icons.Outlined.Explore, Color(0xFF85C4C6)),
-    HomeModule(AppScreen.BOOKS, "books", "books_sub", Icons.Outlined.LibraryBooks, Color(0xFFE1C36D)),
     HomeModule(AppScreen.LEXICON, "lexicon", "lexicon_sub", Icons.Outlined.Search, Color(0xFFB3A2F0)),
     HomeModule(AppScreen.FARMUDA, "farmuda", "farmuda_sub", Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
     HomeModule(AppScreen.TASBIH, "tasbih", "tasbih_sub", Icons.Outlined.Spa, Color(0xFF80C6B1)),
@@ -564,7 +563,6 @@ private fun MoreScreen(
         HomeModule(AppScreen.NAMES, "names", "names_sub", Icons.Outlined.Favorite, Color(0xFFE39FB2)),
         HomeModule(AppScreen.TASBIH, "tasbih", "tasbih_sub", Icons.Outlined.Spa, Color(0xFF80C6B1)),
         HomeModule(AppScreen.FARMUDA, "farmuda", "farmuda_sub", Icons.Outlined.VolunteerActivism, Color(0xFFE6A879)),
-        HomeModule(AppScreen.BOOKS, "books", "books_sub", Icons.Outlined.AutoStories, Color(0xFFE1C36D)),
         HomeModule(AppScreen.LEXICON, "lexicon", "lexicon_sub", Icons.Outlined.Search, Color(0xFFB3A2F0)),
         HomeModule(AppScreen.BOOKMARKS, "bookmarks", "bookmarks_sub", Icons.Outlined.BookmarkBorder, Gold),
         HomeModule(AppScreen.BACKUP, "backup_title", "backup_subtitle", Icons.Outlined.Tune, Emerald),
@@ -583,9 +581,9 @@ private fun MoreScreen(
                 )
                 Text(
                     when (language) {
-                        AppLanguage.EN -> "Audio, Qibla, Hadith, books and personal tools"
-                        AppLanguage.AR -> "الصوتيات والقبلة والأحاديث والكتب والأدوات الشخصية"
-                        AppLanguage.CKB -> "دەنگ، قیبلە، فەرموودە، کتێب و ئامرازە کەسییەکان"
+                        AppLanguage.EN -> "Audio, Qibla, Hadith and personal tools"
+                        AppLanguage.AR -> "الصوتيات والقبلة والأحاديث والأدوات الشخصية"
+                        AppLanguage.CKB -> "دەنگ، قیبلە، فەرموودە و ئامرازە کەسییەکان"
                     }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
                 )
             }
@@ -1062,24 +1060,6 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
             }, color = foreground.copy(alpha = 0.62f), fontSize = 13.sp, lineHeight = 21.sp
         )
         Spacer(Modifier.height(18.dp))
-        Card(
-            Modifier.fillMaxWidth().clickable { onOpen(AppScreen.BOOKS) },
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            shape = RoundedCornerShape(22.dp),
-            border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f))
-        ) {
-            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(RoundedCornerShape(17.dp)).background(Gold.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.MenuBook, null, tint = Gold, modifier = Modifier.size(29.dp))
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(tr(language, "books"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(tr(language, "books_sub"), color = foreground.copy(alpha = 0.58f), fontSize = 11.sp)
-                }
-                Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
-            }
-        }
         Spacer(Modifier.height(18.dp))
         Text(tr(language, "about_data"), color = foreground, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
