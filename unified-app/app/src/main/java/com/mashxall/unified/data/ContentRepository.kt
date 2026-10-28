@@ -844,6 +844,7 @@ object ContentRepository {
             }
             decoded
         } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
             Log.w("MashxallTajweed", "Could not load Tajweed surah $surah", error)
             cached ?: emptyMap()
         } finally {
