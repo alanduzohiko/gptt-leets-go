@@ -14,6 +14,8 @@ import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -752,6 +754,100 @@ object ContentRepository {
                 item.arabicWithoutHarakat.contains(term, true) ||
                 item.translation.contains(term, true) ||
                 item.number.toString() == term
+        }
+    }
+
+    /**
+     * Fetch the AlQuranCloud color-coded Tajweed text for a single surah.
+     * The full tagged dataset is deliberately not bundled in the APK. Once a
+     * surah is fetched successfully, its JSON is cached in app-private storage
+     * for subsequent offline reading.
+     */
+    suspend fun loadTajweedAyahs(
+        context: Context,
+        surah: Int,
+        expectedAyahCount: Int
+    ): Map<Int, String> = withContext(Dispatchers.IO) {
+        if (surah !in 1..114 || expectedAyahCount !in 1..286) return@withContext emptyMap()
+        val cacheFile = File(
+            File(context.filesDir, "tajweed-colored"),
+            "surah-%03d.json".format(Locale.US, surah)
+        )
+
+        fun decode(raw: String): Map<Int, String>? = runCatching {
+            val root = JSONObject(raw)
+            if (root.optInt("code", 200) != 200) return@runCatching null
+            val data = root.optJSONObject("data") ?: return@runCatching null
+            val rows = data.optJSONArray("ayahs") ?: return@runCatching null
+            val values = sortedMapOf<Int, String>()
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val number = row.optInt("numberInSurah", 0)
+                val taggedText = row.optString("text", "").trim()
+                if (number in 1..expectedAyahCount && taggedText.isNotBlank()) {
+                    values[number] = taggedText
+                }
+            }
+            if (values.size != expectedAyahCount ||
+                values.keys != (1..expectedAyahCount).toSet()
+            ) null else values
+        }.getOrNull()
+
+        val cached = runCatching {
+            if (cacheFile.isFile && cacheFile.length() in 32L..5L * 1024L * 1024L) {
+                decode(cacheFile.readText(Charsets.UTF_8))
+            } else null
+        }.getOrNull()
+        if (cached != null) return@withContext cached
+
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL("https://api.alquran.cloud/v1/surah/$surah/quran-tajweed")
+                .openConnection() as HttpURLConnection).apply {
+                connectTimeout = 12_000
+                readTimeout = 25_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "Mashxall Android")
+            }
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                Log.w("MashxallTajweed", "Tajweed API returned HTTP $responseCode for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            if (connection.contentLengthLong > 5L * 1024L * 1024L) {
+                Log.w("MashxallTajweed", "Tajweed response exceeded the 5 MiB limit for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            val raw = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            if (raw.toByteArray(Charsets.UTF_8).size > 5 * 1024 * 1024) {
+                Log.w("MashxallTajweed", "Tajweed response exceeded the 5 MiB limit for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            val decoded = decode(raw)
+            if (decoded == null) {
+                Log.w("MashxallTajweed", "Tajweed response was incomplete or malformed for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            runCatching {
+                cacheFile.parentFile?.mkdirs()
+                val temporary = File(cacheFile.parentFile, cacheFile.name + ".part")
+                temporary.writeText(raw, Charsets.UTF_8)
+                if (cacheFile.exists()) cacheFile.delete()
+                if (!temporary.renameTo(cacheFile)) {
+                    temporary.copyTo(cacheFile, overwrite = true)
+                    temporary.delete()
+                }
+            }.onFailure { error ->
+                Log.w("MashxallTajweed", "Could not cache Tajweed surah $surah", error)
+            }
+            decoded
+        } catch (error: Exception) {
+            Log.w("MashxallTajweed", "Could not load Tajweed surah $surah", error)
+            cached ?: emptyMap()
+        } finally {
+            connection?.disconnect()
         }
     }
 
