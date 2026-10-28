@@ -117,8 +117,11 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         val gpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
         val manualLat = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLon = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
-        val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
-        val countryName = prefs.getString("selected_city_country", "") ?: ""
+        val hasManualCoordinates = manualLat != null && manualLon != null
+        val cityName = com.mashxall.unified.notifications.usableSavedPrayerCityName(
+            prefs.getString("selected_city", ""), hasManualCoordinates
+        ).orEmpty()
+        val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
         val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
         val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
 
@@ -126,8 +129,10 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
             if (gpsLat != null && gpsLon != null) {
                 return ContentRepository.loadPrayerTimesAtLocation(context, gpsLat, gpsLon, date, method, school)
             }
-            if (manualLat != null && manualLon != null) {
-                return ContentRepository.loadPrayerTimesAtLocation(context, manualLat, manualLon, date, method, school)
+            if (cityName.isBlank()) return null
+            if (hasManualCoordinates) {
+                ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
+                return ContentRepository.loadPrayerTimesAtLocation(context, manualLat!!, manualLon!!, date, method, school)
             }
             ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
             val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null

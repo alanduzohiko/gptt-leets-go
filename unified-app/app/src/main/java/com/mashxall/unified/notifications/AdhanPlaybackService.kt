@@ -17,6 +17,13 @@ import androidx.core.app.NotificationCompat
 import java.io.File
 import java.security.MessageDigest
 
+internal fun resolveLocalAdhanFileReference(reference: String): File? {
+    if (!reference.startsWith("local:")) return null
+    val path = reference.removePrefix("local:").trim()
+    if (path.isBlank()) return null
+    return runCatching { File(path).takeIf { it.isFile && it.length() > 512L } }.getOrNull()
+}
+
 class AdhanPlaybackService : Service() {
     private var player: MediaPlayer? = null
     private var stopRequested = false
@@ -71,12 +78,16 @@ class AdhanPlaybackService : Service() {
     private fun playAsset(assetPath: String) {
         releasePlayer()
         val source = try {
-            if (assetPath.isBlank()) null else {
-                val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
-                    .take(8).joinToString("") { "%02x".format(it) }
-                File(cacheDir, "adhan-$hash.audio").also { target ->
-                    if (!target.exists() || target.length() == 0L) {
-                        assets.open(assetPath).use { input -> target.outputStream().use { output -> input.copyTo(output, 64 * 1024) } }
+            when {
+                assetPath.startsWith("local:") -> resolveLocalAdhanFileReference(assetPath)
+                assetPath.isBlank() -> null
+                else -> {
+                    val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
+                        .take(8).joinToString("") { "%02x".format(it) }
+                    File(cacheDir, "adhan-$hash.audio").also { target ->
+                        if (!target.exists() || target.length() == 0L) {
+                            assets.open(assetPath).use { input -> target.outputStream().use { output -> input.copyTo(output, 64 * 1024) } }
+                        }
                     }
                 }
             }

@@ -5302,19 +5302,32 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
     LaunchedEffect(Unit) {
-        // Keep the full original audio inventory available; file-name filtering
-        // must never hide an audio asset from the user's explicit selection.
-        adhanAssets = ContentRepository.loadAudioItems(context)
+        // Keep bundled sounds available and add online adhan tracks already
+        // saved by the user in the dedicated audio library. Scheduled alerts
+        // store a private local-file reference, never a remote stream URL.
+        val bundledAssets = ContentRepository.loadAudioItems(context)
+        val downloadedOnlineAssets = ContentRepository.loadOnlineAdhan(context).mapNotNull { item ->
+            val file = onlineAdhanOfflineFile(context, item)
+            if (file.isFile && file.length() > 512L) {
+                AudioItem(
+                    assetPath = "local:${file.absolutePath}",
+                    title = item.titleArabic.ifBlank { item.titleEnglish },
+                    group = if (language == AppLanguage.EN) "Downloaded online adhan" else if (language == AppLanguage.AR) "أذان منزّل للاستماع دون إنترنت" else "بانگی داگیراو بۆ بەبێ ئینتەرنێت"
+                )
+            } else null
+        }
+        val availableAssets = bundledAssets + downloadedOnlineAssets
+        adhanAssets = availableAssets
         val preferredKeywords = listOf(
             "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah", "mecca",
             "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
             "mshari", "peshawa", "ramazan", "mansur"
         )
-        if (adhanAssets.none { it.assetPath == selectedAdhanAsset }) {
-            val recommended = adhanAssets.firstOrNull { sound ->
+        if (availableAssets.none { it.assetPath == selectedAdhanAsset }) {
+            val recommended = bundledAssets.firstOrNull { sound ->
                 val label = (sound.title + " " + sound.assetPath + " " + sound.group).lowercase(Locale.ROOT)
                 preferredKeywords.any(label::contains)
-            } ?: adhanAssets.firstOrNull()
+            } ?: bundledAssets.firstOrNull()
             selectedAdhanAsset = recommended?.assetPath.orEmpty()
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
@@ -5628,9 +5641,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         )
                         Text(
                             when (language) {
-                                AppLanguage.EN -> "Play a bundled adhan sound at prayer time"
-                                AppLanguage.AR -> "تشغيل صوت الأذان المرفق عند دخول وقت الصلاة"
-                                AppLanguage.CKB -> "لێدانی دەنگی بانگی ناوخۆیی لە کاتی نوێژ"
+                                AppLanguage.EN -> "Play your selected adhan at prayer time, including tracks downloaded for offline use"
+                                AppLanguage.AR -> "شغّل صوت الأذان الذي اخترته عند الصلاة، بما في ذلك التسجيلات المنزّلة دون إنترنت"
+                                AppLanguage.CKB -> "لە کاتی نوێژدا ئەو بانگە لێبدە کە هەڵتبژاردووە، لەوانەش ئەو تۆمارانەی بۆ بەبێ ئینتەرنێت داتگرتوون"
                             }, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp, lineHeight = 17.sp
                         )
                     }
@@ -5826,8 +5839,14 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             } else {
                                 AudioController.stop()
                                 previewingAdhan = sound.assetPath
-                                AudioController.play(context, sound.assetPath) { active ->
-                                    if (!active) previewingAdhan = ""
+                                if (sound.assetPath.startsWith("local:")) {
+                                    AudioController.playSequence(context, listOf(sound.assetPath)) { active ->
+                                        if (!active) previewingAdhan = ""
+                                    }
+                                } else {
+                                    AudioController.play(context, sound.assetPath) { active ->
+                                        if (!active) previewingAdhan = ""
+                                    }
                                 }
                             }
                         }, modifier = Modifier.size(36.dp)) {

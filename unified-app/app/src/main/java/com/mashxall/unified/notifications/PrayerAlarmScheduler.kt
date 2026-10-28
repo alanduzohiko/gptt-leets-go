@@ -14,6 +14,15 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+internal fun usableSavedPrayerCityName(cityName: String?, hasManualCoordinates: Boolean): String? {
+    val name = cityName?.trim().orEmpty()
+    if (name.isBlank()) return null
+    // Erbil was once a UI placeholder; treat it as real only when the user
+    // explicitly selected it and the app saved its manual coordinates.
+    if (name.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) return null
+    return name
+}
+
 object PrayerAlarmScheduler {
     const val PREFS = "mashxall_preferences"
     const val KEY_ENABLED = "adhan_enabled"
@@ -76,11 +85,14 @@ object PrayerAlarmScheduler {
         }
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
-        if (manualLatitude != null && manualLongitude != null) {
-            return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude, manualLongitude, date, method, school)
+        val hasManualCoordinates = manualLatitude != null && manualLongitude != null
+        val cityName = usableSavedPrayerCityName(prefs.getString("selected_city", ""), hasManualCoordinates) ?: return null
+        val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
+
+        if (hasManualCoordinates) {
+            ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
+            return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude!!, manualLongitude!!, date, method, school)
         }
-        val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
-        val countryName = prefs.getString("selected_city_country", "") ?: ""
         ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
         val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
         return ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date, method, school)
