@@ -832,7 +832,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 }
                                 val shareText = buildString {
                                     append("سورة ").append(surahTitle).append(" • ").append(verse.surah).append(":").append(verse.number)
-                                    append("\n\n").append(verse.arabic)
+                                    append("\n\n").append(if (textEditionId != QuranTextEditions.ORIGINAL && alternateTextLoadedSurah == verse.surah) alternateTextAyahs[verse.number] ?: verse.arabic else verse.arabic)
                                     if (verse.translation.isNotBlank()) append("\n\n").append(verse.translation)
                                     if (translationName.isNotBlank()) append("\n— ").append(translationName)
                                     append("\n\n").append("مەشخەڵ • Mashxall")
@@ -859,16 +859,27 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                         }
                         Spacer(Modifier.height(6.dp))
+                        val alternateArabic = alternateTextAyahs[verse.number]
+                            .takeIf { textEditionId != QuranTextEditions.ORIGINAL && alternateTextLoadedSurah == verse.surah }
                         val taggedAyah = tajweedAyahs[verse.number]
-                            .takeIf { coloredTajweed && !showUnvowelled && tajweedLoadedSurah == verse.surah }
+                            .takeIf {
+                                textEditionId == QuranTextEditions.ORIGINAL &&
+                                    coloredTajweed && !showUnvowelled && tajweedLoadedSurah == verse.surah
+                            }
                         val displayedAyah = remember(
-                            verse.surah, verse.number, taggedAyah, showUnvowelled, verse.arabic, verse.arabicWithoutHarakat, foreground
+                            verse.surah, verse.number, textEditionId, alternateArabic,
+                            taggedAyah, showUnvowelled, verse.arabic, verse.arabicWithoutHarakat, foreground
                         ) {
                             if (!taggedAyah.isNullOrBlank()) {
                                 TajweedText.annotate(taggedAyah, darkMode = foreground.red > 0.5f)
                             } else {
                                 androidx.compose.ui.text.AnnotatedString(
-                                    if (showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) verse.arabicWithoutHarakat else verse.arabic
+                                    alternateArabic?.takeIf { it.isNotBlank() }
+                                        ?: if (textEditionId == QuranTextEditions.ORIGINAL && showUnvowelled && verse.arabicWithoutHarakat.isNotBlank()) {
+                                            verse.arabicWithoutHarakat
+                                        } else {
+                                            verse.arabic
+                                        }
                                 )
                             }
                         }
