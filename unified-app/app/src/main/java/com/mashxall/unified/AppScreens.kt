@@ -484,7 +484,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val currentSurah = surahs.firstOrNull { it.number == selected }
     val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
         ?: ContentRepository.quranTranslations.first()
-    LaunchedEffect(selectedAyahForSheet, language, translationKey, selectedTafsirBook) {
+    LaunchedEffect(
+        selectedAyahForSheet, language, translationKey, selectedTafsirBook,
+        textEditionId, alternateTextLoadedSurah, selectedAyahForSheet?.second?.let { alternateTextAyahs[it] }
+    ) {
         val target = selectedAyahForSheet
         if (target == null) {
             sheetVerse = null
@@ -502,7 +505,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         showSheetWordStudy = false
         try {
             val versesForSurah = ContentRepository.loadAyahs(context, target.first, language.key, translationKey = translationKey)
-            sheetVerse = versesForSurah.firstOrNull { it.number == target.second }
+            val baseVerse = versesForSurah.firstOrNull { it.number == target.second }
+            sheetVerse = baseVerse?.let { verse ->
+                if (textEditionId != QuranTextEditions.ORIGINAL && alternateTextLoadedSurah == target.first) {
+                    verse.copy(arabic = alternateTextAyahs[target.second] ?: verse.arabic)
+                } else verse
+            }
             sheetTafsir = ContentRepository.loadTafsir(context, selectedTafsirBook, target.first, target.second)
             sheetRelatedHadith = ContentRepository.loadHadithsForAyah(context, target.first, target.second)
         } catch (_: Exception) {
@@ -615,6 +623,33 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         onClick = { showUnvowelled = true },
                         label = { Text(if (language == AppLanguage.EN) "Without diacritics" else if (language == AppLanguage.AR) "بلا تشكيل" else "بێ حەرەکات", fontSize = 10.sp) }
                     )
+                }
+                if (textEditionId != QuranTextEditions.ORIGINAL && alternateTextMessage.isNotBlank()) {
+                    Spacer(Modifier.height(5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                alternateTextMessage,
+                                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
+                            )
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "QPC-Hafs and Nastaliq text are online first-use data, not new page-image Mushafs."
+                                    AppLanguage.AR -> "نصوص QPC-Hafs والنستعليق تُحمّل عند أول استخدام؛ وليست صور مصاحف جديدة."
+                                    AppLanguage.CKB -> "دەقی QPC-Hafs و نەستەعلیق لە یەکەم بەکارهێنان دادەگیرێت؛ وێنەی مصحەفی نوێ نییە."
+                                },
+                                color = foreground.copy(alpha = 0.46f), fontSize = 9.sp, lineHeight = 13.sp
+                            )
+                        }
+                        if (!alternateTextLoading && alternateTextLoadedSurah != selected && query.isBlank()) {
+                            TextButton(onClick = { alternateTextReloadKey++ }) {
+                                Text(
+                                    if (language == AppLanguage.EN) "Retry" else if (language == AppLanguage.AR) "إعادة" else "دووبارە",
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
                 }
                 if (coloredTajweed) {
                     Spacer(Modifier.height(5.dp))
