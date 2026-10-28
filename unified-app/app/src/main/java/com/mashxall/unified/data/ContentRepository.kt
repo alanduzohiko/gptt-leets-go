@@ -1700,13 +1700,16 @@ object ContentRepository {
 
 
     /**
-     * GPS can find Noor and Salawati rows at identical coordinates. Keep physical
-     * distance as the first criterion, but prefer Salawati when distances tie;
-     * otherwise a stable combined-list order can silently undo the city-source
-     * preference.
+     * Select the closest original Salawati timetable first. When a directly
+     * scheduled locality and a dependent locality have the same coordinates,
+     * prefer the direct row so the dependent-city fallback cannot win by query order.
      */
     internal fun orderPrayerCandidates(candidates: List<Pair<PrayerRow, Double>>): List<Pair<PrayerRow, Double>> =
-        candidates.sortedBy { it.second }
+        candidates.sortedWith(
+            compareBy<Pair<PrayerRow, Double>> { it.second }
+                .thenBy { if (it.first.source.startsWith("salawati-dependent", ignoreCase = true)) 1 else 0 }
+                .thenBy { it.first.city.lowercase(Locale.ROOT) }
+        )
 
     suspend fun loadPrayerTimes(
         context: Context,
