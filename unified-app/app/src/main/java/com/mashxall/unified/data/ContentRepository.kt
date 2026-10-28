@@ -54,6 +54,16 @@ object QuranTextEditions {
     const val QPC_HAFS = "qpc-hafs"
     const val HAFS_NASTALIQ = "hafs-nastaliq"
 
+    val original = QuranTextEdition(
+        id = ORIGINAL,
+        nameEnglish = "Original Uthmani (bundled)",
+        nameArabic = "الرسم العثماني الأصلي (مضمّن)",
+        nameCkb = "نووسینی عوسمانی ڕەسەن (ناوخۆیی)",
+        source = "Mashxall original source bundle",
+        sourceRevision = "unified-source-v1",
+        licenseUrl = ""
+    )
+
     val alternatives = listOf(
         QuranTextEdition(
             id = QPC_HAFS,
@@ -74,6 +84,8 @@ object QuranTextEditions {
             licenseUrl = "https://api.quranpedia.net/dumps/LICENSE.md"
         )
     )
+
+    val all: List<QuranTextEdition> get() = listOf(original) + alternatives
 
     fun find(id: String): QuranTextEdition? = alternatives.firstOrNull { it.id == id }
 }
