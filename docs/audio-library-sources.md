@@ -2,7 +2,7 @@
 
 ## Quran reciter catalog
 
-Mashxall's added full-surah and recitation-edition metadata is derived from [risan/quran-json: data/audio/mp3quran.json](https://github.com/risan/quran-json/blob/main/data/audio/mp3quran.json). The repository identifies its data as [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Attribution remains with the source catalog. The application stores metadata and stream URL patterns, not copies of the Quran audio files.
+Mashxall's added full-surah and recitation-edition metadata is derived from [risan/quran-json: data/audio/mp3quran.json](https://github.com/risan/quran-json/blob/main/data/audio/mp3quran.json). The repository's source registry explicitly records the MP3Quran metadata license as **unknown** because no redistribution license could be identified. The app therefore does not claim CC BY-SA or another license for this catalog. It preserves source attribution and links to MP3Quran-hosted recordings rather than bundling audio files. Please verify current terms with MP3Quran before commercial redistribution.
 
 The upstream catalog contains 288 recitation entries with different chapter coverage. Mashxall retains each entry's declared surah count, and playback/download is disabled when the chosen edition does not include the selected surah. The direct audio files remain hosted by MP3Quran.net; the metadata license is not asserted to be a license for the recordings themselves.
 
