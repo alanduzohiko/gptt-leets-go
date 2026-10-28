@@ -1004,6 +1004,160 @@ if ! grep -Eq '<string name="reciter_playback_mode">verse</string>' dist/runtime
 fi
 echo "PASS: selecting From selected ayah persists the playback mode."
 
+  # Verify that the online adhan metadata really appears in the Android UI.
+  adhan_tab_coords="$(python3 - dist/runtime-test/window-audio-reciter.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"بانگ و دەنگی مزگەوت|الأذان وأصوات المساجد|Adhan & mosque audio", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$adhan_tab_coords" ]]; then
+    echo "FAIL: Adhan & mosque audio tab is not accessible from the reciter library."
+    cat dist/runtime-test/window-audio-reciter.xml
+    exit 1
+  fi
+  read -r adhan_tab_x adhan_tab_y <<< "$adhan_tab_coords"
+  adb shell input tap "$adhan_tab_x" "$adhan_tab_y"
+  sleep 6
+  adhan_catalog_ok=0
+  for attempt in $(seq 1 3); do
+    rm -f dist/runtime-test/window-audio-adhan.xml
+    adb shell rm -f /sdcard/mashxall-audio-adhan.xml >/dev/null 2>&1 || true
+    adb shell uiautomator dump /sdcard/mashxall-audio-adhan.xml > "dist/runtime-test/uiautomator-audio-adhan-$attempt.txt" 2>&1 || true
+    if adb pull /sdcard/mashxall-audio-adhan.xml dist/runtime-test/window-audio-adhan.xml >/dev/null 2>&1 &&
+       grep -Eq '231' dist/runtime-test/window-audio-adhan.xml &&
+       grep -Eqi 'عبد الرزاق صالح|Abd Alrazaq Saleh' dist/runtime-test/window-audio-adhan.xml &&
+       grep -Eqi 'داگرتنی بانگ|Download adhan|تنزيل الأذان' dist/runtime-test/window-audio-adhan.xml; then
+      adhan_catalog_ok=1
+      echo "PASS: the 231-entry adhan catalog renders source recordings and offline-download actions (attempt $attempt)."
+      break
+    fi
+    echo "WARN: waiting for adhan catalog rows in a fresh UI hierarchy (attempt $attempt/3)."
+    sleep 3
+  done
+  if [[ "$adhan_catalog_ok" -ne 1 ]]; then
+    echo "FAIL: the adhan catalog count, first source recording, or download action is missing."
+    cat dist/runtime-test/window-audio-adhan.xml 2>/dev/null || true
+    exit 1
+  fi
+
+  # Return to Quran reciters, select the complete-surah mode, and search for
+  # Ahmad Al Nufais. Verify the visible row advertises its source coverage.
+  reciters_tab_coords="$(python3 - dist/runtime-test/window-audio-adhan.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"قورئان.?خوێنەکان|القرّاء|Reciters", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$reciters_tab_coords" ]]; then
+    echo "FAIL: could not return from Adhan to the reciter library."
+    cat dist/runtime-test/window-audio-adhan.xml
+    exit 1
+  fi
+  read -r reciters_tab_x reciters_tab_y <<< "$reciters_tab_coords"
+  adb shell input tap "$reciters_tab_x" "$reciters_tab_y"
+  sleep 5
+  rm -f dist/runtime-test/window-audio-catalog-reciter.xml
+  adb shell rm -f /sdcard/mashxall-audio-catalog-reciter.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-audio-catalog-reciter.xml > dist/runtime-test/uiautomator-audio-catalog-reciter.txt 2>&1 || true
+  adb pull /sdcard/mashxall-audio-catalog-reciter.xml dist/runtime-test/window-audio-catalog-reciter.xml >/dev/null 2>&1 || true
+  full_mode_coords="$(python3 - dist/runtime-test/window-audio-catalog-reciter.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"سوورەتی تەواو|السورة كاملة|Full surah", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$full_mode_coords" ]]; then
+    echo "FAIL: full-surah mode is not available after returning from the adhan library."
+    cat dist/runtime-test/window-audio-catalog-reciter.xml
+    exit 1
+  fi
+  read -r full_mode_x full_mode_y <<< "$full_mode_coords"
+  adb shell input tap "$full_mode_x" "$full_mode_y"
+  sleep 2
+  search_coords="$(python3 - dist/runtime-test/window-audio-catalog-reciter.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("class", "").endswith("EditText"):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -z "$search_coords" ]]; then
+    echo "FAIL: Quran-reciter search field is not reachable."
+    cat dist/runtime-test/window-audio-catalog-reciter.xml
+    exit 1
+  fi
+  read -r search_x search_y <<< "$search_coords"
+  adb shell input tap "$search_x" "$search_y"
+  adb shell input text 'Ahmad%sAl%sNufais'
+  sleep 4
+  rm -f dist/runtime-test/window-audio-reciter-search.xml
+  adb shell rm -f /sdcard/mashxall-audio-reciter-search.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-audio-reciter-search.xml > dist/runtime-test/uiautomator-audio-reciter-search.txt 2>&1 || true
+  adb pull /sdcard/mashxall-audio-reciter-search.xml dist/runtime-test/window-audio-reciter-search.xml >/dev/null 2>&1 || true
+  if ! grep -Fqi 'Ahmad Al Nufais' dist/runtime-test/window-audio-reciter-search.xml ||
+     ! grep -Eq '114/114' dist/runtime-test/window-audio-reciter-search.xml; then
+    echo "FAIL: searching the online reciter library did not find Ahmad Al Nufais with 114/114 surah coverage."
+    cat dist/runtime-test/window-audio-reciter-search.xml
+    exit 1
+  fi
+  echo "PASS: online-reciter search finds Ahmad Al Nufais and renders its verified 114-surah coverage."
+
+  adb shell input keyevent 4
+  sleep 2
+  adb shell input keyevent 4
+  sleep 2
+
+
 check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
