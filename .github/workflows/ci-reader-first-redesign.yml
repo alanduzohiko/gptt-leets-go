@@ -7,6 +7,7 @@ on:
     paths:
       - "unified-app/**"
       - "docs/audio-library-sources.md"
+      - "docs/quran-text-editions.md"
       - "docs/tajweed-text-source.md"
       - "docs/redesign-spec-ar.md"
       - "THIRD_PARTY_NOTICES.md"
@@ -23,6 +24,7 @@ on:
     paths:
       - "unified-app/**"
       - "docs/audio-library-sources.md"
+      - "docs/quran-text-editions.md"
       - "docs/tajweed-text-source.md"
       - "docs/redesign-spec-ar.md"
       - "THIRD_PARTY_NOTICES.md"
