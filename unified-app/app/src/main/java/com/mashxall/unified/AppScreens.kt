@@ -5161,8 +5161,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
-    var calculationMethod by rememberSaveable { mutableStateOf(prefs.getString("prayer_method", "mwl") ?: "mwl") }
-    var asrSchool by rememberSaveable { mutableStateOf(prefs.getString("asr_school", "shafi") ?: "shafi") }
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
     var selectedAdhanAsset by rememberSaveable {
@@ -5332,7 +5330,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, calculationMethod, asrSchool) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity) {
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
             PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
@@ -5340,10 +5338,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             PrayerAlarmScheduler.cancelAll(context)
         }
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool) {
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, calculationMethod, asrSchool, dayOffset) {
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, dayOffset) {
         var loadedDate = ""
         while (true) {
             val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -5356,27 +5354,21 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }.time
                 times = when {
                     gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, targetDate,
-                        PrayerCalculationMethod.fromId(calculationMethod),
-                        AsrCalculationSchool.fromId(asrSchool)
+                        context, gpsLatitude!!, gpsLongitude!!, targetDate
                     )
                     manualLatitude != null && manualLongitude != null -> {
                         val sourceCityTimes = ContentRepository.loadPrayerTimes(
                             context, selectedCity, targetDate, manualCountry
                         )
                         sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, targetDate,
-                            PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
+                            context, manualLatitude!!, manualLongitude!!, targetDate
                         )
                     }
                     else -> {
                         ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
                             ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
                                 ContentRepository.loadPrayerTimesAtLocation(
-                                    context, city.latitude, city.longitude, targetDate,
-                                    PrayerCalculationMethod.fromId(calculationMethod),
-                                    AsrCalculationSchool.fromId(asrSchool)
+                                    context, city.latitude, city.longitude, targetDate
                                 )
                             }
                     }
@@ -5389,7 +5381,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     LaunchedEffect(
         selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
-        manualCountry, calculationMethod, asrSchool, dayOffset, currentLocalDateKey
+        manualCountry, dayOffset, currentLocalDateKey
     ) {
         if (dayOffset != 0) {
             tomorrowTimes = null
@@ -5401,25 +5393,19 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             tomorrowTimes = when {
                 gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, tomorrow,
-                        PrayerCalculationMethod.fromId(calculationMethod),
-                        AsrCalculationSchool.fromId(asrSchool)
+                        context, gpsLatitude!!, gpsLongitude!!, tomorrow
                     )
                 manualLatitude != null && manualLongitude != null -> {
                     ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
                         ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, tomorrow,
-                            PrayerCalculationMethod.fromId(calculationMethod),
-                            AsrCalculationSchool.fromId(asrSchool)
+                            context, manualLatitude!!, manualLongitude!!, tomorrow
                         )
                 }
                 else -> {
                     ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
                         ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
                             ContentRepository.loadPrayerTimesAtLocation(
-                                context, city.latitude, city.longitude, tomorrow,
-                                PrayerCalculationMethod.fromId(calculationMethod),
-                                AsrCalculationSchool.fromId(asrSchool)
+                                context, city.latitude, city.longitude, tomorrow
                             )
                         }
                 }
@@ -5503,7 +5489,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
                         Text(
                             if (gpsLatitude != null) {
-                                times?.city?.takeIf { it.isNotBlank() } ?: when (language) {
+                                when (language) {
                                     AppLanguage.EN -> "Current location"
                                     AppLanguage.AR -> "الموقع الحالي"
                                     AppLanguage.CKB -> "شوێنی ئێستا"
