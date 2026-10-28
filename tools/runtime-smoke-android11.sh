@@ -39,7 +39,12 @@ if [[ "$package_ready" -ne 1 ]]; then
   exit 1
 fi
 
-adb logcat -c
+# Some Android 11 CI images restrict clearing the system log buffer even
+# after PackageManager is ready. This is a diagnostics-only operation: do not
+# abort the installation/runtime test just because logcat cannot be cleared.
+if ! adb logcat -c >dist/runtime-test/logcat-clear.txt 2>&1; then
+  echo "WARN: logcat buffers could not be cleared; keeping the runtime test running." | tee -a dist/runtime-test/logcat-clear.txt
+fi
 install_success=0
 for attempt in 1 2 3; do
   echo "Install attempt $attempt/3" | tee -a dist/runtime-test/install.txt
