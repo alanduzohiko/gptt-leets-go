@@ -115,10 +115,6 @@ import java.security.MessageDigest
 import java.util.Date
 import java.util.Calendar
 import java.util.Locale
-import java.time.LocalDate
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -5150,8 +5146,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var use24Hour by rememberSaveable { mutableStateOf(false) }
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
-    var dayOffset by rememberSaveable { mutableIntStateOf(0) }
-    var showDatePicker by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
@@ -5341,80 +5335,59 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, dayOffset) {
-        var loadedDate = ""
-        while (true) {
-            val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-            val requestedKey = "$todayKey:$dayOffset"
-            if (requestedKey != loadedDate) {
-                loading = true
-                times = null
-                val targetDate = Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_YEAR, dayOffset)
-                }.time
-                times = when {
-                    gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, targetDate
+    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, currentLocalDateKey) {
+        loading = true
+        times = null
+        val targetDate = Date(clockNowMillis)
+        times = when {
+            gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+                context, gpsLatitude!!, gpsLongitude!!, targetDate
+            )
+            manualLatitude != null && manualLongitude != null -> {
+                ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
+                    ?: ContentRepository.loadPrayerTimesAtLocation(
+                        context, manualLatitude!!, manualLongitude!!, targetDate
                     )
-                    manualLatitude != null && manualLongitude != null -> {
-                        val sourceCityTimes = ContentRepository.loadPrayerTimes(
-                            context, selectedCity, targetDate, manualCountry
-                        )
-                        sourceCityTimes ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, targetDate
-                        )
-                    }
-                    else -> {
-                        ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
-                            ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                                ContentRepository.loadPrayerTimesAtLocation(
-                                    context, city.latitude, city.longitude, targetDate
-                                )
-                            }
-                    }
-                }
-                loadedDate = requestedKey
-                loading = false
             }
-            delay(60_000L)
+            else -> {
+                ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
+                    ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, targetDate)
+                    }
+            }
         }
+        loading = false
     }
     LaunchedEffect(
         selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
-        manualCountry, dayOffset, currentLocalDateKey
+        manualCountry, currentLocalDateKey
     ) {
-        if (dayOffset != 0) {
-            tomorrowTimes = null
-        } else {
-            val tomorrow = Calendar.getInstance().apply {
-                timeInMillis = clockNowMillis
-                add(Calendar.DAY_OF_YEAR, 1)
-            }.time
-            tomorrowTimes = when {
-                gpsLatitude != null && gpsLongitude != null ->
-                    ContentRepository.loadPrayerTimesAtLocation(
-                        context, gpsLatitude!!, gpsLongitude!!, tomorrow
+        val tomorrow = Calendar.getInstance().apply {
+            timeInMillis = clockNowMillis
+            add(Calendar.DAY_OF_YEAR, 1)
+        }.time
+        tomorrowTimes = when {
+            gpsLatitude != null && gpsLongitude != null ->
+                ContentRepository.loadPrayerTimesAtLocation(
+                    context, gpsLatitude!!, gpsLongitude!!, tomorrow
+                )
+            manualLatitude != null && manualLongitude != null -> {
+                ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                    ?: ContentRepository.loadPrayerTimesAtLocation(
+                        context, manualLatitude!!, manualLongitude!!, tomorrow
                     )
-                manualLatitude != null && manualLongitude != null -> {
-                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                        ?: ContentRepository.loadPrayerTimesAtLocation(
-                            context, manualLatitude!!, manualLongitude!!, tomorrow
-                        )
-                }
-                else -> {
-                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                        ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                            ContentRepository.loadPrayerTimesAtLocation(
-                                context, city.latitude, city.longitude, tomorrow
-                            )
-                        }
-                }
+            }
+            else -> {
+                ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                    ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrow)
+                    }
             }
         }
     }
-    val nextPrayerTarget = remember(times, tomorrowTimes, dayOffset, clockNowMillis) {
+    val nextPrayerTarget = remember(times, tomorrowTimes, clockNowMillis) {
         val currentTimes = times
-        if (dayOffset != 0 || currentTimes == null) {
+        if (currentTimes == null) {
             null
         } else {
             val now = Date(clockNowMillis)
@@ -5439,16 +5412,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
             }
         }
-    }
-
-    val displayDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
-    val displayLocalDate = Instant.ofEpochMilli(displayDate.time).atZone(ZoneId.systemDefault()).toLocalDate()
-    val displayDateText = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(displayDate)
-    val datePickerState = key(dayOffset) {
-        rememberDatePickerState(
-            initialSelectedDateMillis = displayLocalDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-            yearRange = (LocalDate.now().year - 1)..(LocalDate.now().year + 1)
-        )
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -5568,7 +5531,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 
         Spacer(Modifier.height(14.dp))
         Spacer(Modifier.height(10.dp))
-        if (dayOffset == 0 && nextPrayerTarget != null) {
+        if (nextPrayerTarget != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = DeepGreen),
                 shape = RoundedCornerShape(22.dp),
