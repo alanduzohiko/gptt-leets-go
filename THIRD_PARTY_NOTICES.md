@@ -37,3 +37,21 @@ This source connection does not imply a claim that every underlying text or
 recording is covered by the MIT license above. The MIT notice applies only to
 the Tajweed markup/rule mapping derived from spa5k/Tajweed. The original
 604-page graphic Mushaf is unchanged by this text-colouring option.
+
+
+## Alternate Quran text scripts (verse text only)
+
+The QPC Hafs and Hafs Nastaliq verse-text datasets are requested from
+[Qur'anpedia.net](https://quranpedia.net/) via the
+[risan/quran-json project](https://github.com/risan/quran-json). The source
+registry marks the selected snapshots as permitted under the
+[Qur'anpedia.net Data License](https://api.quranpedia.net/dumps/LICENSE.md).
+Snapshot revisions recorded by the source registry:
+
+- QPC Hafs (Madinah script): `8528abfcb55d808562ae9675217c07890322178f`
+- Hafs Nastaliq (Indo-Pak text): `a8b5918b0c6f636e61a0cb57fb3366667e45d712`
+
+Mashxall downloads only the selected surah's text on demand and caches a
+validated response in app-private storage. These are verse-text scripts, not
+additional Mushaf page images; the original 604-page graphic edition is
+unchanged. The project does not bundle Quranpedia's fonts or page images here.
