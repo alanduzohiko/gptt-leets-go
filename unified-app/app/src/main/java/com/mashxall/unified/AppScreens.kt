@@ -3161,6 +3161,7 @@ private fun reciterOfflineFile(context: Context, reciter: Reciter, surah: Int, a
 }
 
 private fun isReciterSurahOffline(context: Context, reciter: Reciter, surah: Int, ayahCount: Int): Boolean {
+    if (surah !in 1..reciter.surahTotal) return false
     if (reciter.audioType != 0) return reciterOfflineFile(context, reciter, surah).let { it.isFile && it.length() > 512L }
     if (ayahCount < 1) return false
     return (1..ayahCount).all { ayah ->
@@ -3175,6 +3176,7 @@ private fun reciterAudioSequence(
     startingAyah: Int,
     ayahCount: Int
 ): List<String> {
+    if (surah !in 1..reciter.surahTotal) return emptyList()
     if (reciter.audioType != 0) {
         val local = reciterOfflineFile(context, reciter, surah)
         return listOf(if (local.isFile && local.length() > 512L) "local:${local.absolutePath}" else ContentRepository.reciterSampleUrl(reciter, surah, 1))
@@ -3196,6 +3198,7 @@ private suspend fun downloadReciterSurah(
     onProgress: (Int, Int) -> Unit
 ) = withContext(Dispatchers.IO) {
     val chapter = surah.coerceIn(1, 114)
+    require(chapter in 1..reciter.surahTotal) { "This recitation edition does not contain the selected surah." }
     if (reciter.audioType == 0) {
         require(ayahCount > 0) { "The source did not provide this surah's verse count." }
         for (ayah in 1..ayahCount) {
@@ -3212,6 +3215,26 @@ private suspend fun downloadReciterSurah(
         }
         withContext(Dispatchers.Main) { onProgress(1, 1) }
     }
+}
+
+private fun onlineAdhanOfflineFile(context: Context, item: OnlineAdhan): File {
+    val safeId = item.id.replace(Regex("[^A-Za-z0-9_-]"), "_")
+    return File(File(context.filesDir, "adhan-audio"), "$safeId.mp3")
+}
+
+private suspend fun downloadOnlineAdhan(context: Context, item: OnlineAdhan): File = withContext(Dispatchers.IO) {
+    val destination = onlineAdhanOfflineFile(context, item)
+    if (!destination.isFile || destination.length() <= 512L) {
+        downloadReciterFile(item.url, destination)
+    }
+    require(destination.isFile && destination.length() > 512L) { "The downloaded adhan file is incomplete." }
+    destination
+}
+
+private fun formatAudioFileSize(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes >= 1024L -> String.format(Locale.US, "%.0f KB", bytes / 1024.0)
+    else -> "$bytes B"
 }
 
 private fun downloadReciterFile(url: String, destination: File) {
@@ -3278,10 +3301,13 @@ fun AudioScreen(
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
+    var onlineAdhan by remember { mutableStateOf<List<OnlineAdhan>>(emptyList()) }
     var reciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var downloadingTracks by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var downloadingAdhan by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var offlineRevision by remember { mutableIntStateOf(0) }
+    var offlineAdhanRevision by remember { mutableIntStateOf(0) }
     var audioNotice by rememberSaveable { mutableStateOf("") }
     var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
     val preferredReciter = reciters.firstOrNull { it.id == preferredReciterId }
@@ -3301,6 +3327,7 @@ fun AudioScreen(
     LaunchedEffect(Unit) {
         ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
         audio = ContentRepository.loadAudioItems(context)
+        onlineAdhan = ContentRepository.loadOnlineAdhan(context)
         val loadedReciters = ContentRepository.loadReciters(context)
         reciters = loadedReciters
         surahs = ContentRepository.loadSurahs(context)
@@ -3366,18 +3393,153 @@ fun AudioScreen(
         if (audioNotice.isNotBlank()) {
             Text(audioNotice, color = Gold, fontSize = 11.sp, lineHeight = 16.sp)
         }
-        if (selectedTab == 0 || selectedTab == 2) {
-            val adhanKeywords = listOf(
-                "adhan", "athan", "azan", "muezzin", "takbir", "takbeer", "madina", "madinah",
-                "mecca", "makkah", "fajr", "hijaz", "abdulbasit", "abdul_basit", "abdulmajid",
-                "majid", "mansur", "mshari", "naqshbandi", "nasr", "peshawa", "rahid", "ramazan"
+        if (selectedTab == 2) {
+            val searchTerm = audioQuery.trim()
+            val visibleAdhan = onlineAdhan.filter { item ->
+                searchTerm.isBlank() ||
+                    (item.titleArabic + " " + item.titleEnglish + " " + item.sourceFilename)
+                        .contains(searchTerm, ignoreCase = true)
+            }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${onlineAdhan.size} source-linked adhan and mosque recordings • download selected tracks for offline use"
+                    AppLanguage.AR -> "${onlineAdhan.size} تسجيلاً للأذان والمساجد من مصادرها الأصلية • نزّل ما تختاره للاستماع دون إنترنت"
+                    AppLanguage.CKB -> "${onlineAdhan.size} تۆماری بانگ و مزگەوت لە سەرچاوەی ڕەسەنەوە • ئەو دەنگانە دابگرە کە دەتەوێت بەبێ ئینتەرنێت گوێی لێ بگریت"
+                },
+                color = foreground.copy(alpha = 0.64f), fontSize = 10.sp, lineHeight = 15.sp
             )
+            Text(
+                "Source catalog: Kiwifu/adhan-mp3 • audio stays online until you choose Download.",
+                color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, lineHeight = 13.sp
+            )
+            Spacer(Modifier.height(4.dp))
+            if (visibleAdhan.isEmpty()) {
+                LoadingOrEmpty(loading, language, foreground, if (onlineAdhan.isEmpty()) tr(language, "no_adhan_audio") else tr(language, "not_found"))
+            } else LazyColumn(
+                contentPadding = PaddingValues(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(visibleAdhan, key = { it.id }) { item ->
+                    val file = onlineAdhanOfflineFile(context, item)
+                    val localSaved = remember(item.id, offlineAdhanRevision) { file.isFile && file.length() > 512L }
+                    val downloadProgress = downloadingAdhan[item.id]
+                    val playKey = "online-adhan-${item.id}"
+                    val title = if (language == AppLanguage.EN) item.titleEnglish else item.titleArabic.ifBlank { item.titleEnglish }
+                    val categoryLabel = when (item.category) {
+                        "mosque" -> when (language) {
+                            AppLanguage.EN -> "Mosque / location adhan"
+                            AppLanguage.AR -> "أذان مسجد / موقع"
+                            AppLanguage.CKB -> "بانگی مزگەوت / شوێن"
+                        }
+                        else -> when (language) {
+                            AppLanguage.EN -> "Muezzin recording"
+                            AppLanguage.AR -> "تسجيل مؤذن"
+                            AppLanguage.CKB -> "تۆماری موئەزین"
+                        }
+                    }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(17.dp),
+                        border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f))
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    if (playing == playKey) {
+                                        AudioController.stop()
+                                        playing = ""
+                                    } else {
+                                        val source = if (localSaved) "local:${file.absolutePath}" else item.url
+                                        playing = playKey
+                                        AudioController.playSequence(context, listOf(source)) { state ->
+                                            if (!state) playing = ""
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    if (playing == playKey) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
+                                    contentDescription = if (playing == playKey) "Pause adhan" else "Play adhan",
+                                    tint = Gold, modifier = Modifier.size(29.dp)
+                                )
+                            }
+                            Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                                Text(title, color = foreground, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 2, lineHeight = 16.sp)
+                                if (item.titleArabic.isNotBlank() && item.titleEnglish.isNotBlank() && item.titleArabic != item.titleEnglish) {
+                                    Text(
+                                        if (language == AppLanguage.EN) item.titleArabic else item.titleEnglish,
+                                        color = foreground.copy(alpha = 0.58f), fontSize = 9.sp, maxLines = 2, lineHeight = 12.sp
+                                    )
+                                }
+                                Text(
+                                    "$categoryLabel • ${formatAudioFileSize(item.sizeBytes)}",
+                                    color = foreground.copy(alpha = 0.55f), fontSize = 9.sp, maxLines = 2
+                                )
+                                Text(
+                                    when {
+                                        downloadProgress != null -> if (language == AppLanguage.EN) "Downloading for offline use…" else if (language == AppLanguage.AR) "جارٍ التنزيل للاستماع دون إنترنت…" else "بەبێ ئینتەرنێت دادەگیرێت…"
+                                        localSaved -> if (language == AppLanguage.EN) "Saved on this device • offline ready" else if (language == AppLanguage.AR) "محفوظ على الجهاز • جاهز دون إنترنت" else "لە مۆبایل پارێزراوە • ئامادەی بەبێ ئینتەرنێت"
+                                        else -> if (language == AppLanguage.EN) "Stream online or download for offline playback" else if (language == AppLanguage.AR) "استمع عبر الإنترنت أو نزّله للاستماع دون اتصال" else "بە ئۆنلاین گوێی لێ بگرە یان بۆ بەبێ ئینتەرنێت دایبگرە"
+                                    },
+                                    color = if (downloadProgress != null || localSaved) Gold else foreground.copy(alpha = 0.56f),
+                                    fontSize = 9.sp, lineHeight = 13.sp, maxLines = 2
+                                )
+                            }
+                            when {
+                                downloadProgress != null -> CircularProgressIndicator(
+                                    modifier = Modifier.padding(horizontal = 8.dp).size(21.dp),
+                                    color = Gold, strokeWidth = 2.dp
+                                )
+                                localSaved -> IconButton(onClick = {
+                                    if (playing == playKey) {
+                                        AudioController.stop()
+                                        playing = ""
+                                    }
+                                    file.delete()
+                                    offlineAdhanRevision++
+                                    audioNotice = if (language == AppLanguage.EN) "Offline copy removed; the online recording is still available."
+                                        else if (language == AppLanguage.AR) "أزيلت النسخة المحفوظة؛ ما زال التسجيل متاحًا عبر الإنترنت."
+                                        else "وەشانی بەبێ ئینتەرنێت لابرا؛ تۆمارە ئۆنلاینەکە هێشتا بەردەستە."
+                                }) {
+                                    Icon(Icons.Outlined.CheckCircle, contentDescription = if (language == AppLanguage.EN) "Remove offline copy" else if (language == AppLanguage.AR) "حذف النسخة المحفوظة" else "لابردنی وەشانی پارێزراو", tint = Color(0xFF62C995), modifier = Modifier.size(24.dp))
+                                }
+                                else -> IconButton(onClick = {
+                                    downloadingAdhan = downloadingAdhan + (item.id to "downloading")
+                                    audioNotice = ""
+                                    scope.launch {
+                                        try {
+                                            downloadOnlineAdhan(context, item)
+                                            offlineAdhanRevision++
+                                            audioNotice = if (language == AppLanguage.EN) "Saved ${item.titleEnglish} for offline playback."
+                                                else if (language == AppLanguage.AR) "تم حفظ ${item.titleArabic} للتشغيل دون إنترنت."
+                                                else "تۆماری ${item.titleArabic} بۆ بەکارهێنانی بەبێ ئینتەرنێت پارێزرا."
+                                        } catch (error: Exception) {
+                                            audioNotice = when (language) {
+                                                AppLanguage.EN -> "Download failed. Check the connection and try again."
+                                                AppLanguage.AR -> "فشل التنزيل. تحقّق من الاتصال ثم حاول مجددًا."
+                                                AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
+                                            }
+                                        } finally {
+                                            downloadingAdhan = downloadingAdhan - item.id
+                                        }
+                                    }
+                                }) {
+                                    Icon(Icons.Outlined.Download, contentDescription = if (language == AppLanguage.EN) "Download adhan" else if (language == AppLanguage.AR) "تنزيل الأذان" else "داگرتنی بانگ", tint = Gold, modifier = Modifier.size(23.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (selectedTab == 0) {
             val visibleAudio = audio.filter { item ->
                 val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                (selectedTab == 0 || adhanKeywords.any { name.contains(it) }) &&
-                    (audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT)))
+                audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT))
             }
-            if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selectedTab == 2) tr(language, "no_adhan_audio") else tr(language, "no_data"))
+            if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 items(visibleAudio, key = { it.assetPath }) { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
@@ -3401,7 +3563,7 @@ fun AudioScreen(
                     }
                 }
             }
-        } else {
+        }        } else {
             val visibleReciters = reciters.filter { reciter ->
                 val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
                     .contains(audioQuery, ignoreCase = true)
@@ -3527,8 +3689,17 @@ fun AudioScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
+                                if (reciter.recitation.isNotBlank()) {
+                                    Text(reciter.recitation, color = foreground.copy(alpha = 0.5f), fontSize = 8.sp, maxLines = 2, lineHeight = 11.sp)
+                                }
                                 Text(
                                     when {
+                                        surahNumber > reciter.surahTotal && language == AppLanguage.EN -> "This edition contains only ${reciter.surahTotal} surahs; this one is unavailable."
+                                        surahNumber > reciter.surahTotal && language == AppLanguage.AR -> "هذه الطبعة تضم ${reciter.surahTotal} سورة فقط؛ السورة المختارة غير متاحة."
+                                        surahNumber > reciter.surahTotal -> "ئەم وەشانە تەنها ${reciter.surahTotal} سوورەتی هەیە؛ ئەم سوورەتە بەردەست نییە."
+                                        reciter.sourceId.isNotBlank() && language == AppLanguage.EN -> "MP3Quran.net • ${reciter.surahTotal}/114 surahs"
+                                        reciter.sourceId.isNotBlank() && language == AppLanguage.AR -> "MP3Quran.net • ${reciter.surahTotal}/114 سورة"
+                                        reciter.sourceId.isNotBlank() -> "MP3Quran.net • ${reciter.surahTotal}/114 سوورەت"
                                         playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.EN -> "Full surah • sequential ayah playback"
                                         playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.AR -> "السورة كاملة • تشغيل الآيات بالتتابع"
                                         playbackMode == "full" && reciter.audioType == 0 -> "سوورەتی تەواو • لێدانی یەک لە دوای یەکی ئایەتەکان"
@@ -3570,7 +3741,7 @@ fun AudioScreen(
                                 )
                             }
                             IconButton(
-                                enabled = sources.isNotEmpty(),
+                                enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
                                 onClick = {
                                     if (playing == playKey) {
                                         AudioController.stop()
@@ -3590,7 +3761,7 @@ fun AudioScreen(
                                 )
                             }
                             IconButton(
-                                enabled = downloadProgress == null && surahAyahCount > 0,
+                                enabled = downloadProgress == null && surahAyahCount > 0 && surahNumber <= reciter.surahTotal,
                                 onClick = {
                                     if (localComplete) {
                                         audioNotice = if (language == AppLanguage.EN) "This surah is already saved for offline playback."
@@ -5579,6 +5750,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
     var city by remember { mutableStateOf<City?>(null) }
     var azimuth by remember { mutableFloatStateOf(0f) }
+    var magneticDeclination by remember { mutableFloatStateOf(0f) }
     var sensorAvailable by remember { mutableStateOf(false) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
@@ -5683,6 +5855,18 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             else -> ContentRepository.findCityByName(context, selectedCity, manualCountry)
         }
     }
+    LaunchedEffect(city) {
+        magneticDeclination = city?.let { location ->
+            runCatching {
+                android.hardware.GeomagneticField(
+                    location.latitude.toFloat(),
+                    location.longitude.toFloat(),
+                    0f,
+                    System.currentTimeMillis()
+                ).declination
+            }.getOrDefault(0f)
+        } ?: 0f
+    }
 
     DisposableEffect(context) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
@@ -5724,7 +5908,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     }
 
     val bearing = city?.let { qiblaBearing(it.latitude, it.longitude) }
-    val relativeHeading = bearing?.let { ((it.toFloat() - azimuth + 540f) % 360f) - 180f } ?: 0f
+    val relativeHeading = bearing?.let { qiblaRelativeHeading(it.toFloat(), azimuth, magneticDeclination) } ?: 0f
     val aligned = sensorAvailable && bearing != null && kotlin.math.abs(relativeHeading) <= 5f
     val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
         targetValue = relativeHeading,
@@ -5860,6 +6044,18 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             }, color = foreground.copy(alpha = 0.5f), fontSize = 10.sp, lineHeight = 16.sp, textAlign = TextAlign.Center
         )
     }
+}
+
+internal fun qiblaRelativeHeading(
+    trueBearingDegrees: Float,
+    magneticAzimuthDegrees: Float,
+    declinationDegrees: Float
+): Float {
+    // Android's orientation sensor reports azimuth relative to magnetic north.
+    // A positive geomagnetic declination means magnetic north lies east of true
+    // north, so add the declination to obtain a true-north heading.
+    val trueHeading = ((magneticAzimuthDegrees + declinationDegrees) % 360f + 360f) % 360f
+    return ((trueBearingDegrees - trueHeading + 540f) % 360f) - 180f
 }
 
 private fun qiblaBearing(latitude: Double, longitude: Double): Double {
