@@ -22,4 +22,24 @@ class AudioPlaybackModeTest {
         assertEquals(1, resolveReciterStartAyah("verse", 4, 0))
         assertEquals(1, resolveReciterStartAyah("verse", -1, -10))
     }
+
+    @Test
+    fun selectedAyahModeSwitchesAwayFromFullSurahOnlyReciter() {
+        val verseReciter = com.mashxall.unified.data.Reciter(1, "قارئ آية", "Verse Reciter", 0, "https://example.invalid/verse/", 1)
+        val fullReciter = com.mashxall.unified.data.Reciter(2, "قارئ سورة", "Full Reciter", 1, "https://example.invalid/full/", 2)
+        assertEquals(1, resolveCompatibleReciterId("verse", 2, listOf(verseReciter, fullReciter)))
+    }
+
+    @Test
+    fun fullSurahModeKeepsTheCurrentCompatibleReciter() {
+        val verseReciter = com.mashxall.unified.data.Reciter(1, "قارئ آية", "Verse Reciter", 0, "https://example.invalid/verse/", 1)
+        val fullReciter = com.mashxall.unified.data.Reciter(2, "قارئ سورة", "Full Reciter", 1, "https://example.invalid/full/", 2)
+        assertEquals(2, resolveCompatibleReciterId("full", 2, listOf(verseReciter, fullReciter)))
+    }
+
+    @Test
+    fun verseModeDoesNotPretendAFullSurahOnlySourceCanStartAtAnAyah() {
+        val fullReciter = com.mashxall.unified.data.Reciter(2, "قارئ سورة", "Full Reciter", 1, "https://example.invalid/full/", 2)
+        org.junit.Assert.assertNull(resolveCompatibleReciterId("verse", 2, listOf(fullReciter)))
+    }
 }
