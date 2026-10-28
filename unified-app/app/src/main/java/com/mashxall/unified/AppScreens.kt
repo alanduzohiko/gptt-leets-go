@@ -3601,6 +3601,14 @@ fun AudioScreen(
                     singleLine = true
                 )
             }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${reciters.size} recitation editions • ${reciters.count { it.sourceId.isNotBlank() }} streamed from MP3Quran.net"
+                    AppLanguage.AR -> "${reciters.size} إصدارًا للتلاوة • ${reciters.count { it.sourceId.isNotBlank() }} من MP3Quran.net"
+                    AppLanguage.CKB -> "${reciters.size} وەشانی خوێندنەوە • ${reciters.count { it.sourceId.isNotBlank() }} لە MP3Quran.net"
+                },
+                color = foreground.copy(alpha = 0.5f), fontSize = 9.sp, lineHeight = 13.sp
+            )
             Spacer(Modifier.height(7.dp))
             Text(
                 if (language == AppLanguage.EN) "PLAYBACK MODE" else if (language == AppLanguage.AR) "طريقة التشغيل" else "شێوازی لێدان",
