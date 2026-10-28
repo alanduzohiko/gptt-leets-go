@@ -1365,6 +1365,178 @@ PY
     exit 1
   fi
   echo "PASS: Quran reader settings can select and persist From selected ayah."
+
+  # Exercise the live Tajweed setting and ensure its preference is saved both ways.
+  all_settings_coords="$(python3 - dist/runtime-test/window-quran-reciter-settings.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"All settings|كل الإعدادات|هەموو ڕێکخستنەکان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$all_settings_coords" ]]; then
+    echo "FAIL: could not return to the grouped Quran settings overview."
+    cat dist/runtime-test/window-quran-reciter-settings.xml
+    exit 1
+  fi
+  read -r all_settings_x all_settings_y <<< "$all_settings_coords"
+  adb shell input tap "$all_settings_x" "$all_settings_y"
+  sleep 3
+  rm -f dist/runtime-test/window-quran-settings-overview.xml
+  adb shell rm -f /sdcard/mashxall-quran-settings-overview.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-quran-settings-overview.xml > dist/runtime-test/uiautomator-quran-settings-overview.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-settings-overview.xml dist/runtime-test/window-quran-settings-overview.xml >/dev/null 2>&1 || true
+  appearance_coords="$(python3 - dist/runtime-test/window-quran-settings-overview.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Mushaf & reading appearance|المصحف ومظهر القراءة|مصحەف و ڕووکاری خوێندنەوە", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$appearance_coords" ]]; then
+    echo "FAIL: Quran settings overview does not expose the Mushaf appearance category."
+    cat dist/runtime-test/window-quran-settings-overview.xml
+    exit 1
+  fi
+  read -r appearance_x appearance_y <<< "$appearance_coords"
+  adb shell input tap "$appearance_x" "$appearance_y"
+  sleep 3
+  rm -f dist/runtime-test/window-quran-settings-tajweed.xml
+  adb shell rm -f /sdcard/mashxall-quran-settings-tajweed.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-quran-settings-tajweed.xml > dist/runtime-test/uiautomator-quran-settings-tajweed.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-settings-tajweed.xml dist/runtime-test/window-quran-settings-tajweed.xml >/dev/null 2>&1 || true
+  if ! grep -Eqi 'Colored Tajweed in verse text|التجويد الملوّن في نص الآيات|تەجویدی ڕەنگاوڕەنگ لە دەقی ئایەت' dist/runtime-test/window-quran-settings-tajweed.xml; then
+    echo "FAIL: the grouped Quran settings do not show the functional colored Tajweed option."
+    cat dist/runtime-test/window-quran-settings-tajweed.xml
+    exit 1
+  fi
+
+  tajweed_switch_coords="$(python3 - dist/runtime-test/window-quran-settings-tajweed.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+label = re.compile(r"Colored Tajweed in verse text|التجويد الملوّن في نص الآيات|تەجویدی ڕەنگاوڕەنگ لە دەقی ئایەت", re.I)
+label_y = None
+for node in root.iter("node"):
+    if label.search(node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            _, y1, _, y2 = map(int, match.groups())
+            label_y = (y1 + y2) // 2
+            break
+if label_y is None:
+    raise SystemExit(0)
+candidates = []
+for node in root.iter("node"):
+    if node.attrib.get("checkable") != "true":
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    center_y = (y1+y2)//2
+    if abs(center_y-label_y) <= 120:
+        candidates.append((abs(center_y-label_y), (x1+x2)//2, center_y))
+if not candidates:
+    raise SystemExit(0)
+_, x, y = sorted(candidates)[0]
+print(f"{x} {y}")
+PY
+)"
+  if [[ -z "$tajweed_switch_coords" ]]; then
+    echo "FAIL: colored Tajweed appears but its toggle is not interactable."
+    cat dist/runtime-test/window-quran-settings-tajweed.xml
+    exit 1
+  fi
+  read -r tajweed_switch_x tajweed_switch_y <<< "$tajweed_switch_coords"
+  adb shell input tap "$tajweed_switch_x" "$tajweed_switch_y"
+  sleep 2
+  adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-tajweed-enabled.xml 2>/dev/null || true
+  if ! grep -Eq '<boolean name="quran_colored_tajweed" value="true"' dist/runtime-test/preferences-tajweed-enabled.xml; then
+    echo "FAIL: enabling Colored Tajweed did not persist the preference."
+    cat dist/runtime-test/preferences-tajweed-enabled.xml
+    exit 1
+  fi
+  echo "PASS: Colored Tajweed is exposed and the enabled setting persists."
+
+  adb shell uiautomator dump /sdcard/mashxall-quran-settings-tajweed-on.xml > dist/runtime-test/uiautomator-quran-settings-tajweed-on.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-settings-tajweed-on.xml dist/runtime-test/window-quran-settings-tajweed-on.xml >/dev/null 2>&1 || true
+  tajweed_switch_coords="$(python3 - dist/runtime-test/window-quran-settings-tajweed-on.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+label = re.compile(r"Colored Tajweed in verse text|التجويد الملوّن في نص الآيات|تەجویدی ڕەنگاوڕەنگ لە دەقی ئایەت", re.I)
+label_y = None
+for node in root.iter("node"):
+    if label.search(node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            _, y1, _, y2 = map(int, match.groups())
+            label_y = (y1+y2)//2
+            break
+if label_y is None:
+    raise SystemExit(0)
+candidates = []
+for node in root.iter("node"):
+    if node.attrib.get("checkable") != "true":
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    center_y = (y1+y2)//2
+    if abs(center_y-label_y) <= 120:
+        candidates.append((abs(center_y-label_y), (x1+x2)//2, center_y))
+if not candidates:
+    raise SystemExit(0)
+_, x, y = sorted(candidates)[0]
+print(f"{x} {y}")
+PY
+)"
+  if [[ -n "$tajweed_switch_coords" ]]; then
+    read -r tajweed_switch_x tajweed_switch_y <<< "$tajweed_switch_coords"
+    adb shell input tap "$tajweed_switch_x" "$tajweed_switch_y"
+    sleep 2
+    adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-tajweed-disabled.xml 2>/dev/null || true
+    if ! grep -Eq '<boolean name="quran_colored_tajweed" value="false"' dist/runtime-test/preferences-tajweed-disabled.xml; then
+      echo "FAIL: disabling Colored Tajweed did not persist the preference."
+      cat dist/runtime-test/preferences-tajweed-disabled.xml
+      exit 1
+    fi
+    echo "PASS: Colored Tajweed can be disabled and the setting persists."
+  fi
 else
   echo "FAIL: the global Settings screen did not expose the Quran reader settings action."
   cat dist/runtime-test/window-settings.xml
