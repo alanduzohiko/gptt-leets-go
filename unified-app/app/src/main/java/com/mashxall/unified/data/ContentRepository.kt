@@ -148,7 +148,29 @@ data class WordItem(
 )
 private data class WordTypeInfo(val tag: String, val english: String, val arabic: String, val ckb: String, val color: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
-data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
+data class Reciter(
+    val id: Int,
+    val nameArabic: String,
+    val nameEnglish: String,
+    val audioType: Int,
+    val baseUrl: String,
+    val order: Int,
+    /** Number of surahs confirmed by this source edition; incomplete editions must not be played past this count. */
+    val surahTotal: Int = 114,
+    /** Original source's recitation/riwayah label, when supplied. */
+    val recitation: String = "",
+    /** Stable upstream identifier used for attribution and diagnostics. */
+    val sourceId: String = ""
+)
+data class OnlineAdhan(
+    val id: String,
+    val titleArabic: String,
+    val titleEnglish: String,
+    val category: String,
+    val sourceFilename: String,
+    val url: String,
+    val sizeBytes: Long
+)
 
 /** Remove source-database playback suffixes from the name shown to users. */
 internal fun reciterDisplayName(value: String): String = value
@@ -2061,13 +2083,89 @@ object ContentRepository {
     }
 
     suspend fun loadReciters(context: Context): List<Reciter> = withContext(Dispatchers.IO) {
-        queryDb(context, QURAN_DB, emptyList()) { db ->
+        val originalReciters = queryDb(context, QURAN_DB, emptyList()) { db ->
             db.rawQuery("SELECT id,name,name_english,audiotype,url,q_order FROM audio ORDER BY q_order,name", null).use { c ->
                 buildList {
-                    while (c.moveToNext()) add(Reciter(c.int("id"), reciterDisplayName(c.string("name")), reciterDisplayName(c.string("name_english")), c.int("audiotype"), c.string("url"), c.int("q_order")))
+                    while (c.moveToNext()) add(
+                        Reciter(
+                            id = c.int("id"),
+                            nameArabic = reciterDisplayName(c.string("name")),
+                            nameEnglish = reciterDisplayName(c.string("name_english")),
+                            audioType = c.int("audiotype"),
+                            baseUrl = c.string("url"),
+                            order = c.int("q_order")
+                        )
+                    )
                 }
             }
         }
+        // The Quran database remains the source for verse-by-verse reciters.
+        // Add source-attributed MP3Quran full-surah/edition catalog entries without
+        // bundling third-party audio files in the APK. Numeric IDs are offset so
+        // they cannot collide with the source database's own IDs.
+        val catalogReciters = runCatching {
+            val rows = context.assets.open("mp3quran_reciters.json")
+                .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()).getJSONArray("records") }
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val sourceId = row.optString("source_id")
+                    val upstreamId = row.optInt(
+                        "numeric_id",
+                        sourceId.substringAfterLast('-').toIntOrNull() ?: (index + 1)
+                    )
+                    val baseUrl = row.optString("server").trim()
+                    val englishName = reciterDisplayName(row.optString("name"))
+                    if (upstreamId < 1 || englishName.isBlank() || !baseUrl.startsWith("https://")) continue
+                    add(
+                        Reciter(
+                            id = 1_000_000 + upstreamId,
+                            nameArabic = reciterDisplayName(row.optString("name_ar").ifBlank { englishName }),
+                            nameEnglish = englishName,
+                            audioType = 1,
+                            baseUrl = baseUrl.trimEnd('/') + "/",
+                            order = 10_000 + index,
+                            surahTotal = row.optInt("surah_total", 0).coerceIn(0, 114),
+                            recitation = row.optString("recitation"),
+                            sourceId = sourceId
+                        )
+                    )
+                }
+            }
+        }.onFailure { error ->
+            Log.w("MashxallAudio", "Could not load the attributed online reciter catalog", error)
+        }.getOrDefault(emptyList())
+        (originalReciters + catalogReciters)
+            .distinctBy { it.id }
+            .sortedWith(compareBy<Reciter> { it.order }.thenBy { it.nameEnglish.lowercase(Locale.ROOT) })
+    }
+
+    suspend fun loadOnlineAdhan(context: Context): List<OnlineAdhan> = withContext(Dispatchers.IO) {
+        runCatching {
+            val rows = context.assets.open("adhan_catalog.json")
+                .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()).getJSONArray("records") }
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val id = row.optString("id")
+                    val url = row.optString("url")
+                    if (id.isBlank() || !url.startsWith("https://")) continue
+                    add(
+                        OnlineAdhan(
+                            id = id,
+                            titleArabic = row.optString("title_ar"),
+                            titleEnglish = row.optString("title_en"),
+                            category = row.optString("category"),
+                            sourceFilename = row.optString("source_filename"),
+                            url = url,
+                            sizeBytes = row.optLong("size_bytes", 0L).coerceAtLeast(0L)
+                        )
+                    )
+                }
+            }
+        }.onFailure { error ->
+            Log.w("MashxallAudio", "Could not load the source-linked adhan catalog", error)
+        }.getOrDefault(emptyList())
     }
 
     fun reciterSampleUrl(reciter: Reciter, surah: Int, ayah: Int): String {
