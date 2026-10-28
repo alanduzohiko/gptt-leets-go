@@ -239,6 +239,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var openingMushaf by remember { mutableStateOf(false) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
+    var textEditionId by rememberSaveable {
+        mutableStateOf(
+            prefs.getString("quran_text_edition", QuranTextEditions.ORIGINAL)
+                ?.takeIf { selectedId -> QuranTextEditions.all.any { it.id == selectedId } }
+                ?: QuranTextEditions.ORIGINAL
+        )
+    }
+    var alternateTextAyahs by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var alternateTextLoadedSurah by remember { mutableIntStateOf(0) }
+    var alternateTextLoading by remember { mutableStateOf(false) }
+    var alternateTextMessage by rememberSaveable { mutableStateOf("") }
+    var alternateTextReloadKey by rememberSaveable { mutableIntStateOf(0) }
     var coloredTajweed by rememberSaveable {
         mutableStateOf(prefs.getBoolean("quran_colored_tajweed", false))
     }
@@ -270,6 +282,22 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1))
     }
     val readerPlaybackMode = ReaderPlaybackSettings.mode
+    val selectedTextEdition = QuranTextEditions.all.firstOrNull { it.id == textEditionId }
+        ?: QuranTextEditions.original
+    val chooseTextEdition: (String) -> Unit = { editionId ->
+        if (QuranTextEditions.all.any { it.id == editionId }) {
+            textEditionId = editionId
+            prefs.edit().putString("quran_text_edition", editionId).apply()
+            showUnvowelled = false
+            if (editionId != QuranTextEditions.ORIGINAL && coloredTajweed) {
+                coloredTajweed = false
+                prefs.edit().putBoolean("quran_colored_tajweed", false).apply()
+                tajweedAyahs = emptyMap()
+                tajweedLoadedSurah = 0
+                tajweedMessage = ""
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
         readerReciters = ContentRepository.loadReciters(context)
@@ -395,6 +423,62 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
         } finally {
             tajweedLoading = false
+        }
+    }
+    LaunchedEffect(selected, textEditionId, mushafMode, showSurahList, query, surahs, alternateTextReloadKey) {
+        alternateTextAyahs = emptyMap()
+        alternateTextLoadedSurah = 0
+        alternateTextMessage = ""
+        if (textEditionId == QuranTextEditions.ORIGINAL || mushafMode || showSurahList) {
+            alternateTextLoading = false
+            return@LaunchedEffect
+        }
+        if (query.isNotBlank()) {
+            alternateTextLoading = false
+            alternateTextMessage = when (language) {
+                AppLanguage.EN -> "Cross-surah search uses the bundled original text. Open a surah to use the selected script."
+                AppLanguage.AR -> "يستخدم البحث في جميع السور النص الأصلي المضمّن؛ افتح سورة لاستخدام الخط المختار."
+                AppLanguage.CKB -> "گەڕانی هەموو سوورەتەکان دەقی ڕەسەنی ناوخۆیی بەکاردەهێنێت؛ سوورەتێک بکەرەوە بۆ بەکارهێنانی نووسینی هەڵبژێردراو."
+            }
+            return@LaunchedEffect
+        }
+        val expectedCount = surahs.firstOrNull { it.number == selected }?.ayahCount ?: 0
+        if (expectedCount < 1) {
+            alternateTextLoading = false
+            return@LaunchedEffect
+        }
+        alternateTextLoading = true
+        alternateTextMessage = when (language) {
+            AppLanguage.EN -> "Loading the selected text script…"
+            AppLanguage.AR -> "جارٍ تحميل نمط النص المختار…"
+            AppLanguage.CKB -> "نووسینی هەڵبژێردراو دادەگیرێت…"
+        }
+        try {
+            val loaded = ContentRepository.loadQuranScriptAyahs(context, textEditionId, selected, expectedCount)
+            if (loaded.isNotEmpty()) {
+                alternateTextAyahs = loaded
+                alternateTextLoadedSurah = selected
+                alternateTextMessage = when (language) {
+                    AppLanguage.EN -> "Alternate text loaded. After a successful cache, this surah is available offline. The 604-page graphic Mushaf is unchanged."
+                    AppLanguage.AR -> "تم تحميل النص البديل؛ وبعد نجاح التخزين تبقى السورة متاحة دون إنترنت. لا تتغير صفحات المصحف الرسومي الـ604."
+                    AppLanguage.CKB -> "دەقی جێگرەوە بارکرا؛ دوای پاشەکەوتکردنی سەرکەوتوو بەبێ ئینتەرنێتیش بەردەست دەبێت. مصحەفی وێنەیی ٦٠٤ پەڕە ناگۆڕێت."
+                }
+            } else {
+                alternateTextMessage = when (language) {
+                    AppLanguage.EN -> "Could not load this text script. The original Quran text remains visible; connect and retry."
+                    AppLanguage.AR -> "تعذر تحميل نمط النص؛ يبقى النص الأصلي ظاهرًا. اتصل بالإنترنت ثم أعد المحاولة."
+                    AppLanguage.CKB -> "نەتوانرا ئەم نووسینە بار بکرێت؛ دەقی ڕەسەن هەر پیشان دەدرێت. پەیوەندی بکە و دووبارە هەوڵ بدەوە."
+                }
+            }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            alternateTextMessage = when (language) {
+                AppLanguage.EN -> "Could not load this text script. The original Quran text remains visible; connect and retry."
+                AppLanguage.AR -> "تعذر تحميل نمط النص؛ يبقى النص الأصلي ظاهرًا. اتصل بالإنترنت ثم أعد المحاولة."
+                AppLanguage.CKB -> "نەتوانرا ئەم نووسینە بار بکرێت؛ دەقی ڕەسەن هەر پیشان دەدرێت. پەیوەندی بکە و دووبارە هەوڵ بدەوە."
+            }
+        } finally {
+            alternateTextLoading = false
         }
     }
     val currentSurah = surahs.firstOrNull { it.number == selected }
