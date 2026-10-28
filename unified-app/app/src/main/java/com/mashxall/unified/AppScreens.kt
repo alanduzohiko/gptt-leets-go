@@ -1100,9 +1100,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         Column(Modifier.weight(1f)) {
                                             Text(if (language == AppLanguage.EN) "Mushaf editions & Tajweed" else if (language == AppLanguage.AR) "طبعات المصحف والتجويد" else "چاپەکانی مصحەف و تەجوید", color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             Text(
-                                                if (language == AppLanguage.EN) "This build contains the original 604-page Mushaf. Extra editions and colored Tajweed need verified source files; no inactive switches are shown."
-                                                else if (language == AppLanguage.AR) "تتضمن هذه النسخة المصحف الأصلي ذا 604 صفحات. تحتاج الطبعات الإضافية والتجويد الملوّن إلى ملفات مصدر موثوقة؛ لن تظهر مفاتيح لا تعمل."
-                                                else "ئەم وەشانە مصحەفی ڕەسەنی ٦٠٤ پەڕەی تێدایە. چاپی زیاتر و تەجویدی ڕەنگاوڕەنگ پێویستیان بە فایلە پشتڕاستکراوەکانە؛ دوگمەی بێ‌کارکردن نیشان نادرێت.",
+                                                if (language == AppLanguage.EN) "The original 604-page graphic Mushaf remains unchanged. Colored Tajweed is available in verse-text view; extra full-page Mushaf editions need complete verified page assets."
+                                                else if (language == AppLanguage.AR) "يبقى المصحف المصوّر الأصلي ذو 604 صفحات كما هو. التجويد الملوّن متاح في عرض نص الآيات؛ أما طبعات المصاحف المصوّرة الإضافية فتحتاج ملفات صفحات كاملة وموثوقة."
+                                                else "مصحەفی وێنەیی ڕەسەنی ٦٠٤ پەڕە ناگۆڕدرێت. تەجویدی ڕەنگاوڕەنگ لە پێشان‌دانی دەقی ئایەت بەردەستە؛ چاپی وێنەیی زیاتر پێویستی بە فایلە تەواو و پشتڕاستکراوەکانە.",
                                                 color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
                                             )
                                         }
