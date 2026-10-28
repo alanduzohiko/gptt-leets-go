@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Build
 import com.mashxall.unified.data.ContentRepository
 import com.mashxall.unified.data.PrayerRow
-import com.mashxall.unified.data.PrayerLocationMath
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
