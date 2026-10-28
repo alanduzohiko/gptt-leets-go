@@ -839,6 +839,115 @@ echo "PASS: Adhkar categories open a list, and an individual remembrance opens i
 check_screen names 'ناوە پیرۆزەکان|أسماء الله الحسنى|Names of Allah'
 check_screen tasbih 'تەسبیح|المسبحة|Digital tasbih'
 check_screen audio 'دەنگ و تلاوەت|التلاوات والصوتيات|Recitations & audio'
+
+# Exercise the Quran reciter playback mode controls, not just the Audio screen.
+reciters_tab_coords="$(python3 - dist/runtime-test/window-audio.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"قورئان.?خوێنەکان|القرّاء|Reciters", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$reciters_tab_coords" ]]; then
+  echo "FAIL: Audio screen does not expose a selectable Quran-reciter tab."
+  cat dist/runtime-test/window-audio.xml
+  exit 1
+fi
+read -r reciters_tab_x reciters_tab_y <<< "$reciters_tab_coords"
+adb shell input tap "$reciters_tab_x" "$reciters_tab_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-audio-reciter.xml > dist/runtime-test/uiautomator-audio-reciter.txt 2>&1 || true
+adb pull /sdcard/mashxall-audio-reciter.xml dist/runtime-test/window-audio-reciter.xml >/dev/null 2>&1 || true
+if ! grep -Eq 'شێوازی لێدان|طريقة التشغيل|PLAYBACK MODE' dist/runtime-test/window-audio-reciter.xml ||
+   ! grep -Eq 'لە ئایەتی هەڵبژێردراوەوە|من الآية المحددة|From selected ayah' dist/runtime-test/window-audio-reciter.xml ||
+   ! grep -Eq 'سوورەتی تەواو|السورة كاملة|Full surah' dist/runtime-test/window-audio-reciter.xml; then
+  echo "FAIL: reciter screen does not show both full-surah and selected-ayah modes."
+  cat dist/runtime-test/window-audio-reciter.xml
+  exit 1
+fi
+
+full_mode_coords="$(python3 - dist/runtime-test/window-audio-reciter.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"سوورەتی تەواو|السورة كاملة|Full surah", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$full_mode_coords" ]]; then
+  echo "FAIL: full-surah playback mode is not tappable."
+  cat dist/runtime-test/window-audio-reciter.xml
+  exit 1
+fi
+read -r full_mode_x full_mode_y <<< "$full_mode_coords"
+adb shell input tap "$full_mode_x" "$full_mode_y"
+sleep 2
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-audio-full-mode.xml 2>/dev/null || true
+if ! grep -Eq '<string name="reciter_playback_mode">full</string>' dist/runtime-test/preferences-audio-full-mode.xml; then
+  echo "FAIL: tapping Full surah did not persist playback mode."
+  cat dist/runtime-test/preferences-audio-full-mode.xml
+  exit 1
+fi
+echo "PASS: selecting Full surah persists the playback mode."
+
+ayah_mode_coords="$(python3 - dist/runtime-test/window-audio-reciter.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"لە ئایەتی هەڵبژێردراوەوە|من الآية المحددة|From selected ayah", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$ayah_mode_coords" ]]; then
+  echo "FAIL: selected-ayah playback mode is not tappable."
+  cat dist/runtime-test/window-audio-reciter.xml
+  exit 1
+fi
+read -r ayah_mode_x ayah_mode_y <<< "$ayah_mode_coords"
+adb shell input tap "$ayah_mode_x" "$ayah_mode_y"
+sleep 2
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-audio-ayah-mode.xml 2>/dev/null || true
+if ! grep -Eq '<string name="reciter_playback_mode">verse</string>' dist/runtime-test/preferences-audio-ayah-mode.xml; then
+  echo "FAIL: tapping selected ayah did not persist playback mode."
+  cat dist/runtime-test/preferences-audio-ayah-mode.xml
+  exit 1
+fi
+echo "PASS: selecting From selected ayah persists the playback mode."
+
 check_screen lexicon 'فەرهەنگی وشەکان|معجم الكلمات|Word lexicon'
 check_screen qibla 'ئاڕاستەی قیبلە|اتجاه القبلة|Qibla direction'
 check_screen bookmarks 'نیشانکراوەکان|العلامات المرجعية|Bookmarks'
