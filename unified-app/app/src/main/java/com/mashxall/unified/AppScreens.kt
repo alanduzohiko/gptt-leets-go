@@ -359,6 +359,44 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             if (startAt >= 0) listState.scrollToItem(startAt)
         }
     }
+    LaunchedEffect(selected, coloredTajweed, mushafMode, showSurahList, surahs) {
+        tajweedAyahs = emptyMap()
+        tajweedLoadedSurah = 0
+        if (!coloredTajweed || mushafMode || showSurahList) {
+            tajweedLoading = false
+            tajweedMessage = ""
+            return@LaunchedEffect
+        }
+        val expectedCount = surahs.firstOrNull { it.number == selected }?.ayahCount ?: 0
+        if (expectedCount < 1) {
+            tajweedLoading = false
+            tajweedMessage = ""
+            return@LaunchedEffect
+        }
+        tajweedLoading = true
+        tajweedMessage = ""
+        try {
+            val loaded = ContentRepository.loadTajweedAyahs(context, selected, expectedCount)
+            tajweedAyahs = loaded
+            tajweedLoadedSurah = if (loaded.isNotEmpty()) selected else 0
+            tajweedMessage = when {
+                loaded.isNotEmpty() && language == AppLanguage.EN ->
+                    "Colored Tajweed is active. The surah is cached on this device when storage is available."
+                loaded.isNotEmpty() && language == AppLanguage.AR ->
+                    "التجويد الملوّن مفعّل؛ تُحفظ بيانات السورة على الجهاز لاستخدامها دون إنترنت."
+                loaded.isNotEmpty() ->
+                    "تەجویدی ڕەنگاوڕەنگ چالاکە؛ زانیاریی سوورەتەکە لەسەر مۆبایل دەپارێزرێت بۆ بەکارهێنانی بەبێ ئینتەرنێت."
+                language == AppLanguage.EN ->
+                    "Tajweed text is unavailable right now. Connect to the internet on first use; regular Quran text remains available."
+                language == AppLanguage.AR ->
+                    "بيانات التجويد غير متاحة الآن. اتصل بالإنترنت عند الاستخدام الأول؛ وسيبقى نص القرآن العادي متاحًا."
+                else ->
+                    "دەقی تەجوید ئێستا بەردەست نییە. بۆ یەکەم جار پەیوەندی ئینتەرنێت پێویستە؛ دەقی ئاسایی قورئان هەر بەردەستە."
+            }
+        } finally {
+            tajweedLoading = false
+        }
+    }
     val currentSurah = surahs.firstOrNull { it.number == selected }
     val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
         ?: ContentRepository.quranTranslations.first()
