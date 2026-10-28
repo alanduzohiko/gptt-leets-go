@@ -1184,7 +1184,44 @@ if ! grep -Eq 'دەستگەیشتنی خێرا|وصول سريع|Quick access' d
   cat dist/runtime-test/window-home.xml
   exit 1
 fi
-resume_coords="$(python3 - dist/runtime-test/window-home.xml <<'PY'
+# Wait for the prayer card to finish loading before collecting coordinates.
+# Its height changes when six real timetable rows replace the loading state; a
+# tap calculated from the earlier layout can accidentally open Prayer settings.
+home_ready=0
+for attempt in $(seq 1 20); do
+  rm -f dist/runtime-test/window-home-stable.xml
+  adb shell rm -f /sdcard/mashxall-home-stable.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-home-stable.xml > "dist/runtime-test/uiautomator-home-stable-$attempt.txt" 2>&1 || true
+  if adb pull /sdcard/mashxall-home-stable.xml dist/runtime-test/window-home-stable.xml >/dev/null 2>&1 &&
+     grep -Eq 'بەیانی|الفجر|Fajr' dist/runtime-test/window-home-stable.xml &&
+     grep -Eq 'هەڵهاتنی خۆر|الشروق|Sunrise' dist/runtime-test/window-home-stable.xml &&
+     grep -Eq 'نیوەڕۆ|الظهر|Dhuhr' dist/runtime-test/window-home-stable.xml &&
+     grep -Eq 'عەسر|العصر|Asr' dist/runtime-test/window-home-stable.xml &&
+     grep -Eq 'مەغریب|المغرب|Maghrib' dist/runtime-test/window-home-stable.xml &&
+     grep -Eq 'عیشا|العشاء|Isha' dist/runtime-test/window-home-stable.xml &&
+     grep -Eq 'بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading' dist/runtime-test/window-home-stable.xml; then
+    home_ready=1
+    cp dist/runtime-test/window-home-stable.xml dist/runtime-test/window-home.xml
+    echo "PASS: home prayer timetable settled before the continue-reading interaction (attempt $attempt)."
+    break
+  fi
+  sleep 2
+done
+if [[ "$home_ready" -ne 1 ]]; then
+  echo "FAIL: home did not settle into a stable state with the prayer timetable and continue-reading action."
+  cat dist/runtime-test/window-home-stable.xml 2>/dev/null || true
+  exit 1
+fi
+
+resume_coords=""
+# If the Continue reading card is below the fold, scroll it into view, then
+# recapture the hierarchy. Only use fresh on-screen bounds for the actual tap.
+for attempt in $(seq 1 6); do
+  rm -f dist/runtime-test/window-home-stable.xml
+  adb shell rm -f /sdcard/mashxall-home-stable.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-home-stable.xml > "dist/runtime-test/uiautomator-home-card-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-home-stable.xml dist/runtime-test/window-home-stable.xml >/dev/null 2>&1 || true
+  resume_coords="$(python3 - dist/runtime-test/window-home-stable.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -1198,20 +1235,33 @@ for node in root.iter("node"):
         continue
     bounds = node.attrib.get("bounds", "")
     match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
-    if match:
-        x1, y1, x2, y2 = map(int, match.groups())
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    # Avoid taps over the system bars or below the physical display.
+    if x2 > x1 and y2 > y1 and y1 >= 63 and y2 <= 1700:
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
         raise SystemExit(0)
 PY
 )"
+  if [[ -n "$resume_coords" ]]; then
+    cp dist/runtime-test/window-home-stable.xml dist/runtime-test/window-home.xml
+    break
+  fi
+  adb shell input swipe 540 1470 540 520 450
+  sleep 1
+done
 if [[ -z "$resume_coords" ]]; then
-  echo "FAIL: Continue reading shortcut has no tappable UI bounds."
-  cat dist/runtime-test/window-home.xml
+  echo "FAIL: Continue reading shortcut has no current on-screen tappable bounds after scrolling."
+  cat dist/runtime-test/window-home-stable.xml
   exit 1
 fi
 read -r resume_x resume_y <<< "$resume_coords"
+# The hierarchy has just been captured after the home content stabilized.
 adb shell input tap "$resume_x" "$resume_y"
 sleep 7
+rm -f dist/runtime-test/window-home-resume.xml
+adb shell rm -f /sdcard/mashxall-home-resume.xml >/dev/null 2>&1 || true
 adb shell uiautomator dump /sdcard/mashxall-home-resume.xml > dist/runtime-test/uiautomator-home-resume.txt 2>&1 || true
 adb pull /sdcard/mashxall-home-resume.xml dist/runtime-test/window-home-resume.xml >/dev/null 2>&1 || true
 if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.xml ||
