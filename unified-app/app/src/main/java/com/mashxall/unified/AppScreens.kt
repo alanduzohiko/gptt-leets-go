@@ -1383,7 +1383,60 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     }
                     "appearance" -> {
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                            Text(if (language == AppLanguage.EN) "Included edition: original 604-page Mushaf." else if (language == AppLanguage.AR) "النسخة المضمّنة: المصحف الأصلي ذو 604 صفحات." else "وەشانی بەردەست: مصحەفی ڕەسەنی ٦٠٤ پەڕە.", color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
+                            Text(
+                                if (language == AppLanguage.EN) "QURAN TEXT SCRIPT • VERSE VIEW"
+                                else if (language == AppLanguage.AR) "نمط نص القرآن • عرض الآيات"
+                                else "نووسینی دەقی قورئان • پیشاندانی ئایەت",
+                                color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Choose the original offline text, QPC Hafs, or Hafs Nastaliq. Alternate scripts download per surah and are cached for offline use; they do not change the 604 page images."
+                                    AppLanguage.AR -> "اختر النص الأصلي دون إنترنت أو QPC Hafs أو حفص بالنستعليق. تُحمّل الأنماط البديلة لكل سورة وتُحفظ للاستخدام دون إنترنت؛ ولا تغيّر صور الصفحات الـ604."
+                                    AppLanguage.CKB -> "دەقی ڕەسەن بەبێ ئینتەرنێت، QPC Hafs یان حەفص نەستەعلیق هەڵبژێرە. نووسینی جێگرەوە بۆ هەر سوورەت دادەگیرێت و بۆ بەبێ ئینتەرنێت دەپارێزرێت؛ وێنەکانی ٦٠٤ پەڕە ناگۆڕێت."
+                                },
+                                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                items(QuranTextEditions.all, key = { it.id }) { edition ->
+                                    val label = when (edition.id) {
+                                        QuranTextEditions.ORIGINAL -> when (language) {
+                                            AppLanguage.EN -> "Original Uthmani"
+                                            AppLanguage.AR -> "الرسم العثماني"
+                                            AppLanguage.CKB -> "نووسینی عوسمانی"
+                                        }
+                                        QuranTextEditions.QPC_HAFS -> when (language) {
+                                            AppLanguage.EN -> "QPC Hafs"
+                                            AppLanguage.AR -> "حفص — مصحف المدينة"
+                                            AppLanguage.CKB -> "حەفص — مصحەفی مەدینە"
+                                        }
+                                        else -> when (language) {
+                                            AppLanguage.EN -> "Hafs Nastaliq"
+                                            AppLanguage.AR -> "حفص — نستعليق"
+                                            AppLanguage.CKB -> "حەفص — نەستەعلیق"
+                                        }
+                                    }
+                                    FilterChip(
+                                        selected = textEditionId == edition.id,
+                                        onClick = { chooseTextEdition(edition.id) },
+                                        label = { Text(label, fontSize = 10.sp, maxLines = 1) }
+                                    )
+                                }
+                            }
+                            Text(
+                                when {
+                                    textEditionId == QuranTextEditions.ORIGINAL && language == AppLanguage.EN -> "Bundled and available offline."
+                                    textEditionId == QuranTextEditions.ORIGINAL && language == AppLanguage.AR -> "النص الأصلي مضمّن ويعمل دون إنترنت."
+                                    textEditionId == QuranTextEditions.ORIGINAL -> "دەقی ڕەسەن لە ناو ئەپەکەدایە و بەبێ ئینتەرنێت کار دەکات."
+                                    textEditionId != QuranTextEditions.ORIGINAL && language == AppLanguage.EN -> "Source: Qur'anpedia.net via quran-json • first use needs internet. Colored Tajweed applies to the original Uthmani text."
+                                    textEditionId != QuranTextEditions.ORIGINAL && language == AppLanguage.AR -> "المصدر: Qur'anpedia.net عبر quran-json • يلزم الإنترنت عند أول استخدام. التجويد الملوّن متاح مع النص العثماني الأصلي."
+                                    else -> "سەرچاوە: Qur'anpedia.net لە ڕێگەی quran-json • یەکەم جار ئینتەرنێت پێویستە؛ تەجویدی ڕەنگاوڕەنگ بۆ دەقی عوسمانی ڕەسەنە."
+                                },
+                                color = foreground.copy(alpha = 0.50f), fontSize = 9.sp, lineHeight = 13.sp
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Text(if (language == AppLanguage.EN) "Original graphic edition: 604-page Mushaf." else if (language == AppLanguage.AR) "المصحف الرسومي الأصلي: 604 صفحات." else "مصحەفی وێنەیی ڕەسەن: ٦٠٤ پەڕە.", color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
                             Spacer(Modifier.height(12.dp))
                             Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.22f))) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
