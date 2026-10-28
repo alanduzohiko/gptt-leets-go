@@ -1537,6 +1537,91 @@ PY
     fi
     echo "PASS: Colored Tajweed can be disabled and the setting persists."
   fi
+
+  # Verify the text-script chooser and preference persistence before closing settings.
+  adb shell input swipe 500 300 500 1180 350
+  sleep 2
+  rm -f dist/runtime-test/window-quran-text-script-options.xml
+  adb shell rm -f /sdcard/mashxall-quran-text-script-options.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-quran-text-script-options.xml > dist/runtime-test/uiautomator-quran-text-script-options.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-text-script-options.xml dist/runtime-test/window-quran-text-script-options.xml >/dev/null 2>&1 || true
+  if ! grep -Eqi 'QPC Hafs|حفص.*مصحف المدينة|حەفص.*مصحەفی مەدینە' dist/runtime-test/window-quran-text-script-options.xml ||
+     ! grep -Eqi 'Hafs Nastaliq|حفص.*نستعليق|حەفص.*نەستەعلیق' dist/runtime-test/window-quran-text-script-options.xml; then
+    echo "FAIL: Quran settings do not expose both documented alternate text scripts."
+    cat dist/runtime-test/window-quran-text-script-options.xml
+    exit 1
+  fi
+  qpc_chip_coords="$(python3 - dist/runtime-test/window-quran-text-script-options.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"QPC Hafs|حفص.*مصحف المدينة|حەفص.*مصحەفی مەدینە", re.I)
+for node in root.iter("node"):
+    if pattern.search(node.attrib.get("text", "").strip()):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -z "$qpc_chip_coords" ]]; then
+    echo "FAIL: QPC Hafs text-script choice is not tappable."
+    cat dist/runtime-test/window-quran-text-script-options.xml
+    exit 1
+  fi
+  read -r qpc_chip_x qpc_chip_y <<< "$qpc_chip_coords"
+  adb shell input tap "$qpc_chip_x" "$qpc_chip_y"
+  sleep 2
+  adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-quran-qpc-script.xml 2>/dev/null || true
+  if ! grep -Eq '<string name="quran_text_edition">qpc-hafs</string>' dist/runtime-test/preferences-quran-qpc-script.xml; then
+    echo "FAIL: selecting QPC Hafs did not persist the Quran text-script preference."
+    cat dist/runtime-test/preferences-quran-qpc-script.xml
+    exit 1
+  fi
+  echo "PASS: QPC Hafs text script can be selected and saved."
+
+  rm -f dist/runtime-test/window-quran-text-script-original.xml
+  adb shell rm -f /sdcard/mashxall-quran-text-script-original.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-quran-text-script-original.xml > dist/runtime-test/uiautomator-quran-text-script-original.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-text-script-original.xml dist/runtime-test/window-quran-text-script-original.xml >/dev/null 2>&1 || true
+  original_chip_coords="$(python3 - dist/runtime-test/window-quran-text-script-original.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Original Uthmani|الرسم العثماني|نووسینی عوسمانی", re.I)
+for node in root.iter("node"):
+    if pattern.search(node.attrib.get("text", "").strip()):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -z "$original_chip_coords" ]]; then
+    echo "FAIL: the original Uthmani script cannot be reselected."
+    cat dist/runtime-test/window-quran-text-script-original.xml
+    exit 1
+  fi
+  read -r original_chip_x original_chip_y <<< "$original_chip_coords"
+  adb shell input tap "$original_chip_x" "$original_chip_y"
+  sleep 2
+  adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-quran-uthmani-script.xml 2>/dev/null || true
+  if ! grep -Eq '<string name="quran_text_edition">uthmani</string>' dist/runtime-test/preferences-quran-uthmani-script.xml; then
+    echo "FAIL: returning to Original Uthmani did not persist the preference."
+    cat dist/runtime-test/preferences-quran-uthmani-script.xml
+    exit 1
+  fi
+  echo "PASS: the original offline Uthmani text remains selectable after an alternate script."
 else
   echo "FAIL: the global Settings screen did not expose the Quran reader settings action."
   cat dist/runtime-test/window-settings.xml
