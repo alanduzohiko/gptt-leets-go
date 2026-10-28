@@ -239,6 +239,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var openingMushaf by remember { mutableStateOf(false) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
+    var coloredTajweed by rememberSaveable {
+        mutableStateOf(prefs.getBoolean("quran_colored_tajweed", false))
+    }
+    var tajweedAyahs by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var tajweedLoadedSurah by remember { mutableIntStateOf(0) }
+    var tajweedLoading by remember { mutableStateOf(false) }
+    var tajweedMessage by rememberSaveable { mutableStateOf("") }
     var showReaderSettings by remember { mutableStateOf(false) }
     var readerSettingsSection by rememberSaveable { mutableStateOf("overview") }
     LaunchedEffect(openSettingsOnEntry) {
