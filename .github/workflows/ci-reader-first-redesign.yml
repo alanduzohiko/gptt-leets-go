@@ -7,7 +7,10 @@ on:
     paths:
       - "unified-app/**"
       - "docs/audio-library-sources.md"
+      - "docs/tajweed-text-source.md"
       - "docs/redesign-spec-ar.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "tools/audit_audio_catalogs.py"
       - "tools/runtime-smoke-android11.sh"
       - "tools/audit_content_coverage.py"
       - "tools/audit_content_wiring.py"
@@ -19,7 +22,11 @@ on:
     branches: ["main"]
     paths:
       - "unified-app/**"
+      - "docs/audio-library-sources.md"
+      - "docs/tajweed-text-source.md"
       - "docs/redesign-spec-ar.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "tools/audit_audio_catalogs.py"
       - "tools/runtime-smoke-android11.sh"
       - "tools/audit_content_coverage.py"
       - "tools/audit_content_wiring.py"
