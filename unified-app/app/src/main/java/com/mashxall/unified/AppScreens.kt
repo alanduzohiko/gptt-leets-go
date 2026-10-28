@@ -284,6 +284,17 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val readerPlaybackMode = ReaderPlaybackSettings.mode
     val selectedTextEdition = QuranTextEditions.all.firstOrNull { it.id == textEditionId }
         ?: QuranTextEditions.original
+    LaunchedEffect(textEditionId, coloredTajweed) {
+        if (textEditionId != QuranTextEditions.ORIGINAL && coloredTajweed) {
+            // Tajweed markup belongs to the original Uthmani payload. Never
+            // paint those spans over text from a different script.
+            coloredTajweed = false
+            prefs.edit().putBoolean("quran_colored_tajweed", false).apply()
+            tajweedAyahs = emptyMap()
+            tajweedLoadedSurah = 0
+            tajweedMessage = ""
+        }
+    }
     val chooseTextEdition: (String) -> Unit = { editionId ->
         if (QuranTextEditions.all.any { it.id == editionId }) {
             textEditionId = editionId
@@ -1457,6 +1468,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     }
                                     Switch(
                                         checked = coloredTajweed,
+                                        enabled = textEditionId == QuranTextEditions.ORIGINAL,
                                         onCheckedChange = { enabled ->
                                             coloredTajweed = enabled
                                             prefs.edit().putBoolean("quran_colored_tajweed", enabled).apply()
