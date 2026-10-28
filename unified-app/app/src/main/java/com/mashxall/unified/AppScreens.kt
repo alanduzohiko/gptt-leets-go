@@ -381,11 +381,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             tajweedLoadedSurah = if (loaded.isNotEmpty()) selected else 0
             tajweedMessage = when {
                 loaded.isNotEmpty() && language == AppLanguage.EN ->
-                    "Colored Tajweed is active. The surah is cached on this device when storage is available."
+                    "Colored Tajweed is active. A successful local cache keeps this surah available offline."
                 loaded.isNotEmpty() && language == AppLanguage.AR ->
-                    "التجويد الملوّن مفعّل؛ تُحفظ بيانات السورة على الجهاز لاستخدامها دون إنترنت."
+                    "التجويد الملوّن مفعّل؛ يتيح حفظ السورة محليًا استخدامها دون إنترنت عند نجاح التخزين."
                 loaded.isNotEmpty() ->
-                    "تەجویدی ڕەنگاوڕەنگ چالاکە؛ زانیاریی سوورەتەکە لەسەر مۆبایل دەپارێزرێت بۆ بەکارهێنانی بەبێ ئینتەرنێت."
+                    "تەجویدی ڕەنگاوڕەنگ چالاکە؛ ئەگەر پاشەکەوتکردن سەرکەوتوو بێت، سوورەتەکە بەبێ ئینتەرنێتیش دەخوێندرێتەوە."
                 language == AppLanguage.EN ->
                     "Tajweed text is unavailable right now. Connect to the internet on first use; regular Quran text remains available."
                 language == AppLanguage.AR ->
