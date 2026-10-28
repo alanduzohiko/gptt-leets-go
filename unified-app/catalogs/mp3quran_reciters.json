@@ -2,8 +2,8 @@
   "schema_version": 1,
   "catalog_name": "MP3Quran.net reciter and recitation metadata",
   "catalog_source": "https://github.com/risan/quran-json/blob/main/data/audio/mp3quran.json",
-  "catalog_license": "CC-BY-SA-4.0",
-  "catalog_license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "catalog_license": "The upstream source registry marks MP3Quran metadata as having no identified redistribution license. The app links to MP3Quran-hosted audio and does not bundle the recordings; the catalog metadata license remains unknown.",
+  "catalog_license_url": "https://mp3quran.net/eng/",
   "audio_host": "MP3Quran.net",
   "audio_host_url": "https://www.mp3quran.net/",
   "notice": "This file contains reciter/catalog metadata and stream URL patterns only. The metadata license does not change the rights for the underlying audio recordings. Each recording is streamed from its listed host; chapter coverage is recorded per entry.",
@@ -2888,5 +2888,6 @@
       "surah_total": 114,
       "filename_template": "{surah3}.mp3"
     }
-  ]
+  ],
+  "catalog_license_status": "unknown"
 }
