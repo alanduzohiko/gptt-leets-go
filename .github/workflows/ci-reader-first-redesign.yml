@@ -6,6 +6,7 @@ on:
       - "redesign/**"
     paths:
       - "unified-app/**"
+      - "docs/audio-library-sources.md"
       - "docs/redesign-spec-ar.md"
       - "tools/runtime-smoke-android11.sh"
       - "tools/audit_content_coverage.py"
@@ -78,6 +79,13 @@ jobs:
             --bundle "$RUNNER_TEMP/mashxall-input/Mashxall-Unified-Source-Bundle.zip" \
             --out unified-app/app/src/main/assets \
             --catalog unified-app/app/src/main/assets/content_catalog.json
+
+      - name: Install version-controlled online audio catalogs into app assets
+        run: |
+          set -euo pipefail
+          mkdir -p unified-app/app/src/main/assets
+          cp unified-app/catalogs/mp3quran_reciters.json unified-app/app/src/main/assets/
+          cp unified-app/catalogs/adhan_catalog.json unified-app/app/src/main/assets/
 
       - name: Audit all three original app libraries and required feature assets
         run: |
