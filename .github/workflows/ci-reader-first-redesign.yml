@@ -86,6 +86,9 @@ jobs:
           mkdir -p unified-app/app/src/main/assets
           cp unified-app/catalogs/mp3quran_reciters.json unified-app/app/src/main/assets/
           cp unified-app/catalogs/adhan_catalog.json unified-app/app/src/main/assets/
+          python tools/audit_audio_catalogs.py \
+            unified-app/app/src/main/assets/mp3quran_reciters.json \
+            unified-app/app/src/main/assets/adhan_catalog.json
 
       - name: Audit all three original app libraries and required feature assets
         run: |
