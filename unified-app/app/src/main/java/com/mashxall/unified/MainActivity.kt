@@ -70,6 +70,7 @@ import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material.icons.outlined.MenuBook
@@ -1290,9 +1291,9 @@ private fun SettingsScreen(
                 Icons.Outlined.BookmarkBorder to onBackup
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Data sources & book library"; AppLanguage.AR -> "مصادر البيانات ومكتبة الكتب"; AppLanguage.CKB -> "سەرچاوەی داتا و کتێبخانە" },
-                when (language) { AppLanguage.EN -> "Offline content, book catalogue and source notes"; AppLanguage.AR -> "المحتوى دون اتصال وفهرس الكتب ومصادر البيانات"; AppLanguage.CKB -> "ناوەڕۆکی ناوخۆیی، فهرستی کتێب و سەرچاوەی داتا" },
-                Icons.Outlined.LibraryBooks to onDataInfo
+                when (language) { AppLanguage.EN -> "Data sources & rights"; AppLanguage.AR -> "مصادر البيانات والحقوق"; AppLanguage.CKB -> "سەرچاوەی داتا و مافەکان" },
+                when (language) { AppLanguage.EN -> "Source details, licensing and offline availability"; AppLanguage.AR -> "تفاصيل المصادر والتراخيص والمحتوى المتاح دون اتصال"; AppLanguage.CKB -> "وردەکاری سەرچاوەکان، مۆڵەت و ناوەڕۆکی بێ ئینتەرنێت" },
+                Icons.Outlined.Info to onDataInfo
             )
         )
         actions.forEach { (title, subtitle, item) ->
