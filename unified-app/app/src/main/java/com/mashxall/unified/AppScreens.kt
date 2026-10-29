@@ -6238,6 +6238,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             null
         }
     }
+    val nearestKnownCityLabel = nearestKnownCity?.city?.name?.let { cityName ->
+        localizedKurdistanCityName(cityName, language.key).ifBlank { cityName }
+    }
+    val nearestKnownCityCountry = nearestKnownCity?.city?.country.orEmpty()
+    val nearestKnownDistance = nearestKnownCity?.distanceKm?.let { "%.1f".format(Locale.US, it) }.orEmpty()
     val nextPrayerTarget = remember(times, tomorrowTimes, clockNowMillis) {
         val currentTimes = times
         if (currentTimes == null) {
@@ -6306,11 +6311,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         val nearestScheduleCity = times?.city
                             ?.takeIf { gpsLatitude != null && gpsLongitude != null }
                             ?.let { cityName -> localizedKurdistanCityName(cityName, language.key).ifBlank { cityName } }
-                        val nearestKnownCityLabel = nearestKnownCity?.city?.name?.let { cityName ->
-                            localizedKurdistanCityName(cityName, language.key).ifBlank { cityName }
-                        }
-                        val nearestKnownCityCountry = nearestKnownCity?.city?.country.orEmpty()
-                        val nearestKnownDistance = nearestKnownCity?.distanceKm?.let { "%.1f".format(Locale.US, it) }.orEmpty()
                         Text(
                             if (locationMode == "gps") {
                                 if (gpsLatitude != null && gpsLongitude != null) {
