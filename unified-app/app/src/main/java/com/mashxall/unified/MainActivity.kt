@@ -98,6 +98,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.PullToRefreshBox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -1032,6 +1033,7 @@ private fun HomePrayerCountdown(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
     language: AppLanguage,
@@ -1049,6 +1051,8 @@ private fun HomeScreen(
     var tomorrowPrayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var upcomingPrayerKey by remember { mutableStateOf<String?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
+    var isRefreshingPrayerTimes by remember { mutableStateOf(false) }
+    var prayerRefreshRevision by remember { mutableIntStateOf(0) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
     var locationMode by rememberSaveable {
         mutableStateOf(resolvePrayerLocationMode(
@@ -1095,7 +1099,7 @@ private fun HomeScreen(
             }
         }
     }
-    LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", ""), prayerRefreshRevision) {
         loadingTimes = true
         // Remove the previous city's timetable immediately; never leave stale times under a new location label.
         prayerTimes = null
@@ -1118,9 +1122,10 @@ private fun HomeScreen(
             null
         }
         loadingTimes = false
+        isRefreshingPrayerTimes = false
     }
 
-    LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", ""), prayerRefreshRevision) {
         tomorrowPrayerTimes = null
         val tomorrowCalendar = Calendar.getInstance().apply {
             time = Date(clockNow)
@@ -1335,7 +1340,17 @@ private fun HomeScreen(
         )
     }.orEmpty()
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshingPrayerTimes,
+        onRefresh = {
+            if (!isRefreshingPrayerTimes) {
+                isRefreshingPrayerTimes = true
+                prayerRefreshRevision++
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth().premiumClickable { onOpen(AppScreen.PRAYER) },
             shape = RoundedCornerShape(24.dp),
@@ -1574,6 +1589,7 @@ private fun HomeScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
+        }
     }
 }
 

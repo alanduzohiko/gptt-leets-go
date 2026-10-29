@@ -2368,9 +2368,14 @@ fun BookmarksScreen(
             )
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(visibleBookmarks, key = { it.first.toString() + ":" + it.second.toString() }) { saved ->
+                itemsIndexed(visibleBookmarks, key = { _, it -> it.first.toString() + ":" + it.second.toString() }) { itemIndex, saved ->
                     val key = "${saved.first}:${saved.second}"
-                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = key, index = itemIndex),
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(17.dp)
+                    ) {
                         Column(Modifier.fillMaxWidth().padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold)
@@ -2707,7 +2712,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 contentPadding = PaddingValues(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(articles, key = { "hadith-article-" + it.id }) { article ->
+                itemsIndexed(articles, key = { _, it -> "hadith-article-" + it.id }) { itemIndex, article ->
                     val localizedAuthor = when (language) {
                         AppLanguage.CKB -> article.authorCkb.ifBlank { article.authorArabic }
                         AppLanguage.AR -> article.authorArabic.ifBlank { article.authorCkb }
@@ -2724,7 +2729,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
                     }
                     Card(
-                        modifier = Modifier.fillMaxWidth().premiumClickable { selectedArticleForDetails = article },
+                        modifier = Modifier.fillMaxWidth()
+                                    .staggeredEntrance(itemKey = article.id, index = itemIndex)
+                                    .premiumClickable { selectedArticleForDetails = article },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(20.dp),
                         border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.22f))
@@ -3485,7 +3492,7 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             contentPadding = PaddingValues(vertical = 7.dp, horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            items(visibleNames, key = { it.number }) { name ->
+            itemsIndexed(visibleNames, key = { _, it -> it.number }) { itemIndex, name ->
                 var expanded by rememberSaveable(name.number) { mutableStateOf(false) }
                 val favorite = favoriteIds.contains(name.number.toString())
                 val description = when (language) {
@@ -3498,7 +3505,9 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth().premiumClickable { expanded = !expanded }
+                    modifier = Modifier.fillMaxWidth()
+                        .staggeredEntrance(itemKey = name.number, index = itemIndex)
+                        .premiumClickable { expanded = !expanded }
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4188,10 +4197,12 @@ fun AudioScreen(
                             modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
                         )
                     }
-                    items(visibleBundledAdhan, key = { "bundled:${it.item.assetPath}" }) { track ->
+                    itemsIndexed(visibleBundledAdhan, key = { _, it -> "bundled:${it.item.assetPath}" }) { itemIndex, track ->
                         val item = track.item
                         val playKey = "bundled-adhan:${item.assetPath}"
                         Card(
+                            modifier = Modifier.fillMaxWidth()
+                                .staggeredEntrance(itemKey = item.assetPath, index = itemIndex),
                             colors = CardDefaults.cardColors(containerColor = cardColor),
                             shape = RoundedCornerShape(17.dp),
                             border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f))
@@ -4271,7 +4282,7 @@ fun AudioScreen(
                         }
                     }
                 }
-                items(visibleAdhan, key = { "online:${it.id}" }) { item ->
+                itemsIndexed(visibleAdhan, key = { _, it -> "online:${it.id}" }) { itemIndex, item ->
                     val file = onlineAdhanOfflineFile(context, item)
                     val localSaved = remember(item.id, offlineAdhanRevision) { file.isFile && file.length() > 512L }
                     val downloadProgress = downloadingAdhan[item.id]
@@ -4290,9 +4301,11 @@ fun AudioScreen(
                         }
                     }
                     Card(
+                        modifier = Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = item.id, index = itemIndex),
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(17.dp),
-                        border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f))
+                        border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f)
                     ) {
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
@@ -4407,8 +4420,13 @@ fun AudioScreen(
             }
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                items(visibleAudio, key = { it.assetPath }) { item ->
-                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
+                itemsIndexed(visibleAudio, key = { _, it -> it.assetPath }) { itemIndex, item ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = item.assetPath, index = itemIndex),
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
                         Row(Modifier.fillMaxWidth().premiumClickable {
                             if (playing == item.assetPath) {
                                 AudioController.stop()
@@ -4542,7 +4560,7 @@ fun AudioScreen(
                 }
                 LoadingOrEmpty(false, language, foreground, emptyMessage)
             } else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(visibleReciters, key = { it.id }) { reciter ->
+                itemsIndexed(visibleReciters, key = { _, it -> it.id }) { itemIndex, reciter ->
                     val surahNumber = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
                     val surahAyahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
                     val requestedAyah = ayahText.toIntOrNull() ?: 1
@@ -4565,7 +4583,12 @@ fun AudioScreen(
                         else if (language == AppLanguage.AR) "تشغيل من الآية $startingAyah حتى نهاية السورة"
                         else "لە ئایەتی $startingAyah تا کۆتایی سوورەت بخوێنەوە"
                     }
-                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = reciter.id, index = itemIndex),
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(17.dp)
+                    ) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(22.dp))
@@ -7042,9 +7065,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
                 )
                 LazyColumn(Modifier.height(355.dp)) {
-                    items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
+                    itemsIndexed(visibleCities, key = { _, it -> "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { cityIndex, city ->
                         Column(
-                            Modifier.fillMaxWidth().premiumClickable {
+                            Modifier.fillMaxWidth()
+                                .staggeredEntrance(itemKey = "${city.name}|${city.country}|${city.latitude}|${city.longitude}", index = cityIndex)
+                                .premiumClickable {
                                 // Manual city mode is explicit and shared with Home, Qibla and scheduled alerts.
                                 onCity(city)
                                 locationMode = "city"
