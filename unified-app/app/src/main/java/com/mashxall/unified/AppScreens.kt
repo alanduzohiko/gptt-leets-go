@@ -5717,7 +5717,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android ثم أعد المحاولة."
                 AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە و دووبارە هەوڵ بدەوە."
             }
-            else -> error
+            "LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE" -> when (language) {
+                AppLanguage.EN -> "Android could not start a location provider. Check Location permissions and turn on GPS/network location."
+                AppLanguage.AR -> "تعذّر تشغيل مزوّد الموقع في Android. تحقّق من الأذونات وفعّل GPS/موقع الشبكة."
+                AppLanguage.CKB -> "ئەندرۆید نەیتوانی دابینکەری شوێن دەستپێبکات؛ مۆڵەتەکان بپشکنە و GPS/شوێنی تۆڕ چالاک بکە."
+            }
+            else -> when (language) {
+                AppLanguage.EN -> "Could not obtain a fresh location. Check Android Location settings and retry."
+                AppLanguage.AR -> "تعذّر الحصول على موقع حديث. تحقّق من إعدادات الموقع في Android ثم أعد المحاولة."
+                AppLanguage.CKB -> "نەتوانرا شوێنێکی نوێ وەربگیرێت؛ ڕێکخستنەکانی شوێنی Android بپشکنە و دووبارە هەوڵ بدەوە."
+            }
         }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -5964,15 +5973,18 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(tr(language, "city"), color = Color(0xFFF4E5B4), fontSize = 11.sp)
+                        val nearestScheduleCity = times?.city
+                            ?.takeIf { gpsLatitude != null && gpsLongitude != null }
+                            ?.let { cityName -> localizedKurdistanCityName(cityName, language.key).ifBlank { cityName } }
                         Text(
-                            if (gpsLatitude != null) {
+                            if (gpsLatitude != null && gpsLongitude != null) {
                                 when (language) {
-                                    AppLanguage.EN -> "Current location"
-                                    AppLanguage.AR -> "الموقع الحالي"
-                                    AppLanguage.CKB -> "شوێنی ئێستا"
+                                    AppLanguage.EN -> nearestScheduleCity?.let { "GPS location • nearest source: $it" } ?: "Current GPS location"
+                                    AppLanguage.AR -> nearestScheduleCity?.let { "الموقع عبر GPS • أقرب مصدر: $it" } ?: "الموقع الحالي عبر GPS"
+                                    AppLanguage.CKB -> nearestScheduleCity?.let { "شوێنی GPS • نزیکترین سەرچاوە: $it" } ?: "شوێنی ئێستا بە GPS"
                                 }
                             } else localizedKurdistanCityName(selectedCity, language.key),
-                            color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                            color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold
                         )
                         if (gpsLatitude != null && gpsLongitude != null) {
                             Text(String.format(Locale.US, "%.5f, %.5f", gpsLatitude, gpsLongitude), color = Color(0xFFB9CDC5), fontSize = 11.sp)

@@ -2017,23 +2017,52 @@ object ContentRepository {
         }
     }
 
+    /**
+     * Prefer an original source timetable very close to the GPS fix. If none exists
+     * within 7 km, retry within 30 km and expose the selected source-city distance in
+     * the UI. No source times are recalculated or altered.
+     */
+    internal fun nearestValidSalawatiCandidate(
+        candidates: List<Pair<PrayerRow, Double>>,
+        maxDistanceKm: Double
+    ): Pair<PrayerRow, Double>? {
+        if (!maxDistanceKm.isFinite() || maxDistanceKm <= 0.0) return null
+        val valid = candidates.mapNotNull { (row, distance) ->
+            val validRow = salawatiOnlyPrayerTimes(row) ?: return@mapNotNull null
+            if (!distance.isFinite() || distance < 0.0 || distance > maxDistanceKm) return@mapNotNull null
+            validRow to distance
+        }
+        return orderPrayerCandidates(valid).firstOrNull()
+    }
+
     suspend fun loadPrayerTimesAtLocation(
         context: Context,
         latitude: Double,
         longitude: Double,
         date: Date = Date(),
-        staticRadiusKm: Double = 7.0
+        staticRadiusKm: Double = 7.0,
+        fallbackRadiusKm: Double = 30.0
     ): PrayerRow? = withContext(Dispatchers.IO) {
-        val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
-            .mapNotNull { row ->
-                val validSourceRow = salawatiOnlyPrayerTimes(row) ?: return@mapNotNull null
-                val rowLat = validSourceRow.latitude ?: return@mapNotNull null
-                val rowLon = validSourceRow.longitude ?: return@mapNotNull null
+        if (!latitude.isFinite() || latitude !in -90.0..90.0 ||
+            !longitude.isFinite() || longitude !in -180.0..180.0 ||
+            !staticRadiusKm.isFinite() || staticRadiusKm <= 0.0
+        ) return@withContext null
+
+        suspend fun findCandidates(radiusKm: Double): List<Pair<PrayerRow, Double>> =
+            loadNearbyTimetableRows(context, latitude, longitude, date, radiusKm).mapNotNull { row ->
+                val validRow = salawatiOnlyPrayerTimes(row) ?: return@mapNotNull null
+                val rowLat = validRow.latitude ?: return@mapNotNull null
+                val rowLon = validRow.longitude ?: return@mapNotNull null
                 val distance = PrayerLocationMath.distanceKm(latitude, longitude, rowLat, rowLon)
-                if (distance <= staticRadiusKm) validSourceRow to distance else null
+                if (distance.isFinite() && distance >= 0.0 && distance <= radiusKm) validRow to distance else null
             }
-            .sortedBy { it.second }
-        val nearest = orderPrayerCandidates(candidates).firstOrNull()
+
+        val nearest = nearestValidSalawatiCandidate(
+            findCandidates(staticRadiusKm), staticRadiusKm
+        ) ?: if (fallbackRadiusKm.isFinite() && fallbackRadiusKm > staticRadiusKm) {
+            nearestValidSalawatiCandidate(findCandidates(fallbackRadiusKm), fallbackRadiusKm)
+        } else null
+
         if (nearest != null) {
             nearest.first.copy(
                 source = "${nearest.first.source} • ${"%.1f".format(Locale.US, nearest.second)}km",
@@ -2041,8 +2070,8 @@ object ContentRepository {
                 longitude = longitude
             )
         } else {
-            // Do not invent a calculation method that differs from Salawati.
-            // The UI will report unavailable if no valid nearby source timetable exists.
+            // No valid source timetable exists within the fallback radius.
+            // Do not calculate prayer times or substitute another database's schedule.
             null
         }
     }
