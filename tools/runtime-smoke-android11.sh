@@ -1059,8 +1059,8 @@ PY
     exit 1
   fi
 
-  # Return to Quran reciters, select the complete-surah mode, and search for
-  # Ahmad Al Nufais. Verify the visible row advertises its source coverage.
+  # Return to Quran reciters, select complete-surah mode, and search for
+  # the distinctive single token Nufais. Verify the visible row advertises full coverage.
   reciters_tab_coords="$(python3 - dist/runtime-test/window-audio-adhan.xml <<'PY'
 import re
 import sys
@@ -1119,7 +1119,12 @@ PY
   read -r full_mode_x full_mode_y <<< "$full_mode_coords"
   adb shell input tap "$full_mode_x" "$full_mode_y"
   sleep 2
-  search_coords="$(python3 - dist/runtime-test/window-audio-catalog-reciter.xml <<'PY'
+  # Re-snapshot after the mode change; do not use tap coordinates from the stale hierarchy.
+  rm -f dist/runtime-test/window-audio-reciter-ready.xml
+  adb shell rm -f /sdcard/mashxall-audio-reciter-ready.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-audio-reciter-ready.xml > dist/runtime-test/uiautomator-audio-reciter-ready.txt 2>&1 || true
+  adb pull /sdcard/mashxall-audio-reciter-ready.xml dist/runtime-test/window-audio-reciter-ready.xml >/dev/null 2>&1 || true
+  search_coords="$(python3 - dist/runtime-test/window-audio-reciter-ready.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -1143,7 +1148,7 @@ PY
   fi
   read -r search_x search_y <<< "$search_coords"
   adb shell input tap "$search_x" "$search_y"
-  adb shell input text 'Ahmad%sAl%sNufais'
+  adb shell input text 'Nufais'
   sleep 4
   rm -f dist/runtime-test/window-audio-reciter-search.xml
   adb shell rm -f /sdcard/mashxall-audio-reciter-search.xml >/dev/null 2>&1 || true
