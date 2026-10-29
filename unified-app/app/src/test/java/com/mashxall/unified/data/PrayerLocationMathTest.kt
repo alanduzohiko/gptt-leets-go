@@ -49,6 +49,25 @@ class PrayerLocationMathTest {
     }
 
     @Test
+    fun closestNamedSalawatiLocalityCanBeShownWithoutPretendingItHasPrayerTimes() {
+        val far = City("Far locality", 36.30, 44.10, "Iraq")
+        val near = City("Sulaymaniyah", 35.56, 45.43, "Iraq")
+        val result = nearestSalawatiCityCandidate(listOf(far to 27.0, near to 1.4), 30.0)
+        assertEquals("Sulaymaniyah", result?.city?.name)
+        assertEquals("Iraq", result?.city?.country)
+        assertEquals(1.4, result?.distanceKm ?: -1.0, 0.0001)
+    }
+
+    @Test
+    fun closestNamedSalawatiLocalityRejectsInvalidOrOutOfRadiusCandidates() {
+        val far = City("Outside", 36.3, 44.1, "Iraq")
+        assertNull(nearestSalawatiCityCandidate(listOf(far to 45.0), 30.0))
+        assertNull(nearestSalawatiCityCandidate(listOf(far to Double.NaN), 30.0))
+        assertNull(nearestSalawatiCityCandidate(listOf(far to 1.0), Double.NaN))
+        assertNull(nearestSalawatiCityCandidate(emptyList(), 30.0))
+    }
+
+    @Test
     fun distanceToSameCoordinateIsZero() {
         assertEquals(0.0, PrayerLocationMath.distanceKm(35.56, 45.43, 35.56, 45.43), 0.000001)
     }

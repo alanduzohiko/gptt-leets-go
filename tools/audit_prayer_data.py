@@ -118,15 +118,18 @@ def location_schedule_diagnostics(con: sqlite3.Connection, month_day: str) -> di
         FROM prayer_time
     """).fetchone()
 
-    patterns = [
+    # Exact aliases avoid substring false positives such as "Oberbillig" matching "Erbil".
+    city_aliases = [
         "sulaymaniyah", "sulaimaniyah", "sulaimaniya", "slemani", "slemany",
         "سلێمانی", "السليمانية", "السلیمانیة",
         "erbil", "hawler", "hawlêr", "هەولێر", "اربيل", "أربيل", "أربیل",
         "duhok", "dohuk", "دهوك", "دهۆک",
         "kirkuk", "كركوك", "کەرکووک",
     ]
-    where = " OR ".join(["lower(l.name) LIKE ?" for _ in patterns])
-    args = [month_day] + [f"%{pattern.lower()}%" for pattern in patterns]
+    where = "lower(trim(l.name)) IN (" + ",".join("?" for _ in city_aliases) + ")"
+    # Placeholders in the SELECT come before those in the WHERE clause:
+    # six prayer values plus the has_requested_date indicator.
+    args = [month_day] * 7 + [alias.lower() for alias in city_aliases]
     city_rows = con.execute(f"""
         SELECT l.name AS city,
                COALESCE(c.name,'') AS country,
@@ -138,6 +141,12 @@ def location_schedule_diagnostics(con: sqlite3.Connection, month_day: str) -> di
                COUNT(pt.date) AS scheduled_days,
                MIN(pt.date) AS first_date,
                MAX(pt.date) AS last_date,
+               MAX(CASE WHEN pt.date=? THEN pt.fajr END) AS requested_fajr,
+               MAX(CASE WHEN pt.date=? THEN pt.sunrise END) AS requested_sunrise,
+               MAX(CASE WHEN pt.date=? THEN pt.dhuhr END) AS requested_dhuhr,
+               MAX(CASE WHEN pt.date=? THEN pt.asr END) AS requested_asr,
+               MAX(CASE WHEN pt.date=? THEN pt.maghrib END) AS requested_maghrib,
+               MAX(CASE WHEN pt.date=? THEN pt.isha END) AS requested_isha,
                SUM(CASE WHEN pt.date=? THEN 1 ELSE 0 END) AS has_requested_date
         FROM location l
         LEFT JOIN country c ON c._id=l.country_id
@@ -197,7 +206,19 @@ def location_schedule_diagnostics(con: sqlite3.Connection, month_day: str) -> di
             "last_date": row["last_date"],
         }
         if "has_requested_date" in row.keys():
-            result["has_requested_month_day"] = (row["has_requested_date"] or 0) > 0
+            has_requested_date = (row["has_requested_date"] or 0) > 0
+            result["has_requested_month_day"] = has_requested_date
+            result["requested_date_times"] = (
+                {
+                    "fajr": row["requested_fajr"],
+                    "sunrise": row["requested_sunrise"],
+                    "dhuhr": row["requested_dhuhr"],
+                    "asr": row["requested_asr"],
+                    "maghrib": row["requested_maghrib"],
+                    "isha": row["requested_isha"],
+                }
+                if has_requested_date else None
+            )
         return result
 
     return {
