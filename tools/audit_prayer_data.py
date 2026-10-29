@@ -106,6 +106,113 @@ def clock_stats(con: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
+
+def location_schedule_diagnostics(con: sqlite3.Connection, month_day: str) -> dict[str, Any]:
+    """Expose real source coverage around named Iraqi cities and GPS timetable providers."""
+    totals = con.execute("""
+        SELECT
+            COUNT(DISTINCT location_id) AS scheduled_locations,
+            COUNT(DISTINCT date) AS distinct_dates,
+            MIN(date) AS first_date,
+            MAX(date) AS last_date
+        FROM prayer_time
+    """).fetchone()
+
+    patterns = [
+        "sulaymaniyah", "sulaimaniyah", "sulaimaniya", "slemani", "slemany",
+        "سلێمانی", "السليمانية", "السلیمانیة",
+        "erbil", "hawler", "hawlêr", "هەولێر", "اربيل", "أربيل", "أربیل",
+        "duhok", "dohuk", "دهوك", "دهۆک",
+        "kirkuk", "كركوك", "کەرکووک",
+    ]
+    where = " OR ".join(["lower(l.name) LIKE ?" for _ in patterns])
+    args = [month_day] + [f"%{pattern.lower()}%" for pattern in patterns]
+    city_rows = con.execute(f"""
+        SELECT l.name AS city,
+               COALESCE(c.name,'') AS country,
+               l.latitude AS latitude,
+               l.longitude AS longitude,
+               COALESCE(l.has_fixed_prayer_time,0) AS has_fixed,
+               COALESCE(l.prayer_dependent_id,0) AS dependent_id,
+               COALESCE(base.name,'') AS dependent_base,
+               COUNT(pt.date) AS scheduled_days,
+               MIN(pt.date) AS first_date,
+               MAX(pt.date) AS last_date,
+               SUM(CASE WHEN pt.date=? THEN 1 ELSE 0 END) AS has_requested_date
+        FROM location l
+        LEFT JOIN country c ON c._id=l.country_id
+        LEFT JOIN location base ON base._id=l.prayer_dependent_id
+        LEFT JOIN prayer_time pt
+          ON pt.location_id = CASE
+              WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN l._id
+              WHEN COALESCE(l.prayer_dependent_id,0)>0 THEN l.prayer_dependent_id
+              ELSE l._id
+          END
+        WHERE {where}
+        GROUP BY l._id
+        ORDER BY
+            CASE WHEN lower(COALESCE(c.name,'')) LIKE '%iraq%' OR lower(COALESCE(c.name,'')) LIKE '%العراق%' THEN 0 ELSE 1 END,
+            scheduled_days DESC, l.name
+        LIMIT 80
+    """, args).fetchall()
+
+    providers = con.execute("""
+        SELECT l.name AS city,
+               COALESCE(c.name,'') AS country,
+               l.latitude AS latitude,
+               l.longitude AS longitude,
+               COALESCE(l.has_fixed_prayer_time,0) AS has_fixed,
+               COALESCE(l.prayer_dependent_id,0) AS dependent_id,
+               COALESCE(base.name,'') AS dependent_base,
+               COUNT(pt.date) AS scheduled_days,
+               MIN(pt.date) AS first_date,
+               MAX(pt.date) AS last_date
+        FROM location l
+        LEFT JOIN country c ON c._id=l.country_id
+        LEFT JOIN location base ON base._id=l.prayer_dependent_id
+        JOIN prayer_time pt
+          ON pt.location_id = CASE
+              WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN l._id
+              WHEN COALESCE(l.prayer_dependent_id,0)>0 THEN l.prayer_dependent_id
+              ELSE l._id
+          END
+        WHERE lower(COALESCE(c.name,'')) LIKE '%iraq%'
+           OR lower(COALESCE(c.name,'')) LIKE '%العراق%'
+        GROUP BY l._id
+        ORDER BY scheduled_days DESC, l.name
+        LIMIT 40
+    """).fetchall()
+
+    def row_dict(row: sqlite3.Row) -> dict[str, Any]:
+        result = {
+            "city": row["city"],
+            "country": row["country"],
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+            "has_fixed_prayer_time": bool(row["has_fixed"]),
+            "prayer_dependent_id": row["dependent_id"],
+            "dependent_base_city": row["dependent_base"],
+            "scheduled_days": row["scheduled_days"],
+            "first_date": row["first_date"],
+            "last_date": row["last_date"],
+        }
+        if "has_requested_date" in row.keys():
+            result["has_requested_month_day"] = (row["has_requested_date"] or 0) > 0
+        return result
+
+    return {
+        "requested_month_day": month_day,
+        "scheduled_location_count": totals["scheduled_locations"],
+        "distinct_schedule_date_count": totals["distinct_dates"],
+        "schedule_date_range": [totals["first_date"], totals["last_date"]],
+        "named_kurdistan_and_iraq_city_matches": [row_dict(row) for row in city_rows],
+        "iraq_locations_with_source_schedules": [row_dict(row) for row in providers],
+        "notes": [
+            "A city listed in the location table may not own a prayer schedule; the original dependent-location relation or a nearby supported Salawati schedule may be needed.",
+            "These diagnostics expose source rows only. They do not generate or adjust prayer times.",
+        ],
+    }
+
 def audit(salawati_path: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
@@ -164,6 +271,8 @@ def audit(salawati_path: Path) -> dict[str, Any]:
                 WHERE l.country_id IS NOT NULL AND c._id IS NULL
             """).fetchone()[0]
             quality = clock_stats(salawati)
+            source_date = __import__("datetime").datetime.now().strftime("%m-%d")
+            stats["salawati_location_diagnostics"] = location_schedule_diagnostics(salawati, source_date)
             stats["salawati"] = {
                 "countries": country_count,
                 "locations": location_count,
@@ -237,6 +346,7 @@ def main() -> int:
         "passed_checks": report["passed_checks"],
         "failed_checks": report["failed_checks"],
         "statistics": report["statistics"],
+        "source_city_diagnostics": report["statistics"].get("salawati_location_diagnostics", {}),
         "warnings": report["warnings"],
         "failures": [x for x in report["checks"] if not x["passed"]],
         "report": str(args.out),
