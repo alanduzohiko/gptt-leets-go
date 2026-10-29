@@ -22,6 +22,17 @@ class LocationFixFreshnessTest {
     }
 
     @Test
+    fun currentFixMustHaveRecentTimestampValidCoordinatesAndPlausibleAccuracy() {
+        val now = 1_800_000_000_000L
+        assertTrue(isUsableIncomingLocation(now - 5_000L, 36.19, 44.01, now, 18f))
+        assertFalse(isUsableIncomingLocation(now - 90_000L, 36.19, 44.01, now, 18f))
+        assertFalse(isUsableIncomingLocation(now + 1_000L, 36.19, 44.01, now, 18f))
+        assertFalse(isUsableIncomingLocation(now, 91.0, 44.01, now, 18f))
+        assertFalse(isUsableIncomingLocation(now, 36.19, 181.0, now, 18f))
+        assertFalse(isUsableIncomingLocation(now, 36.19, 44.01, now, 60_000f))
+    }
+
+    @Test
     fun savedGpsCoordinatesRequireARecentTimestampAndValidCoordinateBounds() {
         val now = 1_800_000_000_000L
         assertTrue(isUsableSavedGpsFix(36.19, 44.01, now - 20 * 60_000L, now))

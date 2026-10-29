@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.annotation.SuppressLint
 import android.text.Html
 import androidx.compose.animation.animateContentSize
 import android.content.ClipData
@@ -13,6 +14,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Handler
 import android.os.Build
+import android.os.CancellationSignal
 import android.os.Looper
 import android.graphics.Bitmap
 import android.graphics.Typeface
@@ -5624,6 +5626,24 @@ private fun mostRecentUsableCachedLocation(
         ?.let(::Location)
 }
 
+
+/** Accept only plausible, recent location results; provider callbacks can occasionally be stale. */
+internal fun isUsableIncomingLocation(
+    locationTimeMillis: Long,
+    latitude: Double,
+    longitude: Double,
+    nowMillis: Long,
+    accuracyMeters: Float? = null,
+    maxAgeMillis: Long = 60_000L
+): Boolean {
+    if (!isRecentLocationFix(locationTimeMillis, nowMillis, maxAgeMillis)) return false
+    if (!latitude.isFinite() || latitude !in -90.0..90.0) return false
+    if (!longitude.isFinite() || longitude !in -180.0..180.0) return false
+    if (accuracyMeters != null && (!accuracyMeters.isFinite() || accuracyMeters < 0f || accuracyMeters > 50_000f)) return false
+    return true
+}
+
+@SuppressLint("MissingPermission")
 internal fun requestCurrentLocation(
     context: Context,
     onLocation: (Location) -> Unit,
@@ -5631,9 +5651,20 @@ internal fun requestCurrentLocation(
 ) {
     val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
     if (manager == null) {
-        onError("Location service is unavailable")
+        onError("LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE")
         return
     }
+    val hasFinePermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    val hasCoarsePermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    if (!hasFinePermission && !hasCoarsePermission) {
+        onError("LOCATION_PERMISSION_DENIED")
+        return
+    }
+
     val now = System.currentTimeMillis()
     val cachedLocation = mostRecentUsableCachedLocation(context, manager, now)
     val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
@@ -5660,11 +5691,13 @@ internal fun requestCurrentLocation(
 
     val mainHandler = Handler(Looper.getMainLooper())
     val listeners = mutableListOf<LocationListener>()
+    val cancellationSignals = mutableListOf<CancellationSignal>()
     var bestLocation: Location? = null
     var finished = false
     var deferredFinish: Runnable? = null
     var timeout: Runnable? = null
     var registeredProviders = 0
+    lateinit var finishBest: Runnable
 
     fun cleanup() {
         timeout?.let(mainHandler::removeCallbacks)
@@ -5672,9 +5705,36 @@ internal fun requestCurrentLocation(
         listeners.forEach { listener ->
             try { manager.removeUpdates(listener) } catch (_: Exception) {}
         }
+        cancellationSignals.forEach { signal -> runCatching { signal.cancel() } }
+        cancellationSignals.clear()
     }
 
-    val finishBest = Runnable {
+    fun considerLocation(location: Location?) {
+        if (finished || location == null) return
+        val accuracy = if (location.hasAccuracy()) location.accuracy else null
+        if (!isUsableIncomingLocation(
+                location.time, location.latitude, location.longitude,
+                System.currentTimeMillis(), accuracy, maxAgeMillis = 60_000L
+            )
+        ) return
+
+        // A fresh sensor fix supersedes the cached point even if accuracy is marginally worse:
+        // the user may have moved since the cache was recorded.
+        val prior = bestLocation
+        val newIsBetter = prior == null ||
+            (location.hasAccuracy() && (!prior.hasAccuracy() || location.accuracy < prior.accuracy))
+        if (newIsBetter) bestLocation = Location(location)
+
+        if (bestLocation?.hasAccuracy() == true && bestLocation!!.accuracy <= 15f) {
+            finishBest.run()
+        } else {
+            deferredFinish?.let(mainHandler::removeCallbacks)
+            deferredFinish = Runnable { finishBest.run() }
+            mainHandler.postDelayed(deferredFinish!!, 3500L)
+        }
+    }
+
+    finishBest = Runnable {
         if (!finished) {
             finished = true
             cleanup()
@@ -5689,39 +5749,38 @@ internal fun requestCurrentLocation(
 
     providers.forEach { provider ->
         val listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                if (finished) return
-                // Some providers can answer a single-update request with a stale cached fix.
-                // Do not label or persist it as live; the separate cache path is age-checked.
-                if (!isRecentLocationFix(location.time, System.currentTimeMillis(), 60_000L)) return
-                // A new sensor fix supersedes the cached fix even if its reported
-                // accuracy is a little worse; the user may have moved since the cache.
-                val prior = bestLocation
-                val newIsBetter = prior == null ||
-                    (location.hasAccuracy() && (!prior.hasAccuracy() || location.accuracy < prior.accuracy))
-                if (newIsBetter) bestLocation = Location(location)
-
-                if (bestLocation?.hasAccuracy() == true && bestLocation!!.accuracy <= 15f) {
-                    finishBest.run()
-                } else {
-                    deferredFinish?.let(mainHandler::removeCallbacks)
-                    deferredFinish = Runnable { finishBest.run() }
-                    mainHandler.postDelayed(deferredFinish!!, 3500L)
-                }
-            }
+            override fun onLocationChanged(location: Location) = considerLocation(location)
             @Deprecated("Deprecated by Android; retained for API 24 compatibility")
             override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) = Unit
             override fun onProviderEnabled(provider: String) = Unit
             override fun onProviderDisabled(provider: String) = Unit
         }
         listeners += listener
+        var signal: CancellationSignal? = null
         try {
-            manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Android 11+: use the current-location request API instead of the deprecated single-update path.
+                signal = CancellationSignal()
+                cancellationSignals += signal
+                manager.getCurrentLocation(provider, signal, context.mainExecutor) { location ->
+                    considerLocation(location)
+                }
+            } else {
+                manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+            }
             registeredProviders += 1
         } catch (_: SecurityException) {
+            signal?.let {
+                runCatching { it.cancel() }
+                cancellationSignals.remove(it)
+            }
             try { manager.removeUpdates(listener) } catch (_: Exception) {}
             listeners.remove(listener)
         } catch (_: IllegalArgumentException) {
+            signal?.let {
+                runCatching { it.cancel() }
+                cancellationSignals.remove(it)
+            }
             try { manager.removeUpdates(listener) } catch (_: Exception) {}
             listeners.remove(listener)
         }
@@ -5920,6 +5979,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 AppLanguage.EN -> "Location services are off. Turn them on in Android settings, then retry."
                 AppLanguage.AR -> "خدمات الموقع متوقفة. فعّلها من إعدادات Android ثم أعد المحاولة."
                 AppLanguage.CKB -> "خزمەتگوزاری شوێن ناچالاکە؛ لە ڕێکخستنەکانی Android چالاکی بکە و دووبارە هەوڵ بدەوە."
+            }
+            "LOCATION_PERMISSION_DENIED" -> when (language) {
+                AppLanguage.EN -> "Location permission is not currently granted. Allow it in Android App settings, then retry."
+                AppLanguage.AR -> "إذن الموقع غير ممنوح حاليًا. اسمح به من إعدادات التطبيق في Android ثم أعد المحاولة."
+                AppLanguage.CKB -> "مۆڵەتی شوێن لەم کاتەدا نەدراوە؛ لە ڕێکخستنەکانی ئەپی Android مۆڵەت بدە و دووبارە هەوڵ بدەوە."
+            }
+            "LOCATION_PERMISSION_DENIED" -> when (language) {
+                AppLanguage.EN -> "Location permission is not currently granted. Allow it in Android App settings, then retry."
+                AppLanguage.AR -> "إذن الموقع غير ممنوح حاليًا. اسمح به من إعدادات التطبيق في Android ثم أعد المحاولة."
+                AppLanguage.CKB -> "مۆڵەتی شوێن لەم کاتەدا نەدراوە؛ لە ڕێکخستنەکانی ئەپی Android مۆڵەت بدە و دووبارە هەوڵ بدەوە."
             }
             "LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE" -> when (language) {
                 AppLanguage.EN -> "Android could not start a location provider. Check Location permissions and turn on GPS/network location."
