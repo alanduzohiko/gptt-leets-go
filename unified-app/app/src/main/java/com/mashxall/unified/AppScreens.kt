@@ -5725,9 +5725,30 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
-    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
-    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
-    var gpsAccuracy by remember { mutableStateOf(prefs.getString("gps_accuracy", null)?.toFloatOrNull()) }
+    var locationMode by rememberSaveable {
+        mutableStateOf(
+            resolvePrayerLocationMode(
+                prefs.getString("prayer_location_mode", null),
+                prefs.getString("gps_latitude", null)?.toDoubleOrNull() != null &&
+                    prefs.getString("gps_longitude", null)?.toDoubleOrNull() != null,
+                prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
+                    prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+            )
+        )
+    }
+    val usableSavedGps = remember {
+        val lat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val lon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        if (locationMode == "gps" && isUsableSavedGpsFix(
+                lat, lon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+            )
+        ) lat to lon else null
+    }
+    var gpsLatitude by remember { mutableStateOf(usableSavedGps?.first) }
+    var gpsLongitude by remember { mutableStateOf(usableSavedGps?.second) }
+    var gpsAccuracy by remember {
+        mutableStateOf(if (usableSavedGps != null) prefs.getString("gps_accuracy", null)?.toFloatOrNull() else null)
+    }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
@@ -5756,10 +5777,17 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         gpsLatitude = fix.latitude
         gpsLongitude = fix.longitude
         gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
+        locationMode = "gps"
+        manualLatitude = null
+        manualLongitude = null
         prefs.edit()
+            .putString("prayer_location_mode", "gps")
             .putString("gps_latitude", fix.latitude.toString())
             .putString("gps_longitude", fix.longitude.toString())
+            .putLong("gps_location_timestamp", fix.time)
             .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .remove("manual_city_latitude")
+            .remove("manual_city_longitude")
             .apply()
         locationMessage = if (!isFreshFix) {
             val ageMinutes = ((receivedAt - fix.time).coerceAtLeast(0L) / 60_000L)
@@ -5837,6 +5865,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (allowed) {
+            locationMode = "gps"
+            prefs.edit().putString("prayer_location_mode", "gps").apply()
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
@@ -5853,17 +5883,38 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
+            locationMode = "gps"
+            prefs.edit().putString("prayer_location_mode", "gps").apply()
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
         } else {
+            locationMode = "gps"
+            prefs.edit().putString("prayer_location_mode", "gps").apply()
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
 
     LaunchedEffect(Unit) {
         val alreadyAsked = prefs.getBoolean("prayer_location_prompted", false)
-        if (!alreadyAsked && gpsLatitude == null && gpsLongitude == null) {
+        val missingGpsFix = gpsLatitude == null || gpsLongitude == null
+        if (locationMode == "gps") {
+            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fine || coarse) {
+                // Refresh on entering the Prayer screen; stale saved coordinates never masquerade as a live fix.
+                locateNow()
+            } else if (!alreadyAsked) {
+                prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+                locateNow()
+            } else if (missingGpsFix) {
+                locationMessage = when (language) {
+                    AppLanguage.EN -> "Allow location permission to show your current location, or choose a city."
+                    AppLanguage.AR -> "اسمح بإذن الموقع لعرض موقعك الحالي، أو اختر مدينة."
+                    AppLanguage.CKB -> "بۆ پیشاندانی شوێنی ئێستات مۆڵەتی شوێن بدە یان شارێک هەڵبژێرە."
+                }
+            }
+        } else if (!alreadyAsked && missingGpsFix && manualLatitude == null && manualLongitude == null) {
             prefs.edit().putBoolean("prayer_location_prompted", true).apply()
             locateNow()
         }
@@ -5921,7 +5972,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
             val result = try {
@@ -5939,17 +5990,18 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             adhanMessage = ""
         }
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {
+    LaunchedEffect(selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, currentLocalDateKey) {
+    LaunchedEffect(selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, currentLocalDateKey) {
         loading = true
         times = null
         val targetDate = Date(clockNowMillis)
         times = when {
-            gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+            locationMode == "gps" && gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
                 context, gpsLatitude!!, gpsLongitude!!, targetDate
             )
+            locationMode == "gps" -> null
             manualLatitude != null && manualLongitude != null -> {
                 ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
                     ?: ContentRepository.loadPrayerTimesAtLocation(
@@ -5966,7 +6018,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         loading = false
     }
     LaunchedEffect(
-        selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
+        selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
         manualCountry, currentLocalDateKey
     ) {
         val tomorrow = Calendar.getInstance().apply {
@@ -5974,10 +6026,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             add(Calendar.DAY_OF_YEAR, 1)
         }.time
         tomorrowTimes = when {
-            gpsLatitude != null && gpsLongitude != null ->
+            locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
                 ContentRepository.loadPrayerTimesAtLocation(
                     context, gpsLatitude!!, gpsLongitude!!, tomorrow
                 )
+            locationMode == "gps" -> null
             manualLatitude != null && manualLongitude != null -> {
                 ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
                     ?: ContentRepository.loadPrayerTimesAtLocation(
@@ -6061,18 +6114,26 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             ?.takeIf { gpsLatitude != null && gpsLongitude != null }
                             ?.let { cityName -> localizedKurdistanCityName(cityName, language.key).ifBlank { cityName } }
                         Text(
-                            if (gpsLatitude != null && gpsLongitude != null) {
-                                when (language) {
-                                    AppLanguage.EN -> nearestScheduleCity?.let { "GPS location • nearest source: $it" } ?: "Current GPS location"
-                                    AppLanguage.AR -> nearestScheduleCity?.let { "الموقع عبر GPS • أقرب مصدر: $it" } ?: "الموقع الحالي عبر GPS"
-                                    AppLanguage.CKB -> nearestScheduleCity?.let { "شوێنی GPS • نزیکترین سەرچاوە: $it" } ?: "شوێنی ئێستا بە GPS"
+                            if (locationMode == "gps") {
+                                if (gpsLatitude != null && gpsLongitude != null) {
+                                    when (language) {
+                                        AppLanguage.EN -> nearestScheduleCity?.let { "Your GPS position • nearest source: $it" } ?: "Current GPS location"
+                                        AppLanguage.AR -> nearestScheduleCity?.let { "موقعك عبر GPS • أقرب مصدر: $it" } ?: "الموقع الحالي عبر GPS"
+                                        AppLanguage.CKB -> nearestScheduleCity?.let { "شوێنی GPSی تۆ • نزیکترین سەرچاوە: $it" } ?: "شوێنی ئێستا بە GPS"
+                                    }
+                                } else when (language) {
+                                    AppLanguage.EN -> if (locating) "Finding your current location…" else "Current location unavailable"
+                                    AppLanguage.AR -> if (locating) "جارٍ تحديد موقعك الحالي…" else "الموقع الحالي غير متاح"
+                                    AppLanguage.CKB -> if (locating) "شوێنی ئێستات دیاری دەکرێت…" else "شوێنی ئێستا بەردەست نییە"
                                 }
                             } else localizedKurdistanCityName(selectedCity, language.key),
                             color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold
                         )
-                        if (gpsLatitude != null && gpsLongitude != null) {
+                        if (locationMode == "gps" && gpsLatitude != null && gpsLongitude != null) {
                             Text(String.format(Locale.US, "%.5f, %.5f", gpsLatitude, gpsLongitude), color = Color(0xFFB9CDC5), fontSize = 11.sp)
-                        } else Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
+                        } else if (locationMode == "city") {
+                            Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
+                        }
                     }
                     IconButton(onClick = locateNow) {
                         Icon(
@@ -6351,8 +6412,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
                         Column(
                             Modifier.fillMaxWidth().clickable {
-                                // The parent owns the selected city and updates it via onCity.
+                                // Manual city mode is explicit and shared with Home, Qibla and scheduled alerts.
                                 onCity(city)
+                                locationMode = "city"
                                 gpsLatitude = null
                                 gpsLongitude = null
                                 gpsAccuracy = null
@@ -6362,7 +6424,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 tomorrowTimes = null
                                 loading = true
                                 prefs.edit()
-                                    .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
+                                    .putString("prayer_location_mode", "city")
+                                    .remove("gps_latitude").remove("gps_longitude")
+                                    .remove("gps_location_timestamp").remove("gps_accuracy")
                                     .putString("selected_city", city.name)
                                     .putString("selected_city_country", city.country)
                                     .putString("manual_city_latitude", city.latitude.toString())
@@ -6480,8 +6544,27 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
-    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
-    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var locationMode by rememberSaveable {
+        mutableStateOf(
+            resolvePrayerLocationMode(
+                prefs.getString("prayer_location_mode", null),
+                prefs.getString("gps_latitude", null)?.toDoubleOrNull() != null &&
+                    prefs.getString("gps_longitude", null)?.toDoubleOrNull() != null,
+                prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
+                    prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+            )
+        )
+    }
+    val usableSavedGps = remember {
+        val lat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val lon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        if (locationMode == "gps" && isUsableSavedGpsFix(
+                lat, lon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+            )
+        ) lat to lon else null
+    }
+    var gpsLatitude by remember { mutableStateOf(usableSavedGps?.first) }
+    var gpsLongitude by remember { mutableStateOf(usableSavedGps?.second) }
     val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
     val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
@@ -6495,10 +6578,15 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val onFix: (Location) -> Unit = { fix ->
         gpsLatitude = fix.latitude
         gpsLongitude = fix.longitude
+        locationMode = "gps"
         prefs.edit()
+            .putString("prayer_location_mode", "gps")
             .putString("gps_latitude", fix.latitude.toString())
             .putString("gps_longitude", fix.longitude.toString())
+            .putLong("gps_location_timestamp", fix.time)
             .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .remove("manual_city_latitude")
+            .remove("manual_city_longitude")
             .apply()
         locating = false
         locationMessage = when (language) {
@@ -6542,6 +6630,8 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
             grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (allowed) {
             locating = true
+            locationMode = "gps"
+            prefs.edit().putString("prayer_location_mode", "gps").apply()
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
         } else {
@@ -6556,44 +6646,36 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     LaunchedEffect(Unit) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) {
-            // A fresh fix is requested on entry so Qibla does not keep pointing
-            // from stale coordinates saved before the user moved.
+        if (locationMode == "gps" && (fine || coarse)) {
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
-        } else {
-            // When location permission was revoked, use the explicitly saved
-            // city instead of continuing to trust stale GPS coordinates.
+        } else if (locationMode == "gps") {
             gpsLatitude = null
             gpsLongitude = null
-            prefs.edit().remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy").apply()
-            if (manualLatitude == null || manualLongitude == null) {
-                if (selectedCity.isBlank()) {
-                    qiblaPermissionLauncher.launch(
-                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                    )
-                } else {
-                    locationMessage = when (language) {
-                        AppLanguage.EN -> "Using the saved city because current location is unavailable."
-                        AppLanguage.AR -> "يُستخدم موقع المدينة المحفوظة لأن الموقع الحالي غير متاح."
-                        AppLanguage.CKB -> "چونکە شوێنی ئێستا بەردەست نییە، شوێنی شاری پاشەکەوتکراو بەکاردێت."
-                    }
-                }
-            } else {
-                locationMessage = when (language) {
-                    AppLanguage.EN -> "Using the saved city because current location permission is off."
-                    AppLanguage.AR -> "يُستخدم موقع المدينة المحفوظة لأن إذن الموقع متوقف."
-                    AppLanguage.CKB -> "بەهۆی ناچالاکبوونی مۆڵەتی شوێنەوە، شوێنی شاری پاشەکەوتکراو بەکاردێت."
-                }
+            prefs.edit().remove("gps_latitude").remove("gps_longitude")
+                .remove("gps_location_timestamp").remove("gps_accuracy").apply()
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Current location permission is off. Allow it or select a city in Prayer settings."
+                AppLanguage.AR -> "إذن الموقع الحالي متوقف. اسمح به أو اختر مدينة من إعدادات الصلاة."
+                AppLanguage.CKB -> "مۆڵەتی شوێنی ئێستا ناچالاکە؛ چالاکی بکە یان لە ڕێکخستنەکانی نوێژ شارێک هەڵبژێرە."
+            }
+        } else {
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Using the selected city for Qibla."
+                AppLanguage.AR -> "يُستخدم موضع المدينة المختارة لحساب القبلة."
+                AppLanguage.CKB -> "شوێنی شاری هەڵبژێردراو بۆ قیبلە بەکاردێت."
             }
         }
     }
 
-    LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry) {
+    LaunchedEffect(locationMode, selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry) {
         city = when {
-            gpsLatitude != null && gpsLongitude != null -> City("GPS", gpsLatitude!!, gpsLongitude!!)
-            manualLatitude != null && manualLongitude != null -> City(selectedCity, manualLatitude, manualLongitude, manualCountry)
+            locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
+                City("GPS", gpsLatitude!!, gpsLongitude!!)
+            locationMode == "gps" -> null
+            manualLatitude != null && manualLongitude != null ->
+                City(selectedCity, manualLatitude, manualLongitude, manualCountry)
             else -> ContentRepository.findCityByName(context, selectedCity, manualCountry)
         }
     }

@@ -194,17 +194,53 @@ enum class AppScreen(val key: String) {
     AUDIO("audio"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
-/** Preserve an explicit city choice instead of prompting for GPS on every empty GPS state. */
+/** Saved GPS coordinates are valid only with a recent, real Location.time timestamp. */
+internal const val MAX_SAVED_GPS_FIX_AGE_MILLIS: Long = 30L * 60L * 1000L
+
+internal fun isUsableSavedGpsFix(
+    latitude: Double?,
+    longitude: Double?,
+    fixTimeMillis: Long,
+    nowMillis: Long,
+    maxAgeMillis: Long = MAX_SAVED_GPS_FIX_AGE_MILLIS
+): Boolean {
+    if (latitude == null || longitude == null ||
+        !latitude.isFinite() || latitude !in -90.0..90.0 ||
+        !longitude.isFinite() || longitude !in -180.0..180.0 ||
+        fixTimeMillis <= 0L || maxAgeMillis < 0L
+    ) return false
+    val age = nowMillis - fixTimeMillis
+    return age in 0L..maxAgeMillis
+}
+
+internal fun resolvePrayerLocationMode(
+    savedMode: String?,
+    hasSavedGpsCoordinates: Boolean,
+    hasManualCityCoordinates: Boolean
+): String = when (savedMode?.lowercase(Locale.ROOT)) {
+    "gps" -> "gps"
+    "city" -> "city"
+    else -> when {
+        hasSavedGpsCoordinates -> "gps"
+        hasManualCityCoordinates -> "city"
+        else -> "gps"
+    }
+}
+
 internal fun shouldAutoRequestLocation(
     gpsLatitude: Double?,
     gpsLongitude: Double?,
     selectedCity: String,
     manualLatitude: Double?,
-    manualLongitude: Double?
+    manualLongitude: Double?,
+    locationMode: String? = null
 ): Boolean {
+    if (locationMode.equals("city", ignoreCase = true)) return false
     val hasGpsFix = gpsLatitude != null && gpsLongitude != null
     val hasManualCity = selectedCity.isNotBlank() && manualLatitude != null && manualLongitude != null
-    return !hasGpsFix && !hasManualCity
+    if (hasGpsFix) return false
+    if (locationMode.equals("gps", ignoreCase = true)) return true
+    return !hasManualCity
 }
 
 private data class HomeModule(
@@ -475,11 +511,13 @@ fun MashxallApp(startScreen: String? = null) {
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, use24Hour = use24Hour, onCity = { city ->
                                     selectedCity = city.name
                                     prefs.edit()
+                                        .putString("prayer_location_mode", "city")
                                         .putString("selected_city", city.name)
                                         .putString("selected_city_country", city.country)
                                         .putString("manual_city_latitude", city.latitude.toString())
                                         .putString("manual_city_longitude", city.longitude.toString())
-                                        .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
+                                        .remove("gps_latitude").remove("gps_longitude")
+                                        .remove("gps_location_timestamp").remove("gps_accuracy")
                                         .apply()
                                 }, onQibla = { navigateTo("qibla") },
                                     onBrowseAdhanLibrary = {
@@ -965,8 +1003,25 @@ private fun HomeScreen(
     var upcomingPrayerKey by remember { mutableStateOf<String?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
-    var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
-    var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
+    var locationMode by rememberSaveable {
+        mutableStateOf(resolvePrayerLocationMode(
+            prefs.getString("prayer_location_mode", null),
+            prefs.getString("gps_latitude", null)?.toDoubleOrNull() != null &&
+                prefs.getString("gps_longitude", null)?.toDoubleOrNull() != null,
+            prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
+                prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+        ))
+    }
+    val usableSavedGps = remember {
+        val lat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val lon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        if (locationMode == "gps" && isUsableSavedGpsFix(
+                lat, lon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+            )
+        ) lat to lon else null
+    }
+    var gpsLatitude by remember { mutableStateOf(usableSavedGps?.first) }
+    var gpsLongitude by remember { mutableStateOf(usableSavedGps?.second) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -981,8 +1036,9 @@ private fun HomeScreen(
         val country = prefs.getString("selected_city_country", "") ?: ""
         prayerTimes = runCatching {
             when {
-                gpsLatitude != null && gpsLongitude != null ->
+                locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
+                locationMode == "gps" -> null
                 else -> ContentRepository.loadPrayerTimes(context, selectedCity, date, country)
                     ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
                         ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date)
@@ -1001,8 +1057,9 @@ private fun HomeScreen(
         val country = prefs.getString("selected_city_country", "") ?: ""
         tomorrowPrayerTimes = runCatching {
             when {
-                gpsLatitude != null && gpsLongitude != null ->
+                locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, tomorrowDate)
+                locationMode == "gps" -> null
                 else -> ContentRepository.loadPrayerTimes(context, selectedCity, tomorrowDate, country)
                     ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
                         ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrowDate)
@@ -1016,10 +1073,15 @@ private fun HomeScreen(
         val isFreshFix = isRecentLocationFix(fix.time, receivedAt, 60_000L)
         gpsLatitude = fix.latitude
         gpsLongitude = fix.longitude
+        locationMode = "gps"
         prefs.edit()
+            .putString("prayer_location_mode", "gps")
             .putString("gps_latitude", fix.latitude.toString())
             .putString("gps_longitude", fix.longitude.toString())
+            .putLong("gps_location_timestamp", fix.time)
             .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .remove("manual_city_latitude")
+            .remove("manual_city_longitude")
             .putBoolean("prayer_location_prompted", true)
             .apply()
         locationMessage = if (!isFreshFix) {
@@ -1093,7 +1155,7 @@ private fun HomeScreen(
         // with GPS just because the saved GPS coordinates are empty.
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
-        if (shouldAutoRequestLocation(gpsLatitude, gpsLongitude, selectedCity, manualLatitude, manualLongitude)) {
+        if (shouldAutoRequestLocation(gpsLatitude, gpsLongitude, selectedCity, manualLatitude, manualLongitude, locationMode)) {
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
@@ -1138,12 +1200,18 @@ private fun HomeScreen(
                         )
                         val nearestSourceCity = prayerTimes?.city?.takeIf { gpsLatitude != null && gpsLongitude != null }
                             ?.let { sourceCity -> localizedKurdistanCityName(sourceCity, language.key).ifBlank { sourceCity } }
-                        val displayedLocation = if (gpsLatitude != null && gpsLongitude != null) {
-                            val coordinates = String.format(Locale.US, "%.4f, %.4f", gpsLatitude, gpsLongitude)
-                            when (language) {
-                                AppLanguage.EN -> if (nearestSourceCity != null) "GPS location • nearest schedule: $nearestSourceCity" else "GPS coordinates: $coordinates"
-                                AppLanguage.AR -> if (nearestSourceCity != null) "موقع GPS • أقرب جدول: $nearestSourceCity" else "إحداثيات GPS: $coordinates"
-                                AppLanguage.CKB -> if (nearestSourceCity != null) "شوێنی GPS • نزیکترین خشتە: $nearestSourceCity" else "کۆئۆردیناتی GPS: $coordinates"
+                        val displayedLocation = if (locationMode == "gps") {
+                            if (gpsLatitude != null && gpsLongitude != null) {
+                                val coordinates = String.format(Locale.US, "%.4f, %.4f", gpsLatitude, gpsLongitude)
+                                when (language) {
+                                    AppLanguage.EN -> if (nearestSourceCity != null) "Your GPS position • nearest Salawati schedule: $nearestSourceCity" else "Current GPS coordinates: $coordinates"
+                                    AppLanguage.AR -> if (nearestSourceCity != null) "موقعك عبر GPS • أقرب جدول صلواتي: $nearestSourceCity" else "إحداثيات GPS الحالية: $coordinates"
+                                    AppLanguage.CKB -> if (nearestSourceCity != null) "شوێنی GPSی تۆ • نزیکترین خشتەی صەڵەواتی: $nearestSourceCity" else "کۆئۆردیناتی GPSی ئێستا: $coordinates"
+                                }
+                            } else when (language) {
+                                AppLanguage.EN -> "Getting your current location…"
+                                AppLanguage.AR -> "جارٍ تحديد موقعك الحالي…"
+                                AppLanguage.CKB -> "شوێنی ئێستات دیاری دەکرێت…"
                             }
                         } else localizedKurdistanCityName(selectedCity, language.key).ifBlank {
                             when (language) {

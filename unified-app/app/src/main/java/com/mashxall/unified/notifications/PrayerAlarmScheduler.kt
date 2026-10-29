@@ -7,6 +7,8 @@ import android.content.Intent
 import android.os.Build
 import com.mashxall.unified.data.ContentRepository
 import com.mashxall.unified.AppLanguage
+import com.mashxall.unified.isUsableSavedGpsFix
+import com.mashxall.unified.resolvePrayerLocationMode
 import com.mashxall.unified.data.PrayerRow
 import java.util.Calendar
 import java.util.Date
@@ -119,14 +121,25 @@ object PrayerAlarmScheduler {
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
         val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
-        if (gpsLatitude != null && gpsLongitude != null) {
-            return ContentRepository.salawatiOnlyPrayerTimes(
-                ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude, gpsLongitude, date)
-            )
-        }
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
         val hasManualCoordinates = manualLatitude != null && manualLongitude != null
+        val locationMode = resolvePrayerLocationMode(
+            prefs.getString("prayer_location_mode", null),
+            gpsLatitude != null && gpsLongitude != null,
+            hasManualCoordinates
+        )
+        if (locationMode == "gps") {
+            val gpsFixTime = prefs.getLong("gps_location_timestamp", 0L)
+            val gpsScheduleStillUsable = isUsableSavedGpsFix(
+                gpsLatitude, gpsLongitude, gpsFixTime, System.currentTimeMillis(),
+                maxAgeMillis = 48L * 60L * 60L * 1000L
+            )
+            if (!gpsScheduleStillUsable) return null
+            return ContentRepository.salawatiOnlyPrayerTimes(
+                ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
+            )
+        }
         val cityName = usableSavedPrayerCityName(prefs.getString("selected_city", ""), hasManualCoordinates) ?: return null
         val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
 

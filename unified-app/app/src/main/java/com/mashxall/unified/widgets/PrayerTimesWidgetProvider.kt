@@ -10,6 +10,8 @@ import android.os.Build
 import android.widget.RemoteViews
 import com.mashxall.unified.MainActivity
 import com.mashxall.unified.R
+import com.mashxall.unified.isUsableSavedGpsFix
+import com.mashxall.unified.resolvePrayerLocationMode
 import com.mashxall.unified.data.ContentRepository
 import com.mashxall.unified.data.PrayerRow
 import kotlinx.coroutines.CoroutineScope
@@ -115,14 +117,24 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         val manualLat = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLon = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
         val hasManualCoordinates = manualLat != null && manualLon != null
+        val locationMode = resolvePrayerLocationMode(
+            prefs.getString("prayer_location_mode", null),
+            gpsLat != null && gpsLon != null,
+            hasManualCoordinates
+        )
+        val freshGps = if (locationMode == "gps" && isUsableSavedGpsFix(
+                gpsLat, gpsLon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+            )
+        ) gpsLat to gpsLon else null
         val cityName = com.mashxall.unified.notifications.usableSavedPrayerCityName(
             prefs.getString("selected_city", ""), hasManualCoordinates
         ).orEmpty()
         val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
 
         suspend fun rowFor(date: Date): PrayerRow? {
-            if (gpsLat != null && gpsLon != null) {
-                return ContentRepository.loadPrayerTimesAtLocation(context, gpsLat, gpsLon, date)
+            if (locationMode == "gps") {
+                val gps = freshGps ?: return null
+                return ContentRepository.loadPrayerTimesAtLocation(context, gps.first, gps.second, date)
             }
             if (cityName.isBlank()) return null
             if (hasManualCoordinates) {
@@ -146,7 +158,13 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         }
         val tomorrowRow = rowFor(tomorrowCalendar.time)
         val locationLabel = when {
-            gpsLat != null && gpsLon != null -> String.format(Locale.US, "%.3f, %.3f", gpsLat, gpsLon)
+            locationMode == "gps" && freshGps != null ->
+                String.format(Locale.US, "%.3f, %.3f", freshGps.first, freshGps.second)
+            locationMode == "gps" -> when (language) {
+                "en" -> "Getting current location…"
+                "ar" -> "جارٍ تحديد موقعك الحالي…"
+                else -> "شوێنی ئێستات دیاری دەکرێت…"
+            }
             manualLat != null && manualLon != null -> String.format(Locale.US, "%.3f, %.3f", manualLat, manualLon)
             else -> listOf(cityName, countryName).filter { it.isNotBlank() }.joinToString(", ")
         }
