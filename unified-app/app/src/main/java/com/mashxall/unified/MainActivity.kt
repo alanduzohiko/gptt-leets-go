@@ -1026,12 +1026,27 @@ private fun HomeScreen(
     }
     var gpsLatitude by remember { mutableStateOf(usableSavedGps?.first) }
     var gpsLongitude by remember { mutableStateOf(usableSavedGps?.second) }
+    var nearestKnownCity by remember { mutableStateOf<NearbySalawatiCity?>(null) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
             delay(60_000L)
+        }
+    }
+    LaunchedEffect(locationMode, gpsLatitude, gpsLongitude) {
+        val latitude = gpsLatitude
+        val longitude = gpsLongitude
+        nearestKnownCity = null
+        if (locationMode == "gps" && latitude != null && longitude != null) {
+            nearestKnownCity = try {
+                ContentRepository.findNearestSalawatiCityAtLocation(context, latitude, longitude)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
         }
     }
     LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
@@ -1222,13 +1237,30 @@ private fun HomeScreen(
                         )
                         val nearestSourceCity = prayerTimes?.city?.takeIf { gpsLatitude != null && gpsLongitude != null }
                             ?.let { sourceCity -> localizedKurdistanCityName(sourceCity, language.key).ifBlank { sourceCity } }
+                        val nearestKnownCityLabel = nearestKnownCity?.city?.name?.let { sourceCity ->
+                            localizedKurdistanCityName(sourceCity, language.key).ifBlank { sourceCity }
+                        }
+                        val nearestKnownCityCountry = nearestKnownCity?.city?.country.orEmpty()
+                        val nearestKnownDistance = nearestKnownCity?.distanceKm?.let { "%.1f".format(Locale.US, it) }.orEmpty()
                         val displayedLocation = if (locationMode == "gps") {
                             if (gpsLatitude != null && gpsLongitude != null) {
                                 val coordinates = String.format(Locale.US, "%.4f, %.4f", gpsLatitude, gpsLongitude)
-                                when (language) {
-                                    AppLanguage.EN -> if (nearestSourceCity != null) "Your GPS position • nearest Salawati schedule: $nearestSourceCity" else "Current GPS coordinates: $coordinates"
-                                    AppLanguage.AR -> if (nearestSourceCity != null) "موقعك عبر GPS • أقرب جدول صلواتي: $nearestSourceCity" else "إحداثيات GPS الحالية: $coordinates"
-                                    AppLanguage.CKB -> if (nearestSourceCity != null) "شوێنی GPSی تۆ • نزیکترین خشتەی صەڵەواتی: $nearestSourceCity" else "کۆئۆردیناتی GPSی ئێستا: $coordinates"
+                                when {
+                                    nearestSourceCity != null -> when (language) {
+                                        AppLanguage.EN -> "Your GPS position • nearest Salawati schedule: $nearestSourceCity"
+                                        AppLanguage.AR -> "موقعك عبر GPS • أقرب جدول صلواتي: $nearestSourceCity"
+                                        AppLanguage.CKB -> "شوێنی GPSی تۆ • نزیکترین خشتەی صەڵەواتی: $nearestSourceCity"
+                                    }
+                                    nearestKnownCityLabel != null -> when (language) {
+                                        AppLanguage.EN -> "GPS found • closest Salawati locality: $nearestKnownCityLabel, $nearestKnownCityCountry ($nearestKnownDistance km). No verified timetable matched."
+                                        AppLanguage.AR -> "تم تحديد GPS • أقرب بلدة في بيانات صلواتي: $nearestKnownCityLabel، $nearestKnownCityCountry (على بعد $nearestKnownDistance كم). لم يطابقها جدول موثوق."
+                                        AppLanguage.CKB -> "GPS دیاری کرا • نزیکترین شوێنی ناو داتای صەڵەواتی: $nearestKnownCityLabel، $nearestKnownCityCountry ($nearestKnownDistance کم). خشتەی پشتڕاستکراو نەدۆزرایەوە."
+                                    }
+                                    else -> when (language) {
+                                        AppLanguage.EN -> "Current GPS coordinates: $coordinates"
+                                        AppLanguage.AR -> "إحداثيات GPS الحالية: $coordinates"
+                                        AppLanguage.CKB -> "کۆئۆردیناتی GPSی ئێستا: $coordinates"
+                                    }
                                 }
                             } else when (language) {
                                 AppLanguage.EN -> "Getting your current location…"

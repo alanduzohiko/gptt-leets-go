@@ -5899,6 +5899,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var gpsAccuracy by remember {
         mutableStateOf(if (usableSavedGps != null) prefs.getString("gps_accuracy", null)?.toFloatOrNull() else null)
     }
+    var nearestKnownCity by remember { mutableStateOf<NearbySalawatiCity?>(null) }
     var manualLatitude by remember { mutableStateOf(prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()) }
     var manualLongitude by remember { mutableStateOf(prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()) }
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
@@ -6053,6 +6054,21 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             locationMode = "gps"
             prefs.edit().putString("prayer_location_mode", "gps").apply()
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+
+    LaunchedEffect(locationMode, gpsLatitude, gpsLongitude) {
+        val latitude = gpsLatitude
+        val longitude = gpsLongitude
+        nearestKnownCity = null
+        if (locationMode == "gps" && latitude != null && longitude != null) {
+            nearestKnownCity = try {
+                ContentRepository.findNearestSalawatiCityAtLocation(context, latitude, longitude)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
@@ -6290,13 +6306,30 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         val nearestScheduleCity = times?.city
                             ?.takeIf { gpsLatitude != null && gpsLongitude != null }
                             ?.let { cityName -> localizedKurdistanCityName(cityName, language.key).ifBlank { cityName } }
+                        val nearestKnownCityLabel = nearestKnownCity?.city?.name?.let { cityName ->
+                            localizedKurdistanCityName(cityName, language.key).ifBlank { cityName }
+                        }
+                        val nearestKnownCityCountry = nearestKnownCity?.city?.country.orEmpty()
+                        val nearestKnownDistance = nearestKnownCity?.distanceKm?.let { "%.1f".format(Locale.US, it) }.orEmpty()
                         Text(
                             if (locationMode == "gps") {
                                 if (gpsLatitude != null && gpsLongitude != null) {
-                                    when (language) {
-                                        AppLanguage.EN -> nearestScheduleCity?.let { "Your GPS position • nearest source: $it" } ?: "Current GPS location"
-                                        AppLanguage.AR -> nearestScheduleCity?.let { "موقعك عبر GPS • أقرب مصدر: $it" } ?: "الموقع الحالي عبر GPS"
-                                        AppLanguage.CKB -> nearestScheduleCity?.let { "شوێنی GPSی تۆ • نزیکترین سەرچاوە: $it" } ?: "شوێنی ئێستا بە GPS"
+                                    when {
+                                        nearestScheduleCity != null -> when (language) {
+                                            AppLanguage.EN -> "Your GPS position • nearest source schedule: $nearestScheduleCity"
+                                            AppLanguage.AR -> "موقعك عبر GPS • أقرب جدول مصدر: $nearestScheduleCity"
+                                            AppLanguage.CKB -> "شوێنی GPSی تۆ • نزیکترین خشتەی سەرچاوە: $nearestScheduleCity"
+                                        }
+                                        nearestKnownCityLabel != null -> when (language) {
+                                            AppLanguage.EN -> "GPS found • nearest Salawati locality: $nearestKnownCityLabel, $nearestKnownCityCountry ($nearestKnownDistance km)"
+                                            AppLanguage.AR -> "تم تحديد GPS • أقرب بلدة في صلواتي: $nearestKnownCityLabel، $nearestKnownCityCountry ($nearestKnownDistance كم)"
+                                            AppLanguage.CKB -> "GPS دیاری کرا • نزیکترین شوێنی صەڵەواتی: $nearestKnownCityLabel، $nearestKnownCityCountry ($nearestKnownDistance کم)"
+                                        }
+                                        else -> when (language) {
+                                            AppLanguage.EN -> "Current GPS location"
+                                            AppLanguage.AR -> "الموقع الحالي عبر GPS"
+                                            AppLanguage.CKB -> "شوێنی ئێستا بە GPS"
+                                        }
                                     }
                                 } else when (language) {
                                     AppLanguage.EN -> if (locating) "Finding your current location…" else "Current location unavailable"
@@ -6366,6 +6399,17 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
         }
         Spacer(Modifier.height(14.dp))
+        if (!loading && times == null && locationMode == "gps" && nearestKnownCityLabel != null) {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "This identifies the closest locality recorded in Salawati; it does not mean a valid timetable exists for it. Choose a supported city or retry GPS for the prayer source."
+                    AppLanguage.AR -> "هذا اسم أقرب بلدة مسجلة في صلواتي فقط، ولا يعني وجود جدول مواقيت صالح لها. اختر مدينة مدعومة أو حدّث GPS لمصدر المواقيت."
+                    AppLanguage.CKB -> "ئەمە تەنها ناوی نزیکترین شوێنی تۆمارکراوە لە صەڵەواتییە؛ واتای ئەوە نییە خشتەی کاتی نوێژی دروستی هەیە. شارێکی پشتگیریکراو هەڵبژێرە یان GPS نوێ بکەرەوە."
+                },
+                color = Gold, fontSize = 11.sp, lineHeight = 17.sp
+            )
+            Spacer(Modifier.height(6.dp))
+        }
         if (times == null) LoadingOrEmpty(loading, language, foreground) else {
             val timeItems = listOf(
                 tr(language, "fajr") to formatPrayerTime(times!!.fajr, language, use24Hour),

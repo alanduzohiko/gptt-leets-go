@@ -112,6 +112,19 @@ data class AllahName(
     val extraText: String = ""
 )
 data class City(val name: String, val latitude: Double, val longitude: Double, val country: String = "")
+data class NearbySalawatiCity(val city: City, val distanceKm: Double)
+
+/** Select a named source location by exact geographic distance; this never supplies prayer times. */
+internal fun nearestSalawatiCityCandidate(
+    candidates: List<Pair<City, Double>>,
+    maxDistanceKm: Double
+): NearbySalawatiCity? {
+    if (!maxDistanceKm.isFinite() || maxDistanceKm <= 0.0) return null
+    return candidates.asSequence()
+        .filter { (_, distance) -> distance.isFinite() && distance >= 0.0 && distance <= maxDistanceKm }
+        .minByOrNull { it.second }
+        ?.let { (city, distance) -> NearbySalawatiCity(city, distance) }
+}
 data class PrayerRow(
     val city: String, val date: String, val fajr: String, val sunrise: String,
     val dhuhr: String, val asr: String, val maghrib: String, val isha: String,
@@ -1799,6 +1812,65 @@ object ContentRepository {
                 } else null
             }
         }
+    }
+
+    /** Return the nearest named Salawati locality for display, even if no prayer schedule exists there. */
+    suspend fun findNearestSalawatiCityAtLocation(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        maxDistanceKm: Double = 30.0
+    ): NearbySalawatiCity? = withContext(Dispatchers.IO) {
+        if (!latitude.isFinite() || latitude !in -90.0..90.0 ||
+            !longitude.isFinite() || longitude !in -180.0..180.0 ||
+            !maxDistanceKm.isFinite() || maxDistanceKm <= 0.0
+        ) return@withContext null
+
+        val latDelta = maxDistanceKm / 110.6
+        val longitudeCos = kotlin.math.abs(kotlin.math.cos(Math.toRadians(latitude))).coerceAtLeast(0.15)
+        val lonDelta = maxDistanceKm / (111.32 * longitudeCos)
+        val minLat = (latitude - latDelta).coerceAtLeast(-90.0)
+        val maxLat = (latitude + latDelta).coerceAtMost(90.0)
+        val minLon = (longitude - lonDelta).coerceAtLeast(-180.0)
+        val maxLon = (longitude + lonDelta).coerceAtMost(180.0)
+
+        val candidates = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
+            db.rawQuery(
+                """
+                SELECT l.name AS city,
+                       l.latitude AS lat,
+                       l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name
+                FROM location l
+                LEFT JOIN country ON country._id=l.country_id
+                WHERE l.latitude BETWEEN ? AND ?
+                  AND l.longitude BETWEEN ? AND ?
+                  AND l.name IS NOT NULL AND trim(l.name) <> ''
+                ORDER BY ((l.latitude-?)*(l.latitude-?)) + ((l.longitude-?)*(l.longitude-?))
+                LIMIT 1000
+                """.trimIndent(),
+                arrayOf(
+                    minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
+                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
+                )
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(City(
+                            name = cursor.string("city"),
+                            latitude = cursor.double("lat"),
+                            longitude = cursor.double("lon"),
+                            country = cursor.string("country_name")
+                        ))
+                    }
+                }
+            }
+        }
+
+        val measured = candidates.map { city ->
+            city to PrayerLocationMath.distanceKm(latitude, longitude, city.latitude, city.longitude)
+        }
+        nearestSalawatiCityCandidate(measured, maxDistanceKm)
     }
 
     /** Load the same Salawati-backed catalogue for non-search city pickers. */
