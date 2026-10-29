@@ -114,7 +114,7 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
     quran_reader_contract = {
         "text_verse_card_opens_action_panel": (
             re.search(
-                r"modifier\s*=\s*Modifier\.(?:premiumClickable|clickable)\s*\{\s*selected\s*=\s*verse\.surah",
+                r"modifier\s*=\s*Modifier(?:\s*\.\s*staggeredEntrance\s*\([^)]*\))?\s*\.\s*(?:premiumClickable|clickable)\s*\{\s*selected\s*=\s*verse\.surah",
                 app_screens_text,
             ) is not None
             and "selectedAyahForSheet = verse.surah to verse.number" in app_screens_text
