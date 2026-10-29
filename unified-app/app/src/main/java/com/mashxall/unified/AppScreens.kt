@@ -3890,11 +3890,18 @@ internal fun bundledAdhanCategory(item: AudioItem): String? {
         .replace('_', ' ')
         .replace('-', ' ')
         .replace('/', ' ')
+    // Source bundles contain Arabic-only filenames as well as English/Latin names.
+    // Match whole words in both scripts so original Adhan recordings are not hidden
+    // just because their filenames do not contain the English word "adhan".
     val mosqueRecording = Regex(
         """(?:^|[^a-z])(mosque|masjid|haram|makkah|mecca|madinah|madina|nabawi)(?:[^a-z]|$)"""
+    ).containsMatchIn(searchable) || Regex(
+        """(?:^|[^\p{L}])(المسجد الحرام|مسجد الحرام|المسجد النبوي|مسجد نبوي|المسجد|مسجد|الحرم|مكة المكرمة|مكة|مكه|المدينة المنورة|المدينة)(?:[^\p{L}]|$)"""
     ).containsMatchIn(searchable)
     val adhanRecording = Regex(
         """(?:^|[^a-z])(adhan|athan|azan|muezzin|muazzin|iqama|iqamah|takbir|takbeer|call to prayer|prayer call)(?:[^a-z]|$)"""
+    ).containsMatchIn(searchable) || Regex(
+        """(?:^|[^\p{L}])(الأذان|الاذان|أذان|اذان|آذان|المؤذن|مؤذن|المؤذنون|مؤذنون|المؤذنين|مؤذنين|الموذن|موذن|الإقامة|الاقامة|إقامة|اقامة|التكبير|تكبير|نداء الصلاة)(?:[^\p{L}]|$)"""
     ).containsMatchIn(searchable)
     return when {
         mosqueRecording -> "mosque"
