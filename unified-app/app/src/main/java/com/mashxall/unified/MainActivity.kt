@@ -837,7 +837,7 @@ private fun HomePrayerCountdown(
     foreground: Color,
     cardColor: Color
 ) {
-    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             nowMillis = System.currentTimeMillis()
