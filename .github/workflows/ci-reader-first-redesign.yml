@@ -118,7 +118,7 @@ jobs:
             --source-root unified-app/app/src/main/java/com/mashxall/unified \
             --out dist/runtime-test/content-wiring-audit.json
 
-      - name: Audit actual Noor and Salawati prayer sources
+      - name: Audit the original Salawati-only prayer timetable source
         run: |
           set -euo pipefail
           python tools/audit_prayer_data.py \
