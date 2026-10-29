@@ -101,20 +101,22 @@ internal fun PremiumLoadingSkeleton(
 ) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
-    val transition = rememberInfiniteTransition(label = "Mashxall loading shimmer")
-    val shimmerOffset by transition.animateFloat(
-        initialValue = -240f,
-        targetValue = 720f,
-        animationSpec = if (motionAllowed) {
-            infiniteRepeatable(
+    val shimmerOffset = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall loading shimmer")
+        val animatedOffset by transition.animateFloat(
+            initialValue = -240f,
+            targetValue = 720f,
+            animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 1350, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
-            )
-        } else {
-            androidx.compose.animation.core.snap()
-        },
-        label = "Mashxall shimmer position"
-    )
+            ),
+            label = "Mashxall shimmer position"
+        )
+        animatedOffset
+    } else {
+        // No running animation when Android's animator scale is disabled.
+        -240f
+    }
     val shimmer = Brush.linearGradient(
         colors = listOf(
             accent.copy(alpha = 0.045f),
