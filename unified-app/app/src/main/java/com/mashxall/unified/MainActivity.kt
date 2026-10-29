@@ -847,9 +847,14 @@ private fun MoreScreen(
                 )
             }
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(Gold.copy(alpha = 0.14f)),
+                Modifier.size(44.dp).clip(RoundedCornerShape(15.dp))
+                    .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.25f), Gold.copy(alpha = 0.055f))))
+                    .border(1.dp, Gold.copy(alpha = 0.32f), RoundedCornerShape(15.dp)),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Outlined.MoreHoriz, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp)) }
+            ) {
+                Box(Modifier.size(35.dp).border(1.dp, Gold.copy(alpha = 0.16f), CircleShape))
+                Icon(Icons.Outlined.MoreHoriz, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
+            }
         }
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
@@ -896,11 +901,13 @@ private fun MoreScreen(
                                         verticalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Box(
-                                            Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
-                                                .background(module.color.copy(alpha = 0.17f)),
+                                            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp))
+                                                .background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.30f), module.color.copy(alpha = 0.055f))))
+                                                .border(1.dp, module.color.copy(alpha = 0.34f), RoundedCornerShape(13.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(21.dp))
+                                            Box(Modifier.size(31.dp).border(1.dp, module.color.copy(alpha = 0.20f), CircleShape))
+                                            Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(22.dp))
                                         }
                                         Column {
                                             Text(
@@ -1914,10 +1921,10 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 @Composable
 fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
     val worshipModules = listOf(
-        AppScreen.AZKAR to Icons.Outlined.Spa,
-        AppScreen.FARMUDA to Icons.Outlined.VolunteerActivism,
-        AppScreen.NAMES to Icons.Outlined.Favorite,
-        AppScreen.TASBIH to Icons.Outlined.Spa
+        Triple(AppScreen.AZKAR, Icons.Outlined.Spa, Color(0xFF74C7A7)),
+        Triple(AppScreen.FARMUDA, Icons.Outlined.VolunteerActivism, Color(0xFFE8B477)),
+        Triple(AppScreen.NAMES, Icons.Outlined.Favorite, Color(0xFFE59DB8)),
+        Triple(AppScreen.TASBIH, Icons.Outlined.Spa, Color(0xFF8BB9F0))
     )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(
@@ -1933,23 +1940,47 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
             }, color = foreground.copy(alpha = 0.58f), fontSize = 12.sp, lineHeight = 19.sp
         )
         Spacer(Modifier.height(16.dp))
-        worshipModules.forEach { (target, icon) ->
-            Card(
-                Modifier.fillMaxWidth().padding(bottom = 10.dp).premiumClickable { onOpen(target) },
-                colors = CardDefaults.cardColors(containerColor = cardColor),
-                shape = RoundedCornerShape(22.dp),
-                border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.2f))
+        worshipModules.forEachIndexed { index, (target, icon, tint) ->
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(380, delayMillis = index * 55)) +
+                    slideInVertically(initialOffsetY = { it / 8 }, animationSpec = tween(380, delayMillis = index * 55)) +
+                    scaleIn(initialScale = 0.965f, animationSpec = tween(380, delayMillis = index * 55))
             ) {
-                Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(Gold.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                        Icon(icon, null, tint = Gold, modifier = Modifier.size(26.dp))
+                Card(
+                    Modifier.fillMaxWidth().padding(bottom = 10.dp).premiumClickable { onOpen(target) },
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(23.dp),
+                    border = BorderStroke(1.dp, tint.copy(alpha = 0.34f))
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.13f), cardColor, cardColor)))
+                            .padding(15.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(54.dp).clip(RoundedCornerShape(18.dp))
+                                .background(Brush.linearGradient(listOf(tint.copy(alpha = 0.28f), tint.copy(alpha = 0.055f))))
+                                .border(1.dp, tint.copy(alpha = 0.38f), RoundedCornerShape(18.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(Modifier.size(42.dp).border(1.dp, tint.copy(alpha = 0.22f), CircleShape))
+                            Icon(icon, null, tint = tint, modifier = Modifier.size(28.dp))
+                        }
+                        Spacer(Modifier.width(13.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(tr(language, target.key), color = foreground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Spacer(Modifier.height(3.dp))
+                            Text(tr(language, target.key + "_sub"), color = foreground.copy(alpha = 0.60f), fontSize = 11.sp, lineHeight = 16.sp)
+                        }
+                        Box(
+                            Modifier.size(31.dp).clip(CircleShape).background(tint.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.ChevronRight, null, tint = tint, modifier = Modifier.size(20.dp))
+                        }
                     }
-                    Spacer(Modifier.width(13.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(tr(language, target.key), color = foreground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(tr(language, target.key + "_sub"), color = foreground.copy(alpha = 0.56f), fontSize = 11.sp)
-                    }
-                    Icon(Icons.Outlined.ChevronRight, null, tint = Gold.copy(alpha = 0.8f))
                 }
             }
         }
