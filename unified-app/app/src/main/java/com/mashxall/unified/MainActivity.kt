@@ -217,13 +217,16 @@ internal fun isUsableSavedGpsFix(
 internal fun resolvePrayerLocationMode(
     savedMode: String?,
     hasSavedGpsCoordinates: Boolean,
-    hasManualCityCoordinates: Boolean
+    hasManualCityCoordinates: Boolean,
+    hasUsableCitySelection: Boolean = hasManualCityCoordinates
 ): String = when (savedMode?.lowercase(Locale.ROOT)) {
     "gps" -> "gps"
-    "city" -> "city"
+    // A legacy "city" setting is valid only when an actual city remains selected.
+    // Otherwise the app would sit on an empty city screen and never request GPS.
+    "city" -> if (hasUsableCitySelection) "city" else "gps"
     else -> when {
         hasSavedGpsCoordinates -> "gps"
-        hasManualCityCoordinates -> "city"
+        hasUsableCitySelection || hasManualCityCoordinates -> "city"
         else -> "gps"
     }
 }
@@ -1009,7 +1012,8 @@ private fun HomeScreen(
             prefs.getString("gps_latitude", null)?.toDoubleOrNull() != null &&
                 prefs.getString("gps_longitude", null)?.toDoubleOrNull() != null,
             prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
-                prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+                prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null,
+            hasUsableCitySelection = selectedCity.isNotBlank()
         ))
     }
     val usableSavedGps = remember {

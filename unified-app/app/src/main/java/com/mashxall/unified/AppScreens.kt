@@ -5822,7 +5822,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 prefs.getString("gps_latitude", null)?.toDoubleOrNull() != null &&
                     prefs.getString("gps_longitude", null)?.toDoubleOrNull() != null,
                 prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
-                    prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+                    prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null,
+                hasUsableCitySelection = selectedCity.isNotBlank()
             )
         )
     }
@@ -6705,7 +6706,8 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                 prefs.getString("gps_latitude", null)?.toDoubleOrNull() != null &&
                     prefs.getString("gps_longitude", null)?.toDoubleOrNull() != null,
                 prefs.getString("manual_city_latitude", null)?.toDoubleOrNull() != null &&
-                    prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null
+                    prefs.getString("manual_city_longitude", null)?.toDoubleOrNull() != null,
+                hasUsableCitySelection = selectedCity.isNotBlank()
             )
         )
     }

@@ -124,10 +124,12 @@ object PrayerAlarmScheduler {
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
         val hasManualCoordinates = manualLatitude != null && manualLongitude != null
+        val savedCityName = usableSavedPrayerCityName(prefs.getString("selected_city", ""), hasManualCoordinates)
         val locationMode = resolvePrayerLocationMode(
             prefs.getString("prayer_location_mode", null),
             gpsLatitude != null && gpsLongitude != null,
-            hasManualCoordinates
+            hasManualCoordinates,
+            hasUsableCitySelection = savedCityName != null
         )
         if (locationMode == "gps") {
             val gpsFixTime = prefs.getLong("gps_location_timestamp", 0L)
@@ -140,7 +142,7 @@ object PrayerAlarmScheduler {
                 ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
             )
         }
-        val cityName = usableSavedPrayerCityName(prefs.getString("selected_city", ""), hasManualCoordinates) ?: return null
+        val cityName = savedCityName ?: return null
         val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
 
         if (hasManualCoordinates) {

@@ -42,6 +42,9 @@ class LocationSelectionTest {
         assertEquals("gps", resolvePrayerLocationMode(null, true, true))
         assertEquals("city", resolvePrayerLocationMode(null, false, true))
         assertEquals("gps", resolvePrayerLocationMode("gps", false, true))
-        assertEquals("city", resolvePrayerLocationMode("city", true, false))
+        assertEquals("city", resolvePrayerLocationMode("city", true, false, hasUsableCitySelection = true))
+        assertEquals("gps", resolvePrayerLocationMode("city", true, false, hasUsableCitySelection = false))
+        assertEquals("gps", resolvePrayerLocationMode("city", false, false, hasUsableCitySelection = false))
+        assertEquals("city", resolvePrayerLocationMode("city", false, false, hasUsableCitySelection = true))
     }
 }
