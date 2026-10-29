@@ -12,7 +12,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-internal data class PrayerAlarmScheduleResult(
+data class PrayerAlarmScheduleResult(
     val sourceTimetableAvailable: Boolean,
     val scheduledCount: Int
 )

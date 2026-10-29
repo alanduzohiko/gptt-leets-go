@@ -1012,6 +1012,8 @@ private fun HomeScreen(
     }
 
     val saveLocationFix: (Location) -> Unit = { fix ->
+        val receivedAt = System.currentTimeMillis()
+        val isFreshFix = isRecentLocationFix(fix.time, receivedAt, 60_000L)
         gpsLatitude = fix.latitude
         gpsLongitude = fix.longitude
         prefs.edit()
@@ -1020,23 +1022,35 @@ private fun HomeScreen(
             .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
             .putBoolean("prayer_location_prompted", true)
             .apply()
-        locationMessage = if (fix.hasAccuracy()) {
+        locationMessage = if (!isFreshFix) {
+            val ageMinutes = ((receivedAt - fix.time).coerceAtLeast(0L) / 60_000L)
+            when (language) {
+                AppLanguage.EN -> "Using last known location (~$ageMinutes min old) while refreshing…"
+                AppLanguage.AR -> "يُستخدم آخر موقع محفوظ (عمره نحو $ageMinutes دقيقة) أثناء التحديث…"
+                AppLanguage.CKB -> "شوێنی پێشوو بەکاردێت (نزیکەی $ageMinutes خولەک) تا نوێ بکرێتەوە…"
+            }
+        } else if (fix.hasAccuracy()) {
             val accuracy = fix.accuracy.toInt()
             when (language) {
-                AppLanguage.EN -> "Location updated • reported accuracy ±$accuracy m"
-                AppLanguage.AR -> "تم تحديث الموقع • الدقة التقريبية ±$accuracy متر"
-                AppLanguage.CKB -> "شوێن نوێکرایەوە • وردبینی نزیکەی ±$accuracy مەتر"
+                AppLanguage.EN -> "Live location fix • accuracy ±$accuracy m"
+                AppLanguage.AR -> "تم تحديث الموقع مباشرة • الدقة ±$accuracy متر"
+                AppLanguage.CKB -> "شوێنی ڕاستەوخۆ نوێکرایەوە • وردبینی ±$accuracy مەتر"
             }
         } else {
             when (language) {
-                AppLanguage.EN -> "Location updated."
-                AppLanguage.AR -> "تم تحديث الموقع."
-                AppLanguage.CKB -> "شوێن نوێکرایەوە."
+                AppLanguage.EN -> "Live location updated."
+                AppLanguage.AR -> "تم تحديث الموقع مباشرة."
+                AppLanguage.CKB -> "شوێنی ڕاستەوخۆ نوێکرایەوە."
             }
         }
     }
     val handleLocationError: (String) -> Unit = { error ->
         locationMessage = when (error) {
+            "LOCATION_LAST_KNOWN_ONLY" -> when (language) {
+                AppLanguage.EN -> "The recent saved location is shown, but Android could not refresh it. Turn on Location and retry."
+                AppLanguage.AR -> "الموقع المحفوظ حديثًا ظاهر، لكن Android لم يستطع تحديثه. فعّل الموقع ثم أعد المحاولة."
+                AppLanguage.CKB -> "شوێنی پاشەکەوتکراوی نزیک پیشان دەدرێت، بەڵام ئەندرۆید نوێی نەکردەوە؛ شوێن چالاک بکە و دووبارە هەوڵ بدەوە."
+            }
             "LOCATION_SETTINGS_OPENED" -> when (language) {
                 AppLanguage.EN -> "Location settings opened. Turn on Location, return here, then retry."
                 AppLanguage.AR -> "فُتحت إعدادات الموقع. فعّل الموقع، ثم ارجع إلى التطبيق وأعد المحاولة."

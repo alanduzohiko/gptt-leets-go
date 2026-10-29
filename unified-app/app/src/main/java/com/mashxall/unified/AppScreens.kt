@@ -105,7 +105,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
 import com.mashxall.unified.notifications.PrayerAlarmScheduler
-import com.mashxall.unified.notifications.PrayerAlarmScheduleResult
 import com.mashxall.unified.notifications.prayerAlarmScheduleFailureMessage
 import com.mashxall.unified.notifications.prayerAlarmScheduleMessage
 import com.mashxall.unified.widgets.PrayerTimesWidgetProvider
@@ -5413,6 +5412,30 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+internal fun isRecentLocationFix(
+    locationTimeMillis: Long,
+    nowMillis: Long,
+    maxAgeMillis: Long = 30L * 60L * 1000L
+): Boolean {
+    if (maxAgeMillis < 0L) return false
+    val ageMillis = nowMillis - locationTimeMillis
+    return ageMillis >= 0L && ageMillis <= maxAgeMillis
+}
+
+private fun mostRecentUsableCachedLocation(manager: LocationManager, nowMillis: Long): Location? =
+    listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        .mapNotNull { provider ->
+            runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+        }
+        .filter { location ->
+            isRecentLocationFix(location.time, nowMillis) &&
+                location.latitude.isFinite() && location.longitude.isFinite() &&
+                location.latitude in -90.0..90.0 && location.longitude in -180.0..180.0 &&
+                (!location.hasAccuracy() || location.accuracy <= 50_000f)
+        }
+        .maxByOrNull { it.time }
+        ?.let(::Location)
+
 internal fun requestCurrentLocation(
     context: Context,
     onLocation: (Location) -> Unit,
@@ -5423,15 +5446,27 @@ internal fun requestCurrentLocation(
         onError("Location service is unavailable")
         return
     }
+    val now = System.currentTimeMillis()
+    val cachedLocation = mostRecentUsableCachedLocation(manager, now)
     val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
         .filter { provider -> try { manager.isProviderEnabled(provider) } catch (_: Exception) { false } }
+
+    if (cachedLocation != null) {
+        // Show a recent cached point immediately; keep searching for a live fix.
+        // Caller labels it as cached based on Location.time, never as fresh GPS.
+        onLocation(Location(cachedLocation))
+    }
     if (providers.isEmpty()) {
-        val openedSettings = runCatching {
-            context.startActivity(
-                Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }.isSuccess
-        onError(if (openedSettings) "LOCATION_SETTINGS_OPENED" else "LOCATION_SERVICES_OFF")
+        if (cachedLocation != null) {
+            onError("LOCATION_LAST_KNOWN_ONLY")
+        } else {
+            val openedSettings = runCatching {
+                context.startActivity(
+                    Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.isSuccess
+            onError(if (openedSettings) "LOCATION_SETTINGS_OPENED" else "LOCATION_SERVICES_OFF")
+        }
         return
     }
 
@@ -5457,6 +5492,7 @@ internal fun requestCurrentLocation(
             cleanup()
             val best = bestLocation
             if (best != null) onLocation(best)
+            else if (cachedLocation != null) onError("LOCATION_LAST_KNOWN_ONLY")
             else onError("No fresh location fix. Turn on GPS and try again outdoors.")
         }
     }
@@ -5467,13 +5503,16 @@ internal fun requestCurrentLocation(
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 if (finished) return
+                // Some providers can answer a single-update request with a stale cached fix.
+                // Do not label or persist it as live; the separate cache path is age-checked.
+                if (!isRecentLocationFix(location.time, System.currentTimeMillis(), 60_000L)) return
+                // A new sensor fix supersedes the cached fix even if its reported
+                // accuracy is a little worse; the user may have moved since the cache.
                 val prior = bestLocation
                 val newIsBetter = prior == null ||
                     (location.hasAccuracy() && (!prior.hasAccuracy() || location.accuracy < prior.accuracy))
                 if (newIsBetter) bestLocation = Location(location)
 
-                // Finish immediately for a good GPS fix; otherwise allow a short
-                // window for the other provider to return a more accurate point.
                 if (bestLocation?.hasAccuracy() == true && bestLocation!!.accuracy <= 15f) {
                     finishBest.run()
                 } else {
@@ -5492,12 +5531,9 @@ internal fun requestCurrentLocation(
             manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
             registeredProviders += 1
         } catch (_: SecurityException) {
-            // Coarse permission may remain enabled while the fine-only GPS provider
-            // rejects the request. Remove only this listener and try NETWORK_PROVIDER.
             try { manager.removeUpdates(listener) } catch (_: Exception) {}
             listeners.remove(listener)
         } catch (_: IllegalArgumentException) {
-            // Provider was disabled between discovery and request; try the other one.
             try { manager.removeUpdates(listener) } catch (_: Exception) {}
             listeners.remove(listener)
         }
@@ -5505,7 +5541,8 @@ internal fun requestCurrentLocation(
     if (registeredProviders == 0 && !finished) {
         finished = true
         cleanup()
-        onError("LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE")
+        if (cachedLocation != null) onError("LOCATION_LAST_KNOWN_ONLY")
+        else onError("LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE")
     }
 }
 
@@ -5613,10 +5650,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
 
     val onFix: (Location) -> Unit = { fix ->
-        // A new fix supersedes the previous location even if its reported accuracy
-        // is a little worse: otherwise a user who moved could stay stuck at stale
-        // coordinates until the new sensor accuracy beats an old measurement.
-        locating = false
+        // A cached point can immediately populate the timetable, but it is not reported
+        // as live until Android supplies a recent Location.time.
+        val receivedAt = System.currentTimeMillis()
+        val isFreshFix = isRecentLocationFix(fix.time, receivedAt, 60_000L)
+        locating = !isFreshFix
         gpsLatitude = fix.latitude
         gpsLongitude = fix.longitude
         gpsAccuracy = if (fix.hasAccuracy()) fix.accuracy else null
@@ -5625,24 +5663,36 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             .putString("gps_longitude", fix.longitude.toString())
             .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
             .apply()
-        locationMessage = if (fix.hasAccuracy()) {
+        locationMessage = if (!isFreshFix) {
+            val ageMinutes = ((receivedAt - fix.time).coerceAtLeast(0L) / 60_000L)
+            when (language) {
+                AppLanguage.EN -> "Using last known location (~$ageMinutes min old) while refreshing GPS/network…"
+                AppLanguage.AR -> "يُستخدم آخر موقع محفوظ (عمره نحو $ageMinutes دقيقة) أثناء تحديث GPS/الشبكة…"
+                AppLanguage.CKB -> "شوێنی پێشوو بەکاردێت (نزیکەی $ageMinutes خولەک) تا GPS/تۆڕ نوێ دەبێتەوە…"
+            }
+        } else if (fix.hasAccuracy()) {
             val acc = fix.accuracy.toInt().toString()
             when (language) {
-                AppLanguage.EN -> "Fresh GPS/network fix; reported accuracy about ±$acc m"
-                AppLanguage.AR -> "تم تحديث الموقع الحالي؛ الدقة التقريبية ±$acc متر"
-                AppLanguage.CKB -> "شوێنی ئێستا نوێکرایەوە؛ وردبینی نزیکەی ±$acc مەتر"
+                AppLanguage.EN -> "Live GPS/network fix; reported accuracy about ±$acc m"
+                AppLanguage.AR -> "تم تحديث الموقع مباشرة؛ الدقة التقريبية ±$acc متر"
+                AppLanguage.CKB -> "شوێنی ڕاستەوخۆ نوێکرایەوە؛ وردبینی نزیکەی ±$acc مەتر"
             }
         } else {
             when (language) {
-                AppLanguage.EN -> "Fresh coordinates received; Android did not report accuracy."
-                AppLanguage.AR -> "تم تحديث الإحداثيات، لكن الهاتف لم يذكر دقة القياس."
-                AppLanguage.CKB -> "کۆئۆردیناتی نوێ وەرگیرا، بەڵام وردبینی نەدراوە."
+                AppLanguage.EN -> "Live coordinates received; Android did not report accuracy."
+                AppLanguage.AR -> "تم تحديث الإحداثيات مباشرة، لكن الهاتف لم يذكر دقة القياس."
+                AppLanguage.CKB -> "کۆئۆردیناتی ڕاستەوخۆ وەرگیرا، بەڵام وردبینی نەدراوە."
             }
         }
     }
     val onLocationError: (String) -> Unit = { error ->
         locating = false
         locationMessage = when (error) {
+            "LOCATION_LAST_KNOWN_ONLY" -> when (language) {
+                AppLanguage.EN -> "Showing the recent saved location, but Android could not refresh it. Turn on Location and retry."
+                AppLanguage.AR -> "يُعرض الموقع المحفوظ حديثًا، لكن Android لم يستطع تحديثه. فعّل الموقع ثم أعد المحاولة."
+                AppLanguage.CKB -> "شوێنی پاشەکەوتکراوی نزیک پیشان دەدرێت، بەڵام ئەندرۆید نوێی نەکردەوە؛ شوێن چالاک بکە و دووبارە هەوڵ بدەوە."
+            }
             "LOCATION_SETTINGS_OPENED" -> when (language) {
                 AppLanguage.EN -> "Location settings opened. Turn on Location, return here, then retry."
                 AppLanguage.AR -> "فُتحت إعدادات الموقع. فعّل الموقع، ثم ارجع إلى التطبيق وأعد المحاولة."
@@ -6350,6 +6400,11 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val onLocationError: (String) -> Unit = { error ->
         locating = false
         locationMessage = when (error) {
+            "LOCATION_LAST_KNOWN_ONLY" -> when (language) {
+                AppLanguage.EN -> "Showing the recent saved location, but Android could not refresh it. Turn on Location and retry."
+                AppLanguage.AR -> "يُعرض الموقع المحفوظ حديثًا، لكن Android لم يستطع تحديثه. فعّل الموقع ثم أعد المحاولة."
+                AppLanguage.CKB -> "شوێنی پاشەکەوتکراوی نزیک پیشان دەدرێت، بەڵام ئەندرۆید نوێی نەکردەوە؛ شوێن چالاک بکە و دووبارە هەوڵ بدەوە."
+            }
             "LOCATION_SETTINGS_OPENED" -> when (language) {
                 AppLanguage.EN -> "Android location settings opened. Turn Location on and return to Mashxall."
                 AppLanguage.AR -> "فُتحت إعدادات الموقع في Android. فعّل الموقع ثم عُد إلى مەشخەڵ."
