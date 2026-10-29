@@ -151,6 +151,15 @@ jobs:
           APK="unified-app/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          SIGNING_CERT_SHA256="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          EXPECTED_SIGNING_CERT_SHA256="ebade279706bd1b74e7d821e8ff955058b8aa56b10955e49e79ffccbe60def06"
+          if [[ "$SIGNING_CERT_SHA256" != "$EXPECTED_SIGNING_CERT_SHA256" ]]; then
+            echo "Unexpected APK signer. Refusing to publish an APK signed with an ephemeral/different debug key."
+            echo "Expected stable preview certificate: $EXPECTED_SIGNING_CERT_SHA256"
+            echo "Actual certificate: $SIGNING_CERT_SHA256"
+            exit 1
+          fi
+          echo "Stable Mashxall preview signer verified: $SIGNING_CERT_SHA256"
           unzip -t "$APK" | tail -n 2
           sha256sum "$APK" | tee apk-sha256.txt
           cp "$APK" Mashxall-Redesign-debug.apk

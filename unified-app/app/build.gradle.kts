@@ -1,7 +1,23 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// A stable, preview-only signing identity makes repeated sideload APKs install as
+// upgrades instead of being rejected for a different ephemeral CI debug key.
+// This public key is for development previews only; never use it for production.
+val mashxallPreviewKeystoreFile = rootProject.file("../.github/signing/mashxall-preview.keystore")
+val mashxallPreviewKeystoreBase64File = rootProject.file("../.github/signing/mashxall-preview.keystore.b64")
+if (!mashxallPreviewKeystoreFile.isFile) {
+    require(mashxallPreviewKeystoreBase64File.isFile) {
+        "Mashxall preview signing key bundle is missing."
+    }
+    mashxallPreviewKeystoreFile.parentFile?.mkdirs()
+    val encodedKeystore = mashxallPreviewKeystoreBase64File.readText().filterNot { it.isWhitespace() }
+    mashxallPreviewKeystoreFile.writeBytes(Base64.getDecoder().decode(encodedKeystore))
 }
 
 android {
@@ -15,6 +31,21 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        create("mashxallPreview") {
+            storeFile = mashxallPreviewKeystoreFile
+            storePassword = "MashxallPreview-2026!!"
+            keyAlias = "mashxall-preview"
+            keyPassword = "MashxallPreview-2026!!"
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("mashxallPreview")
+        }
     }
 
     buildFeatures {
