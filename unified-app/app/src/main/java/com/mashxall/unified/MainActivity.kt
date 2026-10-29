@@ -481,7 +481,13 @@ fun MashxallApp(startScreen: String? = null) {
                                         .putString("manual_city_longitude", city.longitude.toString())
                                         .remove("gps_latitude").remove("gps_longitude").remove("gps_accuracy")
                                         .apply()
-                                }, onQibla = { navigateTo("qibla") })
+                                }, onQibla = { navigateTo("qibla") },
+                                    onBrowseAdhanLibrary = {
+                                        audioStartsAtAdhan = true
+                                        audioStartsAtReciters = false
+                                        audioAutoPlayRequested = false
+                                        navigateTo(AppScreen.AUDIO.key)
+                                    })
                                 "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
                                     selectedSurah = s; selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()

@@ -148,13 +148,22 @@ private val MushafSepiaColorMatrix = ColorMatrix(
 )
 
 internal object ReaderPlaybackSettings {
-    var mode by mutableStateOf("verse")
+    var mode by mutableStateOf("full")
 
-    fun normalize(value: String?): String = if (value == "full") "full" else "verse"
+    /** Full-surah playback is the first-use default; keep verse mode when it was explicitly selected. */
+    fun normalize(value: String?): String = if (value == "verse") "verse" else "full"
 }
 
 internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
     if (mode == "full") 1 else requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
+
+/** Pick a reciter compatible with the user's chosen mode, preferring complete-surah sources on first use. */
+internal fun defaultReciterId(mode: String, reciters: List<Reciter>): Int? =
+    if (mode == "full") {
+        reciters.firstOrNull { it.audioType != 0 }?.id ?: reciters.firstOrNull()?.id
+    } else {
+        reciters.firstOrNull { it.audioType == 0 }?.id ?: reciters.firstOrNull()?.id
+    }
 
 /** Ensure selected-ayah mode never retains a reciter that only has full-surah tracks. */
 internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: List<Reciter>): Int? {
@@ -329,11 +338,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     val readerPlaybackMode = ReaderPlaybackSettings.mode
     LaunchedEffect(Unit) {
-        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
+        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
         readerReciters = ContentRepository.loadReciters(context)
         if (preferredReaderReciterId == -1 || readerReciters.none { it.id == preferredReaderReciterId }) {
-            preferredReaderReciterId = readerReciters.firstOrNull { it.audioType == 0 }?.id
-                ?: readerReciters.firstOrNull()?.id ?: -1
+            preferredReaderReciterId = defaultReciterId(ReaderPlaybackSettings.mode, readerReciters) ?: -1
             if (preferredReaderReciterId > 0) {
                 prefs.edit().putInt("preferred_reciter_id", preferredReaderReciterId).apply()
             }
@@ -3729,19 +3737,18 @@ fun AudioScreen(
         selectedTab = if (focusAdhan) 2 else if (focusReciters) 1 else 0
     }
     LaunchedEffect(Unit) {
-        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
+        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
         audio = ContentRepository.loadAudioItems(context)
         onlineAdhan = ContentRepository.loadOnlineAdhan(context)
         val loadedReciters = ContentRepository.loadReciters(context)
         reciters = loadedReciters
         surahs = ContentRepository.loadSurahs(context)
-        // The Quran's play control must do useful work on first use. When a
-        // user has not chosen a favourite yet, use the first available
-        // verse-by-verse source and persist it like an explicit selection.
+        // The first-use default is complete-surah playback. Prefer a source with
+        // complete-surah files; verse-by-verse remains available as an explicit choice.
         if (preferredReciterId < 0 || loadedReciters.none { it.id == preferredReciterId }) {
-            (loadedReciters.firstOrNull { it.audioType == 0 } ?: loadedReciters.firstOrNull())?.let { firstAvailable ->
-                preferredReciterId = firstAvailable.id
-                prefs.edit().putInt("preferred_reciter_id", firstAvailable.id).apply()
+            defaultReciterId(ReaderPlaybackSettings.mode, loadedReciters)?.let { firstAvailableId ->
+                preferredReciterId = firstAvailableId
+                prefs.edit().putInt("preferred_reciter_id", firstAvailableId).apply()
             }
         }
         loading = false
@@ -5543,7 +5550,7 @@ internal fun prayerSourceDescription(source: String, language: AppLanguage): Str
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit) {
+fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
@@ -6033,6 +6040,29 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         }
                     })
                 }
+                OutlinedButton(
+                    onClick = onBrowseAdhanLibrary,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Browse full adhan & mosque library"
+                            AppLanguage.AR -> "فتح مكتبة الأذان وأصوات المساجد الكاملة"
+                            AppLanguage.CKB -> "کردنەوەی کتێبخانەی تەواوی بانگ و دەنگی مزگەوت"
+                        },
+                        fontSize = 11.sp
+                    )
+                }
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Choose a source recording, download it in the library, then return here to select it for scheduled prayer alerts."
+                        AppLanguage.AR -> "اختر تسجيلًا من المكتبة ونزّله، ثم عُد إلى هنا لاختياره لتنبيهات الصلاة المجدولة."
+                        AppLanguage.CKB -> "تۆمارێک لە کتێبخانەکە هەڵبژێرە و دایبگرە؛ پاشان بگەڕێوە بۆ ئەم شوێنە و بۆ ئاگادارکردنەوەی نوێژ هەڵیبژێرە."
+                    },
+                    color = foreground.copy(alpha = 0.55f), fontSize = 10.sp, lineHeight = 15.sp
+                )
                 if (adhanEnabled) {
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(onClick = { adhanSoundQuery = ""; chooseAdhanSound = true }, modifier = Modifier.fillMaxWidth()) {

@@ -5,6 +5,24 @@ import org.junit.Test
 
 class AudioPlaybackModeTest {
     @Test
+    fun defaultsToFullSurahButHonoursExplicitVerseMode() {
+        assertEquals("full", ReaderPlaybackSettings.normalize(null))
+        assertEquals("full", ReaderPlaybackSettings.normalize("full"))
+        assertEquals("full", ReaderPlaybackSettings.normalize("unknown"))
+        assertEquals("verse", ReaderPlaybackSettings.normalize("verse"))
+    }
+
+    @Test
+    fun firstUseReciterMatchesTheSelectedPlaybackMode() {
+        val verseReciter = com.mashxall.unified.data.Reciter(1, "قارئ آية", "Verse Reciter", 0, "https://example.invalid/verse/", 1)
+        val fullReciter = com.mashxall.unified.data.Reciter(2, "قارئ سورة", "Full Reciter", 1, "https://example.invalid/full/", 2)
+        assertEquals(2, defaultReciterId("full", listOf(verseReciter, fullReciter)))
+        assertEquals(1, defaultReciterId("verse", listOf(verseReciter, fullReciter)))
+        assertEquals(2, defaultReciterId("full", listOf(fullReciter)))
+        assertEquals(1, defaultReciterId("verse", listOf(verseReciter)))
+    }
+
+    @Test
     fun fullSurahAlwaysStartsAtTheFirstAyah() {
         assertEquals(1, resolveReciterStartAyah("full", 17, 286))
         assertEquals(1, resolveReciterStartAyah("full", 1, 7))
