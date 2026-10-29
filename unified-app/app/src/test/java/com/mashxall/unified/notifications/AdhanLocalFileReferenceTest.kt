@@ -7,6 +7,40 @@ import java.io.File
 
 class AdhanLocalFileReferenceTest {
     @Test
+    fun missingSelectedAdhanNeverFallsBackToAnUnrelatedSystemRingtone() {
+        assertEquals(
+            AdhanAudioSourceSelection.MISSING_SELECTED_AUDIO,
+            classifyAdhanAudioSource("local:/missing/selected-adhan.mp3", null)
+        )
+        assertEquals(
+            AdhanAudioSourceSelection.MISSING_SELECTED_AUDIO,
+            classifyAdhanAudioSource("content/selected-adhan.mp3", null)
+        )
+    }
+
+    @Test
+    fun systemAlarmIsUsedOnlyWhenTheUserDidNotSelectAnAudio() {
+        assertEquals(
+            AdhanAudioSourceSelection.DEFAULT_SYSTEM_ALARM,
+            classifyAdhanAudioSource("", null)
+        )
+    }
+
+    @Test
+    fun selectedExistingAudioUsesTheSelectedFile() {
+        val file = File.createTempFile("mashxall-adhan-selected-", ".mp3")
+        try {
+            file.writeBytes(ByteArray(2048) { 7 })
+            assertEquals(
+                AdhanAudioSourceSelection.SELECTED_AUDIO,
+                classifyAdhanAudioSource("local:${file.absolutePath}", file)
+            )
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun resolvesOnlyExistingLocalAudioReferences() {
         val file = File.createTempFile("mashxall-adhan-", ".mp3")
         try {

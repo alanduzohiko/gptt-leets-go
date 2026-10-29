@@ -6,6 +6,13 @@ import org.junit.Test
 
 class AdhanNotificationCopyTest {
     @Test
+    fun missingSelectedAudioExplainsHowToFixItInEverySupportedLanguage() {
+        assertEquals(true, missingAdhanAudioMessage(AppLanguage.EN).contains("Prayer settings"))
+        assertEquals(true, missingAdhanAudioMessage(AppLanguage.AR).contains("إعدادات الصلاة"))
+        assertEquals(true, missingAdhanAudioMessage(AppLanguage.CKB).contains("ڕێکخستنەکانی نوێژ"))
+    }
+
+    @Test
     fun notificationContentAndStopActionAreLocalized() {
         assertEquals("Prayer adhan", adhanNotificationCopy(AppLanguage.EN).channelName)
         assertEquals("Stop", adhanNotificationCopy(AppLanguage.EN).stopAction)

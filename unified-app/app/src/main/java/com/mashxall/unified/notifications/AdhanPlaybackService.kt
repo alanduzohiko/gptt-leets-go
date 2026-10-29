@@ -39,6 +39,26 @@ internal fun resolveLocalAdhanFileReference(reference: String): File? {
     return runCatching { File(path).takeIf { it.isFile && it.length() > 512L } }.getOrNull()
 }
 
+internal enum class AdhanAudioSourceSelection {
+    DEFAULT_SYSTEM_ALARM,
+    SELECTED_AUDIO,
+    MISSING_SELECTED_AUDIO
+}
+
+/** Never substitute a generic ringtone for a non-empty user-selected adhan path. */
+internal fun classifyAdhanAudioSource(assetPath: String, source: File?): AdhanAudioSourceSelection =
+    when {
+        assetPath.isBlank() -> AdhanAudioSourceSelection.DEFAULT_SYSTEM_ALARM
+        source != null && source.isFile && source.length() > 512L -> AdhanAudioSourceSelection.SELECTED_AUDIO
+        else -> AdhanAudioSourceSelection.MISSING_SELECTED_AUDIO
+    }
+
+internal fun missingAdhanAudioMessage(language: AppLanguage): String = when (language) {
+    AppLanguage.EN -> "Selected adhan audio is missing. Open Prayer settings and choose an available or downloaded track."
+    AppLanguage.AR -> "ملف الأذان المحدد غير متاح. افتح إعدادات الصلاة واختر تسجيلًا متاحًا أو منزّلًا."
+    AppLanguage.CKB -> "فایلی دەنگی بانگی هەڵبژێردراو بەردەست نییە؛ ڕێکخستنەکانی نوێژ بکەرەوە و دەنگێکی بەردەست یان داگیراو هەڵبژێرە."
+}
+
 class AdhanPlaybackService : Service() {
     private var player: MediaPlayer? = null
     private var stopRequested = false
@@ -78,7 +98,7 @@ class AdhanPlaybackService : Service() {
             .build()
         startForeground(NOTIFICATION_ID, notification)
         stopRequested = false
-        playAsset(audioPath)
+        playAsset(audioPath, prayerLabel, notificationCopy, language, channelId)
         return START_NOT_STICKY
     }
 
@@ -95,7 +115,13 @@ class AdhanPlaybackService : Service() {
         }
     }
 
-    private fun playAsset(assetPath: String) {
+    private fun playAsset(
+        assetPath: String,
+        prayerLabel: String,
+        notificationCopy: AdhanNotificationCopy,
+        language: AppLanguage,
+        channelId: String
+    ) {
         releasePlayer()
         val source = try {
             when {
@@ -105,13 +131,26 @@ class AdhanPlaybackService : Service() {
                     val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
                         .take(8).joinToString("") { "%02x".format(it) }
                     File(cacheDir, "adhan-$hash.audio").also { target ->
-                        if (!target.exists() || target.length() == 0L) {
+                        if (!target.isFile || target.length() <= 512L) {
+                            target.delete()
                             assets.open(assetPath).use { input -> target.outputStream().use { output -> input.copyTo(output, 64 * 1024) } }
                         }
                     }
                 }
             }
         } catch (_: Exception) { null }
+
+        when (classifyAdhanAudioSource(assetPath, source)) {
+            AdhanAudioSourceSelection.MISSING_SELECTED_AUDIO -> {
+                // Keep the selected adhan truthful. Do not silently play an unrelated system ringtone.
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
+                stopSelf()
+                return
+            }
+            else -> Unit
+        }
+
         val mp = MediaPlayer()
         player = mp
         try {
@@ -121,12 +160,26 @@ class AdhanPlaybackService : Service() {
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build()
             )
-            if (source != null && source.exists() && source.length() > 0L) {
-                mp.setDataSource(source.absolutePath)
-            } else {
-                val fallback: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                mp.setDataSource(this, fallback)
+            when (classifyAdhanAudioSource(assetPath, source)) {
+                AdhanAudioSourceSelection.SELECTED_AUDIO -> mp.setDataSource(source!!.absolutePath)
+                AdhanAudioSourceSelection.DEFAULT_SYSTEM_ALARM -> {
+                    val fallback: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                        ?: run {
+                            releasePlayer()
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                            stopSelf()
+                            return
+                        }
+                    mp.setDataSource(this, fallback)
+                }
+                AdhanAudioSourceSelection.MISSING_SELECTED_AUDIO -> {
+                    // Guarded above; this branch exists for exhaustive enum handling.
+                    releasePlayer()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return
+                }
             }
             mp.setOnPreparedListener { ready -> if (!stopRequested) ready.start() }
             mp.setOnCompletionListener {
@@ -148,6 +201,24 @@ class AdhanPlaybackService : Service() {
         }
     }
 
+    private fun postMissingAudioNotification(
+        prayerLabel: String,
+        copy: AdhanNotificationCopy,
+        language: AppLanguage,
+        channelId: String
+    ) {
+        val notice = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
+            .setContentTitle(prayerLabel.ifBlank { copy.fallbackPrayerTitle })
+            .setContentText(missingAdhanAudioMessage(language))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(true)
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(MISSING_AUDIO_NOTIFICATION_ID, notice)
+    }
+
     private fun releasePlayer() {
         try { player?.setOnCompletionListener(null); player?.setOnErrorListener(null); player?.release() } catch (_: Exception) {}
         player = null
@@ -164,6 +235,7 @@ class AdhanPlaybackService : Service() {
         const val EXTRA_AUDIO_PATH = "audio_path"
         private const val CHANNEL_ID = "mashxall_adhan_playback"
         private const val NOTIFICATION_ID = 7842
+        private const val MISSING_AUDIO_NOTIFICATION_ID = 7844
         private const val STOP_REQUEST_CODE = 7843
         const val ACTION_STOP = "com.mashxall.unified.STOP_ADHAN"
     }
