@@ -8,6 +8,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.app.AlarmManager
@@ -224,14 +225,30 @@ private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: 
             enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180)),
             exit = fadeOut(tween(120))
         ) {
-            Text(
-                message,
-                color = foreground.copy(alpha = 0.66f),
-                textAlign = TextAlign.Center,
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp)
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    Modifier.size(62.dp)
+                        .clip(CircleShape)
+                        .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.20f), Gold.copy(alpha = 0.055f))))
+                        .border(1.dp, Gold.copy(alpha = 0.22f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Info, contentDescription = null, tint = Gold, modifier = Modifier.size(29.dp))
+                }
+                Text(
+                    message,
+                    color = foreground.copy(alpha = 0.72f),
+                    textAlign = TextAlign.Center,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 21.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -4079,8 +4096,40 @@ fun AudioScreen(
         }
         Spacer(Modifier.height(7.dp))
         SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
-        if (audioNotice.isNotBlank()) {
-            Text(audioNotice, color = Gold, fontSize = 11.sp, lineHeight = 16.sp)
+        AnimatedVisibility(
+            visible = audioNotice.isNotBlank(),
+            enter = fadeIn(tween(180)) + slideInVertically(
+                initialOffsetY = { height -> height / 4 },
+                animationSpec = tween(220)
+            ),
+            exit = fadeOut(tween(120))
+        ) {
+            val noticeIsError = audioNotice.contains("failed", ignoreCase = true) ||
+                audioNotice.contains("فشل") || audioNotice.contains("سەرکەوتوو نەبوو")
+            val noticeColor = if (noticeIsError) Color(0xFFE07870) else Gold
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(noticeColor.copy(alpha = 0.09f))
+                    .border(1.dp, noticeColor.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (noticeIsError) Icons.Outlined.Info else Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = noticeColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(9.dp))
+                Text(
+                    audioNotice,
+                    color = foreground,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         if (selectedTab == 2) {
             val searchTerm = audioQuery.trim()
