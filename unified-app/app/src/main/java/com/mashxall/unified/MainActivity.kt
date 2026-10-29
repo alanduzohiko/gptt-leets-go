@@ -122,6 +122,7 @@ import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -775,6 +776,156 @@ internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boo
     return String.format(Locale.US, "%d:%s %s", hour12, minute, marker)
 }
 
+
+internal data class UpcomingPrayerTarget(val key: String, val timeMillis: Long)
+
+private fun parseSourcePrayerClock(raw: String): Pair<Int, Int>? {
+    val match = Regex("""^([01]\\d|2[0-3]):([0-5]\\d)$""").matchEntire(raw.trim()) ?: return null
+    val hour = match.groupValues[1].toIntOrNull() ?: return null
+    val minute = match.groupValues[2].toIntOrNull() ?: return null
+    return hour to minute
+}
+
+/** Resolve the next named prayer only from valid original Salawati rows. Sunrise is not an adhan. */
+internal fun nextSourcePrayerTarget(
+    today: PrayerRow?,
+    tomorrow: PrayerRow?,
+    nowMillis: Long
+): UpcomingPrayerTarget? {
+    val currentDay = today ?: return null
+    if (!ContentRepository.hasValidPrayerTimes(currentDay)) return null
+    val candidates = listOf(
+        "fajr" to currentDay.fajr,
+        "dhuhr" to currentDay.dhuhr,
+        "asr" to currentDay.asr,
+        "maghrib" to currentDay.maghrib,
+        "isha" to currentDay.isha
+    )
+    for ((key, raw) in candidates) {
+        val (hour, minute) = parseSourcePrayerClock(raw) ?: return null
+        val target = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (target.timeInMillis > nowMillis) return UpcomingPrayerTarget(key, target.timeInMillis)
+    }
+
+    // After Isha, do not guess tomorrow's Fajr: require tomorrow's own Salawati row.
+    val tomorrowRow = tomorrow ?: return null
+    if (!ContentRepository.hasValidPrayerTimes(tomorrowRow)) return null
+    val (hour, minute) = parseSourcePrayerClock(tomorrowRow.fajr) ?: return null
+    val nextDay = Calendar.getInstance().apply {
+        timeInMillis = nowMillis
+        add(Calendar.DAY_OF_YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return nextDay.timeInMillis.takeIf { it > nowMillis }?.let { UpcomingPrayerTarget("fajr", it) }
+}
+
+@Composable
+private fun HomePrayerCountdown(
+    today: PrayerRow?,
+    tomorrow: PrayerRow?,
+    language: AppLanguage,
+    use24Hour: Boolean,
+    foreground: Color,
+    cardColor: Color
+) {
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+    val next = remember(today, tomorrow, nowMillis / 1_000L) {
+        nextSourcePrayerTarget(today, tomorrow, nowMillis)
+    }
+    val nowText = formatPrayerTime(SimpleDateFormat("HH:mm", Locale.US).format(Date(nowMillis)), language, use24Hour)
+    val prayerName = when (next?.key) {
+        "fajr" -> tr(language, "fajr")
+        "dhuhr" -> tr(language, "dhuhr")
+        "asr" -> tr(language, "asr")
+        "maghrib" -> tr(language, "maghrib")
+        "isha" -> tr(language, "isha")
+        else -> ""
+    }
+    val prayerTimeText = next?.let {
+        formatPrayerTime(SimpleDateFormat("HH:mm", Locale.US).format(Date(it.timeMillis)), language, use24Hour)
+    }.orEmpty()
+    val countdown = next?.let {
+        val seconds = ((it.timeMillis - nowMillis).coerceAtLeast(0L) + 999L) / 1_000L
+        String.format(Locale.US, "%02d:%02d:%02d", seconds / 3_600L, (seconds % 3_600L) / 60L, seconds % 60L)
+    }.orEmpty()
+
+    Card(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        colors = CardDefaults.cardColors(containerColor = cardColor.copy(alpha = 0.92f)),
+        shape = RoundedCornerShape(17.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(39.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.13f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Current time"
+                        AppLanguage.AR -> "الوقت الحالي"
+                        AppLanguage.CKB -> "کاتی ئێستا"
+                    },
+                    color = foreground.copy(alpha = 0.58f), fontSize = 10.sp
+                )
+                Text(nowText, color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> if (next == null) "Next prayer unavailable" else "Next: $prayerName"
+                        AppLanguage.AR -> if (next == null) "الصلاة القادمة غير متاحة" else "القادمة: $prayerName"
+                        AppLanguage.CKB -> if (next == null) "نوێژی دواتر بەردەست نییە" else "دواتر: $prayerName"
+                    },
+                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1
+                )
+                if (next != null) {
+                    Text(prayerTimeText, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        countdown,
+                        color = Gold,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.animateContentSize()
+                    )
+                } else {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Requires tomorrow's verified source row after Isha"
+                            AppLanguage.AR -> "يتطلب جدول صلواتي موثوقًا للغد بعد العشاء"
+                            AppLanguage.CKB -> "دوای عیشا پێویستی بە خشتەی پشتڕاستکراوی صەڵەواتی بۆ سبەیە"
+                        },
+                        color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 2
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun HomeScreen(
     language: AppLanguage,
@@ -788,6 +939,7 @@ private fun HomeScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
+    var tomorrowPrayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
@@ -815,6 +967,25 @@ private fun HomeScreen(
             }
         }.getOrNull()
         loadingTimes = false
+    }
+
+    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+        val tomorrowCalendar = Calendar.getInstance().apply {
+            time = Date(clockNow)
+            add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val tomorrowDate = tomorrowCalendar.time
+        val country = prefs.getString("selected_city_country", "") ?: ""
+        tomorrowPrayerTimes = runCatching {
+            when {
+                gpsLatitude != null && gpsLongitude != null ->
+                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, tomorrowDate)
+                else -> ContentRepository.loadPrayerTimes(context, selectedCity, tomorrowDate, country)
+                    ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
+                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrowDate)
+                    }
+            }
+        }.getOrNull()
     }
 
     val saveLocationFix: (Location) -> Unit = { fix ->
@@ -950,6 +1121,15 @@ private fun HomeScreen(
                     Icon(Icons.Outlined.Explore, contentDescription = null, tint = Gold)
                 }
                 Spacer(Modifier.height(14.dp))
+                HomePrayerCountdown(
+                    today = prayerTimes,
+                    tomorrow = tomorrowPrayerTimes,
+                    language = language,
+                    use24Hour = use24Hour,
+                    foreground = foreground,
+                    cardColor = cardColor
+                )
+                Spacer(Modifier.height(10.dp))
                 when {
                     loadingTimes -> Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
                         androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
