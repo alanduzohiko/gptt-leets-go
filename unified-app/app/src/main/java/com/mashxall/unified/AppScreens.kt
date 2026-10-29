@@ -1105,7 +1105,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(listOf(DeepGreen, Emerald))).border(1.dp, Gold.copy(alpha = 0.34f), CircleShape), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF19725A)))).border(1.dp, Gold.copy(alpha = 0.34f), CircleShape), contentAlignment = Alignment.Center) {
                                 Text(verse.number.toString(), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Spacer(Modifier.width(8.dp))
