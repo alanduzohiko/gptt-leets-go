@@ -5205,14 +5205,13 @@ private fun formatPrayerCountdown(remainingMillis: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, onCity: (City) -> Unit, onQibla: () -> Unit) {
+fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
     var tomorrowTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var use24Hour by rememberSaveable { mutableStateOf(false) }
     var chooseCity by remember { mutableStateOf(false) }
     var citySearch by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }

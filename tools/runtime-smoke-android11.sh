@@ -1529,6 +1529,129 @@ echo "PASS: home prayer-times card, continue-reading resume, and quick access ar
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
+# Test the actual clock preference, and then restore the required 12-hour default.
+time24_coords=""
+for attempt in $(seq 1 12); do
+  rm -f dist/runtime-test/window-settings-time-format.xml
+  adb shell rm -f /sdcard/mashxall-settings-time-format.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-settings-time-format.xml > "dist/runtime-test/uiautomator-settings-time-format-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings-time-format.xml dist/runtime-test/window-settings-time-format.xml >/dev/null 2>&1 || true
+  time24_coords="$(python3 - dist/runtime-test/window-settings-time-format.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"24-hour|24 ساعة|٢٤ کاتژمێر", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        if x2 > x1 and y2 > y1 and y1 >= 63 and y2 <= 1740:
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -n "$time24_coords" ]]; then break; fi
+  adb shell input swipe 540 1490 540 500 450 || true
+  sleep 1
+done
+if [[ -z "$time24_coords" ]]; then
+  echo "FAIL: Settings does not expose an on-screen 24-hour time-format option."
+  cat dist/runtime-test/window-settings-time-format.xml
+  exit 1
+fi
+read -r time24_x time24_y <<< "$time24_coords"
+adb shell input tap "$time24_x" "$time24_y"
+sleep 2
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-time-format-24h.xml 2>/dev/null || true
+if ! grep -Eq '<boolean name="time_format_24h" value="true"' dist/runtime-test/preferences-time-format-24h.xml; then
+  echo "FAIL: selecting 24-hour time format did not persist."
+  cat dist/runtime-test/preferences-time-format-24h.xml
+  exit 1
+fi
+time12_coords="$(python3 - dist/runtime-test/window-settings-time-format.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"12-hour|12 ساعة|١٢ کاتژمێر", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        if x2 > x1 and y2 > y1 and y1 >= 63 and y2 <= 1740:
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+if [[ -z "$time12_coords" ]]; then
+  echo "FAIL: Settings does not expose an on-screen 12-hour option after changing formats."
+  cat dist/runtime-test/window-settings-time-format.xml
+  exit 1
+fi
+read -r time12_x time12_y <<< "$time12_coords"
+adb shell input tap "$time12_x" "$time12_y"
+sleep 2
+adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml > dist/runtime-test/preferences-time-format-12h.xml 2>/dev/null || true
+if ! grep -Eq '<boolean name="time_format_24h" value="false"' dist/runtime-test/preferences-time-format-12h.xml; then
+  echo "FAIL: switching back to the required 12-hour default did not persist."
+  cat dist/runtime-test/preferences-time-format-12h.xml
+  exit 1
+fi
+echo "PASS: Settings can save 24-hour display and restore the 12-hour default."
+
+# Scroll to the actual reader-settings card and replace the earlier snapshot with fresh on-screen bounds.
+settings_reader_ready=0
+for attempt in $(seq 1 10); do
+  rm -f dist/runtime-test/window-settings-reader-action.xml
+  adb shell rm -f /sdcard/mashxall-settings-reader-action.xml >/dev/null 2>&1 || true
+  adb shell uiautomator dump /sdcard/mashxall-settings-reader-action.xml > "dist/runtime-test/uiautomator-settings-reader-action-$attempt.txt" 2>&1 || true
+  adb pull /sdcard/mashxall-settings-reader-action.xml dist/runtime-test/window-settings-reader-action.xml >/dev/null 2>&1 || true
+  quran_action_visible="$(python3 - dist/runtime-test/window-settings-reader-action.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Quran reader settings|إعدادات قارئ القرآن|ڕێکخستنەکانی خوێندنەوەی قورئان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        if x2 > x1 and y2 > y1 and y1 >= 63 and y2 <= 1740:
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -n "$quran_action_visible" ]]; then
+    cp dist/runtime-test/window-settings-reader-action.xml dist/runtime-test/window-settings.xml
+    settings_reader_ready=1
+    break
+  fi
+  adb shell input swipe 540 1490 540 500 450 || true
+  sleep 1
+done
+if [[ "$settings_reader_ready" -ne 1 ]]; then
+  echo "FAIL: Quran reader settings cannot be reached from the Settings screen."
+  cat dist/runtime-test/window-settings-reader-action.xml
+  exit 1
+fi
+echo "PASS: time format preference persists while the reader-settings route remains reachable."
+
 quran_settings_coords="$(python3 - dist/runtime-test/window-settings.xml <<'PY'
 import re
 import sys

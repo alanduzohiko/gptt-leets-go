@@ -261,11 +261,8 @@ class MainActivity : ComponentActivity() {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    LaunchedEffect(Unit) {
-        // Mashxall uses a fixed 12-hour clock, including upgrades from older builds.
-        prefs.edit().putBoolean("time_format_24h", false).apply()
-    }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
+    var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
     SideEffect { MashxallAppearance.accent = MashxallAppearance.colorFor(accentPalette) }
     var screen by rememberSaveable {
@@ -415,7 +412,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 when (visibleScreen) {
                                 "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
-                                    language, foreground, cardColor, selectedCity,
+                                    language, foreground, cardColor, selectedCity, use24Hour,
                                     onOpen = { target -> navigateTo(target.key) },
                                     onResumeReading = {
                                         // First-time users should still see the surah list;
@@ -473,7 +470,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 )
                                                                 "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
-                                "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = { city ->
+                                "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, use24Hour = use24Hour, onCity = { city ->
                                     selectedCity = city.name
                                     prefs.edit()
                                         .putString("selected_city", city.name)
@@ -507,7 +504,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette,
+                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette, use24Hour,
                                     onAccent = {
                                         accentPalette = it
                                         MashxallAppearance.accent = MashxallAppearance.colorFor(it)
@@ -516,6 +513,9 @@ fun MashxallApp(startScreen: String? = null) {
                                     onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
+                                }, onTimeFormatChange = { enabled ->
+                                    use24Hour = enabled
+                                    prefs.edit().putBoolean("time_format_24h", enabled).apply()
                                 }, onDataInfo = { navigateTo("about_data") }, onBackup = { navigateTo("backup") }, onAudio = {
                                     audioStartsAtReciters = true
                                     audioStartsAtAdhan = false
@@ -531,7 +531,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     navigateTo("quran")
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(target.key) })
+                                else -> HomeScreen(language, foreground, cardColor, selectedCity, use24Hour, onOpen = { target -> navigateTo(target.key) })
                                 }
                             }
                         }
@@ -790,6 +790,7 @@ private fun HomeScreen(
     foreground: Color,
     cardColor: Color,
     selectedCity: String,
+    use24Hour: Boolean,
     onOpen: (AppScreen) -> Unit,
     onResumeReading: () -> Unit = { onOpen(AppScreen.QURAN) }
 ) {
@@ -798,7 +799,6 @@ private fun HomeScreen(
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
-    var use24Hour by remember { mutableStateOf(false) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
@@ -806,8 +806,6 @@ private fun HomeScreen(
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
-            use24Hour = false
-            prefs.edit().putBoolean("time_format_24h", false).apply()
             delay(60_000L)
         }
     }
@@ -1179,9 +1177,11 @@ private fun SettingsScreen(
     cardColor: Color,
     dark: Boolean,
     accentPalette: String,
+    use24Hour: Boolean,
     onAccent: (String) -> Unit,
     onDark: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
+    onTimeFormatChange: (Boolean) -> Unit,
     onDataInfo: () -> Unit,
     onBackup: () -> Unit,
     onAudio: () -> Unit,
@@ -1280,6 +1280,58 @@ private fun SettingsScreen(
                     )
                 }
                 FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) { AppLanguage.EN -> "TIME FORMAT"; AppLanguage.AR -> "تنسيق الوقت"; AppLanguage.CKB -> "فۆرماتی کات" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Prayer times default to 12-hour display. Choose 24-hour display only if you prefer it."
+                AppLanguage.AR -> "عرض المواقيت الافتراضي هو 12 ساعة؛ اختر 24 ساعة إذا كنت تفضّل ذلك."
+                AppLanguage.CKB -> "پیشاندانی کاتەکانی نوێژ بە بنەڕەت ١٢ کاتژمێرە؛ ئەگەر پێت باشە ٢٤ کاتژمێر هەڵبژێرە."
+            },
+            color = foreground.copy(alpha = 0.58f), fontSize = 11.sp, lineHeight = 17.sp
+        )
+        Spacer(Modifier.height(9.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                Text(
+                    when (language) { AppLanguage.EN -> "Time display"; AppLanguage.AR -> "طريقة عرض الوقت"; AppLanguage.CKB -> "شێوازی پیشاندانی کات" },
+                    color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    FilterChip(
+                        selected = !use24Hour,
+                        onClick = { onTimeFormatChange(false) },
+                        label = {
+                            Text(
+                                when (language) { AppLanguage.EN -> "12-hour"; AppLanguage.AR -> "12 ساعة"; AppLanguage.CKB -> "١٢ کاتژمێر" },
+                                fontSize = 11.sp
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = use24Hour,
+                        onClick = { onTimeFormatChange(true) },
+                        label = {
+                            Text(
+                                when (language) { AppLanguage.EN -> "24-hour"; AppLanguage.AR -> "24 ساعة"; AppLanguage.CKB -> "٢٤ کاتژمێر" },
+                                fontSize = 11.sp
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
         Spacer(Modifier.height(20.dp))
