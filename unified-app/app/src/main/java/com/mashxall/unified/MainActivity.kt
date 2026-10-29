@@ -12,6 +12,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.core.content.ContextCompat
@@ -248,6 +251,13 @@ internal fun shouldAutoRequestLocation(
     if (locationMode.equals("gps", ignoreCase = true)) return true
     return !hasManualCity
 }
+
+/** Retry GPS after the user returns from Android Location settings, but only with a permission grant. */
+internal fun shouldRetryLocationOnResume(
+    waitingForSettingsReturn: Boolean,
+    isResumed: Boolean,
+    hasLocationPermission: Boolean
+): Boolean = waitingForSettingsReturn && isResumed && hasLocationPermission
 
 private data class HomeModule(
     val screen: AppScreen, val titleKey: String, val subtitleKey: String,
@@ -1031,6 +1041,7 @@ private fun HomeScreen(
     var nearestKnownCity by remember { mutableStateOf<NearbySalawatiCity?>(null) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
     var locatingLocation by remember { mutableStateOf(false) }
+    var retryLocationWhenResumed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -1144,6 +1155,7 @@ private fun HomeScreen(
     val handleLocationError: (String) -> Unit = { error ->
         locatingLocation = false
         loadingTimes = false
+        if (error == "LOCATION_SETTINGS_OPENED") retryLocationWhenResumed = true
         locationMessage = when (error) {
             "LOCATION_LAST_KNOWN_ONLY" -> when (language) {
                 AppLanguage.EN -> "The recent saved location is shown, but Android could not refresh it. Turn on Location and retry."
@@ -1204,6 +1216,31 @@ private fun HomeScreen(
         if (fine || coarse) requestCurrentLocation(context, saveLocationFix, handleLocationError)
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
+
+    val homeLifecycleOwner = context as? LifecycleOwner
+    DisposableEffect(homeLifecycleOwner, retryLocationWhenResumed) {
+        if (homeLifecycleOwner == null || !retryLocationWhenResumed) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME && retryLocationWhenResumed) {
+                    val permissionGranted =
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    val retry = shouldRetryLocationOnResume(retryLocationWhenResumed, true, permissionGranted)
+                    retryLocationWhenResumed = false
+                    when {
+                        !permissionGranted -> handleLocationError("LOCATION_PERMISSION_DENIED")
+                        !hasEnabledLocationProvider(context) -> handleLocationError("LOCATION_SERVICES_OFF")
+                        retry -> requestHomeLocation()
+                    }
+                }
+            }
+            homeLifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { homeLifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+    }
+
     LaunchedEffect(Unit) {
         // An explicit city choice is authoritative until the user taps "Use my
         // location". Do not silently replace a manually selected Kurdistan city

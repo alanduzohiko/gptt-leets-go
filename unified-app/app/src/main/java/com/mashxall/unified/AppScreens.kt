@@ -12,6 +12,9 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import android.os.Handler
 import android.os.Build
 import android.os.CancellationSignal
@@ -5640,6 +5643,13 @@ internal fun isRecentLocationFix(
     return ageMillis >= 0L && ageMillis <= maxAgeMillis
 }
 
+internal fun hasEnabledLocationProvider(context: Context): Boolean {
+    val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+    return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).any { provider ->
+        runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false)
+    }
+}
+
 private fun mostRecentUsableCachedLocation(
     context: Context,
     manager: LocationManager,
@@ -5916,6 +5926,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var loading by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
+    var retryLocationWhenResumed by remember { mutableStateOf(false) }
     var locationMode by rememberSaveable {
         mutableStateOf(
             resolvePrayerLocationMode(
@@ -6007,6 +6018,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     val onLocationError: (String) -> Unit = { error ->
         locating = false
+        if (error == "LOCATION_SETTINGS_OPENED") retryLocationWhenResumed = true
         locationMessage = when (error) {
             "LOCATION_LAST_KNOWN_ONLY" -> when (language) {
                 AppLanguage.EN -> "Showing the recent saved location, but Android could not refresh it. Turn on Location and retry."
@@ -6096,6 +6108,30 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             locationMode = "gps"
             prefs.edit().putString("prayer_location_mode", "gps").apply()
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+
+    val prayerLifecycleOwner = context as? LifecycleOwner
+    DisposableEffect(prayerLifecycleOwner, retryLocationWhenResumed) {
+        if (prayerLifecycleOwner == null || !retryLocationWhenResumed) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME && retryLocationWhenResumed) {
+                    val permissionGranted =
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    val retry = shouldRetryLocationOnResume(retryLocationWhenResumed, true, permissionGranted)
+                    retryLocationWhenResumed = false
+                    when {
+                        !permissionGranted -> onLocationError("LOCATION_PERMISSION_DENIED")
+                        !hasEnabledLocationProvider(context) -> onLocationError("LOCATION_SERVICES_OFF")
+                        retry -> locateNow()
+                    }
+                }
+            }
+            prayerLifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { prayerLifecycleOwner.lifecycle.removeObserver(observer) }
         }
     }
 
@@ -6438,7 +6474,19 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         if (locationMessage.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
-            Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+            Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp, lineHeight = 16.sp)
+            if (!locating) {
+                TextButton(onClick = locateNow) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Try location again"
+                            AppLanguage.AR -> "إعادة محاولة تحديد الموقع"
+                            AppLanguage.CKB -> "دووبارە شوێن دیاری بکە"
+                        },
+                        color = Gold, fontSize = 11.sp
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(14.dp))
         if (!loading && times == null && locationMode == "gps" && nearestKnownCityLabel != null) {

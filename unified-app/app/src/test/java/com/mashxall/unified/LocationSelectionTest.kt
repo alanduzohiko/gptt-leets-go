@@ -57,4 +57,12 @@ class LocationSelectionTest {
         assertTrue(shouldAutoRequestLocation(null, null, "Sulaymaniyah", null, null, "gps"))
         assertTrue(shouldAutoRequestLocation(null, null, "Erbil", null, null, "gps"))
     }
+
+    @Test
+    fun automaticLocationRetryHappensOnlyAfterReturningFromSettingsWithPermission() {
+        assertTrue(shouldRetryLocationOnResume(true, true, true))
+        assertFalse(shouldRetryLocationOnResume(false, true, true))
+        assertFalse(shouldRetryLocationOnResume(true, false, true))
+        assertFalse(shouldRetryLocationOnResume(true, true, false))
+    }
 }
