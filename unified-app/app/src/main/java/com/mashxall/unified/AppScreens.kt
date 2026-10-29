@@ -211,6 +211,55 @@ private fun ReaderSettingsCategoryCard(
     }
 }
 
+
+internal data class QuranTextFontOption(
+    val id: String,
+    val assetPath: String,
+    val sizeBytes: Long,
+    val sha256: String,
+    val labelCkb: String,
+    val labelArabic: String,
+    val labelEnglish: String
+)
+
+/** Font paths, sizes and hashes are taken from the extracted original-source inventory. */
+internal val quranTextFontOptions = listOf(
+    QuranTextFontOption("hafs_regular", "content/noor_tafsir_1.2.2/base/assets/fonts/hafs_regular.ttf", 242368L, "a0636e68e375af9552470d67773936f54d536e6586ce2608311b2fe7f9cbec3a", "هەفسی قورئان", "حفص للقرآن", "Hafs Regular"),
+    QuranTextFontOption("hafs_otf", "content/noor_tafsir_1.2.2/base/res/font/hafs.otf", 232884L, "eaec00f41bdc2437c57c7ba1a69a518ee566ab47e1312ec75314c159db4df917", "هەفسی قورئان (OTF)", "حفص للقرآن (OTF)", "Hafs OTF"),
+    QuranTextFontOption("amiri_quran", "content/noor_tafsir_1.2.2/base/assets/fonts/amiri_quran.ttf", 156432L, "0b0d47c50b3b74b798a6a27bca5935fb83161f34fa290a96e60a8a7ab4af80bf", "ئەمری قورئان", "أميري للقرآن", "Amiri Quran"),
+    QuranTextFontOption("me_quran", "content/noor_tafsir_1.2.2/base/assets/fonts/me_quran.ttf", 86164L, "e5804830d22eda4ebb00548ef77265b4481bda939c80b280ba6024a967320c06", "ME Quran", "ME Quran", "ME Quran"),
+    QuranTextFontOption("al_qalam", "content/noor_tafsir_1.2.2/base/assets/fonts/al_qalam.ttf", 215412L, "2fd8fe6f23b914c9f05642f7dea8d0f37045d3a429a1d3144d579c02bed9bc4b", "القلم", "القلم", "Al Qalam"),
+    QuranTextFontOption("uthmanic_hafs", "content/salawati_3.1.3/base/res/font/uthmanic_hafs.otf", 246428L, "59e20b2403687a67854fd199861abed3528068c035d2689898465d5faf39bb31", "ڕەسمی عوسمانی بە حفص", "الرسم العثماني برواية حفص", "Uthmanic Hafs")
+)
+
+internal fun quranTextFontOption(id: String): QuranTextFontOption =
+    quranTextFontOptions.firstOrNull { it.id == id } ?: quranTextFontOptions.first()
+
+internal fun quranTextFontLabel(option: QuranTextFontOption, language: AppLanguage): String = when (language) {
+    AppLanguage.CKB -> option.labelCkb
+    AppLanguage.AR -> option.labelArabic
+    AppLanguage.EN -> option.labelEnglish
+}
+
+private fun quranFontSha256(bytes: ByteArray): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { b -> "%02x".format(b.toInt() and 0xff) }
+
+internal fun loadQuranTextTypeface(context: Context, fontId: String): Typeface? = runCatching {
+    val option = quranTextFontOption(fontId)
+    val extension = option.assetPath.substringAfterLast('.', "ttf")
+    val target = File(context.cacheDir, "mashxall-quran-font-${option.id}.$extension")
+    val cachedBytes = if (target.isFile && target.length() == option.sizeBytes) target.readBytes() else null
+    if (cachedBytes != null && quranFontSha256(cachedBytes) == option.sha256) {
+        return@runCatching Typeface.createFromFile(target)
+    }
+    val sourceBytes = context.assets.open(option.assetPath).use { it.readBytes() }
+    check(sourceBytes.size.toLong() == option.sizeBytes && quranFontSha256(sourceBytes) == option.sha256) {
+        "The chosen Quran font does not match the verified original-source inventory."
+    }
+    target.writeBytes(sourceBytes)
+    Typeface.createFromFile(target)
+}.getOrNull()
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
@@ -254,6 +303,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var mushafDarkMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_dark_mode", false)) }
     var mushafSepiaMode by rememberSaveable { mutableStateOf(prefs.getBoolean("mushaf_sepia_mode", false)) }
     var verseTextScale by rememberSaveable { mutableFloatStateOf(prefs.getFloat("quran_verse_text_scale", 1.0f)) }
+    var quranTextFontId by rememberSaveable {
+        mutableStateOf(quranTextFontOption(prefs.getString("quran_text_font", "hafs_regular") ?: "hafs_regular").id)
+    }
+    var quranTextTypeface by remember { mutableStateOf<Typeface?>(null) }
+    val quranTextFontFamily = remember(quranTextTypeface) {
+        quranTextTypeface?.let { FontFamily(it) } ?: FontFamily.Default
+    }
+    var quranFontLoadFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(quranTextFontId) {
+        val loadedTypeface = withContext(Dispatchers.IO) { loadQuranTextTypeface(context, quranTextFontId) }
+        quranTextTypeface = loadedTypeface
+        quranFontLoadFailed = loadedTypeface == null
+    }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
             AppLanguage.EN -> "sahih"
@@ -786,7 +848,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }
                         Text(
                             text = displayedAyah,
-                            color = foreground, fontSize = (23f * verseTextScale).sp, lineHeight = (39f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
+                            color = foreground,
+                            fontSize = (23f * verseTextScale).sp,
+                            lineHeight = (39f * verseTextScale).sp,
+                            textAlign = TextAlign.End,
+                            fontFamily = quranTextFontFamily,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         if (verse.hasHadith) {
                             Spacer(Modifier.height(5.dp))
@@ -1038,6 +1105,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         )
                         Text(
                             when (readerSettingsSection) {
+                                "font" -> if (language == AppLanguage.EN) "Real Arabic script fonts from the recovered source apps" else if (language == AppLanguage.AR) "خطوط عربية أصلية من التطبيقات المستخرجة" else "فۆنتە ڕەسەنەکانی عەرەبی لە ئەپە ڕیکۆڤەرکراوەکان"
                                 "translation" -> if (language == AppLanguage.EN) "Choose the default translation" else if (language == AppLanguage.AR) "اختر الترجمة الافتراضية" else "وەرگێڕانی بنەڕەت هەڵبژێرە"
                                 "tafsir" -> if (language == AppLanguage.EN) "Choose the default tafsir" else if (language == AppLanguage.AR) "اختر التفسير الافتراضي" else "تەفسیری بنەڕەت هەڵبژێرە"
                                 "reciters" -> if (language == AppLanguage.EN) "Choose the reciter and playback mode" else if (language == AppLanguage.AR) "اختر القارئ وطريقة التشغيل" else "قورئان‌خوێن و شێوازی لێدان هەڵبژێرە"
@@ -1068,6 +1136,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             Triple("appearance",
                                 (if (language == AppLanguage.EN) "Mushaf & reading appearance" else if (language == AppLanguage.AR) "المصحف ومظهر القراءة" else "مصحەف و ڕووکاری خوێندنەوە") to
                                 (if (language == AppLanguage.EN) "Night mode, warm paper, text size and gestures" else if (language == AppLanguage.AR) "الوضع الليلي والورق الدافئ وحجم النص والإيماءات" else "دۆخی شەوانە، کاغەزی گەرم، قەبارەی دەق و جووڵەکان"),
+                                Icons.Outlined.AutoStories),
+                            Triple("font",
+                                (if (language == AppLanguage.EN) "Quran text font" else if (language == AppLanguage.AR) "خط نص القرآن" else "فۆنتی دەقی قورئان") to
+                                (if (language == AppLanguage.EN) "Choose one of six bundled original fonts" else if (language == AppLanguage.AR) "اختر واحدًا من ستة خطوط أصلية مضمّنة" else "یەکێک لە شەش فۆنتی ڕەسەنی ناو حەزمەکە هەڵبژێرە"),
                                 Icons.Outlined.AutoStories),
                             Triple("translation",
                                 (if (language == AppLanguage.EN) "Translations" else if (language == AppLanguage.AR) "الترجمات" else "وەرگێڕانەکان") to
@@ -1102,6 +1174,72 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                                 color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
                                             )
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "font" -> {
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "These options change the font in verse-text reading. They do not replace the separately rendered 604-page graphic Mushaf."
+                                        AppLanguage.AR -> "تغيّر هذه الخيارات الخط في عرض نص الآيات. وهي لا تستبدل المصحف المصوّر المنفصل ذي 604 صفحات."
+                                        AppLanguage.CKB -> "ئەم هەڵبژاردانە فۆنتی خوێندنەوەی دەقی ئایەت دەگۆڕن؛ جێگرەوەی مصحەفی وێنەیی ٦٠٤ پەڕە نین."
+                                    },
+                                    color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
+                                )
+                                if (quranFontLoadFailed) {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        when (language) {
+                                            AppLanguage.EN -> "The selected source font failed integrity/loading checks; the system font is used."
+                                            AppLanguage.AR -> "فشل التحقق من الخط المحدد أو تحميله؛ يُستخدم خط النظام بدلًا منه."
+                                            AppLanguage.CKB -> "پشتڕاستکردنەوە یان بارکردنی فۆنتەکە سەرکەوتوو نەبوو؛ فۆنتی سیستەم بەکاردێت."
+                                        },
+                                        color = Gold, fontSize = 10.sp, lineHeight = 15.sp
+                                    )
+                                }
+                            }
+                            items(quranTextFontOptions, key = { it.id }) { option ->
+                                val selectedFont = quranTextFontId == option.id
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        quranTextFontId = option.id
+                                        prefs.edit().putString("quran_text_font", option.id).apply()
+                                    },
+                                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                                    shape = RoundedCornerShape(15.dp),
+                                    border = BorderStroke(1.dp, if (selectedFont) Gold else Gold.copy(alpha = 0.12f))
+                                ) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                quranTextFontLabel(option, language),
+                                                color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                option.assetPath.substringAfterLast('/'),
+                                                color = foreground.copy(alpha = 0.56f), fontSize = 9.sp
+                                            )
+                                            Text(
+                                                when (language) {
+                                                    AppLanguage.EN -> "Verified original • ${option.sizeBytes / 1024} KB"
+                                                    AppLanguage.AR -> "ملف أصلي موثّق • ${option.sizeBytes / 1024} كيلوبايت"
+                                                    AppLanguage.CKB -> "فایلی ڕەسەنی پشتڕاستکراو • ${option.sizeBytes / 1024} کیلۆبایت"
+                                                },
+                                                color = foreground.copy(alpha = 0.50f), fontSize = 9.sp
+                                            )
+                                        }
+                                        if (selectedFont) Icon(
+                                            Icons.Outlined.CheckCircle,
+                                            contentDescription = if (language == AppLanguage.EN) "Selected" else if (language == AppLanguage.AR) "محدد" else "هەڵبژێردراوە",
+                                            tint = Gold
+                                        )
                                     }
                                 }
                             }

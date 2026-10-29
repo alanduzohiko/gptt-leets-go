@@ -732,23 +732,14 @@ private fun MoreScreen(
 
 private fun prayerSourceLabel(source: String, language: AppLanguage): String {
     val normalized = source.substringBefore(" • ").lowercase(Locale.ROOT)
-    return when {
-        normalized.startsWith("noor") -> when (language) {
-            AppLanguage.EN -> "Noor timetable"
-            AppLanguage.AR -> "جدول نور"
-            AppLanguage.CKB -> "خشتەی نور"
-        }
-        normalized.startsWith("salawati") -> when (language) {
+    return if (normalized.startsWith("salawati")) {
+        when (language) {
             AppLanguage.EN -> "Salawati timetable"
             AppLanguage.AR -> "جدول صلواتي"
             AppLanguage.CKB -> "خشتەی صلواتی"
         }
-        normalized.contains("calculated") || normalized.contains("astronomical") -> when (language) {
-            AppLanguage.EN -> "Calculated from coordinates"
-            AppLanguage.AR -> "حساب فلكي من الإحداثيات"
-            AppLanguage.CKB -> "حسابکردن لە کۆئۆردیناتەکانەوە"
-        }
-        else -> ""
+    } else {
+        ""
     }
 }
 
