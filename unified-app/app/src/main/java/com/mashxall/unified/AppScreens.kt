@@ -751,12 +751,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 var loadingRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
                 var relatedHadiths by remember(verse.surah, verse.number) { mutableStateOf<List<AyahHadith>>(emptyList()) }
                 Card(
-                    modifier = if (query.isNotBlank()) Modifier.clickable {
+                    modifier = Modifier.clickable {
                         selected = verse.surah
                         onOpenVerse(verse.surah, verse.number)
                         prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
                         query = ""
-                    } else Modifier,
+                        selectedAyahForSheet = verse.surah to verse.number
+                    },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
                     border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))
@@ -1513,7 +1514,15 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }, color = foreground, fontSize = 13.sp
                     )
                     else -> {
-                        Text(sheetVerse!!.arabic, color = foreground, fontSize = (27f * verseTextScale).sp, lineHeight = (48f * verseTextScale).sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            text = sheetVerse!!.arabic,
+                            color = foreground,
+                            fontSize = (27f * verseTextScale).sp,
+                            lineHeight = (48f * verseTextScale).sp,
+                            textAlign = TextAlign.End,
+                            fontFamily = quranTextFontFamily,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         if (sheetVerse!!.translation.isNotBlank()) {
                             Spacer(Modifier.height(9.dp))
                             Text(sheetVerse!!.translation, color = foreground.copy(alpha = 0.8f), fontSize = (15f * verseTextScale).sp, lineHeight = (25f * verseTextScale).sp)

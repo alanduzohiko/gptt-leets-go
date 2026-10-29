@@ -108,6 +108,33 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
             **quran_font_contract,
         })
 
+    # Quran reading contract: tapping a verse in text mode must open the same
+    # verse-action panel used by the printed Mushaf; never make this search-only.
+    app_screens_text = source_text.get("AppScreens.kt", "")
+    quran_reader_contract = {
+        "text_verse_card_opens_action_panel": (
+            re.search(
+                r"modifier\s*=\s*Modifier\.clickable\s*\{\s*selected\s*=\s*verse\.surah",
+                app_screens_text,
+            ) is not None
+            and "selectedAyahForSheet = verse.surah to verse.number" in app_screens_text
+            and "modifier = if (query.isNotBlank()) Modifier.clickable" not in app_screens_text
+        ),
+        "chosen_quran_font_is_applied_in_verse_panel": (
+            "fontFamily = quranTextFontFamily" in app_screens_text
+            and "text = sheetVerse!!.arabic" in app_screens_text
+        ),
+    }
+    failed_quran_reader_contract = [
+        name for name, passed in quran_reader_contract.items() if not passed
+    ]
+    if has_app_screens and failed_quran_reader_contract:
+        missing.append({
+            "path": "QURAN_READER_INTERACTION_CONTRACT",
+            "sources": [str(source) for source in sources if source.name == "AppScreens.kt"],
+            "failed_checks": failed_quran_reader_contract,
+        })
+
     for path, owners in sorted(referenced.items()):
         if path not in available:
             missing.append({"path": path, "sources": sorted(owners)})
@@ -137,6 +164,7 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
         "missing_references": missing,
         "runtime_prayer_source_contract": runtime_prayer_contract,
         "quran_font_source_integrity_contract": quran_font_contract,
+        "quran_reader_interaction_contract": quran_reader_contract if has_app_screens else {"applicable": False},
         "checked_sources": [str(source) for source in sources],
     }
 
