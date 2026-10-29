@@ -23,6 +23,26 @@ class AudioPlaybackModeTest {
     }
 
     @Test
+    fun fullSurahModeOnlyShowsEditionsDeclaredToCoverAll114Surahs() {
+        val complete = com.mashxall.unified.data.Reciter(
+            10, "قارئ كامل", "Complete edition", 1, "https://example.invalid/complete/", 1,
+            surahTotal = 114, sourceId = "complete-114"
+        )
+        val partial = com.mashxall.unified.data.Reciter(
+            11, "قارئ جزئي", "Partial edition", 1, "https://example.invalid/partial/", 2,
+            surahTotal = 38, sourceId = "partial-38"
+        )
+        val bundledVerseSource = com.mashxall.unified.data.Reciter(
+            12, "قارئ آية", "Bundled verse source", 0, "https://example.invalid/ayah/", 3,
+            surahTotal = 114
+        )
+
+        assertEquals(true, ReaderPlaybackSettings.supportsAllSurahs(complete))
+        assertEquals(false, ReaderPlaybackSettings.supportsAllSurahs(partial))
+        assertEquals(true, ReaderPlaybackSettings.supportsAllSurahs(bundledVerseSource))
+    }
+
+    @Test
     fun fullSurahAlwaysStartsAtTheFirstAyah() {
         assertEquals(1, resolveReciterStartAyah("full", 17, 286))
         assertEquals(1, resolveReciterStartAyah("full", 1, 7))

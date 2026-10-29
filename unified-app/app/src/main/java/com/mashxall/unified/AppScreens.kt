@@ -154,6 +154,9 @@ internal object ReaderPlaybackSettings {
 
     /** Full-surah playback is the first-use default; keep verse mode when it was explicitly selected. */
     fun normalize(value: String?): String = if (value == "verse") "verse" else "full"
+
+    /** Full-surah mode must not list editions whose source metadata says their coverage is incomplete. */
+    fun supportsAllSurahs(reciter: Reciter): Boolean = reciter.surahTotal == 114
 }
 
 internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
@@ -4019,9 +4022,14 @@ fun AudioScreen(
             val visibleReciters = reciters.filter { reciter ->
                 val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
                     .contains(audioQuery, ignoreCase = true)
-                // A selected-verse start needs individual ayah files. Full-surah
-                // mode can use either a complete-surah file or a verse sequence.
-                matchesSearch && (playbackMode == "full" || reciter.audioType == 0)
+                // Full mode deliberately lists complete-coverage editions only; the source's
+                // "surah_total" is a coverage count, not proof that every partial edition
+                // has every number below that count.
+                matchesSearch && if (playbackMode == "full") {
+                    ReaderPlaybackSettings.supportsAllSurahs(reciter)
+                } else {
+                    reciter.audioType == 0
+                }
             }
             Text(
                 if (language == AppLanguage.EN) {
@@ -4053,11 +4061,15 @@ fun AudioScreen(
                     singleLine = true
                 )
             }
+            val allSurahEditionCount = reciters.count { ReaderPlaybackSettings.supportsAllSurahs(it) }
+            val partialOnlineEditionCount = reciters.count {
+                it.sourceId.isNotBlank() && !ReaderPlaybackSettings.supportsAllSurahs(it)
+            }
             Text(
                 when (language) {
-                    AppLanguage.EN -> "${reciters.size} recitation editions • ${reciters.count { it.sourceId.isNotBlank() }} streamed from MP3Quran.net"
-                    AppLanguage.AR -> "${reciters.size} إصدارًا للتلاوة • ${reciters.count { it.sourceId.isNotBlank() }} من MP3Quran.net"
-                    AppLanguage.CKB -> "${reciters.size} وەشانی خوێندنەوە • ${reciters.count { it.sourceId.isNotBlank() }} لە MP3Quran.net"
+                    AppLanguage.EN -> "${reciters.size} editions • ${allSurahEditionCount} listed with all 114 surahs • ${partialOnlineEditionCount} partial online editions are kept out of Full surah mode"
+                    AppLanguage.AR -> "${reciters.size} إصدارًا • ${allSurahEditionCount} بتغطية 114 سورة • تُستبعد ${partialOnlineEditionCount} إصدارات جزئية من وضع السورة كاملة"
+                    AppLanguage.CKB -> "${reciters.size} وەشان • ${allSurahEditionCount} بە تەواوی ١١٤ سوورەت • ${partialOnlineEditionCount} وەشانی بەشەکی لە شێوازی سوورەتی تەواودا پیشان نادرێن"
                 },
                 color = foreground.copy(alpha = 0.5f), fontSize = 9.sp, lineHeight = 13.sp
             )
