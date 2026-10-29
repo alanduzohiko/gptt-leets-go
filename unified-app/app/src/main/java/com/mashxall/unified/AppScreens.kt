@@ -149,6 +149,21 @@ private val MushafSepiaColorMatrix = ColorMatrix(
     )
 )
 
+/** Keep the list aligned with usable playback coverage instead of saving hidden partial editions as the default. */
+internal fun filterRecitersForPlaybackMode(
+    reciters: List<Reciter>,
+    mode: String,
+    query: String
+): List<Reciter> = reciters.filter { reciter ->
+    val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
+        .contains(query, ignoreCase = true)
+    matchesSearch && if (mode == "full") {
+        ReaderPlaybackSettings.supportsAllSurahs(reciter)
+    } else {
+        reciter.audioType == 0
+    }
+}
+
 internal object ReaderPlaybackSettings {
     var mode by mutableStateOf("full")
 
@@ -162,20 +177,23 @@ internal object ReaderPlaybackSettings {
 internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
     if (mode == "full") 1 else requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
 
-/** Pick a reciter compatible with the user's chosen mode, preferring complete-surah sources on first use. */
+/** Pick a reciter compatible with the user's chosen mode and actual source coverage. */
 internal fun defaultReciterId(mode: String, reciters: List<Reciter>): Int? =
     if (mode == "full") {
-        reciters.firstOrNull { it.audioType != 0 }?.id ?: reciters.firstOrNull()?.id
+        reciters.firstOrNull { it.audioType != 0 && ReaderPlaybackSettings.supportsAllSurahs(it) }?.id
+            ?: reciters.firstOrNull { ReaderPlaybackSettings.supportsAllSurahs(it) }?.id
     } else {
-        reciters.firstOrNull { it.audioType == 0 }?.id ?: reciters.firstOrNull()?.id
+        reciters.firstOrNull { it.audioType == 0 }?.id
     }
 
-/** Ensure selected-ayah mode never retains a reciter that only has full-surah tracks. */
+/** Never retain a hidden partial edition in Full Surah mode or an incompatible source in verse mode. */
 internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: List<Reciter>): Int? {
     val current = reciters.firstOrNull { it.id == currentId }
-    if (current != null && (mode != "verse" || current.audioType == 0)) return current.id
-    return reciters.firstOrNull { it.audioType == 0 }?.id
-        ?: if (mode == "full") reciters.firstOrNull()?.id else null
+    if (current != null) {
+        if (mode == "verse" && current.audioType == 0) return current.id
+        if (mode == "full" && ReaderPlaybackSettings.supportsAllSurahs(current)) return current.id
+    }
+    return defaultReciterId(mode, reciters)
 }
 
 @Composable
@@ -4091,18 +4109,7 @@ fun AudioScreen(
                 }
             }
         } else {
-            val visibleReciters = reciters.filter { reciter ->
-                val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
-                    .contains(audioQuery, ignoreCase = true)
-                // Full mode deliberately lists complete-coverage editions only; the source's
-                // "surah_total" is a coverage count, not proof that every partial edition
-                // has every number below that count.
-                matchesSearch && if (playbackMode == "full") {
-                    ReaderPlaybackSettings.supportsAllSurahs(reciter)
-                } else {
-                    reciter.audioType == 0
-                }
-            }
+            val visibleReciters = filterRecitersForPlaybackMode(reciters, playbackMode, audioQuery)
             Text(
                 if (language == AppLanguage.EN) {
                     if (preferredReciter != null) "Your saved reciter will be used when you open audio playback from a Quran verse."
@@ -4199,8 +4206,21 @@ fun AudioScreen(
             )
             Spacer(Modifier.height(7.dp))
             if (reciters.isEmpty()) LoadingOrEmpty(loading, language, foreground)
-            else if (visibleReciters.isEmpty()) LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
-            else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            else if (visibleReciters.isEmpty()) {
+                val emptyMessage = when {
+                    audioQuery.isNotBlank() -> tr(language, "not_found")
+                    playbackMode == "full" && language == AppLanguage.EN ->
+                        "No complete 114-surah edition matches the current catalogue. Clear search or switch to From selected ayah."
+                    playbackMode == "full" && language == AppLanguage.AR ->
+                        "لا يوجد إصدار كامل لـ114 سورة ضمن النتائج الحالية. امسح البحث أو بدّل إلى التشغيل من الآية المحددة."
+                    playbackMode == "full" ->
+                        "لە کاتەلۆگی ئێستادا وەشانی تەواوی ١١٤ سوورەت نەدۆزرایەوە؛ گەڕان پاک بکەرەوە یان بگۆڕە بۆ لێدان لە ئایەتی هەڵبژێردراوەوە."
+                    language == AppLanguage.EN -> "No verse-by-verse reciter is available in this catalogue."
+                    language == AppLanguage.AR -> "لا يوجد قارئ بملفات آيات منفصلة في هذا الكتالوج."
+                    else -> "لەو کاتەلۆگەدا قورئان‌خوێنی فایلە جیاوازەکانی ئایەت بەردەست نییە."
+                }
+                LoadingOrEmpty(false, language, foreground, emptyMessage)
+            } else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visibleReciters, key = { it.id }) { reciter ->
                     val surahNumber = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
                     val surahAyahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
