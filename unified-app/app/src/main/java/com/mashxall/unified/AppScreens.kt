@@ -4,6 +4,7 @@ import android.content.Context
 import android.annotation.SuppressLint
 import android.text.Html
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -261,6 +262,139 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
         leadingIcon = { Icon(Icons.Outlined.Search, null, tint = Gold) },
         shape = RoundedCornerShape(17.dp)
     )
+}
+
+@Composable
+private fun ReaderActionIcon(icon: ImageVector, description: String?, onClick: () -> Unit) {
+    Box(
+        Modifier.size(32.dp).clip(CircleShape)
+            .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.20f), Gold.copy(alpha = 0.055f))))
+            .border(1.dp, Gold.copy(alpha = 0.23f), CircleShape)
+            .premiumClickable(hapticFeedback = false, onClick = onClick)
+            .padding(6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = description, tint = Gold, modifier = Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+private fun ReaderModeSegment(
+    modifier: Modifier = Modifier,
+    label: String,
+    selected: Boolean,
+    icon: ImageVector,
+    foreground: Color,
+    onClick: () -> Unit
+) {
+    val fill by animateColorAsState(
+        targetValue = if (selected) Gold.copy(alpha = 0.16f) else foreground.copy(alpha = 0.035f),
+        animationSpec = tween(220),
+        label = "Quran reader mode fill"
+    )
+    val stroke by animateColorAsState(
+        targetValue = if (selected) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.09f),
+        animationSpec = tween(220),
+        label = "Quran reader mode outline"
+    )
+    Row(
+        modifier.clip(RoundedCornerShape(15.dp)).background(fill)
+            .border(1.dp, stroke, RoundedCornerShape(15.dp))
+            .premiumClickable(hapticFeedback = false, onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = if (selected) Gold else foreground.copy(alpha = 0.65f), modifier = Modifier.size(17.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = if (selected) foreground else foreground.copy(alpha = 0.70f), fontSize = 10.sp, maxLines = 1, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+        if (selected) {
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
+        }
+    }
+}
+
+@Composable
+private fun QuranSurahWelcomeCard(
+    language: AppLanguage,
+    surahCount: Int,
+    onSettings: () -> Unit
+) {
+    val title = when (language) {
+        AppLanguage.EN -> "The Noble Quran"
+        AppLanguage.AR -> "القرآن الكريم"
+        AppLanguage.CKB -> "قورئانی پیرۆز"
+    }
+    val subtitle = when (language) {
+        AppLanguage.EN -> "Choose a surah, resume reading, or open the page Mushaf."
+        AppLanguage.AR -> "اختر سورة، أو تابع قراءتك، أو افتح المصحف المصوّر."
+        AppLanguage.CKB -> "سوورەتێک هەڵبژێرە، خوێندنەوە بەردەوام بکە یان مصحەفی پەڕەیی بکەرەوە."
+    }
+    val countLabel = surahCount.toString() + when (language) {
+        AppLanguage.EN -> " surahs available"
+        AppLanguage.AR -> " سورة متاحة"
+        AppLanguage.CKB -> " سوورەت بەردەستە"
+    }
+    val mantra = when (language) {
+        AppLanguage.EN -> "READ • RECITE • REFLECT"
+        AppLanguage.AR -> "اقرأ • رتّل • تدبّر"
+        AppLanguage.CKB -> "بخوێنەوە • تلاوەت بکە • بیر بکەوە"
+    }
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp))
+            .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF1A5A45), CardDark)))
+            .border(1.dp, Gold.copy(alpha = 0.36f), RoundedCornerShape(25.dp))
+    ) {
+        Box(
+            Modifier.align(Alignment.TopEnd).offset(x = 36.dp, y = (-48).dp).size(132.dp)
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color(0xFF4EAB84).copy(alpha = 0.07f), Color.Transparent)))
+        )
+        Row(
+            Modifier.fillMaxWidth().padding(15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(mantra, color = PaleGold, fontSize = 8.sp, letterSpacing = 0.65.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.height(9.dp))
+                Text(title, color = Color(0xFFFFF8E7), fontSize = 23.sp, lineHeight = 29.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp, lineHeight = 16.sp)
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.07f))
+                        .border(1.dp, Color.White.copy(alpha = 0.13f), CircleShape)
+                        .padding(horizontal = 9.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(countLabel, color = Color.White.copy(alpha = 0.91f), fontSize = 9.sp, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.size(66.dp).clip(CircleShape)
+                        .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color.White.copy(alpha = 0.025f))))
+                        .border(1.dp, Gold.copy(alpha = 0.37f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(51.dp).border(1.dp, Gold.copy(alpha = 0.22f), CircleShape))
+                    Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = Gold, modifier = Modifier.size(34.dp))
+                }
+                Box(
+                    Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.075f))
+                        .border(1.dp, Color.White.copy(alpha = 0.17f), CircleShape)
+                        .premiumClickable { onSettings() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Settings, contentDescription = if (language == AppLanguage.EN) "Reader settings" else if (language == AppLanguage.AR) "إعدادات القارئ" else "ڕێکخستنەکانی خوێندنەوە", tint = PaleGold, modifier = Modifier.size(17.dp))
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -617,7 +751,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     Column(Modifier.fillMaxSize()) {
         if (!mushafMode && !showSurahList && !openingMushaf) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = RoundedCornerShape(23.dp),
+                border = BorderStroke(1.dp, Gold.copy(alpha = 0.22f))
+            ) {
+            Row(
+                Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(cardColor, Gold.copy(alpha = 0.045f)))).padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(Modifier.weight(1f)) {
                     Text(tr(language, "quran"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text(
@@ -663,7 +806,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }
                     }
                 }
-                OutlinedButton(onClick = { chooseSurah = true }) { Text(tr(language, "choose_surah"), fontSize = 11.sp) }
+                Row(
+                    Modifier.clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.12f))
+                        .border(1.dp, Gold.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
+                        .premiumClickable(hapticFeedback = false) { chooseSurah = true }
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Gold, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(tr(language, "choose_surah"), color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
             }
             Spacer(Modifier.height(8.dp))
             SearchBox(query, { query = it }, tr(language, "search"))
@@ -673,35 +827,55 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 AppLanguage.AR -> currentTranslation.arabic
                 AppLanguage.EN -> currentTranslation.english
             }
-            OutlinedButton(onClick = { chooseTranslation = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Language, null, tint = Gold, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(tr(language, "translation") + ": " + currentTranslationLabel, fontSize = 11.sp, maxLines = 1)
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
+                    .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.12f), cardColor)))
+                    .border(1.dp, Gold.copy(alpha = 0.22f), RoundedCornerShape(17.dp))
+                    .premiumClickable(hapticFeedback = false) { chooseTranslation = true }
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(31.dp).clip(RoundedCornerShape(11.dp)).background(Gold.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Language, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr(language, "translation"), color = Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
+                    Text(currentTranslationLabel, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold, modifier = Modifier.size(19.dp))
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                FilterChip(
-                    selected = !mushafMode, onClick = {
-                        mushafMode = false
-                        prefs.edit().putString("quran_reader_mode", "verse").apply()
-                    },
-                    label = { Text(tr(language, "verse_view"), fontSize = 11.sp, maxLines = 1) },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterChip(
-                    selected = mushafMode, onClick = {
-                        query = ""
-                        mushafMode = true
-                        prefs.edit()
-                            .putString("quran_reader_mode", "mushaf")
-                            .putInt("last_mushaf_page", mushafPage)
-                            .putInt("last_surah", selected)
-                            .putInt("last_ayah_number", initialAyah)
-                            .apply()
-                    },
-                    label = { Text(tr(language, "mushaf_view"), fontSize = 11.sp, maxLines = 1) },
-                    modifier = Modifier.weight(1f)
-                )
+                ReaderModeSegment(
+                    modifier = Modifier.weight(1f),
+                    label = tr(language, "verse_view"),
+                    selected = !mushafMode,
+                    icon = Icons.Outlined.MenuBook,
+                    foreground = foreground
+                ) {
+                    mushafMode = false
+                    prefs.edit().putString("quran_reader_mode", "verse").apply()
+                }
+                ReaderModeSegment(
+                    modifier = Modifier.weight(1f),
+                    label = tr(language, "mushaf_view"),
+                    selected = mushafMode,
+                    icon = Icons.Outlined.AutoStories,
+                    foreground = foreground
+                ) {
+                    query = ""
+                    mushafMode = true
+                    prefs.edit()
+                        .putString("quran_reader_mode", "mushaf")
+                        .putInt("last_mushaf_page", mushafPage)
+                        .putInt("last_surah", selected)
+                        .putInt("last_ayah_number", initialAyah)
+                        .apply()
+                }
             }
             if (!mushafMode) {
                 Spacer(Modifier.height(5.dp))
@@ -716,18 +890,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
                 )
                 Spacer(Modifier.height(5.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    FilterChip(
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    ReaderModeSegment(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) "With diacritics" else if (language == AppLanguage.AR) "بالتشكيل" else "بە حەرەکات",
                         selected = !showUnvowelled,
-                        onClick = { showUnvowelled = false },
-                        label = { Text(if (language == AppLanguage.EN) "With diacritics" else if (language == AppLanguage.AR) "بالتشكيل" else "بە حەرەکات", fontSize = 10.sp) }
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    FilterChip(
+                        icon = Icons.Outlined.CheckCircle,
+                        foreground = foreground
+                    ) { showUnvowelled = false }
+                    ReaderModeSegment(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) "Without diacritics" else if (language == AppLanguage.AR) "بلا تشكيل" else "بێ حەرەکات",
                         selected = showUnvowelled,
-                        onClick = { showUnvowelled = true },
-                        label = { Text(if (language == AppLanguage.EN) "Without diacritics" else if (language == AppLanguage.AR) "بلا تشكيل" else "بێ حەرەکات", fontSize = 10.sp) }
-                    )
+                        icon = Icons.Outlined.Info,
+                        foreground = foreground
+                    ) { showUnvowelled = true }
                 }
                 if (coloredTajweed) {
                     Spacer(Modifier.height(5.dp))
@@ -787,22 +964,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         } else if (showSurahList) {
             Column(Modifier.fillMaxSize()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(tr(language, "quran"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Choose a surah to read; switch to the printed page Mushaf whenever you like"
-                                    AppLanguage.AR -> "اختر سورة للقراءة، ويمكنك الانتقال إلى المصحف المصوّر متى شئت"
-                                    AppLanguage.CKB -> "سوورەتێک هەڵبژێرە بۆ خوێندنەوە؛ هەر کاتێک دەتەوێت بگۆڕە بۆ مصحەفی پەڕەیی"
-                                }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp
-                            )
-                        }
-                        TextButton(onClick = { readerSettingsSection = "overview"; showReaderSettings = true }) {
-                            Text("⚙", color = Gold, fontSize = 24.sp)
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
+                    QuranSurahWelcomeCard(
+                        language = language,
+                        surahCount = surahs.size,
+                        onSettings = { readerSettingsSection = "overview"; showReaderSettings = true }
+                    )
+                    Spacer(Modifier.height(12.dp))
                     SearchBox(query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
                 }
                 val filteredSurahs = surahs.filter { item ->
@@ -849,7 +1016,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         ) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(
-                                    Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.13f)),
+                                    Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.24f), Gold.copy(alpha = 0.06f)))).border(1.dp, Gold.copy(alpha = 0.30f), RoundedCornerShape(13.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(item.number.toString(), color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -938,7 +1105,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(32.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(listOf(DeepGreen, Emerald))).border(1.dp, Gold.copy(alpha = 0.34f), CircleShape), contentAlignment = Alignment.Center) {
                                 Text(verse.number.toString(), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Spacer(Modifier.width(8.dp))
@@ -950,18 +1117,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 color = foreground.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1
                             )
                             Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { onTafsir(verse.surah, verse.number) }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Outlined.AutoStories, tr(language, "tafsir"), tint = Gold, modifier = Modifier.size(19.dp))
+                            ReaderActionIcon(Icons.Outlined.AutoStories, tr(language, "tafsir")) {
+                                onTafsir(verse.surah, verse.number)
                             }
-                            IconButton(onClick = { onPlayAudio(verse.surah, verse.number) }, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.Outlined.PlayCircle,
-                                    if (language == AppLanguage.EN) "Play this verse" else if (language == AppLanguage.AR) "استمع إلى هذه الآية" else "گوێگرتن لەم ئایەتە",
-                                    tint = Gold,
-                                    modifier = Modifier.size(19.dp)
-                                )
+                            ReaderActionIcon(
+                                Icons.Outlined.PlayCircle,
+                                if (language == AppLanguage.EN) "Play this verse" else if (language == AppLanguage.AR) "استمع إلى هذه الآية" else "گوێگرتن لەم ئایەتە"
+                            ) {
+                                onPlayAudio(verse.surah, verse.number)
                             }
-                            IconButton(onClick = {
+                            ReaderActionIcon(Icons.Outlined.BookmarkBorder, if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ الآية" else "ئایەت پاشەکەوت بکە") {
                                 onBookmark(verse.surah, verse.number)
                                 val message = when (language) {
                                     AppLanguage.CKB -> "ئایەتەکە پاشەکەوت کرا"
@@ -969,10 +1134,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     AppLanguage.EN -> "Verse saved to bookmarks"
                                 }
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Outlined.BookmarkBorder, null, tint = foreground.copy(alpha = 0.6f), modifier = Modifier.size(19.dp))
                             }
-                            IconButton(onClick = {
+                            ReaderActionIcon(
+                                Icons.Outlined.Share,
+                                if (language == AppLanguage.EN) "Share verse" else if (language == AppLanguage.AR) "مشاركة الآية" else "ئایەت هاوبەش بکە"
+                            ) {
                                 val surahTitle = surahs.firstOrNull { it.number == verse.surah }?.arabicName.orEmpty()
                                 val translationName = when (language) {
                                     AppLanguage.CKB -> currentTranslation.ckb
@@ -1003,8 +1169,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 } catch (_: Exception) {
                                     Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
                                 }
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Outlined.Share, null, tint = Gold, modifier = Modifier.size(18.dp))
                             }
                         }
                         Spacer(Modifier.height(6.dp))
