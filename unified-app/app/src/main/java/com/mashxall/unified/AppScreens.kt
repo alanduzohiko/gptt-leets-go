@@ -5167,7 +5167,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val visibleCities = remember(cities, citySearch) {
         if (citySearch.isBlank()) cities
         else cities.filter { city ->
-            ContentRepository.citySearchMatchesQuery(citySearch.trim(), city.name, city.country)
+            citySearchMatchesQuery(citySearch.trim(), city.name, city.country)
         }
     }
 
@@ -5720,7 +5720,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 chooseCity = false
                             }.padding(vertical = 9.dp, horizontal = 4.dp)
                         ) {
-                            val localizedCityName = ContentRepository.localizedKurdistanCityName(city.name, language.key)
+                            val localizedCityName = localizedKurdistanCityName(city.name, language.key)
                             Text(localizedCityName, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             val cityDetails = listOf(city.name.takeIf { it != localizedCityName }, city.country)
                                 .filter { !it.isNullOrBlank() }.joinToString(" • ")
@@ -6049,7 +6049,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                 }
                 Spacer(Modifier.height(18.dp))
                 Text(
-                    city?.name?.let { if (it == "GPS") when (language) { AppLanguage.EN -> "Current location"; AppLanguage.AR -> "الموقع الحالي"; AppLanguage.CKB -> "شوێنی ئێستا" } else ContentRepository.localizedKurdistanCityName(it, language.key) } ?: when (language) {
+                    city?.name?.let { if (it == "GPS") when (language) { AppLanguage.EN -> "Current location"; AppLanguage.AR -> "الموقع الحالي"; AppLanguage.CKB -> "شوێنی ئێستا" } else localizedKurdistanCityName(it, language.key) } ?: when (language) {
                         AppLanguage.EN -> "Location unavailable"
                         AppLanguage.AR -> "الموقع غير متاح"
                         AppLanguage.CKB -> "شوێن بەردەست نییە"
