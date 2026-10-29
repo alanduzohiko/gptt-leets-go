@@ -3345,6 +3345,9 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+internal fun tasbihProgressFraction(count: Int, target: Int): Float =
+    if (target <= 0) 0f else (count.toFloat() / target.toFloat()).coerceIn(0f, 1f)
+
 @Composable
 fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
@@ -3363,6 +3366,12 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         tapPulse.animateTo(1f, animationSpec = tween(130))
     }
     val selected = presets.firstOrNull { it.id == selectedId }
+    val targetCount = selected?.targetCount?.takeIf { it > 0 } ?: 0
+    val targetProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = tasbihProgressFraction(count, targetCount),
+        animationSpec = tween(220),
+        label = "tasbihTargetProgress"
+    )
 
     LaunchedEffect(Unit) {
         presets = ContentRepository.loadTasbihPresets(context)
@@ -3439,9 +3448,42 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             },
             contentAlignment = Alignment.Center
         ) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(10.dp)) {
+                val strokeWidth = 6.dp.toPx()
+                drawArc(
+                    color = Color.White.copy(alpha = 0.12f),
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = strokeWidth,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                )
+                if (targetCount > 0) {
+                    drawArc(
+                        color = Gold,
+                        startAngle = -90f,
+                        sweepAngle = 360f * targetProgress,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = strokeWidth,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    )
+                }
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(count.toString(), color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.ExtraBold)
                 Text(if (language == AppLanguage.EN) "TAP TO COUNT" else if (language == AppLanguage.AR) "اضغط للعدّ" else "بۆ ژماردن لێی بدە", color = Gold, fontSize = 10.sp, letterSpacing = 1.4.sp)
+                if (targetCount > 0) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        "${(targetProgress * 100f).toInt()}%",
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 10.sp
+                    )
+                }
             }
         }
         Spacer(Modifier.height(9.dp))
