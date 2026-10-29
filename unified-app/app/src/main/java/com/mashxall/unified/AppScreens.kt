@@ -3728,6 +3728,13 @@ private fun downloadReciterFile(url: String, destination: File) {
     }
 }
 
+internal fun matchesAdhanLibraryFilter(filter: String, category: String, downloaded: Boolean): Boolean = when (filter) {
+    "muezzin" -> category == "muezzin"
+    "mosque" -> category == "mosque"
+    "downloaded" -> downloaded
+    else -> true
+}
+
 @Composable
 fun AudioScreen(
     language: AppLanguage,
@@ -3758,6 +3765,7 @@ fun AudioScreen(
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusAdhan) 2 else if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
+    var adhanCategory by rememberSaveable { mutableStateOf("all") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
     val playbackMode = ReaderPlaybackSettings.mode
@@ -3836,11 +3844,75 @@ fun AudioScreen(
         }
         if (selectedTab == 2) {
             val searchTerm = audioQuery.trim()
-            val visibleAdhan = onlineAdhan.filter { item ->
-                searchTerm.isBlank() ||
-                    (item.titleArabic + " " + item.titleEnglish + " " + item.sourceFilename)
-                        .contains(searchTerm, ignoreCase = true)
+            val categoryCounts = remember(onlineAdhan, offlineAdhanRevision) {
+                mapOf(
+                    "all" to onlineAdhan.size,
+                    "muezzin" to onlineAdhan.count { it.category == "muezzin" },
+                    "mosque" to onlineAdhan.count { it.category == "mosque" },
+                    "downloaded" to onlineAdhan.count { item ->
+                        val file = onlineAdhanOfflineFile(context, item)
+                        file.isFile && file.length() > 512L
+                    }
+                )
             }
+            val visibleAdhan = remember(onlineAdhan, searchTerm, adhanCategory, offlineAdhanRevision) {
+                onlineAdhan.filter { item ->
+                    val matchesSearch = searchTerm.isBlank() ||
+                        (item.titleArabic + " " + item.titleEnglish + " " + item.sourceFilename)
+                            .contains(searchTerm, ignoreCase = true)
+                    val file = onlineAdhanOfflineFile(context, item)
+                    matchesSearch && matchesAdhanLibraryFilter(
+                        adhanCategory,
+                        item.category,
+                        file.isFile && file.length() > 512L
+                    )
+                }
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), contentPadding = PaddingValues(vertical = 3.dp)) {
+                items(listOf("all", "muezzin", "mosque", "downloaded"), key = { it }) { category ->
+                    val count = categoryCounts[category] ?: 0
+                    FilterChip(
+                        selected = adhanCategory == category,
+                        onClick = { adhanCategory = category },
+                        label = {
+                            Text(
+                                when (category) {
+                                    "muezzin" -> when (language) {
+                                        AppLanguage.EN -> "Muezzins ($count)"
+                                        AppLanguage.AR -> "المؤذنون ($count)"
+                                        AppLanguage.CKB -> "موئەزینەکان ($count)"
+                                    }
+                                    "mosque" -> when (language) {
+                                        AppLanguage.EN -> "Mosques ($count)"
+                                        AppLanguage.AR -> "المساجد ($count)"
+                                        AppLanguage.CKB -> "مزگەوتەکان ($count)"
+                                    }
+                                    "downloaded" -> when (language) {
+                                        AppLanguage.EN -> "Downloaded ($count)"
+                                        AppLanguage.AR -> "المنزّل ($count)"
+                                        AppLanguage.CKB -> "داگیراوەکان ($count)"
+                                    }
+                                    else -> when (language) {
+                                        AppLanguage.EN -> "All ($count)"
+                                        AppLanguage.AR -> "الكل ($count)"
+                                        AppLanguage.CKB -> "هەموو ($count)"
+                                    }
+                                },
+                                fontSize = 10.sp,
+                                maxLines = 1
+                            )
+                        }
+                    )
+                }
+            }
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "${visibleAdhan.size} recordings shown • ${categoryCounts["muezzin"]} muezzin tracks • ${categoryCounts["mosque"]} mosque/location recordings"
+                    AppLanguage.AR -> "المعروض ${visibleAdhan.size} تسجيلات • ${categoryCounts["muezzin"]} للمؤذنين • ${categoryCounts["mosque"]} للمساجد والمواقع"
+                    AppLanguage.CKB -> "${visibleAdhan.size} تۆمار پیشان دەدرێت • ${categoryCounts["muezzin"]} دەنگی موئەزین • ${categoryCounts["mosque"]} دەنگی مزگەوت و شوێن"
+                },
+                color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 14.sp
+            )
             Text(
                 when (language) {
                     AppLanguage.EN -> "${onlineAdhan.size} source-linked adhan and mosque recordings • download selected tracks for offline use"
