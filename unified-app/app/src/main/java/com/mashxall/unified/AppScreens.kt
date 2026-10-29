@@ -3718,9 +3718,13 @@ fun AudioScreen(
                                     } else {
                                         val source = if (localSaved) "local:${file.absolutePath}" else item.url
                                         playing = "loading:$playKey"
-                                        AudioController.playSequence(context, listOf(source)) { state ->
-                                            playing = if (state) playKey else ""
-                                        }
+                                        AudioController.playSequence(
+                                        context,
+                                        listOf(source),
+                                        failure = if (localSaved) AudioPlaybackFailure.LOCAL_ASSET else AudioPlaybackFailure.STREAM
+                                    ) { state ->
+                                        playing = if (state) playKey else ""
+                                    }
                                     }
                                 }
                             ) {
@@ -4109,17 +4113,17 @@ internal fun audioPlaybackFailureMessage(language: AppLanguage, failure: AudioPl
     AppLanguage.EN -> when (failure) {
         AudioPlaybackFailure.RECITATION_SEGMENT -> "A recitation segment could not be played. Check the connection or download the surah."
         AudioPlaybackFailure.LOCAL_ASSET -> "The audio file could not be opened. Try another recording."
-        AudioPlaybackFailure.STREAM -> "Streaming is unavailable. Try another reciter or check the connection."
+        AudioPlaybackFailure.STREAM -> "The audio stream is unavailable. Check the connection and retry."
     }
     AppLanguage.AR -> when (failure) {
         AudioPlaybackFailure.RECITATION_SEGMENT -> "تعذّر تشغيل مقطع من التلاوة؛ تحقّق من الاتصال أو نزّل السورة."
         AudioPlaybackFailure.LOCAL_ASSET -> "تعذّر فتح الملف الصوتي؛ جرّب تسجيلاً آخر."
-        AudioPlaybackFailure.STREAM -> "البث غير متاح؛ جرّب قارئًا آخر أو تحقّق من الاتصال."
+        AudioPlaybackFailure.STREAM -> "تعذّر بث الملف الصوتي؛ تحقق من الاتصال ثم أعد المحاولة."
     }
     AppLanguage.CKB -> when (failure) {
         AudioPlaybackFailure.RECITATION_SEGMENT -> "نەتوانرا بەشێک لە خوێندنەوەکە پەخش بکرێت؛ پەیوەندی بپشکنە یان سوورەتەکە دابگرە."
         AudioPlaybackFailure.LOCAL_ASSET -> "نەتوانرا فایلە دەنگییەکە بکرێتەوە؛ تۆمارێکی تر تاقی بکەرەوە."
-        AudioPlaybackFailure.STREAM -> "پەخش بەردەست نییە؛ قورئان‌خوێنێکی تر یان پەیوەندییەکە تاقی بکەرەوە."
+        AudioPlaybackFailure.STREAM -> "پەخشکردنی فایلە دەنگییەکە بەردەست نییە؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەرەوە."
     }
 }
 
@@ -4134,7 +4138,12 @@ private object AudioController {
         player = null
     }
 
-    fun playSequence(context: Context, sources: List<String>, callback: (Boolean) -> Unit) {
+    fun playSequence(
+        context: Context,
+        sources: List<String>,
+        failure: AudioPlaybackFailure = AudioPlaybackFailure.RECITATION_SEGMENT,
+        callback: (Boolean) -> Unit
+    ) {
         stop()
         if (sources.isEmpty()) {
             callback(false)
@@ -4177,7 +4186,7 @@ private object AudioController {
                         callback(false)
                         Toast.makeText(
                             context,
-                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.RECITATION_SEGMENT),
+                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
                             Toast.LENGTH_LONG
                         ).show()
                         stop()
@@ -4188,6 +4197,11 @@ private object AudioController {
             } catch (_: Exception) {
                 if (generation == playbackGeneration) {
                     callback(false)
+                    Toast.makeText(
+                        context,
+                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
+                        Toast.LENGTH_LONG
+                    ).show()
                     stop()
                 }
             }

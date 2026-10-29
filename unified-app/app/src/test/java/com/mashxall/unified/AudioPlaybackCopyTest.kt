@@ -19,7 +19,9 @@ class AudioPlaybackCopyTest {
     fun catalogNoticeAndPlaybackErrorsRespectSelectedLanguage() {
         assertTrue(audioCatalogSourceNotice(AppLanguage.AR).contains("حتى تختار تنزيلها"))
         assertTrue(audioCatalogSourceNotice(AppLanguage.CKB).contains("کاتەلۆگی سەرچاوە"))
-        assertTrue(audioPlaybackFailureMessage(AppLanguage.CKB, AudioPlaybackFailure.STREAM).contains("قورئان‌خوێنێکی تر"))
+        assertTrue(audioPlaybackFailureMessage(AppLanguage.CKB, AudioPlaybackFailure.STREAM).contains("پەخشکردنی فایلە دەنگییەکە"))
+        assertTrue(audioPlaybackFailureMessage(AppLanguage.AR, AudioPlaybackFailure.STREAM).contains("تعذّر بث الملف الصوتي"))
+        assertTrue(audioPlaybackFailureMessage(AppLanguage.EN, AudioPlaybackFailure.STREAM).contains("audio stream"))
         assertTrue(audioPlaybackFailureMessage(AppLanguage.AR, AudioPlaybackFailure.LOCAL_ASSET).contains("تعذّر فتح الملف"))
         assertTrue(audioPlaybackFailureMessage(AppLanguage.EN, AudioPlaybackFailure.RECITATION_SEGMENT).contains("download the surah"))
     }

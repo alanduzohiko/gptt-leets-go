@@ -9,6 +9,10 @@ from pathlib import Path
 
 CONTENT_LITERAL = re.compile(r'"(content/[^"\\]+)"')
 TAFSIR_DB = re.compile(r'^(content/khairah_1\.2/.*/tafsir/[^/]+)\.sqlite$')
+QURAN_FONT_OPTION = re.compile(
+    r'QuranTextFontOption\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+)L\s*,\s*"([0-9a-f]{64})"\s*,'
+)
+
 
 
 def audit(catalog: dict, sources: list[Path]) -> dict:
@@ -50,6 +54,51 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
             "sources": [str(source) for source in sources if source.name in {"ContentRepository.kt", "MainActivity.kt"}],
             "failed_checks": failed_prayer_contract,
         })
+    # Verify each font is an original extracted asset with matching size and SHA-256.
+    font_matches = list(QURAN_FONT_OPTION.finditer(source_text.get("AppScreens.kt", "")))
+    font_issues: list[dict] = []
+    seen_font_ids: set[str] = set()
+    seen_font_paths: set[str] = set()
+    catalog_by_path = {
+        item.get("asset_path"): item
+        for item in catalog.get("files", [])
+        if isinstance(item, dict) and item.get("asset_path")
+    }
+    for match in font_matches:
+        font_id, asset_path, size_text, source_hash = match.groups()
+        declared_size = int(size_text)
+        row = catalog_by_path.get(asset_path)
+        if font_id in seen_font_ids:
+            font_issues.append({"id": font_id, "asset_path": asset_path, "issue": "duplicate font id"})
+        if asset_path in seen_font_paths:
+            font_issues.append({"id": font_id, "asset_path": asset_path, "issue": "duplicate font asset path"})
+        seen_font_ids.add(font_id)
+        seen_font_paths.add(asset_path)
+        if row is None:
+            font_issues.append({"id": font_id, "asset_path": asset_path, "issue": "not present in extracted source catalogue"})
+            continue
+        if declared_size != int(row.get("size_bytes", 0)):
+            font_issues.append({
+                "id": font_id, "asset_path": asset_path, "issue": "size differs from source catalogue",
+                "declared_size_bytes": declared_size, "source_size_bytes": row.get("size_bytes"),
+            })
+        if source_hash != str(row.get("sha256", "")):
+            font_issues.append({
+                "id": font_id, "asset_path": asset_path, "issue": "SHA-256 differs from source catalogue",
+                "declared_sha256": source_hash, "source_sha256": row.get("sha256"),
+            })
+    quran_font_contract = {
+        "option_count": len(font_matches),
+        "unique_ids": len(seen_font_ids),
+        "verified_source_fonts": len(font_matches) - len(font_issues),
+        "issues": font_issues,
+    }
+    if len(font_matches) != 6 or len(seen_font_ids) != len(font_matches) or font_issues:
+        missing.append({
+            "path": "QURAN_FONT_SOURCE_INTEGRITY_CONTRACT",
+            "sources": [str(source) for source in sources if source.name == "AppScreens.kt"],
+            **quran_font_contract,
+        })
     for path, owners in sorted(referenced.items()):
         if path not in available:
             missing.append({"path": path, "sources": sorted(owners)})
@@ -78,6 +127,7 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
         "literal_reference_count": len(referenced),
         "missing_references": missing,
         "runtime_prayer_source_contract": runtime_prayer_contract,
+        "quran_font_source_integrity_contract": quran_font_contract,
         "checked_sources": [str(source) for source in sources],
     }
 
