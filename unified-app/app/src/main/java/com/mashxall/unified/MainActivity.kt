@@ -22,6 +22,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -392,16 +393,33 @@ fun MashxallApp(startScreen: String? = null) {
         }
     }
 
-    val background = if (dark) Ink else Color(0xFFF4F1E7)
-    val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
-    val cardColor = if (dark) Panel else Color.White
+    val background by animateColorAsState(
+        targetValue = if (dark) Ink else Color(0xFFF4F1E7),
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "Mashxall theme background"
+    )
+    val foreground by animateColorAsState(
+        targetValue = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23),
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "Mashxall theme foreground"
+    )
+    val cardColor by animateColorAsState(
+        targetValue = if (dark) Panel else Color.White,
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "Mashxall theme surface"
+    )
+    val surfaceVariant by animateColorAsState(
+        targetValue = if (dark) Color(0xFF163A30) else Color(0xFFE8E3D6),
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "Mashxall theme surface variant"
+    )
     MaterialTheme(
         colorScheme = if (dark) androidx.compose.material3.darkColorScheme(
-            primary = Gold, onPrimary = Ink, secondary = PaleGold, background = Ink, surface = Panel,
-            onSurface = Color(0xFFF6F2E6), onBackground = Color(0xFFF6F2E6), surfaceVariant = Color(0xFF163A30)
+            primary = Gold, onPrimary = Ink, secondary = PaleGold, background = background, surface = cardColor,
+            onSurface = foreground, onBackground = foreground, surfaceVariant = surfaceVariant
         ) else androidx.compose.material3.lightColorScheme(
-            primary = DeepGreen, onPrimary = Color.White, secondary = Gold, background = Color(0xFFF4F1E7),
-            surface = Color.White, onSurface = Color(0xFF102A23), onBackground = Color(0xFF102A23)
+            primary = DeepGreen, onPrimary = Color.White, secondary = Gold, background = background,
+            surface = cardColor, onSurface = foreground, onBackground = foreground, surfaceVariant = surfaceVariant
         )
     ) {
         CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection) {

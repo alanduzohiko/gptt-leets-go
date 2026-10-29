@@ -3,7 +3,11 @@ package com.mashxall.unified
 import android.content.Context
 import android.annotation.SuppressLint
 import android.text.Html
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.app.AlarmManager
@@ -204,9 +208,31 @@ internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: 
 
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
-    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-        if (loading) CircularProgressIndicator(color = Gold, modifier = Modifier.size(30.dp))
-        else Text(message, color = foreground.copy(alpha = 0.66f), textAlign = TextAlign.Center, fontSize = 13.sp, lineHeight = 20.sp)
+    Box(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedVisibility(
+            visible = loading,
+            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180)),
+            exit = fadeOut(tween(120))
+        ) {
+            PremiumLoadingSkeleton(accent = Gold)
+        }
+        AnimatedVisibility(
+            visible = !loading,
+            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180)),
+            exit = fadeOut(tween(120))
+        ) {
+            Text(
+                message,
+                color = foreground.copy(alpha = 0.66f),
+                textAlign = TextAlign.Center,
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp)
+            )
+        }
     }
 }
 
