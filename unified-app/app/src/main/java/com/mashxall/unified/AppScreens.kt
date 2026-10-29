@@ -5456,15 +5456,35 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                     AppLanguage.AR -> "الموقع الحالي"
                                     AppLanguage.CKB -> "شوێنی ئێستا"
                                 }
-                            } else selectedCity,
+                            } else localizedKurdistanCityName(selectedCity, language.key),
                             color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
                         )
                         if (gpsLatitude != null && gpsLongitude != null) {
                             Text(String.format(Locale.US, "%.5f, %.5f", gpsLatitude, gpsLongitude), color = Color(0xFFB9CDC5), fontSize = 11.sp)
                         } else Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
                     }
-                    IconButton(onClick = locateNow) { Icon(Icons.Outlined.GpsFixed, null, tint = Gold) }
-                    IconButton(onClick = { citySearch = ""; chooseCity = true }) { Icon(Icons.Outlined.Search, null, tint = Gold) }
+                    IconButton(onClick = locateNow) {
+                        Icon(
+                            Icons.Outlined.GpsFixed,
+                            contentDescription = when (language) {
+                                AppLanguage.EN -> "Refresh location"
+                                AppLanguage.AR -> "تحديث الموقع"
+                                AppLanguage.CKB -> "نوێکردنەوەی شوێن"
+                            },
+                            tint = Gold
+                        )
+                    }
+                    IconButton(onClick = { citySearch = ""; chooseCity = true }) {
+                        Icon(
+                            Icons.Outlined.Search,
+                            contentDescription = when (language) {
+                                AppLanguage.EN -> "Search for a city"
+                                AppLanguage.AR -> "البحث عن مدينة"
+                                AppLanguage.CKB -> "گەڕان بەدوای شارێکدا"
+                            },
+                            tint = Gold
+                        )
+                    }
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(
