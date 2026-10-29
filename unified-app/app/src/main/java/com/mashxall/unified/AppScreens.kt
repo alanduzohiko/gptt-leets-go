@@ -1962,7 +1962,7 @@ private fun MushafPageViewer(
             }
             IconButton(onClick = onVerseView, modifier = Modifier.size(40.dp)) {
                 Icon(
-                    Icons.Outlined.Subject,
+                    Icons.Outlined.AutoStories,
                     contentDescription = when (language) {
                         AppLanguage.EN -> "Open verse-text reader and Tajweed"
                         AppLanguage.AR -> "فتح قارئ نص الآيات والتجويد"
