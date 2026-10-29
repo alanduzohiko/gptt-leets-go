@@ -3821,6 +3821,31 @@ private fun downloadReciterFile(url: String, destination: File) {
     }
 }
 
+internal data class BundledAdhanTrack(val item: AudioItem, val category: String)
+
+/**
+ * Identify genuine adhan/call-to-prayer assets in the recovered app bundles.
+ * Do not classify generic Quran recitation or unrelated religious audio as adhan.
+ */
+internal fun bundledAdhanCategory(item: AudioItem): String? {
+    val searchable = (item.assetPath + " " + item.title + " " + item.group)
+        .lowercase(Locale.ROOT)
+        .replace('_', ' ')
+        .replace('-', ' ')
+        .replace('/', ' ')
+    val mosqueRecording = Regex(
+        """(?:^|[^a-z])(mosque|masjid|haram|makkah|mecca|madinah|madina|nabawi)(?:[^a-z]|$)"""
+    ).containsMatchIn(searchable)
+    val adhanRecording = Regex(
+        """(?:^|[^a-z])(adhan|athan|azan|muezzin|muazzin|iqama|iqamah|takbir|takbeer|call to prayer|prayer call)(?:[^a-z]|$)"""
+    ).containsMatchIn(searchable)
+    return when {
+        mosqueRecording -> "mosque"
+        adhanRecording -> "muezzin"
+        else -> null
+    }
+}
+
 internal fun matchesAdhanLibraryFilter(filter: String, category: String, downloaded: Boolean): Boolean = when (filter) {
     "muezzin" -> category == "muezzin"
     "mosque" -> category == "mosque"
@@ -3937,12 +3962,25 @@ fun AudioScreen(
         }
         if (selectedTab == 2) {
             val searchTerm = audioQuery.trim()
-            val categoryCounts = remember(onlineAdhan, offlineAdhanRevision) {
+            val bundledAdhan = remember(audio) {
+                audio.mapNotNull { item ->
+                    bundledAdhanCategory(item)?.let { category -> BundledAdhanTrack(item, category) }
+                }
+            }
+            val visibleBundledAdhan = remember(bundledAdhan, searchTerm, adhanCategory) {
+                bundledAdhan.filter { track ->
+                    val matchesSearch = searchTerm.isBlank() ||
+                        (track.item.title + " " + track.item.assetPath + " " + track.item.group)
+                            .contains(searchTerm, ignoreCase = true)
+                    matchesSearch && matchesAdhanLibraryFilter(adhanCategory, track.category, downloaded = true)
+                }
+            }
+            val categoryCounts = remember(onlineAdhan, bundledAdhan, offlineAdhanRevision) {
                 mapOf(
-                    "all" to onlineAdhan.size,
-                    "muezzin" to onlineAdhan.count { it.category == "muezzin" },
-                    "mosque" to onlineAdhan.count { it.category == "mosque" },
-                    "downloaded" to onlineAdhan.count { item ->
+                    "all" to onlineAdhan.size + bundledAdhan.size,
+                    "muezzin" to onlineAdhan.count { it.category == "muezzin" } + bundledAdhan.count { it.category == "muezzin" },
+                    "mosque" to onlineAdhan.count { it.category == "mosque" } + bundledAdhan.count { it.category == "mosque" },
+                    "downloaded" to bundledAdhan.size + onlineAdhan.count { item ->
                         val file = onlineAdhanOfflineFile(context, item)
                         file.isFile && file.length() > 512L
                     }
@@ -4000,17 +4038,17 @@ fun AudioScreen(
             }
             Text(
                 when (language) {
-                    AppLanguage.EN -> "${visibleAdhan.size} recordings shown • ${categoryCounts["muezzin"]} muezzin tracks • ${categoryCounts["mosque"]} mosque/location recordings"
-                    AppLanguage.AR -> "المعروض ${visibleAdhan.size} تسجيلات • ${categoryCounts["muezzin"]} للمؤذنين • ${categoryCounts["mosque"]} للمساجد والمواقع"
-                    AppLanguage.CKB -> "${visibleAdhan.size} تۆمار پیشان دەدرێت • ${categoryCounts["muezzin"]} دەنگی موئەزین • ${categoryCounts["mosque"]} دەنگی مزگەوت و شوێن"
+                    AppLanguage.EN -> "${visibleAdhan.size + visibleBundledAdhan.size} recordings shown • ${categoryCounts["muezzin"]} muezzin tracks • ${categoryCounts["mosque"]} mosque/location recordings"
+                    AppLanguage.AR -> "المعروض ${visibleAdhan.size + visibleBundledAdhan.size} تسجيلًا • ${categoryCounts["muezzin"]} للمؤذنين • ${categoryCounts["mosque"]} للمساجد والمواقع"
+                    AppLanguage.CKB -> "${visibleAdhan.size + visibleBundledAdhan.size} تۆمار پیشان دەدرێت • ${categoryCounts["muezzin"]} دەنگی موئەزین • ${categoryCounts["mosque"]} دەنگی مزگەوت و شوێن"
                 },
                 color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 14.sp
             )
             Text(
                 when (language) {
-                    AppLanguage.EN -> "${onlineAdhan.size} source-linked adhan and mosque recordings • download selected tracks for offline use"
-                    AppLanguage.AR -> "${onlineAdhan.size} تسجيلاً للأذان والمساجد من مصادرها الأصلية • نزّل ما تختاره للاستماع دون إنترنت"
-                    AppLanguage.CKB -> "${onlineAdhan.size} تۆماری بانگ و مزگەوت لە سەرچاوەی ڕەسەنەوە • ئەو دەنگانە دابگرە کە دەتەوێت بەبێ ئینتەرنێت گوێی لێ بگریت"
+                    AppLanguage.EN -> "${onlineAdhan.size} online source-linked recordings + ${bundledAdhan.size} original bundled tracks • bundled tracks work offline immediately"
+                    AppLanguage.AR -> "${onlineAdhan.size} تسجيلًا إلكترونيًا من مصادرها + ${bundledAdhan.size} تسجيلًا أصليًا مضمّنًا • الملفات المضمّنة تعمل دون إنترنت فورًا"
+                    AppLanguage.CKB -> "${onlineAdhan.size} تۆماری ئۆنلاین لە سەرچاوەی ڕەسەن + ${bundledAdhan.size} تۆماری ناو حەزمەی ڕەسەن • تۆمارە ناوخۆییەکان دەستبەجێ بەبێ ئینتەرنێت کار دەکەن"
                 },
                 color = foreground.copy(alpha = 0.64f), fontSize = 10.sp, lineHeight = 15.sp
             )
@@ -4019,13 +4057,108 @@ fun AudioScreen(
                 color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, lineHeight = 13.sp
             )
             Spacer(Modifier.height(4.dp))
-            if (visibleAdhan.isEmpty()) {
-                LoadingOrEmpty(loading, language, foreground, if (onlineAdhan.isEmpty()) tr(language, "no_adhan_audio") else tr(language, "not_found"))
+            if (visibleAdhan.isEmpty() && visibleBundledAdhan.isEmpty()) {
+                LoadingOrEmpty(loading, language, foreground, if (onlineAdhan.isEmpty() && bundledAdhan.isEmpty()) tr(language, "no_adhan_audio") else tr(language, "not_found"))
             } else LazyColumn(
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(visibleAdhan, key = { it.id }) { item ->
+                if (visibleBundledAdhan.isNotEmpty()) {
+                    item(key = "bundled-adhan-heading") {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Included with the original app • ready offline"
+                                AppLanguage.AR -> "مضمّن من ملفات التطبيق الأصلية • جاهز دون إنترنت"
+                                AppLanguage.CKB -> "لەگەڵ فایلە ڕەسەنەکانی ئەپدا هەیە • ئامادەی بەبێ ئینتەرنێت"
+                            },
+                            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+                        )
+                    }
+                    items(visibleBundledAdhan, key = { "bundled:${it.item.assetPath}" }) { track ->
+                        val item = track.item
+                        val playKey = "bundled-adhan:${item.assetPath}"
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = cardColor),
+                            shape = RoundedCornerShape(17.dp),
+                            border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f))
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        if (playing == playKey || playing == "loading:$playKey") {
+                                            AudioController.stop()
+                                            playing = ""
+                                        } else {
+                                            playing = "loading:$playKey"
+                                            AudioController.play(context, item.assetPath) { state ->
+                                                playing = if (state) playKey else ""
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    when (playing) {
+                                        playKey -> Icon(
+                                            Icons.Outlined.PauseCircle,
+                                            contentDescription = adhanAudioActionDescription(language, true),
+                                            tint = Gold, modifier = Modifier.size(29.dp)
+                                        )
+                                        "loading:$playKey" -> CircularProgressIndicator(
+                                            color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)
+                                        )
+                                        else -> Icon(
+                                            Icons.Outlined.PlayCircle,
+                                            contentDescription = adhanAudioActionDescription(language, false),
+                                            tint = Gold, modifier = Modifier.size(29.dp)
+                                        )
+                                    }
+                                }
+                                Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                                    Text(
+                                        item.title, color = foreground, fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp, maxLines = 2, lineHeight = 16.sp
+                                    )
+                                    Text(
+                                        when (track.category) {
+                                            "mosque" -> when (language) {
+                                                AppLanguage.EN -> "Bundled mosque/location recording"
+                                                AppLanguage.AR -> "تسجيل مسجد/موقع من ملفات المصدر"
+                                                AppLanguage.CKB -> "تۆماری مزگەوت/شوێن لە فایلەکانی سەرچاوە"
+                                            }
+                                            else -> when (language) {
+                                                AppLanguage.EN -> "Bundled muezzin/adhan recording"
+                                                AppLanguage.AR -> "تسجيل مؤذن/أذان من ملفات المصدر"
+                                                AppLanguage.CKB -> "تۆماری موئەزین/بانگ لە فایلەکانی سەرچاوە"
+                                            }
+                                        },
+                                        color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, lineHeight = 13.sp
+                                    )
+                                    Text(
+                                        item.assetPath.substringAfterLast('/'),
+                                        color = foreground.copy(alpha = 0.45f), fontSize = 9.sp, maxLines = 1
+                                    )
+                                    Text(
+                                        when (language) {
+                                            AppLanguage.EN -> "Part of the original app bundle • plays offline; no download needed"
+                                            AppLanguage.AR -> "من حزمة التطبيق الأصلية • يعمل دون إنترنت ولا يحتاج تنزيلًا"
+                                            AppLanguage.CKB -> "بەشێکە لە حەزمەی ڕەسەنی ئەپ • بەبێ ئینتەرنێت کار دەکات"
+                                        },
+                                        color = Gold, fontSize = 9.sp, lineHeight = 13.sp
+                                    )
+                                }
+                                Icon(
+                                    Icons.Outlined.CheckCircle,
+                                    contentDescription = if (language == AppLanguage.EN) "Available offline" else if (language == AppLanguage.AR) "متاح دون إنترنت" else "بەبێ ئینتەرنێت بەردەستە",
+                                    tint = Color(0xFF62C995), modifier = Modifier.size(23.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                items(visibleAdhan, key = { "online:${it.id}" }) { item ->
                     val file = onlineAdhanOfflineFile(context, item)
                     val localSaved = remember(item.id, offlineAdhanRevision) { file.isFile && file.length() > 512L }
                     val downloadProgress = downloadingAdhan[item.id]

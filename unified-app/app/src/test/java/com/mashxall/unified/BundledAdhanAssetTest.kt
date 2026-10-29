@@ -1,0 +1,88 @@
+package com.mashxall.unified
+
+import com.mashxall.unified.data.AudioItem
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class BundledAdhanAssetTest {
+    @Test
+    fun recognizesBundledAdhanAndMuezzinFilesByTheirActualPathOrLabel() {
+        assertEquals(
+            "muezzin",
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/noor/base/assets/audio/adhan/adhan_fajr.mp3",
+                    title = "Fajr Adhan",
+                    group = "adhan"
+                )
+            )
+        )
+        assertEquals(
+            "muezzin",
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/source/audio/muezzin/004.mp3",
+                    title = "Muezzin 004",
+                    group = "muezzin"
+                )
+            )
+        )
+        assertEquals(
+            "muezzin",
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/source/audio/azan_fajr.mp3",
+                    title = "Azan Fajr",
+                    group = "audio"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun recognizesBundledMosqueAndHolySiteRecordings() {
+        assertEquals(
+            "mosque",
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/source/audio/Masjid_Al_Haram.mp3",
+                    title = "Masjid Al Haram",
+                    group = "mosque"
+                )
+            )
+        )
+        assertEquals(
+            "mosque",
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/source/audio/Madinah_Nabawi.mp3",
+                    title = "Madinah Nabawi",
+                    group = "audio"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun doesNotMixGenericQuranRecitationOrAdhkarIntoAdhanLibrary() {
+        assertNull(
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/quran/audio/abdul_basit/001.mp3",
+                    title = "Abdul Basit 001",
+                    group = "quran"
+                )
+            )
+        )
+        assertNull(
+            bundledAdhanCategory(
+                AudioItem(
+                    assetPath = "content/azkar/audio/morning.mp3",
+                    title = "Morning adhkar",
+                    group = "azkar"
+                )
+            )
+        )
+    }
+}
