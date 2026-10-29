@@ -26,6 +26,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -792,8 +793,8 @@ internal fun nextSourcePrayerTarget(
     tomorrow: PrayerRow?,
     nowMillis: Long
 ): UpcomingPrayerTarget? {
-    val currentDay = today ?: return null
-    if (!ContentRepository.hasValidPrayerTimes(currentDay)) return null
+    // Enforce the same one-source policy at the consumer boundary, not only in repository callers.
+    val currentDay = ContentRepository.salawatiOnlyPrayerTimes(today) ?: return null
     val candidates = listOf(
         "fajr" to currentDay.fajr,
         "dhuhr" to currentDay.dhuhr,
@@ -814,8 +815,7 @@ internal fun nextSourcePrayerTarget(
     }
 
     // After Isha, do not guess tomorrow's Fajr: require tomorrow's own Salawati row.
-    val tomorrowRow = tomorrow ?: return null
-    if (!ContentRepository.hasValidPrayerTimes(tomorrowRow)) return null
+    val tomorrowRow = ContentRepository.salawatiOnlyPrayerTimes(tomorrow) ?: return null
     val (hour, minute) = parseSourcePrayerClock(tomorrowRow.fajr) ?: return null
     val nextDay = Calendar.getInstance().apply {
         timeInMillis = nowMillis
@@ -835,7 +835,8 @@ private fun HomePrayerCountdown(
     language: AppLanguage,
     use24Hour: Boolean,
     foreground: Color,
-    cardColor: Color
+    cardColor: Color,
+    onNextPrayerChange: (String?) -> Unit
 ) {
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -863,6 +864,7 @@ private fun HomePrayerCountdown(
         val seconds = ((it.timeMillis - nowMillis).coerceAtLeast(0L) + 999L) / 1_000L
         String.format(Locale.US, "%02d:%02d:%02d", seconds / 3_600L, (seconds % 3_600L) / 60L, seconds % 60L)
     }.orEmpty()
+    LaunchedEffect(next?.key) { onNextPrayerChange(next?.key) }
 
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(),
@@ -904,13 +906,27 @@ private fun HomePrayerCountdown(
                 )
                 if (next != null) {
                     Text(prayerTimeText, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        countdown,
-                        color = Gold,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.animateContentSize()
-                    )
+                    AnimatedContent(
+                        targetState = countdown,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(120)) +
+                                slideInVertically(
+                                    animationSpec = tween(160, easing = FastOutSlowInEasing)
+                                ) { height -> height / 3 }) togetherWith
+                                (fadeOut(animationSpec = tween(100)) +
+                                    slideOutVertically(
+                                        animationSpec = tween(100, easing = FastOutSlowInEasing)
+                                    ) { height -> -height / 3 })
+                        },
+                        label = "Next prayer countdown digit transition"
+                    ) { animatedCountdown ->
+                        Text(
+                            animatedCountdown,
+                            color = Gold,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 } else {
                     Text(
                         when (language) {
@@ -940,6 +956,7 @@ private fun HomeScreen(
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var tomorrowPrayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
+    var upcomingPrayerKey by remember { mutableStateOf<String?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
@@ -1127,7 +1144,8 @@ private fun HomeScreen(
                     language = language,
                     use24Hour = use24Hour,
                     foreground = foreground,
-                    cardColor = cardColor
+                    cardColor = cardColor,
+                    onNextPrayerChange = { upcomingPrayerKey = it }
                 )
                 Spacer(Modifier.height(10.dp))
                 when {
@@ -1153,13 +1171,13 @@ private fun HomeScreen(
                             trio.forEach { (key, label, time) ->
                                 Column(
                                     Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
-                                        .background(if (key == "maghrib") Gold.copy(alpha = 0.09f) else foreground.copy(alpha = 0.035f))
+                                        .background(if (key == upcomingPrayerKey) Gold.copy(alpha = 0.11f) else foreground.copy(alpha = 0.035f))
                                         .padding(horizontal = 8.dp, vertical = 11.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(label, color = foreground.copy(alpha = 0.65f), fontSize = 10.sp, maxLines = 1)
                                     Spacer(Modifier.height(5.dp))
-                                    Text(time, color = if (key == "maghrib") Gold else foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(time, color = if (key == upcomingPrayerKey) Gold else foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }

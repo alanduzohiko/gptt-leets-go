@@ -54,9 +54,9 @@ internal fun classifyAdhanAudioSource(assetPath: String, source: File?): AdhanAu
     }
 
 internal fun missingAdhanAudioMessage(language: AppLanguage): String = when (language) {
-    AppLanguage.EN -> "Selected adhan audio is missing. Open Prayer settings and choose an available or downloaded track."
-    AppLanguage.AR -> "ملف الأذان المحدد غير متاح. افتح إعدادات الصلاة واختر تسجيلًا متاحًا أو منزّلًا."
-    AppLanguage.CKB -> "فایلی دەنگی بانگی هەڵبژێردراو بەردەست نییە؛ ڕێکخستنەکانی نوێژ بکەرەوە و دەنگێکی بەردەست یان داگیراو هەڵبژێرە."
+    AppLanguage.EN -> "The selected adhan audio could not be played. Open Prayer settings and choose an available or downloaded track."
+    AppLanguage.AR -> "تعذّر تشغيل ملف الأذان المحدد. افتح إعدادات الصلاة واختر تسجيلًا متاحًا أو منزّلًا."
+    AppLanguage.CKB -> "نەتوانرا دەنگی بانگی هەڵبژێردراو لێ بدرێت؛ ڕێکخستنەکانی نوێژ بکەرەوە و دەنگێکی بەردەست یان داگیراو هەڵبژێرە."
 }
 
 class AdhanPlaybackService : Service() {
@@ -190,6 +190,9 @@ class AdhanPlaybackService : Service() {
             mp.setOnErrorListener { _, _, _ ->
                 releasePlayer()
                 stopForeground(STOP_FOREGROUND_REMOVE)
+                if (assetPath.isNotBlank()) {
+                    postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
+                }
                 stopSelf()
                 true
             }
@@ -197,6 +200,9 @@ class AdhanPlaybackService : Service() {
         } catch (_: Exception) {
             releasePlayer()
             stopForeground(STOP_FOREGROUND_REMOVE)
+            if (assetPath.isNotBlank()) {
+                postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
+            }
             stopSelf()
         }
     }

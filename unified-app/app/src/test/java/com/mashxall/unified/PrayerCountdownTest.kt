@@ -68,4 +68,10 @@ class PrayerCountdownTest {
         assertNull(nextSourcePrayerTarget(row(fajr = "25:70"), row(), localTime(29, 3, 0)))
         assertNull(nextSourcePrayerTarget(null, row(), localTime(29, 3, 0)))
     }
+
+    @Test
+    fun rejectsNoorRowsEvenIfTheirClockValuesLookValid() {
+        assertNull(nextSourcePrayerTarget(row().copy(source = "noor-base:Sulaymaniyah"), row(), localTime(29, 3, 0)))
+        assertNull(nextSourcePrayerTarget(row(), row().copy(source = "noor-base:Sulaymaniyah"), localTime(29, 20, 0)))
+    }
 }
