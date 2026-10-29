@@ -802,11 +802,28 @@ if [[ "$hadith_copy_visible" -ne 1 ]]; then
 fi
 echo "PASS: the Hadith article detail opens with readable body text and exposes its copy action after scrolling."
 
-if ! grep -q '94' dist/runtime-test/window-books.xml; then
-  echo "FAIL: expected 94-record source book catalogue was not visible."
-  cat dist/runtime-test/window-books.xml
-  exit 1
-fi
+# Keep original book records in the app bundle, but do not navigate to a
+# Books/Library screen: the reader-first UX intentionally removes that menu entry.
+python3 - unified-app/app/src/main/assets/content_catalog.json <<'PY'
+import json
+import sys
+from pathlib import Path
+
+catalog = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+target = next(
+    (db for db in catalog.get("databases", [])
+     if db.get("asset_path") == "content/noor_tafsir_1.2.2/base/assets/tn_books.db"),
+    None,
+)
+if target is None or target.get("integrity") != "ok":
+    print("FAIL: original Noor book database is missing or invalid.")
+    raise SystemExit(1)
+table = next((t for t in target.get("tables", []) if t.get("name") == "book_data"), None)
+if table is None or not isinstance(table.get("rows"), int) or table["rows"] < 94:
+    print(f"FAIL: original book catalogue coverage is below 94 records: {None if table is None else table.get('rows')!r}")
+    raise SystemExit(1)
+print(f"PASS: original book data stays embedded ({table['rows']} records) without reintroducing the Books/Library screen.")
+PY
 
 check_screen word_by_word 'شیکردنەوەی وشە بە وشە|تفسير كلمة بكلمة|Word-by-word analysis'
 
