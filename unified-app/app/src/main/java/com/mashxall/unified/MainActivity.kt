@@ -472,7 +472,8 @@ fun MashxallApp(startScreen: String? = null) {
                                         // First-time users see the surah list; returning users resume their saved reader mode.
                                         resumeMushafRequested = prefs.contains("last_surah") || prefs.contains("last_mushaf_page")
                                         navigateTo(AppScreen.QURAN.key)
-                                    }
+                                    },
+                                    isActive = screen == AppScreen.HOME.key
                                 )
                                 "quran" -> QuranScreen(
                                     language, foreground, cardColor, selectedSurah, selectedAyah,
@@ -540,7 +541,9 @@ fun MashxallApp(startScreen: String? = null) {
                                         audioStartsAtReciters = false
                                         audioAutoPlayRequested = false
                                         navigateTo(AppScreen.AUDIO.key)
-                                    })
+                                    },
+                                    isActive = screen == AppScreen.PRAYER.key
+                                )
                                 "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
                                     selectedSurah = s; selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
@@ -1009,7 +1012,8 @@ private fun HomeScreen(
     selectedCity: String,
     use24Hour: Boolean,
     onOpen: (AppScreen) -> Unit,
-    onResumeReading: () -> Unit = { onOpen(AppScreen.QURAN) }
+    onResumeReading: () -> Unit = { onOpen(AppScreen.QURAN) },
+    isActive: Boolean = true
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
@@ -1241,27 +1245,52 @@ private fun HomeScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        // An explicit city choice is authoritative until the user taps "Use my
-        // location". Do not silently replace a manually selected Kurdistan city
-        // with GPS just because the saved GPS coordinates are empty.
+    LaunchedEffect(isActive, selectedCity) {
+        if (!isActive) return@LaunchedEffect
+
+        // Re-read the persisted choice every time Home becomes visible. AnimatedContent can
+        // restore an earlier saved composition, so rememberSaveable alone is not authoritative.
+        val savedGpsLat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val savedGpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        val savedGpsTime = prefs.getLong("gps_location_timestamp", 0L)
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
-        if (shouldAutoRequestLocation(gpsLatitude, gpsLongitude, selectedCity, manualLatitude, manualLongitude, locationMode)) {
+        val hasManualCoordinates = manualLatitude != null && manualLongitude != null
+        val savedMode = resolvePrayerLocationMode(
+            prefs.getString("prayer_location_mode", null),
+            savedGpsLat != null && savedGpsLon != null,
+            hasManualCoordinates,
+            hasUsableCitySelection = selectedCity.isNotBlank()
+        )
+        locationMode = savedMode
+        if (savedMode == "city") {
+            gpsLatitude = null
+            gpsLongitude = null
+        } else if (isUsableSavedGpsFix(savedGpsLat, savedGpsLon, savedGpsTime, System.currentTimeMillis())) {
+            gpsLatitude = savedGpsLat
+            gpsLongitude = savedGpsLon
+        } else {
+            // A location older than the accepted GPS-fix window is not displayed as current.
+            gpsLatitude = null
+            gpsLongitude = null
+            prayerTimes = null
+            tomorrowPrayerTimes = null
+        }
+
+        if (savedMode == "gps" && (gpsLatitude == null || gpsLongitude == null)) {
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
-            if (fine || coarse) {
-                // GPS is the selected source but no fresh fix exists: acquire it, do not fall back to a saved city.
-                requestHomeLocation()
-            } else if (!previouslyPrompted) {
-                prefs.edit().putBoolean("prayer_location_prompted", true).apply()
-                requestHomeLocation()
-            } else if (locationMode == "gps" && (gpsLatitude == null || gpsLongitude == null)) {
-                locationMessage = when (language) {
-                    AppLanguage.EN -> "Current location is selected but Android location permission is off. Allow location or choose a city in Prayer settings."
-                    AppLanguage.AR -> "الموقع الحالي محدد لكن إذن الموقع في Android متوقف. اسمح بالموقع أو اختر مدينة من إعدادات الصلاة."
-                    AppLanguage.CKB -> "شوێنی ئێستا هەڵبژێردراوە بەڵام مۆڵەتی شوێنی ئەندرۆید ناچالاکە؛ مۆڵەت بدە یان لە ڕێکخستنەکانی نوێژ شارێک هەڵبژێرە."
+            when {
+                fine || coarse -> requestHomeLocation()
+                !previouslyPrompted -> {
+                    prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+                    requestHomeLocation()
+                }
+                else -> locationMessage = when (language) {
+                    AppLanguage.EN -> "Current location is selected, but Android location permission is off. Allow location or choose a city in Prayer settings."
+                    AppLanguage.AR -> "الموقع الحالي محدد، لكن إذن الموقع في Android متوقف. اسمح بالموقع أو اختر مدينة من إعدادات الصلاة."
+                    AppLanguage.CKB -> "شوێنی ئێستا هەڵبژێردراوە، بەڵام مۆڵەتی شوێنی ئەندرۆید ناچالاکە؛ مۆڵەت بدە یان لە ڕێکخستنەکانی نوێژ شارێک هەڵبژێرە."
                 }
             }
         }

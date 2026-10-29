@@ -6104,7 +6104,7 @@ internal fun prayerSourceDescription(source: String, language: AppLanguage): Str
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}) {
+fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
@@ -6340,26 +6340,60 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isActive, selectedCity) {
+        if (!isActive) return@LaunchedEffect
+
+        // Sync the saved mode and coordinates whenever the Prayer screen is re-entered.
+        // Otherwise a restored composition can keep the old city/GPS mode in memory.
+        val savedGpsLat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val savedGpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        val savedGpsTime = prefs.getLong("gps_location_timestamp", 0L)
+        val savedManualLat = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
+        val savedManualLon = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
+        val hasManualCoordinates = savedManualLat != null && savedManualLon != null
+        val savedMode = resolvePrayerLocationMode(
+            prefs.getString("prayer_location_mode", null),
+            savedGpsLat != null && savedGpsLon != null,
+            hasManualCoordinates,
+            hasUsableCitySelection = selectedCity.isNotBlank()
+        )
+        locationMode = savedMode
+        manualLatitude = savedManualLat
+        manualLongitude = savedManualLon
+        if (savedMode == "gps") {
+            val savedFixIsFresh = isUsableSavedGpsFix(
+                savedGpsLat, savedGpsLon, savedGpsTime, System.currentTimeMillis()
+            )
+            gpsLatitude = savedGpsLat.takeIf { savedFixIsFresh }
+            gpsLongitude = savedGpsLon.takeIf { savedFixIsFresh }
+            gpsAccuracy = if (savedFixIsFresh) prefs.getString("gps_accuracy", null)?.toFloatOrNull() else null
+        } else {
+            gpsLatitude = null
+            gpsLongitude = null
+            gpsAccuracy = null
+        }
+
         val alreadyAsked = prefs.getBoolean("prayer_location_prompted", false)
         val missingGpsFix = gpsLatitude == null || gpsLongitude == null
-        if (locationMode == "gps") {
+        if (savedMode == "gps") {
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            if (fine || coarse) {
-                // Refresh on entering the Prayer screen; stale saved coordinates never masquerade as a live fix.
-                locateNow()
-            } else if (!alreadyAsked) {
-                prefs.edit().putBoolean("prayer_location_prompted", true).apply()
-                locateNow()
-            } else if (missingGpsFix) {
-                locationMessage = when (language) {
+            when {
+                fine || coarse -> {
+                    // Refresh current location on entry; schedule lookup remains tied to Salawati source rows.
+                    locateNow()
+                }
+                !alreadyAsked -> {
+                    prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+                    locateNow()
+                }
+                missingGpsFix -> locationMessage = when (language) {
                     AppLanguage.EN -> "Allow location permission to show your current location, or choose a city."
                     AppLanguage.AR -> "اسمح بإذن الموقع لعرض موقعك الحالي، أو اختر مدينة."
                     AppLanguage.CKB -> "بۆ پیشاندانی شوێنی ئێستات مۆڵەتی شوێن بدە یان شارێک هەڵبژێرە."
                 }
             }
-        } else if (!alreadyAsked && missingGpsFix && manualLatitude == null && manualLongitude == null) {
+        } else if (!alreadyAsked && missingGpsFix && savedManualLat == null && savedManualLon == null) {
             prefs.edit().putBoolean("prayer_location_prompted", true).apply()
             locateNow()
         }
