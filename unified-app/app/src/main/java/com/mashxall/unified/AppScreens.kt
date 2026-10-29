@@ -1744,6 +1744,27 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
 
 }
 
+internal enum class MushafEdgeTapAction {
+    NEXT_PAGE,
+    PREVIOUS_PAGE,
+    NONE
+}
+
+/**
+ * Enable edge-tap page turns only when the page is at its normal zoom and no verse
+ * geometry was hit. The wide center of the page remains reserved for ayah selection.
+ */
+internal fun mushafEdgeTapAction(xFraction: Float, page: Int, scale: Float, verseWasHit: Boolean): MushafEdgeTapAction {
+    if (verseWasHit || scale > 1.01f || !xFraction.isFinite() || xFraction !in 0f..1f) {
+        return MushafEdgeTapAction.NONE
+    }
+    return when {
+        xFraction <= 0.065f && page < 604 -> MushafEdgeTapAction.NEXT_PAGE
+        xFraction >= 0.935f && page > 1 -> MushafEdgeTapAction.PREVIOUS_PAGE
+        else -> MushafEdgeTapAction.NONE
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
@@ -1993,6 +2014,19 @@ private fun MushafPageViewer(
                                                         selectedVerse = hit
                                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                         onVerseClick(hit.surah, hit.ayah)
+                                                    } else {
+                                                        val edgeAction = mushafEdgeTapAction(x / 1148f, page, scale, verseWasHit = false)
+                                                        when (edgeAction) {
+                                                            MushafEdgeTapAction.NEXT_PAGE -> {
+                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                                onPageChange((page + 1).coerceAtMost(604))
+                                                            }
+                                                            MushafEdgeTapAction.PREVIOUS_PAGE -> {
+                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                                onPageChange((page - 1).coerceAtLeast(1))
+                                                            }
+                                                            MushafEdgeTapAction.NONE -> Unit
+                                                        }
                                                     }
                                                 }
                                             }
