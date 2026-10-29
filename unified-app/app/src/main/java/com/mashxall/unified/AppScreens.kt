@@ -5406,6 +5406,7 @@ internal fun requestCurrentLocation(
     var finished = false
     var deferredFinish: Runnable? = null
     var timeout: Runnable? = null
+    var registeredProviders = 0
 
     fun cleanup() {
         timeout?.let(mainHandler::removeCallbacks)
@@ -5454,16 +5455,22 @@ internal fun requestCurrentLocation(
         listeners += listener
         try {
             manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+            registeredProviders += 1
         } catch (_: SecurityException) {
-            if (!finished) {
-                finished = true
-                cleanup()
-                onError("Location permission is required")
-            }
-            return@forEach
+            // Coarse permission may remain enabled while the fine-only GPS provider
+            // rejects the request. Remove only this listener and try NETWORK_PROVIDER.
+            try { manager.removeUpdates(listener) } catch (_: Exception) {}
+            listeners.remove(listener)
         } catch (_: IllegalArgumentException) {
             // Provider was disabled between discovery and request; try the other one.
+            try { manager.removeUpdates(listener) } catch (_: Exception) {}
+            listeners.remove(listener)
         }
+    }
+    if (registeredProviders == 0 && !finished) {
+        finished = true
+        cleanup()
+        onError("LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE")
     }
 }
 

@@ -1116,24 +1116,35 @@ private fun HomeScreen(
                             when (language) { AppLanguage.EN -> "Prayer times"; AppLanguage.AR -> "مواقيت الصلاة"; AppLanguage.CKB -> "کاتەکانی نوێژ" },
                             color = foreground, fontWeight = FontWeight.Bold, fontSize = 17.sp
                         )
+                        val nearestSourceCity = prayerTimes?.city?.takeIf { gpsLatitude != null && gpsLongitude != null }
+                            ?.let { sourceCity -> localizedKurdistanCityName(sourceCity, language.key).ifBlank { sourceCity } }
                         val displayedLocation = if (gpsLatitude != null && gpsLongitude != null) {
+                            val coordinates = String.format(Locale.US, "%.4f, %.4f", gpsLatitude, gpsLongitude)
                             when (language) {
-                                AppLanguage.EN -> "Current location"
-                                AppLanguage.AR -> "الموقع الحالي"
-                                AppLanguage.CKB -> "شوێنی ئێستا"
+                                AppLanguage.EN -> if (nearestSourceCity != null) "GPS location • nearest schedule: $nearestSourceCity" else "GPS coordinates: $coordinates"
+                                AppLanguage.AR -> if (nearestSourceCity != null) "موقع GPS • أقرب جدول: $nearestSourceCity" else "إحداثيات GPS: $coordinates"
+                                AppLanguage.CKB -> if (nearestSourceCity != null) "شوێنی GPS • نزیکترین خشتە: $nearestSourceCity" else "کۆئۆردیناتی GPS: $coordinates"
                             }
                         } else localizedKurdistanCityName(selectedCity, language.key).ifBlank {
                             when (language) {
-                                AppLanguage.EN -> "Location not set"
-                                AppLanguage.AR -> "لم يُحدَّد الموقع"
-                                AppLanguage.CKB -> "شوێن دیاری نەکراوە"
+                                AppLanguage.EN -> "Choose a city or use your location"
+                                AppLanguage.AR -> "اختر مدينة أو استخدم موقعك"
+                                AppLanguage.CKB -> "شارێک هەڵبژێرە یان شوێنی خۆت بەکاربهێنە"
                             }
                         }
-                        val sourceLabel = prayerTimes?.source?.let { prayerSourceLabel(it, language) }.orEmpty()
-                        Text(
-                            listOf(displayedLocation, sourceLabel).filter { it.isNotBlank() }.joinToString(" • "),
-                            color = foreground.copy(alpha = 0.56f), fontSize = 10.sp, maxLines = 1
-                        )
+                        val sourceLabel = prayerTimes?.source?.let { prayerSourceDescription(it, language) }.orEmpty()
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                displayedLocation,
+                                color = foreground.copy(alpha = 0.64f), fontSize = 10.sp, lineHeight = 14.sp, maxLines = 2
+                            )
+                            if (sourceLabel.isNotBlank()) {
+                                Text(
+                                    sourceLabel,
+                                    color = foreground.copy(alpha = 0.46f), fontSize = 9.sp, lineHeight = 13.sp, maxLines = 2
+                                )
+                            }
+                        }
                     }
                     Icon(Icons.Outlined.Explore, contentDescription = null, tint = Gold)
                 }

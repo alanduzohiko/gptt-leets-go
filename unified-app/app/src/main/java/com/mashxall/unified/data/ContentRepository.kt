@@ -1807,6 +1807,32 @@ object ContentRepository {
 
     // Timetable resolution below is Salawati-only. Noor's database remains
     // available for its non-timetable Quran/worship data elsewhere in the app.
+    /**
+     * Salawati locations do not all own a timetable. Fixed rows override dependency links;
+     * otherwise a dependent locality must inherit the exact source row its relation names.
+     * City lookup and GPS lookup must share this mapping.
+     */
+    internal fun prayerScheduleLocationId(locationId: Int, hasFixedPrayerTime: Boolean, dependentLocationId: Int): Int =
+        when {
+            hasFixedPrayerTime -> locationId
+            dependentLocationId > 0 -> dependentLocationId
+            else -> locationId
+        }
+
+    internal fun hasInheritedPrayerSchedule(hasFixedPrayerTime: Boolean, dependentLocationId: Int): Boolean =
+        !hasFixedPrayerTime && dependentLocationId > 0
+
+    internal fun prayerScheduleLocationSql(alias: String): String {
+        require(alias == "l" || alias == "requested") { "Unsupported Salawati SQL location alias." }
+        return """
+            CASE
+                WHEN COALESCE($alias.has_fixed_prayer_time,0)=1 THEN $alias._id
+                WHEN COALESCE($alias.prayer_dependent_id,0)>0 THEN $alias.prayer_dependent_id
+                ELSE $alias._id
+            END
+        """.trimIndent()
+    }
+
     private val prayerClockPattern = Regex("""^(?:[01]\d|2[0-3]):[0-5]\d$""")
 
     internal fun hasValidPrayerTimes(row: PrayerRow?): Boolean =
@@ -1868,12 +1894,8 @@ object ContentRepository {
                 JOIN country ON country._id=requested.country_id
                 LEFT JOIN location base ON base._id=requested.prayer_dependent_id
                 LEFT JOIN prayer_time pt
-                  ON pt.location_id = CASE
-                       WHEN COALESCE(requested.has_fixed_prayer_time,0)=1 THEN requested._id
-                       WHEN COALESCE(requested.prayer_dependent_id,0)>0 THEN requested.prayer_dependent_id
-                       ELSE requested._id
-                     END
-                 AND pt.date=?
+                   ON pt.location_id = ${prayerScheduleLocationSql("requested")}
+                  AND pt.date=?
                 WHERE lower(requested.name)=lower(?)
                   AND (?='' OR lower(country.name)=lower(?))
                 ORDER BY
@@ -1894,9 +1916,10 @@ object ContentRepository {
                 val maghrib = c.string("maghrib")
                 val isha = c.string("isha")
                 if (fajr.isBlank() || dhuhr.isBlank() || isha.isBlank()) return@use null
+                val hasFixedSchedule = c.int("has_fixed") == 1
                 val dependency = c.int("dependent_id")
                 val baseCity = c.string("base_city")
-                val source = if (dependency > 0 && baseCity.isNotBlank()) {
+                val source = if (hasInheritedPrayerSchedule(hasFixedSchedule, dependency) && baseCity.isNotBlank()) {
                     "salawati-dependent:${c.string("city")} → $baseCity, ${c.string("country")}"
                 } else {
                     "salawati:${c.string("city")}, ${c.string("country")}"
@@ -1932,19 +1955,28 @@ object ContentRepository {
         val maxLat = (latitude + latDelta).coerceAtMost(90.0)
         val minLon = (longitude - lonDelta).coerceAtLeast(-180.0)
         val maxLon = (longitude + lonDelta).coerceAtMost(180.0)
-        val salawatiRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
+
+        // Join each nearby locality to the prayer_time row it actually uses.
+        // A direct JOIN to l._id incorrectly returns a locality's own row even
+        // when Salawati says it inherits another city's timetable.
+        queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
             db.rawQuery(
                 """
                 SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                       l.latitude AS lat,l.longitude AS lon,COALESCE(country.name,'') AS country_name
-                FROM prayer_time pt
-                JOIN location l ON l._id=pt.location_id
+                       l.latitude AS lat,l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name,
+                       COALESCE(l.has_fixed_prayer_time,0) AS has_fixed,
+                       COALESCE(l.prayer_dependent_id,0) AS dependent_id,
+                       COALESCE(base.name,'') AS base_city
+                FROM location l
+                JOIN prayer_time pt ON pt.location_id = ${prayerScheduleLocationSql("l")}
+                LEFT JOIN location base ON base._id=l.prayer_dependent_id
                 LEFT JOIN country ON country._id=l.country_id
                 WHERE pt.date=?
                   AND l.latitude BETWEEN ? AND ?
                   AND l.longitude BETWEEN ? AND ?
                 ORDER BY ((l.latitude-?)*(l.latitude-?)) + ((l.longitude-?)*(l.longitude-?))
-                LIMIT 120
+                LIMIT 600
                 """.trimIndent(),
                 arrayOf(
                     monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
@@ -1952,66 +1984,36 @@ object ContentRepository {
                 )
             ).use { c ->
                 buildList {
-                    while (c.moveToNext()) add(
-                        PrayerRow(
-                            city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
-                            sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
-                            maghrib=c.string("maghrib"), isha=c.string("isha"),
-                            source="salawati:${c.string("city")}, ${c.string("country_name")}",
-                            latitude=c.double("lat"), longitude=c.double("lon")
+                    while (c.moveToNext()) {
+                        val city = c.string("city")
+                        val countryName = c.string("country_name")
+                        val hasFixed = c.int("has_fixed") == 1
+                        val dependentId = c.int("dependent_id")
+                        val baseCity = c.string("base_city")
+                        val source = if (hasInheritedPrayerSchedule(hasFixed, dependentId)) {
+                            "salawati-dependent:$city → ${baseCity.ifBlank { "source location" }}, $countryName"
+                        } else {
+                            "salawati:$city, $countryName"
+                        }
+                        add(
+                            PrayerRow(
+                                city = city,
+                                date = c.string("date"),
+                                fajr = c.string("fajr"),
+                                sunrise = c.string("sunrise"),
+                                dhuhr = c.string("dhuhr"),
+                                asr = c.string("asr"),
+                                maghrib = c.string("maghrib"),
+                                isha = c.string("isha"),
+                                source = source,
+                                latitude = c.double("lat"),
+                                longitude = c.double("lon")
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
-        val dependentRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
-            db.rawQuery(
-                """
-                SELECT dep.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                       dep.latitude AS lat,dep.longitude AS lon,
-                       COALESCE(country.name,'') AS country_name,
-                       COALESCE(base.name,'') AS base_city
-                FROM location dep
-                JOIN location base ON base._id=dep.prayer_dependent_id
-                JOIN prayer_time pt ON pt.location_id=base._id
-                LEFT JOIN country ON country._id=dep.country_id
-                WHERE pt.date=?
-                  AND dep.prayer_dependent_id IS NOT NULL
-                  AND COALESCE(dep.has_fixed_prayer_time,0)=0
-                  AND dep.latitude BETWEEN ? AND ?
-                  AND dep.longitude BETWEEN ? AND ?
-                  AND NOT EXISTS (
-                      SELECT 1 FROM prayer_time own_pt
-                      WHERE own_pt.location_id=dep._id AND own_pt.date=pt.date
-                  )
-                ORDER BY ((dep.latitude-?)*(dep.latitude-?)) + ((dep.longitude-?)*(dep.longitude-?))
-                LIMIT 120
-                """.trimIndent(),
-                arrayOf(
-                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
-                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
-                )
-            ).use { c ->
-                buildList {
-                    while (c.moveToNext()) add(
-                        PrayerRow(
-                            city = c.string("city"),
-                            date = c.string("date"),
-                            fajr = c.string("fajr"),
-                            sunrise = c.string("sunrise"),
-                            dhuhr = c.string("dhuhr"),
-                            asr = c.string("asr"),
-                            maghrib = c.string("maghrib"),
-                            isha = c.string("isha"),
-                            source = "salawati-dependent:${c.string("city")} → ${c.string("base_city")}, ${c.string("country_name")}",
-                            latitude = c.double("lat"),
-                            longitude = c.double("lon")
-                        )
-                    )
-                }
-            }
-        }
-        salawatiRows + dependentRows
     }
 
     suspend fun loadPrayerTimesAtLocation(
@@ -2022,12 +2024,12 @@ object ContentRepository {
         staticRadiusKm: Double = 7.0
     ): PrayerRow? = withContext(Dispatchers.IO) {
         val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
-            .filter(::hasValidPrayerTimes)
             .mapNotNull { row ->
-                val rowLat = row.latitude ?: return@mapNotNull null
-                val rowLon = row.longitude ?: return@mapNotNull null
+                val validSourceRow = salawatiOnlyPrayerTimes(row) ?: return@mapNotNull null
+                val rowLat = validSourceRow.latitude ?: return@mapNotNull null
+                val rowLon = validSourceRow.longitude ?: return@mapNotNull null
                 val distance = PrayerLocationMath.distanceKm(latitude, longitude, rowLat, rowLon)
-                if (distance <= staticRadiusKm) row to distance else null
+                if (distance <= staticRadiusKm) validSourceRow to distance else null
             }
             .sortedBy { it.second }
         val nearest = orderPrayerCandidates(candidates).firstOrNull()
