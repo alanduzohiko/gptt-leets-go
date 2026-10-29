@@ -321,6 +321,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
     var openingMushaf by remember { mutableStateOf(false) }
+    var pendingMushafStartSurah by remember { mutableIntStateOf(0) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var coloredTajweed by rememberSaveable {
@@ -401,7 +402,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     androidx.activity.compose.BackHandler(enabled = !showSurahList || openingMushaf) {
         if (selectedAyahForSheet != null) selectedAyahForSheet = null
         else if (openingMushaf) {
+            pendingMushafStartSurah = 0
             openingMushaf = false
+            mushafMode = false
             showSurahList = true
         } else {
             mushafMode = false
@@ -413,8 +416,55 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
     LaunchedEffect(initialSurah) { selected = initialSurah }
+    LaunchedEffect(pendingMushafStartSurah, language.key, translationKey) {
+        val requestedSurah = pendingMushafStartSurah
+        if (requestedSurah !in 1..114) return@LaunchedEffect
+        val page = runCatching {
+            val sourceVerses = ContentRepository.loadAyahs(
+                context, requestedSurah, language.key, translationKey = translationKey
+            )
+            resolveSurahStartPage(sourceVerses, requestedSurah)
+        }.getOrNull()
+        if (pendingMushafStartSurah != requestedSurah) return@LaunchedEffect
+        if (page != null) {
+            selected = requestedSurah
+            mushafPage = page
+            prefs.edit()
+                .putString("quran_reader_mode", "mushaf")
+                .putInt("last_mushaf_page", page)
+                .putInt("last_surah", requestedSurah)
+                .putInt("last_ayah_number", 1)
+                .apply()
+            pendingMushafStartSurah = 0
+            openingMushaf = false
+            mushafMode = true
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        } else {
+            // Preserve the real verse reader as an explicit fallback if source page metadata is absent.
+            selected = requestedSurah
+            pendingMushafStartSurah = 0
+            openingMushaf = false
+            mushafMode = false
+            showSurahList = false
+            prefs.edit()
+                .putString("quran_reader_mode", "verse")
+                .putInt("last_surah", requestedSurah)
+                .putInt("last_ayah_number", 1)
+                .apply()
+            Toast.makeText(
+                context,
+                when (language) {
+                    AppLanguage.EN -> "The original Mushaf page for this surah is unavailable; opening verse text instead."
+                    AppLanguage.AR -> "صفحة المصحف الأصلية لهذه السورة غير متاحة؛ سيُفتح نص الآيات بدلًا منها."
+                    AppLanguage.CKB -> "پەڕەی ڕەسەنی مصحەف بۆ ئەم سوورەتە بەردەست نییە؛ دەقی ئایەتەکان دەکرێتەوە."
+                },
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
     LaunchedEffect(resumeLastMushaf) {
         if (resumeLastMushaf) {
+            pendingMushafStartSurah = 0
             selected = prefs.getInt("last_surah", initialSurah).coerceIn(1, 114)
             mushafPage = prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)
             query = ""
@@ -427,8 +477,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             onResumeMushafHandled()
         }
     }
-    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList) {
-        if (mushafMode || showSurahList) {
+    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList, openingMushaf) {
+        if (mushafMode || showSurahList || openingMushaf) {
             loading = false
             return@LaunchedEffect
         }
@@ -445,16 +495,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
         loading = false
     }
-    LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode) {
-        if (!showSurahList && !mushafMode && query.isBlank() && verses.isNotEmpty()) {
+    LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode, openingMushaf) {
+        if (!showSurahList && !mushafMode && !openingMushaf && query.isBlank() && verses.isNotEmpty()) {
             val startAt = verses.indexOfFirst { it.number >= initialAyah }
             if (startAt >= 0) listState.scrollToItem(startAt)
         }
     }
-    LaunchedEffect(selected, coloredTajweed, mushafMode, showSurahList, surahs) {
+    LaunchedEffect(selected, coloredTajweed, mushafMode, showSurahList, openingMushaf, surahs) {
         tajweedAyahs = emptyMap()
         tajweedLoadedSurah = 0
-        if (!coloredTajweed || mushafMode || showSurahList) {
+        if (!coloredTajweed || mushafMode || showSurahList || openingMushaf) {
             tajweedLoading = false
             tajweedMessage = ""
             return@LaunchedEffect
@@ -522,7 +572,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
     }
     Column(Modifier.fillMaxSize()) {
-        if (!mushafMode && !showSurahList) {
+        if (!mushafMode && !showSurahList && !openingMushaf) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -738,11 +788,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 onSurah(item.number)
                                 query = ""
                                 selectedAyahForSheet = null
+                                pendingMushafStartSurah = item.number
                                 showSurahList = false
-                                openingMushaf = false
+                                openingMushaf = true
                                 mushafMode = false
                                 prefs.edit()
-                                    .putString("quran_reader_mode", "verse")
                                     .putInt("last_surah", item.number)
                                     .putInt("last_ayah_number", 1)
                                     .apply()
@@ -1834,6 +1884,13 @@ internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boo
     hasSavedPage && !savedReaderMode.equals("verse", ignoreCase = true)
 
 /** In Arabic/Sorani reading order, a physical left swipe advances to the next surah. */
+internal fun resolveSurahStartPage(verses: List<Ayah>, selectedSurah: Int): Int? {
+    if (selectedSurah !in 1..114) return null
+    return verses.firstOrNull { it.surah == selectedSurah && it.number == 1 }
+        ?.page
+        ?.takeIf { it in 1..604 }
+}
+
 internal fun quranSurahSwipeTarget(
     surah: Int,
     horizontalDragPx: Float,
