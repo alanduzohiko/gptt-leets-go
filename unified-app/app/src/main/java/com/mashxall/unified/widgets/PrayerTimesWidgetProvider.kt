@@ -50,15 +50,18 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
     }
 
     private suspend fun updateOne(context: Context, manager: AppWidgetManager, widgetId: Int) {
-        manager.updateAppWidget(widgetId, render(context, widgetId, null, Companion.locationFallback("ckb"), ""))
-        val loaded = runCatching { loadTodayAndTomorrow(context) }.getOrNull()
         val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
             .getString("language", "ckb") ?: "ckb"
+        manager.updateAppWidget(
+            widgetId,
+            render(context, widgetId, null, Companion.locationStatus(context, language), "")
+        )
+        val loaded = runCatching { loadTodayAndTomorrow(context) }.getOrNull()
         val views = render(
             context,
             widgetId,
             loaded?.today,
-            loaded?.locationLabel ?: Companion.locationFallback(language),
+            loaded?.locationLabel ?: Companion.locationStatus(context, language),
             loaded?.nextPrayerLabel(language).orEmpty()
         )
         manager.updateAppWidget(widgetId, views)
@@ -125,11 +128,12 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         val freshGps = if (locationMode == "gps" && isUsableSavedGpsFix(
                 gpsLat, gpsLon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
             )
-        ) gpsLat to gpsLon else null
+        ) gpsLat!! to gpsLon!! else null
         val cityName = com.mashxall.unified.notifications.usableSavedPrayerCityName(
             prefs.getString("selected_city", ""), hasManualCoordinates
         ).orEmpty()
         val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
+        val language = prefs.getString("language", "ckb") ?: "ckb"
 
         suspend fun rowFor(date: Date): PrayerRow? {
             if (locationMode == "gps") {
@@ -219,6 +223,37 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
             "en" -> "Select a city in Mashxall"
             "ar" -> "اختر مدينة في مەشخەڵ"
             else -> "شارێک لە مەشخەڵ هەڵبژێرە"
+        }
+
+        fun locationStatus(context: Context, language: String): String {
+            val prefs = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+            val latitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+            val longitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+            val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
+            val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
+            val mode = resolvePrayerLocationMode(
+                prefs.getString("prayer_location_mode", null),
+                latitude != null && longitude != null,
+                manualLatitude != null && manualLongitude != null
+            )
+            if (mode == "gps") {
+                val usable = isUsableSavedGpsFix(
+                    latitude, longitude, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+                )
+                return if (usable) when (language) {
+                    "en" -> "GPS location • Salawati timetable unavailable nearby"
+                    "ar" -> "موقع GPS • لا يتوفر جدول صلواتي قريب"
+                    else -> "شوێنی GPS • خشتەی صەڵەواتی لە نزیکدا بەردەست نییە"
+                } else when (language) {
+                    "en" -> "Getting current location…"
+                    "ar" -> "جارٍ تحديد موقعك الحالي…"
+                    else -> "شوێنی ئێستات دیاری دەکرێت…"
+                }
+            }
+            val city = prefs.getString("selected_city", "").orEmpty().trim()
+            val country = prefs.getString("selected_city_country", "").orEmpty().trim()
+            if (city.isNotBlank()) return listOf(city, country).filter { it.isNotBlank() }.joinToString(", ")
+            return locationFallback(language)
         }
     }
 }

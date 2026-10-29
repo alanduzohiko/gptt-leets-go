@@ -1160,11 +1160,17 @@ private fun HomeScreen(
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val previouslyPrompted = prefs.getBoolean("prayer_location_prompted", false)
             if (fine || coarse) {
-                // No usable GPS fix and no manual selection: attempt a fresh fix.
+                // GPS is the selected source but no fresh fix exists: acquire it, do not fall back to a saved city.
                 requestHomeLocation()
             } else if (!previouslyPrompted) {
                 prefs.edit().putBoolean("prayer_location_prompted", true).apply()
                 requestHomeLocation()
+            } else if (locationMode == "gps" && (gpsLatitude == null || gpsLongitude == null)) {
+                locationMessage = when (language) {
+                    AppLanguage.EN -> "Current location is selected but Android location permission is off. Allow location or choose a city in Prayer settings."
+                    AppLanguage.AR -> "الموقع الحالي محدد لكن إذن الموقع في Android متوقف. اسمح بالموقع أو اختر مدينة من إعدادات الصلاة."
+                    AppLanguage.CKB -> "شوێنی ئێستا هەڵبژێردراوە بەڵام مۆڵەتی شوێنی ئەندرۆید ناچالاکە؛ مۆڵەت بدە یان لە ڕێکخستنەکانی نوێژ شارێک هەڵبژێرە."
+                }
             }
         }
     }
