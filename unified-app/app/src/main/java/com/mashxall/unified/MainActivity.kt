@@ -144,27 +144,8 @@ private val Panel = Color(0xFF102B25)
  * Native press response for large navigation cards: slight spring scale, the
  * standard Material ripple, and a light haptic acknowledgement on activation.
  */
-private fun Modifier.premiumPress(onClick: () -> Unit): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.975f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "mashxallCardPressScale"
-    )
-    val haptic = LocalHapticFeedback.current
-    graphicsLayer {
-        scaleX = scale
-        scaleY = scale
-    }.clickable(
-        interactionSource = interactionSource,
-        indication = LocalIndication.current,
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onClick()
-        }
-    )
-}
+private fun Modifier.premiumPress(onClick: () -> Unit): Modifier =
+    premiumClickable(onClick = onClick)
 
 internal object MashxallAppearance {
     var accent by mutableStateOf(Color(0xFFC9A44C))
@@ -451,12 +432,22 @@ fun MashxallApp(startScreen: String? = null) {
                             transitionSpec = {
                                 val enterFrom = if (layoutDirection == LayoutDirection.Ltr) 1 else -1
                                 val exitTo = -enterFrom
-                                (fadeIn(animationSpec = tween(240, easing = FastOutSlowInEasing)) +
-                                    slideInHorizontally(animationSpec = tween(260, easing = FastOutSlowInEasing)) { fullWidth ->
-                                        fullWidth * enterFrom / 16
+                                (fadeIn(animationSpec = tween(180, easing = FastOutSlowInEasing)) +
+                                    slideInHorizontally(
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMediumLow
+                                        )
+                                    ) { fullWidth ->
+                                        fullWidth * enterFrom / 18
                                     }) togetherWith
-                                    (fadeOut(animationSpec = tween(170)) +
-                                        slideOutHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth ->
+                                    (fadeOut(animationSpec = tween(150)) +
+                                        slideOutHorizontally(
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        ) { fullWidth ->
                                             fullWidth * exitTo / 24
                                         })
                             },
@@ -648,6 +639,7 @@ private fun AppHeader(
 
 @Composable
 private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor: Color, foreground: Color, onSelect: (String) -> Unit) {
+    val haptic = LocalHapticFeedback.current
     val items = listOf(
         Triple("home", tr(language, "home"), Icons.Outlined.Home),
         Triple("quran", tr(language, "quran"), Icons.Outlined.MenuBook),
@@ -658,7 +650,12 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
     NavigationBar(containerColor = cardColor, contentColor = foreground, windowInsets = WindowInsets.navigationBars) {
         items.forEach { (key, title, icon) ->
             NavigationBarItem(
-                selected = screen == key, onClick = { onSelect(key) },
+                selected = screen == key, onClick = {
+                    if (screen != key) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(key)
+                    }
+                },
                 icon = {
                     Icon(
                         icon,
@@ -1309,7 +1306,7 @@ private fun HomeScreen(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Card(
-            modifier = Modifier.fillMaxWidth().clickable { onOpen(AppScreen.PRAYER) },
+            modifier = Modifier.fillMaxWidth().premiumClickable { onOpen(AppScreen.PRAYER) },
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             border = BorderStroke(1.dp, Gold.copy(alpha = 0.35f))
@@ -1438,7 +1435,7 @@ private fun HomeScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(Gold.copy(alpha = 0.10f))
-                            .clickable(enabled = !locatingLocation) { requestHomeLocation() }
+                            .premiumClickable(enabled = !locatingLocation) { requestHomeLocation() }
                             .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         if (locatingLocation) {
@@ -1463,7 +1460,7 @@ private fun HomeScreen(
                             AppLanguage.AR -> "إعدادات الصلاة"
                             AppLanguage.CKB -> "ڕێکخستنەکانی نوێژ"
                         }, color = foreground.copy(alpha = 0.63f), fontSize = 11.sp,
-                        modifier = Modifier.clickable { onOpen(AppScreen.PRAYER) }
+                        modifier = Modifier.premiumClickable { onOpen(AppScreen.PRAYER) }
                     )
                 }
             }
@@ -1596,7 +1593,7 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
         Spacer(Modifier.height(16.dp))
         worshipModules.forEach { (target, icon) ->
             Card(
-                Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onOpen(target) },
+                Modifier.fillMaxWidth().padding(bottom = 10.dp).premiumClickable { onOpen(target) },
                 colors = CardDefaults.cardColors(containerColor = cardColor),
                 shape = RoundedCornerShape(22.dp),
                 border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.2f))
@@ -1710,7 +1707,7 @@ private fun SettingsScreen(
         )
         Spacer(Modifier.height(9.dp))
         Card(
-            modifier = Modifier.fillMaxWidth().clickable { onDark(!dark) },
+            modifier = Modifier.fillMaxWidth().premiumClickable { onDark(!dark) },
             colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)
         ) {
             Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1822,7 +1819,7 @@ private fun SettingsScreen(
         actions.forEach { (title, subtitle, item) ->
             val (icon, callback) = item
             Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).clickable { callback() },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).premiumClickable { callback() },
                 colors = CardDefaults.cardColors(containerColor = cardColor),
                 shape = RoundedCornerShape(19.dp),
                 border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))

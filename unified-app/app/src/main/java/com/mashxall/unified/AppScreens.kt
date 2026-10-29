@@ -230,7 +230,7 @@ private fun ReaderSettingsCategoryCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().premiumClickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.20f))
@@ -783,7 +783,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             else -> item.place
                         }
                         Card(
-                            modifier = Modifier.fillMaxWidth().clickable {
+                            modifier = Modifier.fillMaxWidth().premiumClickable(hapticFeedback = false) {
                                 selected = item.number
                                 onSurah(item.number)
                                 query = ""
@@ -878,7 +878,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 var loadingRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
                 var relatedHadiths by remember(verse.surah, verse.number) { mutableStateOf<List<AyahHadith>>(emptyList()) }
                 Card(
-                    modifier = Modifier.clickable {
+                    modifier = Modifier.premiumClickable {
                         selected = verse.surah
                         onOpenVerse(verse.surah, verse.number)
                         prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
@@ -1133,7 +1133,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 items(surahs, key = { it.number }) { item ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable { selected = item.number; onSurah(item.number); chooseSurah = false }
+                            .premiumClickable { selected = item.number; onSurah(item.number); chooseSurah = false }
                             .padding(vertical = 9.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1191,7 +1191,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         AppLanguage.EN -> choice.english
                     }
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().premiumClickable {
                             translationKey = choice.id
                             prefs.edit().putString("quran_translation", choice.id).apply()
                             chooseTranslation = false
@@ -1333,7 +1333,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             items(quranTextFontOptions, key = { it.id }) { option ->
                                 val selectedFont = quranTextFontId == option.id
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().clickable {
+                                    modifier = Modifier.fillMaxWidth().premiumClickable {
                                         quranTextFontId = option.id
                                         prefs.edit().putString("quran_text_font", option.id).apply()
                                     },
@@ -1378,7 +1378,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             items(ContentRepository.quranTranslations, key = { "reader-translation-" + it.id }) { choice ->
                                 val label = when (language) { AppLanguage.CKB -> choice.ckb; AppLanguage.AR -> choice.arabic; AppLanguage.EN -> choice.english }
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().clickable { translationKey = choice.id; prefs.edit().putString("quran_translation", choice.id).apply() },
+                                    modifier = Modifier.fillMaxWidth().premiumClickable { translationKey = choice.id; prefs.edit().putString("quran_translation", choice.id).apply() },
                                     colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp),
                                     border = BorderStroke(1.dp, if (translationKey == choice.id) Gold else Gold.copy(alpha = 0.12f))
                                 ) {
@@ -1398,7 +1398,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             items(ContentRepository.tafsirBooks, key = { "reader-tafsir-" + it.id }) { book ->
                                 val label = when (language) { AppLanguage.CKB -> book.labelCkb; AppLanguage.AR -> book.labelAr; AppLanguage.EN -> book.labelEn }
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().clickable { selectedTafsirBook = book.id; prefs.edit().putString("quran_tafsir_book", book.id).apply() },
+                                    modifier = Modifier.fillMaxWidth().premiumClickable { selectedTafsirBook = book.id; prefs.edit().putString("quran_tafsir_book", book.id).apply() },
                                     colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp),
                                     border = BorderStroke(1.dp, if (selectedTafsirBook == book.id) Gold else Gold.copy(alpha = 0.12f))
                                 ) {
@@ -1477,7 +1477,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 )
                             }
                             items(readerReciters.filter { it.audioType == 0 }, key = { "verse-reciter-" + it.id }) { reciter ->
-                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
                                         RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
@@ -1492,7 +1492,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     Spacer(Modifier.height(6.dp))
                                 }
                                 items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
-                                Card(modifier = Modifier.fillMaxWidth().clickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
                                         RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
@@ -2345,7 +2345,7 @@ fun BookmarksScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.BookmarkBorder, null, tint = Gold)
                                 Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f).clickable { onOpen(saved.first, saved.second) }) {
+                                Column(Modifier.weight(1f).premiumClickable { onOpen(saved.first, saved.second) }) {
                                     Text(tr(language, "surah") + " " + saved.first, color = foreground, fontWeight = FontWeight.SemiBold)
                                     Text(tr(language, "ayah") + " " + saved.second, color = foreground.copy(alpha = 0.55f), fontSize = 12.sp)
                                 }
@@ -2469,7 +2469,7 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                     enabled = surah > 1 || ayah > 1
                 ) { Text("‹") }
                 Column(
-                    modifier = Modifier.weight(1f).clickable { chooseSurah = true }.padding(horizontal = 4.dp),
+                    modifier = Modifier.weight(1f).premiumClickable { chooseSurah = true }.padding(horizontal = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -2510,7 +2510,7 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
             LazyColumn(Modifier.height(420.dp)) {
                 items(surahs, key = { it.number }) { item ->
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().premiumClickable {
                             chooseSurah = false
                             onChangeVerse(item.number, 1)
                         }.padding(vertical = 10.dp, horizontal = 4.dp),
@@ -2694,7 +2694,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
                     }
                     Card(
-                        modifier = Modifier.fillMaxWidth().clickable { selectedArticleForDetails = article },
+                        modifier = Modifier.fillMaxWidth().premiumClickable { selectedArticleForDetails = article },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(20.dp),
                         border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.22f))
@@ -2759,7 +2759,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.EN -> hadith.english
                 }
                 Card(
-                    modifier = Modifier.fillMaxWidth().clickable { selectedHadithForDetails = hadith },
+                    modifier = Modifier.fillMaxWidth().premiumClickable { selectedHadithForDetails = hadith },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(19.dp),
                     border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
@@ -3113,7 +3113,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     }
                     val count = allItems.count { it.categoryId == category.id }
                     Card(
-                        modifier = Modifier.fillMaxWidth().clickable { selectedCategory = category.id },
+                        modifier = Modifier.fillMaxWidth().premiumClickable { selectedCategory = category.id },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(20.dp),
                         border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
@@ -3166,7 +3166,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     val count = item.count.coerceAtLeast(1)
                     val completed = progressPrefs.getInt(item.id.toString(), 0)
                     Card(
-                        modifier = Modifier.fillMaxWidth().clickable { selectedItem = item },
+                        modifier = Modifier.fillMaxWidth().premiumClickable { selectedItem = item },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(19.dp),
                         border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
@@ -3464,7 +3464,7 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
+                    modifier = Modifier.fillMaxWidth().premiumClickable { expanded = !expanded }
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4375,7 +4375,7 @@ fun AudioScreen(
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 items(visibleAudio, key = { it.assetPath }) { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                        Row(Modifier.fillMaxWidth().clickable {
+                        Row(Modifier.fillMaxWidth().premiumClickable {
                             if (playing == item.assetPath) {
                                 AudioController.stop()
                                 playing = ""
@@ -5481,7 +5481,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                 }
                 items(visiblePdfs, key = { it }) { path ->
                     Card(
-                        Modifier.clickable { onOpenPdf(path) },
+                        Modifier.premiumClickable { onOpenPdf(path) },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(15.dp)
                     ) {
@@ -6972,7 +6972,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         }
         Spacer(Modifier.height(10.dp))
-        Card(Modifier.fillMaxWidth().clickable { onQibla() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
+        Card(Modifier.fillMaxWidth().premiumClickable { onQibla() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Explore, null, tint = Gold, modifier = Modifier.size(30.dp))
                 Spacer(Modifier.width(12.dp))
@@ -7010,7 +7010,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 LazyColumn(Modifier.height(355.dp)) {
                     items(visibleCities, key = { "${it.name}|${it.country}|${it.latitude}|${it.longitude}" }) { city ->
                         Column(
-                            Modifier.fillMaxWidth().clickable {
+                            Modifier.fillMaxWidth().premiumClickable {
                                 // Manual city mode is explicit and shared with Home, Qibla and scheduled alerts.
                                 onCity(city)
                                 locationMode = "city"
@@ -7136,7 +7136,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
                     Row(
-                        Modifier.fillMaxWidth().clickable {
+                        Modifier.fillMaxWidth().premiumClickable {
                             AudioController.stop()
                             previewingAdhan = ""
                             selectedAdhanAsset = sound.assetPath
@@ -7652,7 +7652,7 @@ fun WordAnalysisScreen(
                                     }
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+                                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).premiumClickable {
                                             selectedPart = part
                                             selectedWord = word
                                         }.padding(horizontal = 3.dp, vertical = 2.dp)
@@ -7819,7 +7819,7 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
                     border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f)),
-                    modifier = Modifier.fillMaxWidth().clickable { selectedRecord = item }
+                    modifier = Modifier.fillMaxWidth().premiumClickable { selectedRecord = item }
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
