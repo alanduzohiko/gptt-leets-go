@@ -3354,6 +3354,29 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+internal data class TasbihTapResult(
+    val roundCount: Int,
+    val totalCount: Int,
+    val accepted: Boolean
+)
+
+/** Enforce the source-defined round target while preserving the all-time total. */
+internal fun nextTasbihTap(roundCount: Int, totalCount: Int, targetCount: Int): TasbihTapResult {
+    val safeRound = roundCount.coerceAtLeast(0)
+    val safeTotal = totalCount.coerceAtLeast(0)
+    if ((targetCount > 0 && safeRound >= targetCount) ||
+        safeRound == Int.MAX_VALUE ||
+        safeTotal == Int.MAX_VALUE
+    ) {
+        return TasbihTapResult(safeRound, safeTotal, accepted = false)
+    }
+    return TasbihTapResult(
+        roundCount = (safeRound + 1).let { next -> if (targetCount > 0) next.coerceAtMost(targetCount) else next },
+        totalCount = safeTotal + 1,
+        accepted = true
+    )
+}
+
 internal fun tasbihProgressFraction(count: Int, target: Int): Float =
     if (target <= 0) 0f else (count.toFloat() / target.toFloat()).coerceIn(0f, 1f)
 
@@ -3440,17 +3463,20 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Modifier.size(238.dp).clip(CircleShape).background(
                 androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF1E7259), DeepGreen, CardDark))
             ).clickable {
-                count += 1
-                totalCount += 1
-                prefs.edit()
-                    .putInt("tasbih_count_$selectedId", count)
-                    .putInt("tasbih_total_$selectedId", totalCount)
-                    .putInt("tasbih_count", count)
-                    .apply()
-                haptic.performHapticFeedback(
-                    if (selected?.targetCount?.let { count >= it } == true) HapticFeedbackType.LongPress
-                    else HapticFeedbackType.TextHandleMove
-                )
+                val result = nextTasbihTap(count, totalCount, targetCount)
+                if (result.accepted) {
+                    count = result.roundCount
+                    totalCount = result.totalCount
+                    prefs.edit()
+                        .putInt("tasbih_count_$selectedId", count)
+                        .putInt("tasbih_total_$selectedId", totalCount)
+                        .putInt("tasbih_count", count)
+                        .apply()
+                    haptic.performHapticFeedback(
+                        if (targetCount > 0 && count >= targetCount) HapticFeedbackType.LongPress
+                        else HapticFeedbackType.TextHandleMove
+                    )
+                }
             }.graphicsLayer {
                 scaleX = tapPulse.value
                 scaleY = tapPulse.value
