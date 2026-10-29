@@ -14,8 +14,23 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.mashxall.unified.AppLanguage
 import java.io.File
 import java.security.MessageDigest
+
+internal data class AdhanNotificationCopy(
+    val fallbackPrayerTitle: String,
+    val contentText: String,
+    val stopAction: String,
+    val channelName: String,
+    val channelDescription: String
+)
+
+internal fun adhanNotificationCopy(language: AppLanguage): AdhanNotificationCopy = when (language) {
+    AppLanguage.EN -> AdhanNotificationCopy("Prayer time", "Adhan · Mashxall", "Stop", "Prayer adhan", "Shown while the selected adhan audio plays.")
+    AppLanguage.AR -> AdhanNotificationCopy("وقت الصلاة", "الأذان · مەشخەڵ", "إيقاف", "أذان الصلاة", "تظهر هذه القناة أثناء تشغيل صوت الأذان المختار.")
+    AppLanguage.CKB -> AdhanNotificationCopy("کاتی نوێژ", "بانگ · مەشخەڵ", "وەستاندن", "بانگی نوێژ", "ئەم ئاگادارکردنەوەیە لە کاتی لێدانی دەنگی بانگی هەڵبژێردراو پیشان دەدرێت.")
+}
 
 internal fun resolveLocalAdhanFileReference(reference: String): File? {
     if (!reference.startsWith("local:")) return null
@@ -40,21 +55,26 @@ class AdhanPlaybackService : Service() {
         }
         val prayerLabel = intent?.getStringExtra(EXTRA_PRAYER_LABEL).orEmpty()
         val audioPath = intent?.getStringExtra(EXTRA_AUDIO_PATH).orEmpty()
-        createNotificationChannel()
+        val language = AppLanguage.from(
+            getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE).getString("language", "ckb")
+        )
+        val notificationCopy = adhanNotificationCopy(language)
+        val channelId = CHANNEL_ID + "_" + language.key
+        createNotificationChannel(channelId, notificationCopy)
         val stopPending = PendingIntent.getService(
             this,
             STOP_REQUEST_CODE,
             Intent(this, AdhanPlaybackService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
         )
-        val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
-            .setContentTitle(prayerLabel.ifBlank { "Prayer time" })
-            .setContentText("Adhan · مەشخەڵ")
+            .setContentTitle(prayerLabel.ifBlank { notificationCopy.fallbackPrayerTitle })
+            .setContentText(notificationCopy.contentText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stopPending)
+            .addAction(android.R.drawable.ic_media_pause, notificationCopy.stopAction, stopPending)
             .build()
         startForeground(NOTIFICATION_ID, notification)
         stopRequested = false
@@ -62,12 +82,12 @@ class AdhanPlaybackService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannel(channelId: String, copy: AdhanNotificationCopy) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                val channel = NotificationChannel(CHANNEL_ID, "Prayer adhan", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Shown while the selected adhan audio plays."
+            if (manager.getNotificationChannel(channelId) == null) {
+                val channel = NotificationChannel(channelId, copy.channelName, NotificationManager.IMPORTANCE_LOW).apply {
+                    description = copy.channelDescription
                     setSound(null, null)
                 }
                 manager.createNotificationChannel(channel)

@@ -23,12 +23,33 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
         if isinstance(item, dict) and item.get("asset_path")
     )
     referenced: dict[str, set[str]] = {}
+    source_text: dict[str, str] = {}
     for source in sources:
         text = source.read_text(encoding="utf-8", errors="replace")
+        source_text[source.name] = source_text.get(source.name, "") + "\\n" + text
         for match in CONTENT_LITERAL.finditer(text):
             referenced.setdefault(match.group(1), set()).add(str(source))
 
     missing: list[dict] = []
+    # Prayer schedule resolution is strictly Salawati-only; Noor's other worship content remains available.
+    repository_text = source_text.get("ContentRepository.kt", "")
+    activity_text = source_text.get("MainActivity.kt", "")
+    runtime_prayer_contract = {
+        "salawati_city_timetable_loader": "loadSalawatiPrayerTimesForCity" in repository_text,
+        "salawati_gps_timetable_lookup": "loadNearbyTimetableRows" in repository_text and "SALAWATI_DB" in repository_text,
+        "rejects_non_salawati_rows": "salawatiOnlyPrayerTimes" in repository_text,
+        "no_noor_prayer_correction_loader": "loadNoorPrayerTimesWithCorrection" not in repository_text,
+        "no_noor_correction_result": "noor-correction:" not in repository_text,
+        "no_noor_source_label": 'normalized.startsWith("noor")' not in activity_text,
+        "no_astronomical_replacement_source": "calculated from coordinates" not in activity_text.lower(),
+    }
+    failed_prayer_contract = [name for name, passed in runtime_prayer_contract.items() if not passed]
+    if failed_prayer_contract:
+        missing.append({
+            "path": "SALAWATI_ONLY_PRAYER_SOURCE_CONTRACT",
+            "sources": [str(source) for source in sources if source.name in {"ContentRepository.kt", "MainActivity.kt"}],
+            "failed_checks": failed_prayer_contract,
+        })
     for path, owners in sorted(referenced.items()):
         if path not in available:
             missing.append({"path": path, "sources": sorted(owners)})
@@ -56,6 +77,7 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
         "source_file_count": len(sources),
         "literal_reference_count": len(referenced),
         "missing_references": missing,
+        "runtime_prayer_source_contract": runtime_prayer_contract,
         "checked_sources": [str(source) for source in sources],
     }
 

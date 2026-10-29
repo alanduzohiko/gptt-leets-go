@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import android.Manifest
+import android.widget.Toast
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -121,6 +122,7 @@ import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -179,10 +181,16 @@ enum class AppLanguage(val key: String, val label: String) {
     }
 }
 
+internal fun homeBackExitMessage(language: AppLanguage): String = when (language) {
+    AppLanguage.EN -> "Press Back again to exit"
+    AppLanguage.AR -> "اضغط رجوع مرة أخرى للخروج"
+    AppLanguage.CKB -> "بۆ دەرچوون جارێکی تر دوگمەی گەڕانەوە دابگرە"
+}
+
 enum class AppScreen(val key: String) {
-    HOME("home"), QURAN("quran"), LIBRARY("library"), WORSHIP("worship"), PRAYER("prayer"), MORE("more"),
+    HOME("home"), QURAN("quran"), WORSHIP("worship"), PRAYER("prayer"), MORE("more"),
     TAFSIR("tafsir"), HADITH("hadith"), AZKAR("azkar"), NAMES("names"), TASBIH("tasbih"),
-    AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
+    AUDIO("audio"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
 /** Preserve an explicit city choice instead of prompting for GPS on every empty GPS state. */
@@ -254,24 +262,21 @@ class MainActivity : ComponentActivity() {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    LaunchedEffect(Unit) {
-        // Mashxall uses a fixed 12-hour clock, including upgrades from older builds.
-        prefs.edit().putBoolean("time_format_24h", false).apply()
-    }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
+    var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
     SideEffect { MashxallAppearance.accent = MashxallAppearance.colorFor(accentPalette) }
     var screen by rememberSaveable {
         mutableStateOf(
             startScreen?.takeIf { candidate ->
-                AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
+                AppScreen.entries.any { it.key == candidate }
             } ?: AppScreen.HOME.key
         )
     }
     var navigationStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(startScreen) {
         val requested = startScreen?.takeIf { candidate ->
-            AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
+            AppScreen.entries.any { it.key == candidate }
         }
         if (requested != null) {
             screen = requested
@@ -297,8 +302,8 @@ fun MashxallApp(startScreen: String? = null) {
             } ?: ""
         )
     }
-    var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
+    var lastHomeBackPressAt by rememberSaveable { mutableStateOf(0L) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
     val rootScreens = setOf("home", "quran", "azkar", "more", "settings")
     val isRoot = screen in rootScreens
@@ -338,7 +343,20 @@ fun MashxallApp(startScreen: String? = null) {
         audioAutoPlayRequested = false
     }
 
+    LaunchedEffect(screen) {
+        lastHomeBackPressAt = 0L
+    }
+
     BackHandler(enabled = !immersiveMushaf && screen != AppScreen.HOME.key) { navigateBack() }
+    BackHandler(enabled = !immersiveMushaf && screen == AppScreen.HOME.key) {
+        val now = System.currentTimeMillis()
+        if (lastHomeBackPressAt > 0L && now - lastHomeBackPressAt <= 2000L) {
+            activity?.finish()
+        } else {
+            lastHomeBackPressAt = now
+            Toast.makeText(context, homeBackExitMessage(language), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val background = if (dark) Ink else Color(0xFFF4F1E7)
     val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
@@ -393,10 +411,10 @@ fun MashxallApp(startScreen: String? = null) {
                         ) { visibleScreen ->
                             Box(Modifier.fillMaxSize()) {
                                 when (visibleScreen) {
-                                "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) }
+                                "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
-                                    language, foreground, cardColor, selectedCity,
-                                    onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) },
+                                    language, foreground, cardColor, selectedCity, use24Hour,
+                                    onOpen = { target -> navigateTo(target.key) },
                                     onResumeReading = {
                                         // First-time users should still see the surah list;
                                         // resume only after a real Mushaf page was saved.
@@ -431,9 +449,19 @@ fun MashxallApp(startScreen: String? = null) {
                                         selectedSurah = s
                                         selectedAyah = a
                                         audioStartsAtReciters = true
+                                        audioStartsAtAdhan = false
                                         audioAutoPlayRequested = true
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo("audio")
+                                    },
+                                    onBrowseReciters = { s, a ->
+                                        selectedSurah = s
+                                        selectedAyah = a
+                                        audioStartsAtReciters = true
+                                        audioStartsAtAdhan = false
+                                        audioAutoPlayRequested = false
+                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                        navigateTo(AppScreen.AUDIO.key)
                                     },
                                     onImmersiveMushaf = { immersiveMushaf = it },
                                     resumeLastMushaf = resumeMushafRequested,
@@ -441,10 +469,9 @@ fun MashxallApp(startScreen: String? = null) {
                                     openSettingsOnEntry = quranSettingsRequested,
                                     onSettingsRequestConsumed = { quranSettingsRequested = false }
                                 )
-                                "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
-                                "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                                                "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
-                                "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = { city ->
+                                "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, use24Hour = use24Hour, onCity = { city ->
                                     selectedCity = city.name
                                     prefs.edit()
                                         .putString("selected_city", city.name)
@@ -468,9 +495,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     focusAdhan = audioStartsAtAdhan,
                                     autoPlayRequested = audioAutoPlayRequested
                                 )
-                                "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
-                                "pdf" -> PdfReaderScreen(language, foreground, selectedPdf)
-                                "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
+                                                                                                "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
                                     selectedSurah = s; selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                     navigationStack = emptyList()
@@ -480,7 +505,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette,
+                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette, use24Hour,
                                     onAccent = {
                                         accentPalette = it
                                         MashxallAppearance.accent = MashxallAppearance.colorFor(it)
@@ -489,6 +514,9 @@ fun MashxallApp(startScreen: String? = null) {
                                     onDark = { dark = it; prefs.edit().putBoolean("dark_mode", it).apply() }, onLanguage = {
                                     language = it
                                     prefs.edit().putString("language", it.key).apply()
+                                }, onTimeFormatChange = { enabled ->
+                                    use24Hour = enabled
+                                    prefs.edit().putBoolean("time_format_24h", enabled).apply()
                                 }, onDataInfo = { navigateTo("about_data") }, onBackup = { navigateTo("backup") }, onAudio = {
                                     audioStartsAtReciters = true
                                     audioStartsAtAdhan = false
@@ -504,7 +532,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     navigateTo("quran")
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) })
+                                else -> HomeScreen(language, foreground, cardColor, selectedCity, use24Hour, onOpen = { target -> navigateTo(target.key) })
                                 }
                             }
                         }
@@ -660,8 +688,7 @@ private fun MoreScreen(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
                                         .animateContentSize()
                                         .premiumPress {
-                                            val target = if (module.screen == AppScreen.LIBRARY) AppScreen.LIBRARY else module.screen
-                                            onOpen(target)
+                                            onOpen(module.screen)
                                         },
                                     colors = CardDefaults.cardColors(containerColor = cardColor),
                                     shape = RoundedCornerShape(21.dp),
@@ -706,23 +733,14 @@ private fun MoreScreen(
 
 private fun prayerSourceLabel(source: String, language: AppLanguage): String {
     val normalized = source.substringBefore(" • ").lowercase(Locale.ROOT)
-    return when {
-        normalized.startsWith("noor") -> when (language) {
-            AppLanguage.EN -> "Noor timetable"
-            AppLanguage.AR -> "جدول نور"
-            AppLanguage.CKB -> "خشتەی نور"
-        }
-        normalized.startsWith("salawati") -> when (language) {
+    return if (normalized.startsWith("salawati")) {
+        when (language) {
             AppLanguage.EN -> "Salawati timetable"
             AppLanguage.AR -> "جدول صلواتي"
             AppLanguage.CKB -> "خشتەی صلواتی"
         }
-        normalized.contains("calculated") || normalized.contains("astronomical") -> when (language) {
-            AppLanguage.EN -> "Calculated from coordinates"
-            AppLanguage.AR -> "حساب فلكي من الإحداثيات"
-            AppLanguage.CKB -> "حسابکردن لە کۆئۆردیناتەکانەوە"
-        }
-        else -> ""
+    } else {
+        ""
     }
 }
 
@@ -758,21 +776,172 @@ internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boo
     return String.format(Locale.US, "%d:%s %s", hour12, minute, marker)
 }
 
+
+internal data class UpcomingPrayerTarget(val key: String, val timeMillis: Long)
+
+private fun parseSourcePrayerClock(raw: String): Pair<Int, Int>? {
+    val match = Regex("""^([01]\d|2[0-3]):([0-5]\d)$""").matchEntire(raw.trim()) ?: return null
+    val hour = match.groupValues[1].toIntOrNull() ?: return null
+    val minute = match.groupValues[2].toIntOrNull() ?: return null
+    return hour to minute
+}
+
+/** Resolve the next named prayer only from valid original Salawati rows. Sunrise is not an adhan. */
+internal fun nextSourcePrayerTarget(
+    today: PrayerRow?,
+    tomorrow: PrayerRow?,
+    nowMillis: Long
+): UpcomingPrayerTarget? {
+    val currentDay = today ?: return null
+    if (!ContentRepository.hasValidPrayerTimes(currentDay)) return null
+    val candidates = listOf(
+        "fajr" to currentDay.fajr,
+        "dhuhr" to currentDay.dhuhr,
+        "asr" to currentDay.asr,
+        "maghrib" to currentDay.maghrib,
+        "isha" to currentDay.isha
+    )
+    for ((key, raw) in candidates) {
+        val (hour, minute) = parseSourcePrayerClock(raw) ?: return null
+        val target = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (target.timeInMillis > nowMillis) return UpcomingPrayerTarget(key, target.timeInMillis)
+    }
+
+    // After Isha, do not guess tomorrow's Fajr: require tomorrow's own Salawati row.
+    val tomorrowRow = tomorrow ?: return null
+    if (!ContentRepository.hasValidPrayerTimes(tomorrowRow)) return null
+    val (hour, minute) = parseSourcePrayerClock(tomorrowRow.fajr) ?: return null
+    val nextDay = Calendar.getInstance().apply {
+        timeInMillis = nowMillis
+        add(Calendar.DAY_OF_YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return nextDay.timeInMillis.takeIf { it > nowMillis }?.let { UpcomingPrayerTarget("fajr", it) }
+}
+
+@Composable
+private fun HomePrayerCountdown(
+    today: PrayerRow?,
+    tomorrow: PrayerRow?,
+    language: AppLanguage,
+    use24Hour: Boolean,
+    foreground: Color,
+    cardColor: Color
+) {
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+    val next = remember(today, tomorrow, nowMillis / 1_000L) {
+        nextSourcePrayerTarget(today, tomorrow, nowMillis)
+    }
+    val nowText = formatPrayerTime(SimpleDateFormat("HH:mm", Locale.US).format(Date(nowMillis)), language, use24Hour)
+    val prayerName = when (next?.key) {
+        "fajr" -> tr(language, "fajr")
+        "dhuhr" -> tr(language, "dhuhr")
+        "asr" -> tr(language, "asr")
+        "maghrib" -> tr(language, "maghrib")
+        "isha" -> tr(language, "isha")
+        else -> ""
+    }
+    val prayerTimeText = next?.let {
+        formatPrayerTime(SimpleDateFormat("HH:mm", Locale.US).format(Date(it.timeMillis)), language, use24Hour)
+    }.orEmpty()
+    val countdown = next?.let {
+        val seconds = ((it.timeMillis - nowMillis).coerceAtLeast(0L) + 999L) / 1_000L
+        String.format(Locale.US, "%02d:%02d:%02d", seconds / 3_600L, (seconds % 3_600L) / 60L, seconds % 60L)
+    }.orEmpty()
+
+    Card(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        colors = CardDefaults.cardColors(containerColor = cardColor.copy(alpha = 0.92f)),
+        shape = RoundedCornerShape(17.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(39.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.13f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Current time"
+                        AppLanguage.AR -> "الوقت الحالي"
+                        AppLanguage.CKB -> "کاتی ئێستا"
+                    },
+                    color = foreground.copy(alpha = 0.58f), fontSize = 10.sp
+                )
+                Text(nowText, color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> if (next == null) "Next prayer unavailable" else "Next: $prayerName"
+                        AppLanguage.AR -> if (next == null) "الصلاة القادمة غير متاحة" else "القادمة: $prayerName"
+                        AppLanguage.CKB -> if (next == null) "نوێژی دواتر بەردەست نییە" else "دواتر: $prayerName"
+                    },
+                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1
+                )
+                if (next != null) {
+                    Text(prayerTimeText, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        countdown,
+                        color = Gold,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.animateContentSize()
+                    )
+                } else {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Requires tomorrow's verified source row after Isha"
+                            AppLanguage.AR -> "يتطلب جدول صلواتي موثوقًا للغد بعد العشاء"
+                            AppLanguage.CKB -> "دوای عیشا پێویستی بە خشتەی پشتڕاستکراوی صەڵەواتی بۆ سبەیە"
+                        },
+                        color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 2
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun HomeScreen(
     language: AppLanguage,
     foreground: Color,
     cardColor: Color,
     selectedCity: String,
+    use24Hour: Boolean,
     onOpen: (AppScreen) -> Unit,
     onResumeReading: () -> Unit = { onOpen(AppScreen.QURAN) }
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
+    var tomorrowPrayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var loadingTimes by remember { mutableStateOf(true) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
-    var use24Hour by remember { mutableStateOf(false) }
     var gpsLatitude by remember { mutableStateOf(prefs.getString("gps_latitude", null)?.toDoubleOrNull()) }
     var gpsLongitude by remember { mutableStateOf(prefs.getString("gps_longitude", null)?.toDoubleOrNull()) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
@@ -780,8 +949,6 @@ private fun HomeScreen(
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
-            use24Hour = false
-            prefs.edit().putBoolean("time_format_24h", false).apply()
             delay(60_000L)
         }
     }
@@ -800,6 +967,25 @@ private fun HomeScreen(
             }
         }.getOrNull()
         loadingTimes = false
+    }
+
+    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+        val tomorrowCalendar = Calendar.getInstance().apply {
+            time = Date(clockNow)
+            add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val tomorrowDate = tomorrowCalendar.time
+        val country = prefs.getString("selected_city_country", "") ?: ""
+        tomorrowPrayerTimes = runCatching {
+            when {
+                gpsLatitude != null && gpsLongitude != null ->
+                    ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, tomorrowDate)
+                else -> ContentRepository.loadPrayerTimes(context, selectedCity, tomorrowDate, country)
+                    ?: ContentRepository.findCityByName(context, selectedCity, country)?.let { city ->
+                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrowDate)
+                    }
+            }
+        }.getOrNull()
     }
 
     val saveLocationFix: (Location) -> Unit = { fix ->
@@ -935,6 +1121,15 @@ private fun HomeScreen(
                     Icon(Icons.Outlined.Explore, contentDescription = null, tint = Gold)
                 }
                 Spacer(Modifier.height(14.dp))
+                HomePrayerCountdown(
+                    today = prayerTimes,
+                    tomorrow = tomorrowPrayerTimes,
+                    language = language,
+                    use24Hour = use24Hour,
+                    foreground = foreground,
+                    cardColor = cardColor
+                )
+                Spacer(Modifier.height(10.dp))
                 when {
                     loadingTimes -> Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
                         androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
@@ -1153,9 +1348,11 @@ private fun SettingsScreen(
     cardColor: Color,
     dark: Boolean,
     accentPalette: String,
+    use24Hour: Boolean,
     onAccent: (String) -> Unit,
     onDark: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
+    onTimeFormatChange: (Boolean) -> Unit,
     onDataInfo: () -> Unit,
     onBackup: () -> Unit,
     onAudio: () -> Unit,
@@ -1254,6 +1451,58 @@ private fun SettingsScreen(
                     )
                 }
                 FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) { AppLanguage.EN -> "TIME FORMAT"; AppLanguage.AR -> "تنسيق الوقت"; AppLanguage.CKB -> "فۆرماتی کات" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Prayer times default to 12-hour display. Choose 24-hour display only if you prefer it."
+                AppLanguage.AR -> "عرض المواقيت الافتراضي هو 12 ساعة؛ اختر 24 ساعة إذا كنت تفضّل ذلك."
+                AppLanguage.CKB -> "پیشاندانی کاتەکانی نوێژ بە بنەڕەت ١٢ کاتژمێرە؛ ئەگەر پێت باشە ٢٤ کاتژمێر هەڵبژێرە."
+            },
+            color = foreground.copy(alpha = 0.58f), fontSize = 11.sp, lineHeight = 17.sp
+        )
+        Spacer(Modifier.height(9.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                Text(
+                    when (language) { AppLanguage.EN -> "Time display"; AppLanguage.AR -> "طريقة عرض الوقت"; AppLanguage.CKB -> "شێوازی پیشاندانی کات" },
+                    color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    FilterChip(
+                        selected = !use24Hour,
+                        onClick = { onTimeFormatChange(false) },
+                        label = {
+                            Text(
+                                when (language) { AppLanguage.EN -> "12-hour"; AppLanguage.AR -> "12 ساعة"; AppLanguage.CKB -> "١٢ کاتژمێر" },
+                                fontSize = 11.sp
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = use24Hour,
+                        onClick = { onTimeFormatChange(true) },
+                        label = {
+                            Text(
+                                when (language) { AppLanguage.EN -> "24-hour"; AppLanguage.AR -> "24 ساعة"; AppLanguage.CKB -> "٢٤ کاتژمێر" },
+                                fontSize = 11.sp
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
         Spacer(Modifier.height(20.dp))

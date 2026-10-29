@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Audit the source prayer databases used for GPS, city and dependent-city schedules.
+"""Read-only quality audit for the single supported prayer-time source: Salawati.
 
-This is a read-only structural/data check. It never edits an original source database.
-It checks coordinate bounds, time/date formats, location references, and the source
-city-correction table before the database is bundled into the Android APK.
+Noor is still used for its separate Quran/worship datasets; this audit deliberately
+does not treat Noor's static prayer rows or correction table as timing fallbacks.
 """
 from __future__ import annotations
 
@@ -16,13 +15,12 @@ from typing import Any
 
 CLOCK = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 MONTH_DAY = re.compile(r"^(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$")
-
 PRAYERS = ("fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha")
 
 
 def open_readonly(path: Path) -> sqlite3.Connection:
     if not path.is_file():
-        raise FileNotFoundError(f"Required prayer database is missing: {path}")
+        raise FileNotFoundError(f"Required Salawati database is missing: {path}")
     uri = path.resolve().as_uri() + "?mode=ro"
     con = sqlite3.connect(uri, uri=True, timeout=15)
     con.row_factory = sqlite3.Row
@@ -42,28 +40,7 @@ def columns(con: sqlite3.Connection, table: str) -> set[str]:
     return {row["name"] for row in con.execute(f'PRAGMA table_info("{table}")')}
 
 
-def require_columns(
-    checks: list[dict[str, Any]],
-    con: sqlite3.Connection,
-    table: str,
-    required: set[str],
-    prefix: str,
-) -> bool:
-    existing_tables = table_names(con)
-    present = table in existing_tables
-    actual = columns(con, table) if present else set()
-    missing = sorted(required - actual)
-    checks.append({
-        "name": f"{prefix}.{table}.required_columns",
-        "passed": present and not missing,
-        "actual": sorted(actual),
-        "expected": sorted(required),
-        **({"missing": missing} if missing else {}),
-    })
-    return present and not missing
-
-
-def check(
+def record(
     checks: list[dict[str, Any]],
     name: str,
     passed: bool,
@@ -80,56 +57,65 @@ def check(
     })
 
 
-def clock_stats(con: sqlite3.Connection, table: str, date_column: str, location_column: str) -> dict[str, Any]:
-    required = set(PRAYERS)
-    available = columns(con, table)
-    if not required <= available:
-        return {"rows": 0, "complete_rows": 0, "invalid_times": {}, "invalid_dates": None}
-    rows = con.execute(
-        f'SELECT "{date_column}",{",".join(chr(34) + p + chr(34) for p in PRAYERS)} FROM "{table}"'
+def require_columns(
+    checks: list[dict[str, Any]],
+    con: sqlite3.Connection,
+    table: str,
+    required: set[str],
+) -> bool:
+    exists = table in table_names(con)
+    actual = columns(con, table) if exists else set()
+    missing = sorted(required - actual)
+    record(
+        checks,
+        f"salawati.{table}.required_columns",
+        exists and not missing,
+        sorted(actual),
+        sorted(required),
+        "Missing columns: " + ", ".join(missing) if missing else "",
     )
+    return exists and not missing
+
+
+def clock_stats(con: sqlite3.Connection) -> dict[str, Any]:
+    available = columns(con, "prayer_time")
+    if not set(PRAYERS + ("date", "location_id")) <= available:
+        return {"rows": 0, "complete_rows": 0, "invalid_times": {}, "invalid_dates": None}
     total = 0
-    complete_rows = 0
+    complete = 0
     invalid_times = {name: 0 for name in PRAYERS}
     invalid_dates = 0
-    for row in rows:
+    select = "SELECT date," + ",".join(f'"{name}"' for name in PRAYERS) + ' FROM "prayer_time"'
+    for row in con.execute(select):
         total += 1
-        date_value = str(row[0] or "").strip()
-        if not MONTH_DAY.fullmatch(date_value):
+        date_ok = bool(MONTH_DAY.fullmatch(str(row[0] or "").strip()))
+        if not date_ok:
             invalid_dates += 1
-        all_valid = True
-        for index, prayer in enumerate(PRAYERS, start=1):
-            value = str(row[index] or "").strip()
-            if not CLOCK.fullmatch(value):
-                invalid_times[prayer] += 1
-                all_valid = False
-        if all_valid and MONTH_DAY.fullmatch(date_value):
-            complete_rows += 1
+        all_times_valid = True
+        for idx, name in enumerate(PRAYERS, start=1):
+            if not CLOCK.fullmatch(str(row[idx] or "").strip()):
+                invalid_times[name] += 1
+                all_times_valid = False
+        if date_ok and all_times_valid:
+            complete += 1
     return {
         "rows": total,
-        "complete_rows": complete_rows,
+        "complete_rows": complete,
         "invalid_times": invalid_times,
         "invalid_dates": invalid_dates,
     }
 
 
-def audit(noor_path: Path, salawati_path: Path) -> dict[str, Any]:
+def audit(salawati_path: Path) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     stats: dict[str, Any] = {}
 
-    with open_readonly(noor_path) as noor, open_readonly(salawati_path) as salawati:
-        noor_integrity = noor.execute("PRAGMA integrity_check").fetchone()[0]
-        salawati_integrity = salawati.execute("PRAGMA integrity_check").fetchone()[0]
-        check(checks, "noor.sqlite_integrity", noor_integrity == "ok", noor_integrity, "ok")
-        check(checks, "salawati.sqlite_integrity", salawati_integrity == "ok", salawati_integrity, "ok")
+    with open_readonly(salawati_path) as salawati:
+        integrity = salawati.execute("PRAGMA integrity_check").fetchone()[0]
+        record(checks, "salawati.sqlite_integrity", integrity == "ok", integrity, "ok")
 
-        noor_requirements = {
-            "cities": {"city", "lat", "lon"},
-            "staticprayertimes": {"city", "date", *PRAYERS},
-            "extra": {"city", "name", "c_base", "correction", "c_order"},
-        }
-        salawati_requirements = {
+        requirements = {
             "country": {"_id", "name"},
             "location": {
                 "_id", "name", "country_id", "latitude", "longitude",
@@ -137,68 +123,17 @@ def audit(noor_path: Path, salawati_path: Path) -> dict[str, Any]:
             },
             "prayer_time": {"location_id", "date", *PRAYERS},
         }
-        noor_ok = all(
-            require_columns(checks, noor, table, cols, "noor")
-            for table, cols in noor_requirements.items()
-        )
-        salawati_ok = all(
-            require_columns(checks, salawati, table, cols, "salawati")
-            for table, cols in salawati_requirements.items()
+        structure_ok = all(
+            require_columns(checks, salawati, table, required)
+            for table, required in requirements.items()
         )
 
-        if noor_ok:
-            city_count = noor.execute("SELECT COUNT(*) FROM cities").fetchone()[0]
-            static_count = noor.execute("SELECT COUNT(*) FROM staticprayertimes").fetchone()[0]
-            correction_count = noor.execute("SELECT COUNT(*) FROM extra").fetchone()[0]
-            noor_clock = clock_stats(noor, "staticprayertimes", "date", "city")
-            coords = noor.execute("""
-                SELECT
-                    SUM(CASE WHEN lat IS NULL OR lon IS NULL THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN lat NOT BETWEEN -90 AND 90 OR lon NOT BETWEEN -180 AND 180 THEN 1 ELSE 0 END)
-                FROM cities
-            """).fetchone()
-            duplicate_timetable_keys = noor.execute("""
-                SELECT COUNT(*) FROM (
-                    SELECT lower(city),date FROM staticprayertimes
-                    GROUP BY lower(city),date HAVING COUNT(*) > 1
-                )
-            """).fetchone()[0]
-            stats["noor"] = {
-                "cities": city_count,
-                "static_prayer_rows": static_count,
-                "city_correction_rows": correction_count,
-                "timetable_quality": noor_clock,
-                "cities_missing_coordinates": coords[0] or 0,
-                "cities_with_out_of_range_coordinates": coords[1] or 0,
-                "duplicate_city_date_keys": duplicate_timetable_keys,
-            }
-            check(checks, "noor.city_count", city_count >= 170, city_count, ">=170")
-            check(checks, "noor.static_timetable_coverage", static_count >= 28000, static_count, ">=28000 rows")
-            check(checks, "noor.city_correction_records", correction_count >= 180, correction_count, ">=180")
-            check(
-                checks, "noor.city_coordinate_bounds",
-                (coords[1] or 0) == 0, coords[1] or 0, 0,
-            )
-            check(
-                checks, "noor.timetable_rows_have_valid_dates_and_clock_values",
-                noor_clock["rows"] == 0 or noor_clock["complete_rows"] / noor_clock["rows"] >= 0.98,
-                noor_clock["complete_rows"], f">=98% of {noor_clock['rows']} rows",
-                "Rows with source-provided empty/invalid clock values are counted per field in the report.",
-            )
-            if duplicate_timetable_keys:
-                warnings.append({
-                    "name": "noor.duplicate_city_date_keys",
-                    "count": duplicate_timetable_keys,
-                    "detail": "These keys may be harmless source aliases, but direct timetable lookup selects the first match.",
-                })
-
-        if salawati_ok:
-            location_count = salawati.execute("SELECT COUNT(*) FROM location").fetchone()[0]
+        if structure_ok:
             country_count = salawati.execute("SELECT COUNT(*) FROM country").fetchone()[0]
+            location_count = salawati.execute("SELECT COUNT(*) FROM location").fetchone()[0]
             prayer_count = salawati.execute("SELECT COUNT(*) FROM prayer_time").fetchone()[0]
             dependent_count = salawati.execute("""
-                SELECT COUNT(*) FROM location
-                WHERE COALESCE(prayer_dependent_id,0) > 0
+                SELECT COUNT(*) FROM location WHERE COALESCE(prayer_dependent_id,0) > 0
             """).fetchone()[0]
             orphan_time_rows = salawati.execute("""
                 SELECT COUNT(*) FROM prayer_time pt
@@ -228,7 +163,7 @@ def audit(noor_path: Path, salawati_path: Path) -> dict[str, Any]:
                 LEFT JOIN country c ON c._id=l.country_id
                 WHERE l.country_id IS NOT NULL AND c._id IS NULL
             """).fetchone()[0]
-            salawati_clock = clock_stats(salawati, "prayer_time", "date", "location_id")
+            quality = clock_stats(salawati)
             stats["salawati"] = {
                 "countries": country_count,
                 "locations": location_count,
@@ -240,17 +175,21 @@ def audit(noor_path: Path, salawati_path: Path) -> dict[str, Any]:
                 "location_rows_with_out_of_range_coordinates": coordinate_rows["invalid"] or 0,
                 "dangling_country_references": country_ref_errors,
                 "duplicate_location_date_keys": duplicate_time_keys,
-                "timetable_quality": salawati_clock,
+                "timetable_quality": quality,
             }
-            check(checks, "salawati.country_count", country_count >= 250, country_count, ">=250")
-            check(checks, "salawati.location_count", location_count >= 160000, location_count, ">=160000")
-            check(checks, "salawati.prayer_timetable_rows", prayer_count >= 45000, prayer_count, ">=45000")
-            check(checks, "salawati.prayer_rows_reference_existing_locations", orphan_time_rows == 0, orphan_time_rows, 0)
-            check(checks, "salawati.dependent_location_references", dangling_dependent_rows == 0, dangling_dependent_rows, 0)
-            check(checks, "salawati.location_coordinate_bounds", (coordinate_rows["invalid"] or 0) == 0, coordinate_rows["invalid"] or 0, 0)
-            check(checks, "salawati.timetable_rows_have_valid_dates_and_clock_values",
-                  salawati_clock["rows"] == 0 or salawati_clock["complete_rows"] / salawati_clock["rows"] >= 0.98,
-                  salawati_clock["complete_rows"], f">=98% of {salawati_clock['rows']} rows")
+            record(checks, "salawati.country_count", country_count >= 250, country_count, ">=250")
+            record(checks, "salawati.location_count", location_count >= 160000, location_count, ">=160000")
+            record(checks, "salawati.prayer_timetable_rows", prayer_count >= 45000, prayer_count, ">=45000")
+            record(checks, "salawati.prayer_rows_reference_existing_locations", orphan_time_rows == 0, orphan_time_rows, 0)
+            record(checks, "salawati.dependent_location_references", dangling_dependent_rows == 0, dangling_dependent_rows, 0)
+            record(checks, "salawati.location_coordinate_bounds", (coordinate_rows["invalid"] or 0) == 0, coordinate_rows["invalid"] or 0, 0)
+            record(
+                checks,
+                "salawati.timetable_rows_have_valid_dates_and_clock_values",
+                quality["rows"] > 0 and quality["complete_rows"] / quality["rows"] >= 0.98,
+                quality["complete_rows"],
+                f">=98% of {quality['rows']} rows",
+            )
             if country_ref_errors:
                 warnings.append({
                     "name": "salawati.dangling_country_references",
@@ -261,35 +200,36 @@ def audit(noor_path: Path, salawati_path: Path) -> dict[str, Any]:
                 warnings.append({
                     "name": "salawati.duplicate_location_date_keys",
                     "count": duplicate_time_keys,
-                    "detail": "Duplicates may cause multiple source timetable matches for the same location and date.",
+                    "detail": "Duplicate source keys may return multiple schedule matches for a location/date.",
                 })
 
     failures = [entry for entry in checks if not entry["passed"]]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "pass" if not failures else "fail",
         "passed_checks": len(checks) - len(failures),
         "failed_checks": len(failures),
         "checks": checks,
         "statistics": stats,
         "warnings": warnings,
-        "source_paths": {"noor": str(noor_path), "salawati": str(salawati_path)},
+        "source_paths": {"salawati": str(salawati_path)},
         "notes": [
-            "All source SQLite connections are opened read-only.",
-            "GPS timetable matching uses bounding-box candidates followed by haversine distance ordering.",
-            "Dependent Salawati locations use the source-linked base location when the original database marks them as dependent.",
-            "Prayer-time resolution returns unavailable rather than calculating replacement times when no valid nearby Salawati timetable exists.",
+            "Only Salawati is accepted as the prayer-time schedule source.",
+            "Dependent locations use Salawati's original prayer_dependent_id relation.",
+            "Noor's prayer database is not a schedule or correction fallback; it remains in the app for separate source content such as Azkar and Allah names.",
+            "GPS lookup uses Salawati locations and source schedule rows only.",
+            "When no valid nearby Salawati schedule exists, the UI reports unavailable rather than inventing/calculating replacement times.",
+            "The database is opened read-only; this audit never edits original source rows.",
         ],
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--noor", required=True, type=Path)
     parser.add_argument("--salawati", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
-    report = audit(args.noor, args.salawati)
+    report = audit(args.salawati)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
