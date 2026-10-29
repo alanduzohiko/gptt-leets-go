@@ -5422,9 +5422,22 @@ internal fun isRecentLocationFix(
     return ageMillis >= 0L && ageMillis <= maxAgeMillis
 }
 
-private fun mostRecentUsableCachedLocation(manager: LocationManager, nowMillis: Long): Location? =
-    listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+private fun mostRecentUsableCachedLocation(
+    context: Context,
+    manager: LocationManager,
+    nowMillis: Long
+): Location? {
+    val hasFinePermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    val hasCoarsePermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    if (!hasFinePermission && !hasCoarsePermission) return null
+
+    return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
         .mapNotNull { provider ->
+            // Even after the explicit permission check, Android can revoke access between calls.
             runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
         }
         .filter { location ->
@@ -5435,6 +5448,7 @@ private fun mostRecentUsableCachedLocation(manager: LocationManager, nowMillis: 
         }
         .maxByOrNull { it.time }
         ?.let(::Location)
+}
 
 internal fun requestCurrentLocation(
     context: Context,
@@ -5447,7 +5461,7 @@ internal fun requestCurrentLocation(
         return
     }
     val now = System.currentTimeMillis()
-    val cachedLocation = mostRecentUsableCachedLocation(manager, now)
+    val cachedLocation = mostRecentUsableCachedLocation(context, manager, now)
     val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
         .filter { provider -> try { manager.isProviderEnabled(provider) } catch (_: Exception) { false } }
 
