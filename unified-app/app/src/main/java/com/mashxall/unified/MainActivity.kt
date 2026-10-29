@@ -221,12 +221,12 @@ internal fun resolvePrayerLocationMode(
     hasUsableCitySelection: Boolean = hasManualCityCoordinates
 ): String = when (savedMode?.lowercase(Locale.ROOT)) {
     "gps" -> "gps"
-    // A legacy "city" setting is valid only when an actual city remains selected.
-    // Otherwise the app would sit on an empty city screen and never request GPS.
-    "city" -> if (hasUsableCitySelection) "city" else "gps"
+    // Keep a manual city only when the old selection includes its actual coordinates.
+    // Older builds sometimes saved a placeholder city name alone; that must not suppress GPS.
+    "city" -> if (hasManualCityCoordinates && hasUsableCitySelection) "city" else "gps"
     else -> when {
         hasSavedGpsCoordinates -> "gps"
-        hasUsableCitySelection || hasManualCityCoordinates -> "city"
+        hasManualCityCoordinates && hasUsableCitySelection -> "city"
         else -> "gps"
     }
 }
@@ -1028,6 +1028,7 @@ private fun HomeScreen(
     var gpsLongitude by remember { mutableStateOf(usableSavedGps?.second) }
     var nearestKnownCity by remember { mutableStateOf<NearbySalawatiCity?>(null) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
+    var locatingLocation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -1100,6 +1101,7 @@ private fun HomeScreen(
     }
 
     val saveLocationFix: (Location) -> Unit = { fix ->
+        locatingLocation = false
         val receivedAt = System.currentTimeMillis()
         val isFreshFix = isRecentLocationFix(fix.time, receivedAt, 60_000L)
         gpsLatitude = fix.latitude
@@ -1138,6 +1140,8 @@ private fun HomeScreen(
         }
     }
     val handleLocationError: (String) -> Unit = { error ->
+        locatingLocation = false
+        loadingTimes = false
         locationMessage = when (error) {
             "LOCATION_LAST_KNOWN_ONLY" -> when (language) {
                 AppLanguage.EN -> "The recent saved location is shown, but Android could not refresh it. Turn on Location and retry."
@@ -1167,14 +1171,32 @@ private fun HomeScreen(
         prefs.edit().putBoolean("prayer_location_prompted", true).apply()
         val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (allowed) requestCurrentLocation(context, saveLocationFix, handleLocationError)
-        else locationMessage = when (language) {
-            AppLanguage.EN -> "Location permission was denied. Choose your city in prayer settings."
-            AppLanguage.AR -> "رُفض إذن الموقع. اختر مدينتك من إعدادات الصلاة."
-            AppLanguage.CKB -> "مۆڵەتی شوێن ڕەتکرایەوە؛ لە ڕێکخستنەکانی نوێژ شارەکەت هەڵبژێرە."
+        if (allowed) {
+            locatingLocation = true
+            requestCurrentLocation(context, saveLocationFix, handleLocationError)
+        } else {
+            locatingLocation = false
+            loadingTimes = false
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Location permission was denied. Enable it in Android settings, or choose a city."
+                AppLanguage.AR -> "رُفض إذن الموقع. فعّله من إعدادات Android أو اختر مدينة."
+                AppLanguage.CKB -> "مۆڵەتی شوێن ڕەتکرایەوە؛ لە ڕێکخستنەکانی Android چالاکی بکە یان شارێک هەڵبژێرە."
+            }
         }
     }
     val requestHomeLocation: () -> Unit = {
+        // Give immediate feedback and stop showing a stale city timetable while GPS is refreshed.
+        locationMode = "gps"
+        prefs.edit().putString("prayer_location_mode", "gps").apply()
+        locatingLocation = true
+        loadingTimes = true
+        prayerTimes = null
+        tomorrowPrayerTimes = null
+        locationMessage = when (language) {
+            AppLanguage.EN -> "Getting your current location…"
+            AppLanguage.AR -> "جارٍ تحديد موقعك الحالي…"
+            AppLanguage.CKB -> "شوێنی ئێستات دیاری دەکرێت…"
+        }
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) requestCurrentLocation(context, saveLocationFix, handleLocationError)
@@ -1302,7 +1324,7 @@ private fun HomeScreen(
                 )
                 Spacer(Modifier.height(10.dp))
                 when {
-                    loadingTimes -> Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
+                    loadingTimes || locatingLocation -> Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
                         androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
                     }
                     prayerEntries.isEmpty() -> Text(
@@ -1343,14 +1365,29 @@ private fun HomeScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "Use my location"
-                            AppLanguage.AR -> "استخدم موقعي"
-                            AppLanguage.CKB -> "شوێنی ئێستام بەکاربهێنە"
-                        }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { requestHomeLocation() }.padding(end = 12.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Gold.copy(alpha = 0.10f))
+                            .clickable(enabled = !locatingLocation) { requestHomeLocation() }
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        if (locatingLocation) {
+                            CircularProgressIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(6.dp))
+                        } else {
+                            Icon(Icons.Outlined.GpsFixed, contentDescription = null, tint = Gold, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(5.dp))
+                        }
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> if (locatingLocation) "Finding location…" else "Use my location"
+                                AppLanguage.AR -> if (locatingLocation) "جارٍ تحديد الموقع…" else "استخدم موقعي"
+                                AppLanguage.CKB -> if (locatingLocation) "شوێن دیاری دەکرێت…" else "شوێنی ئێستام بەکاربهێنە"
+                            }, color = Gold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     Text(
                         when (language) {
