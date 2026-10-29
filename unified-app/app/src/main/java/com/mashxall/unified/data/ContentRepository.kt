@@ -213,6 +213,115 @@ private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.R
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
 }
 
+
+private data class KurdistanCityAlias(
+    val names: List<String>,
+    val sourceTerms: List<String>,
+    val sorani: String,
+    val arabic: String,
+    val english: String
+)
+
+private fun normalizeKurdistanCityText(value: String): String = value
+    .lowercase(Locale.ROOT)
+    .replace("ـ", "")
+    .replace("\u200c", "")
+    .replace("\u200e", "")
+    .replace("\u200f", "")
+    .replace("أ", "ا")
+    .replace("إ", "ا")
+    .replace("آ", "ا")
+    .replace("ٱ", "ا")
+    .replace("ى", "ي")
+    .replace("ة", "ه")
+    .replace("ک", "ك")
+    .replace("ی", "ي")
+    .replace("ە", "ه")
+    .replace("ێ", "ي")
+    .replace("ۆ", "و")
+    .replace("ڕ", "ر")
+    .replace("ڵ", "ل")
+    .filter { it.isLetterOrDigit() }
+
+/** Search Sorani and Arabic spellings against the original Latin Salawati keys. */
+private val kurdistanCityAliases = listOf(
+    KurdistanCityAlias(listOf("Erbil", "Hawler", "Hewler", "هەولێر", "هولێر", "هولير", "أربيل", "اربيل", "اربیل"), listOf("erbil", "hawler", "hewler"), "هەولێر", "أربيل", "Erbil"),
+    KurdistanCityAlias(listOf("Sulaymaniyah", "Sulaimaniyah", "Sulaimani", "Slemani", "Silêmanî", "سلێمانی", "سليمانية", "السليمانية", "سليماني"), listOf("sulaymaniyah", "sulaimaniyah", "sulaimani", "slemani", "silemani"), "سلێمانی", "السليمانية", "Sulaymaniyah"),
+    KurdistanCityAlias(listOf("Duhok", "Dohuk", "دهۆک", "دهوك", "دهوک"), listOf("duhok", "dohuk"), "دهۆک", "دهوك", "Duhok"),
+    KurdistanCityAlias(listOf("Halabja", "Halabjah", "هەڵەبجە", "حلبجة", "حلبجه"), listOf("halabja", "halabjah"), "هەڵەبجە", "حلبجة", "Halabja"),
+    KurdistanCityAlias(listOf("Zakho", "Zaxo", "زاخۆ", "زاخو"), listOf("zakho", "zaxo"), "زاخۆ", "زاخو", "Zakho"),
+    KurdistanCityAlias(listOf("Ranya", "Rania", "ڕانیە", "رانية", "رانيه"), listOf("ranya", "rania"), "ڕانیە", "رانية", "Ranya"),
+    KurdistanCityAlias(listOf("Chamchamal", "چەمچەماڵ", "جمجمال"), listOf("chamchamal"), "چەمچەماڵ", "جمجمال", "Chamchamal"),
+    KurdistanCityAlias(listOf("Koya", "Koysinjaq", "کۆیە", "كويسنجق", "كوية"), listOf("koya", "koysinjaq"), "کۆیە", "كوية", "Koya"),
+    KurdistanCityAlias(listOf("Shaqlawa", "شەقڵاوە", "شقلاوة"), listOf("shaqlawa"), "شەقڵاوە", "شقلاوة", "Shaqlawa"),
+    KurdistanCityAlias(listOf("Soran", "سۆران", "سوران"), listOf("soran"), "سۆران", "سوران", "Soran"),
+    KurdistanCityAlias(listOf("Akre", "Aqra", "ئاکرێ", "عقرة"), listOf("akre", "aqra"), "ئاکرێ", "عقرة", "Akre"),
+    KurdistanCityAlias(listOf("Kirkuk", "کەرکووک", "كركوك"), listOf("kirkuk"), "کەرکووک", "كركوك", "Kirkuk"),
+    KurdistanCityAlias(listOf("Dukan", "دوکان", "دوكان"), listOf("dukan"), "دوکان", "دوكان", "Dukan"),
+    KurdistanCityAlias(listOf("Qaladiza", "Qaladze", "قلادزێ", "قلادزه", "قلعة دزة"), listOf("qaladiza", "qaladze"), "قلادزێ", "قلعة دزة", "Qaladiza"),
+    KurdistanCityAlias(listOf("Penjwen", "پێنجوێن", "بنجوين"), listOf("penjwen"), "پێنجوێن", "بنجوين", "Penjwen"),
+    KurdistanCityAlias(listOf("Darbandikhan", "دەربەندیخان", "دربنديخان"), listOf("darbandikhan"), "دەربەندیخان", "دربنديخان", "Darbandikhan"),
+    KurdistanCityAlias(listOf("Kalar", "کەلار", "كلار"), listOf("kalar"), "کەلار", "كلار", "Kalar"),
+    KurdistanCityAlias(listOf("Kifri", "کفری", "كفري"), listOf("kifri"), "کفری", "كفري", "Kifri"),
+    KurdistanCityAlias(listOf("Khanaqin", "خانەقین", "خانقين"), listOf("khanaqin"), "خانەقین", "خانقين", "Khanaqin"),
+    KurdistanCityAlias(listOf("Makhmur", "مەخمور", "مخمور"), listOf("makhmur"), "مەخمور", "مخمور", "Makhmur"),
+    KurdistanCityAlias(listOf("Bardarash", "بەردەڕەش", "بردرش"), listOf("bardarash"), "بەردەڕەش", "بردرش", "Bardarash"),
+    KurdistanCityAlias(listOf("Harir", "هەریر", "حرير"), listOf("harir"), "هەریر", "حرير", "Harir"),
+    KurdistanCityAlias(listOf("Barzan", "بارزان"), listOf("barzan"), "بارزان", "بارزان", "Barzan"),
+    KurdistanCityAlias(listOf("Mergasor", "میرگەسۆر", "ميركسور"), listOf("mergasor", "margasor"), "میرگەسۆر", "ميركسور", "Mergasor"),
+    KurdistanCityAlias(listOf("Sidakan", "سیدەکان", "سيدكان"), listOf("sidakan"), "سیدەکان", "سيدكان", "Sidakan"),
+    KurdistanCityAlias(listOf("Sharbazher", "شەربەژێر", "شهربازير"), listOf("sharbazher"), "شەربەژێر", "شهربازير", "Sharbazher")
+)
+
+private val kurdistanRegionSearchNames = setOf(
+    "کوردستان", "کوردستانی عێراق", "هەرێمی کوردستان", "هەرێمی کوردستانی عێراق",
+    "اقلیم کوردستان", "اقلیم کوردستان العراق", "إقليم كردستان", "اقليم كردستان",
+    "إقليم كردستان العراق", "اقليم كردستان العراق", "Kurdistan", "Kurdistan Region",
+    "Iraqi Kurdistan"
+).map(::normalizeKurdistanCityText).toSet()
+
+internal fun isKurdistanRegionSearchQuery(query: String): Boolean =
+    normalizeKurdistanCityText(query) in kurdistanRegionSearchNames
+
+internal fun expandKurdistanCitySearchTerms(query: String): List<String> {
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return emptyList()
+    val needle = normalizeKurdistanCityText(trimmed)
+    if (needle.length < 3) return listOf(trimmed)
+    val matches = kurdistanCityAliases.filter { alias ->
+        alias.names.any { name ->
+            val normalized = normalizeKurdistanCityText(name)
+            normalized == needle || normalized.startsWith(needle)
+        }
+    }
+    if (matches.isEmpty()) return listOf(trimmed)
+    return (listOf(trimmed) + matches.flatMap { it.sourceTerms }).distinct()
+}
+
+internal fun citySearchMatchesQuery(query: String, sourceCityName: String, countryName: String): Boolean {
+    if (query.isBlank() || isKurdistanRegionSearchQuery(query)) return true
+    val normalizedQuery = normalizeKurdistanCityText(query)
+    val terms = expandKurdistanCitySearchTerms(query)
+    return terms.any { term ->
+        sourceCityName.contains(term, ignoreCase = true) ||
+            countryName.contains(term, ignoreCase = true)
+    } || normalizeKurdistanCityText(sourceCityName).contains(normalizedQuery) ||
+        normalizeKurdistanCityText(countryName).contains(normalizedQuery)
+}
+
+internal fun localizedKurdistanCityName(sourceCityName: String, languageKey: String): String {
+    val normalized = normalizeKurdistanCityText(sourceCityName)
+    val alias = kurdistanCityAliases.firstOrNull { item ->
+        item.names.any { normalizeKurdistanCityText(it) == normalized } ||
+            item.sourceTerms.any { normalizeKurdistanCityText(it) == normalized }
+    } ?: return sourceCityName
+    return when (languageKey.lowercase(Locale.ROOT)) {
+        "ckb" -> alias.sorani
+        "ar" -> alias.arabic
+        else -> alias.english
+    }
+}
+
 object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
     const val PRAYER_DB = "content/noor_tafsir_1.2.2/base/assets/prayertimes.db"
@@ -1585,7 +1694,11 @@ object ContentRepository {
      * into prayer-location choices. Dependent locations are searchable too.
      */
     suspend fun searchCities(context: Context, query: String = "", limit: Int = 220): List<City> = withContext(Dispatchers.IO) {
-        val term = query.trim()
+        val requestedTerm = query.trim()
+        // Searching for Kurdistan shows the curated local city list; Sorani and
+        // Arabic city names expand to the original source-database spellings.
+        val term = if (isKurdistanRegionSearchQuery(requestedTerm)) "" else requestedTerm
+        val searchTerms = expandKurdistanCitySearchTerms(term)
         val pageLimit = limit.coerceIn(20, 300)
         val pattern = "%$term%"
         val where = if (term.isBlank()) {
@@ -1616,7 +1729,10 @@ object ContentRepository {
                 )
             )
             """.trimIndent()
-        } else "(l.name LIKE ? OR country.name LIKE ?)"
+        } else {
+            val cityClauses = searchTerms.joinToString(" OR ") { "lower(l.name) LIKE lower(?)" }
+            "($cityClauses OR lower(country.name) LIKE lower(?))"
+        }
         queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
             val sql = """
                 SELECT l.name AS city,l.latitude AS lat,l.longitude AS lon,
@@ -1642,7 +1758,7 @@ object ContentRepository {
             val args = if (term.isBlank()) {
                 arrayOf("", "", pageLimit.toString())
             } else {
-                arrayOf(pattern, pattern, term, "$term%", pageLimit.toString())
+                (searchTerms.map { "%$it%" } + listOf(pattern, term, "$term%", pageLimit.toString())).toTypedArray()
             }
             db.rawQuery(sql, args).use { cursor ->
                 buildList {

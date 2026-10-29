@@ -5167,8 +5167,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val visibleCities = remember(cities, citySearch) {
         if (citySearch.isBlank()) cities
         else cities.filter { city ->
-            city.name.contains(citySearch.trim(), ignoreCase = true) ||
-                city.country.contains(citySearch.trim(), ignoreCase = true)
+            ContentRepository.citySearchMatchesQuery(citySearch.trim(), city.name, city.country)
         }
     }
 
@@ -5721,8 +5720,11 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 chooseCity = false
                             }.padding(vertical = 9.dp, horizontal = 4.dp)
                         ) {
-                            Text(city.name, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            if (city.country.isNotBlank()) Text(city.country, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp)
+                            val localizedCityName = ContentRepository.localizedKurdistanCityName(city.name, language.key)
+                            Text(localizedCityName, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            val cityDetails = listOf(city.name.takeIf { it != localizedCityName }, city.country)
+                                .filter { !it.isNullOrBlank() }.joinToString(" • ")
+                            if (cityDetails.isNotBlank()) Text(cityDetails, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp)
                         }
                         Divider(color = foreground.copy(alpha = 0.08f))
                     }
@@ -6047,7 +6049,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                 }
                 Spacer(Modifier.height(18.dp))
                 Text(
-                    city?.name?.let { if (it == "GPS") when (language) { AppLanguage.EN -> "Current location"; AppLanguage.AR -> "الموقع الحالي"; AppLanguage.CKB -> "شوێنی ئێستا" } else it } ?: when (language) {
+                    city?.name?.let { if (it == "GPS") when (language) { AppLanguage.EN -> "Current location"; AppLanguage.AR -> "الموقع الحالي"; AppLanguage.CKB -> "شوێنی ئێستا" } else ContentRepository.localizedKurdistanCityName(it, language.key) } ?: when (language) {
                         AppLanguage.EN -> "Location unavailable"
                         AppLanguage.AR -> "الموقع غير متاح"
                         AppLanguage.CKB -> "شوێن بەردەست نییە"

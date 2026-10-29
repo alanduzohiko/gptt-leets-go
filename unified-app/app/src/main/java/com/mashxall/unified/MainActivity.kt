@@ -919,7 +919,7 @@ private fun HomeScreen(
                                 AppLanguage.AR -> "الموقع الحالي"
                                 AppLanguage.CKB -> "شوێنی ئێستا"
                             }
-                        } else selectedCity.ifBlank {
+                        } else ContentRepository.localizedKurdistanCityName(selectedCity, language.key).ifBlank {
                             when (language) {
                                 AppLanguage.EN -> "Location not set"
                                 AppLanguage.AR -> "لم يُحدَّد الموقع"
