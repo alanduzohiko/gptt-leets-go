@@ -4447,6 +4447,24 @@ internal enum class AudioPlaybackFailure {
     STREAM
 }
 
+internal data class AudioSequenceFailureDecision(
+    val nextIndex: Int?,
+    val showFailureMessage: Boolean
+)
+
+/** Skip an unavailable verse recording so one missing ayah does not stop a full surah. */
+internal fun audioSequenceFailureDecision(
+    currentIndex: Int,
+    totalTracks: Int,
+    hasStartedPlayback: Boolean
+): AudioSequenceFailureDecision {
+    val next = (currentIndex + 1).takeIf { it in 0 until totalTracks }
+    return AudioSequenceFailureDecision(
+        nextIndex = next,
+        showFailureMessage = next == null && !hasStartedPlayback
+    )
+}
+
 internal fun adhanAudioActionDescription(language: AppLanguage, isPlaying: Boolean): String = when (language) {
     AppLanguage.EN -> if (isPlaying) "Pause adhan" else "Play adhan"
     AppLanguage.AR -> if (isPlaying) "إيقاف الأذان مؤقتًا" else "تشغيل الأذان"
@@ -4500,15 +4518,40 @@ private object AudioController {
             return
         }
         val generation = playbackGeneration
-        fun playAt(index: Int) {
+        var hasStartedPlayback = false
+        lateinit var playAt: (Int) -> Unit
+
+        fun handleTrackFailure(index: Int) {
+            if (generation != playbackGeneration) return
+            val decision = audioSequenceFailureDecision(index, sources.size, hasStartedPlayback)
+            val nextIndex = decision.nextIndex
+            if (nextIndex != null) {
+                // Defer the retry to avoid deep synchronous recursion if several files fail quickly.
+                Handler(Looper.getMainLooper()).post { playAt(nextIndex) }
+                return
+            }
+            if (decision.showFailureMessage) {
+                Toast.makeText(
+                    context,
+                    audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            callback(false)
+            stop()
+        }
+
+        playAt = fun(index: Int) {
             if (generation != playbackGeneration) return
             if (index >= sources.size) {
                 callback(false)
                 return
             }
+            var currentPlayer: MediaPlayer? = null
             try {
                 val source = sources[index]
                 val next = MediaPlayer()
+                currentPlayer = next
                 player = next
                 if (source.startsWith("local:")) next.setDataSource(source.removePrefix("local:"))
                 else next.setDataSource(source)
@@ -4517,8 +4560,17 @@ private object AudioController {
                         runCatching { prepared.release() }
                         return@setOnPreparedListener
                     }
-                    prepared.start()
-                    if (index == 0) callback(true)
+                    try {
+                        prepared.start()
+                        if (!hasStartedPlayback) {
+                            hasStartedPlayback = true
+                            callback(true)
+                        }
+                    } catch (_: Exception) {
+                        runCatching { prepared.release() }
+                        if (player === prepared) player = null
+                        handleTrackFailure(index)
+                    }
                 }
                 next.setOnCompletionListener { completed ->
                     if (generation != playbackGeneration) {
@@ -4532,27 +4584,17 @@ private object AudioController {
                 next.setOnErrorListener { failed, _, _ ->
                     runCatching { failed.release() }
                     if (generation == playbackGeneration) {
-                        player = null
-                        callback(false)
-                        Toast.makeText(
-                            context,
-                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
-                            Toast.LENGTH_LONG
-                        ).show()
-                        stop()
+                        if (player === failed) player = null
+                        handleTrackFailure(index)
                     }
                     true
                 }
                 next.prepareAsync()
             } catch (_: Exception) {
                 if (generation == playbackGeneration) {
-                    callback(false)
-                    Toast.makeText(
-                        context,
-                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
-                        Toast.LENGTH_LONG
-                    ).show()
-                    stop()
+                    runCatching { currentPlayer?.release() }
+                    if (player === currentPlayer) player = null
+                    handleTrackFailure(index)
                 }
             }
         }
