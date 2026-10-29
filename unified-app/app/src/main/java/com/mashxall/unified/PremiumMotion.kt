@@ -169,7 +169,7 @@ internal fun PremiumLoadingSkeleton(
 internal fun staggerDelayMillis(index: Int): Long =
     index.coerceIn(0, 8) * 28L
 
-private fun systemAllowsDecorativeMotion(context: Context): Boolean {
+internal fun systemAllowsDecorativeMotion(context: Context): Boolean {
     val animatorEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         ValueAnimator.areAnimatorsEnabled()
     } else {

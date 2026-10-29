@@ -27,6 +27,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -57,6 +59,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -69,6 +73,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Explore
@@ -89,6 +95,8 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.WbTwilight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -456,16 +464,18 @@ fun MashxallApp(startScreen: String? = null) {
                             transitionSpec = {
                                 val enterFrom = if (layoutDirection == LayoutDirection.Ltr) 1 else -1
                                 val exitTo = -enterFrom
-                                (fadeIn(animationSpec = tween(180, easing = FastOutSlowInEasing)) +
+                                (fadeIn(animationSpec = tween(240, easing = FastOutSlowInEasing)) +
+                                    scaleIn(initialScale = 0.94f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) +
                                     slideInHorizontally(
                                         animationSpec = spring(
                                             dampingRatio = Spring.DampingRatioNoBouncy,
                                             stiffness = Spring.StiffnessMediumLow
                                         )
                                     ) { fullWidth ->
-                                        fullWidth * enterFrom / 18
+                                        fullWidth * enterFrom / 8
                                     }) togetherWith
-                                    (fadeOut(animationSpec = tween(150)) +
+                                    (fadeOut(animationSpec = tween(180)) +
+                                        scaleOut(targetScale = 0.975f, animationSpec = tween(180, easing = FastOutSlowInEasing)) +
                                         slideOutHorizontally(
                                             animationSpec = spring(
                                                 dampingRatio = Spring.DampingRatioNoBouncy,
@@ -627,36 +637,87 @@ private fun AppHeader(
     onLanguage: (AppLanguage) -> Unit, onBack: () -> Unit,
     onSettings: () -> Unit, showBack: Boolean
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().background(if (isDark) Ink else Color(0xFFF4F1E7)).padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val logoScale by animateFloatAsState(
+        targetValue = if (isDark) 1.045f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "Mashxall brand emblem response"
+    )
+    Box(
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(23.dp))
+            .background(if (isDark) Color.White.copy(alpha = 0.035f) else Color.White.copy(alpha = 0.82f))
+            .border(1.dp, Gold.copy(alpha = if (isDark) 0.18f else 0.14f), RoundedCornerShape(23.dp))
+            .padding(horizontal = 9.dp, vertical = 8.dp)
     ) {
-        if (showBack) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Outlined.Explore, contentDescription = tr(language, "back"), tint = Gold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showBack) {
+                Box(
+                    Modifier.size(36.dp).clip(RoundedCornerShape(13.dp))
+                        .background(Gold.copy(alpha = 0.12f))
+                        .premiumClickable { onBack() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Gold, modifier = Modifier.size(20.dp))
+                }
+            } else {
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(15.dp))
+                        .background(Brush.linearGradient(listOf(DeepGreen, Emerald, Color(0xFF235C48))))
+                        .border(1.dp, Gold.copy(alpha = 0.36f), RoundedCornerShape(15.dp))
+                        .graphicsLayer { scaleX = logoScale; scaleY = logoScale },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(31.dp).border(1.dp, Gold.copy(alpha = 0.30f), CircleShape))
+                    Icon(
+                        Icons.Outlined.NightsStay, contentDescription = null, tint = Gold,
+                        modifier = Modifier.size(23.dp).graphicsLayer { rotationZ = if (isDark) -18f else 10f }
+                    )
+                }
             }
-        } else {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(DeepGreen, Emerald))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text("مـــەشــخـــەڵ", color = foreground, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1)
+                Text("M A S H X A L L", color = Gold, fontSize = 8.sp, letterSpacing = 1.8.sp, maxLines = 1)
             }
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text("مـــەشــخـــەڵ", color = foreground, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-            Text("M A S H X A L L", color = Gold, fontSize = 9.sp, letterSpacing = 2.2.sp)
-        }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            items(AppLanguage.entries) { lang ->
-                FilterChip(
-                    selected = language == lang, onClick = { onLanguage(lang) },
-                    label = { Text(lang.label, fontSize = 10.sp, maxLines = 1) },
-                    modifier = Modifier.height(30.dp),
-                    border = BorderStroke(0.6.dp, if (language == lang) Gold else foreground.copy(alpha = 0.18f))
-                )
+            LazyRow(
+                modifier = Modifier.width(123.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(AppLanguage.entries) { lang ->
+                    val selected = language == lang
+                    val chipFill by animateColorAsState(
+                        targetValue = if (selected) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        label = "Mashxall language chip"
+                    )
+                    val chipText by animateColorAsState(
+                        targetValue = if (selected) Gold else foreground.copy(alpha = 0.72f),
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        label = "Mashxall language label"
+                    )
+                    Box(
+                        Modifier.clip(CircleShape).background(chipFill)
+                            .border(1.dp, if (selected) Gold.copy(alpha = 0.45f) else foreground.copy(alpha = 0.09f), CircleShape)
+                            .premiumClickable(hapticFeedback = false) { onLanguage(lang) }
+                            .padding(horizontal = 7.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(lang.label, color = chipText, fontSize = 9.sp, maxLines = 1, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
             }
-        }
-        if (!showBack) IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = Gold)
+            if (!showBack) {
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier.size(33.dp).clip(CircleShape).background(Gold.copy(alpha = 0.11f))
+                        .premiumClickable { onSettings() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = Gold, modifier = Modifier.size(19.dp))
+                }
+            }
         }
     }
 }
@@ -666,47 +727,83 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
     val haptic = LocalHapticFeedback.current
     val items = listOf(
         Triple("home", tr(language, "home"), Icons.Outlined.Home),
-        Triple("quran", tr(language, "quran"), Icons.Outlined.MenuBook),
+        Triple("quran", tr(language, "quran"), Icons.Outlined.AutoStories),
         Triple("azkar", tr(language, "azkar"), Icons.Outlined.Spa),
-        Triple("more", tr(language, "more"), Icons.Outlined.MoreHoriz),
-        Triple("settings", tr(language, "settings"), Icons.Outlined.Settings)
+        Triple("more", tr(language, "more"), Icons.Outlined.Explore),
+        Triple("settings", tr(language, "settings"), Icons.Outlined.Tune)
     )
-    NavigationBar(containerColor = cardColor, contentColor = foreground, windowInsets = WindowInsets.navigationBars) {
-        items.forEach { (key, title, icon) ->
-            NavigationBarItem(
-                selected = screen == key, onClick = {
-                    if (screen != key) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSelect(key)
-                    }
-                },
-                icon = {
-                    val iconScale by animateFloatAsState(
-                        targetValue = if (screen == key) 1.13f else 0.94f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        ),
-                        label = "Mashxall bottom navigation icon"
-                    )
-                    Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = cardColor,
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.19f)),
+        shadowElevation = 9.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 5.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { (key, title, icon) ->
+                val selected = screen == key
+                val selectedFill by animateColorAsState(
+                    targetValue = if (selected) Gold.copy(alpha = 0.15f) else Color.Transparent,
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    label = "Mashxall navigation selection surface"
+                )
+                val iconTint by animateColorAsState(
+                    targetValue = if (selected) Gold else foreground.copy(alpha = 0.62f),
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    label = "Mashxall navigation icon tint"
+                )
+                val labelTint by animateColorAsState(
+                    targetValue = if (selected) foreground else foreground.copy(alpha = 0.57f),
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    label = "Mashxall navigation label tint"
+                )
+                val iconScale by animateFloatAsState(
+                    targetValue = if (selected) 1.12f else 0.91f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "Mashxall navigation icon spring"
+                )
+                Column(
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(20.dp))
+                        .background(selectedFill)
+                        .premiumClickable(hapticFeedback = false) {
+                            if (!selected) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSelect(key)
+                            }
+                        }
+                        .padding(vertical = 5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                        if (selected) {
+                            Box(
+                                Modifier.size(32.dp).clip(CircleShape)
+                                    .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.20f), Gold.copy(alpha = 0.045f))))
+                            )
+                        }
                         Icon(
-                            icon,
-                            contentDescription = title,
-                            modifier = Modifier.graphicsLayer {
-                                scaleX = iconScale
-                                scaleY = iconScale
-                            }.size(21.dp)
+                            icon, contentDescription = title,
+                            tint = iconTint,
+                            modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                         )
                     }
-                },
-                label = { Text(title, fontSize = 9.sp, maxLines = 1) },
-                alwaysShowLabel = true
-            )
+                    Spacer(Modifier.height(3.dp))
+                    Text(title, color = labelTint, fontSize = 9.sp, maxLines = 1, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                    if (selected) {
+                        Box(Modifier.padding(top = 3.dp).width(14.dp).height(2.dp).clip(CircleShape).background(Gold))
+                    } else {
+                        Spacer(Modifier.height(5.dp))
+                    }
+                }
+            }
         }
     }
 }
-
 
 @Composable
 private fun MoreScreen(
@@ -1032,6 +1129,155 @@ private fun HomePrayerCountdown(
                         },
                         color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 2
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PremiumHomeHero(
+    language: AppLanguage,
+    onResumeReading: () -> Unit,
+    onOpenQibla: () -> Unit
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val moonMotion = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall welcome moon")
+        val scale by transition.animateFloat(
+            initialValue = 0.94f,
+            targetValue = 1.045f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall welcome moon breathing"
+        )
+        val rotation by transition.animateFloat(
+            initialValue = -12f,
+            targetValue = 12f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(4300, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall welcome moon tilt"
+        )
+        scale to rotation
+    } else {
+        1f to -8f
+    }
+    val title = when (language) {
+        AppLanguage.EN -> "A moment of calm"
+        AppLanguage.AR -> "مساحة من السكينة"
+        AppLanguage.CKB -> "ساتێک بۆ ئارامی"
+    }
+    val subtitle = when (language) {
+        AppLanguage.EN -> "Your Quran, daily remembrance and prayer life in one place."
+        AppLanguage.AR -> "قرآنك وأذكارك ومواقيت صلاتك، كلّها قريبة منك."
+        AppLanguage.CKB -> "قورئان، زیکر و کاتی نوێژ لە یەک شوێندا."
+    }
+    val dailyLabel = when (language) {
+        AppLanguage.EN -> "YOUR DAILY COMPANION"
+        AppLanguage.AR -> "رفيقك اليومي"
+        AppLanguage.CKB -> "هاوڕێی ڕۆژانەت"
+    }
+    val readLabel = when (language) {
+        AppLanguage.EN -> "Continue Quran"
+        AppLanguage.AR -> "تابع القرآن"
+        AppLanguage.CKB -> "بەردەوام بە"
+    }
+    val qiblaLabel = when (language) {
+        AppLanguage.EN -> "Qibla"
+        AppLanguage.AR -> "القبلة"
+        AppLanguage.CKB -> "قیبلە"
+    }
+
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(420, easing = FastOutSlowInEasing)) +
+            slideInVertically(animationSpec = tween(420, easing = FastOutSlowInEasing)) { height -> height / 9 }
+    ) {
+        Box(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(29.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF0B3028), Color(0xFF145540), Color(0xFF0C382F))))
+                .border(1.dp, Gold.copy(alpha = 0.42f), RoundedCornerShape(29.dp))
+        ) {
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 44.dp, y = (-66).dp).size(174.dp)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.25f), Color(0xFF2F8465).copy(alpha = 0.08f), Color.Transparent)))
+            )
+            Box(
+                Modifier.align(Alignment.BottomStart).offset(x = (-36).dp, y = 42.dp).size(112.dp)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFF61B993).copy(alpha = 0.17f), Color.Transparent)))
+            )
+            Column(Modifier.fillMaxWidth().padding(17.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Row(
+                            Modifier.clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.075f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                                .padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF81D9AC)))
+                            Spacer(Modifier.width(6.dp))
+                            Text(dailyLabel, color = PaleGold, fontSize = 8.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        }
+                        Spacer(Modifier.height(11.dp))
+                        Text(title, color = Color(0xFFFFF8E7), fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2)
+                        Spacer(Modifier.height(4.dp))
+                        Text(subtitle, color = Color.White.copy(alpha = 0.74f), fontSize = 11.sp, lineHeight = 17.sp, maxLines = 2)
+                    }
+                    Spacer(Modifier.width(9.dp))
+                    Box(
+                        Modifier.size(78.dp).clip(CircleShape)
+                            .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color.White.copy(alpha = 0.025f))))
+                            .border(1.dp, Gold.copy(alpha = 0.38f), CircleShape)
+                            .graphicsLayer { scaleX = moonMotion.first; scaleY = moonMotion.first },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(Modifier.size(62.dp).border(1.dp, Gold.copy(alpha = 0.25f), CircleShape))
+                        Icon(
+                            Icons.Outlined.NightsStay,
+                            contentDescription = null,
+                            tint = Gold,
+                            modifier = Modifier.size(42.dp).graphicsLayer { rotationZ = moonMotion.second }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                            .background(Brush.horizontalGradient(listOf(Gold, PaleGold)))
+                            .premiumClickable { onResumeReading() }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = Ink, modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text(readLabel, color = Ink, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Spacer(Modifier.width(5.dp))
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Ink, modifier = Modifier.size(16.dp))
+                    }
+                    Row(
+                        Modifier.clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.045f))
+                            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
+                            .premiumClickable { onOpenQibla() }
+                            .padding(horizontal = 11.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Outlined.Explore, contentDescription = null, tint = PaleGold, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(qiblaLabel, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
                 }
             }
         }
@@ -1460,15 +1706,52 @@ private fun HomeScreen(
                     else -> prayerEntries.chunked(3).forEach { trio ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             trio.forEach { (key, label, time) ->
+                                val activePrayer = key == upcomingPrayerKey
+                                val tileFill by animateColorAsState(
+                                    targetValue = if (activePrayer) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
+                                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                                    label = "Mashxall upcoming prayer tile"
+                                )
+                                val tileOutline by animateColorAsState(
+                                    targetValue = if (activePrayer) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.08f),
+                                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                                    label = "Mashxall prayer tile outline"
+                                )
                                 Column(
-                                    Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
-                                        .background(if (key == upcomingPrayerKey) Gold.copy(alpha = 0.11f) else foreground.copy(alpha = 0.035f))
-                                        .padding(horizontal = 8.dp, vertical = 11.dp),
+                                    Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                                        .background(Brush.verticalGradient(listOf(tileFill, tileFill.copy(alpha = (tileFill.alpha * 0.68f).coerceAtLeast(0.018f)))))
+                                        .border(1.dp, tileOutline, RoundedCornerShape(16.dp))
+                                        .premiumClickable(hapticFeedback = false) { onOpen(AppScreen.PRAYER) }
+                                        .padding(horizontal = 5.dp, vertical = 9.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(label, color = foreground.copy(alpha = 0.65f), fontSize = 10.sp, maxLines = 1)
+                                    Box(
+                                        Modifier.size(29.dp).clip(CircleShape)
+                                            .background(if (activePrayer) Gold.copy(alpha = 0.17f) else foreground.copy(alpha = 0.055f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            when (key) {
+                                                "fajr" -> Icons.Outlined.NightsStay
+                                                "sunrise" -> Icons.Outlined.WbSunny
+                                                "dhuhr" -> Icons.Outlined.LightMode
+                                                "asr" -> Icons.Outlined.Schedule
+                                                "maghrib" -> Icons.Outlined.WbTwilight
+                                                else -> Icons.Outlined.NightsStay
+                                            },
+                                            contentDescription = label,
+                                            tint = if (activePrayer) Gold else foreground.copy(alpha = 0.70f),
+                                            modifier = Modifier.size(17.dp)
+                                        )
+                                    }
                                     Spacer(Modifier.height(5.dp))
-                                    Text(time, color = if (key == upcomingPrayerKey) Gold else foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(label, color = if (activePrayer) Gold else foreground.copy(alpha = 0.67f), fontSize = 10.sp, maxLines = 1, fontWeight = if (activePrayer) FontWeight.Bold else FontWeight.Medium)
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(time, color = if (activePrayer) Gold else foreground, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                                    if (activePrayer) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Box(Modifier.width(16.dp).height(2.dp).clip(CircleShape).background(Gold))
+                                    }
                                 }
                             }
                         }
@@ -1517,7 +1800,13 @@ private fun HomeScreen(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(15.dp))
+        PremiumHomeHero(
+            language = language,
+            onResumeReading = onResumeReading,
+            onOpenQibla = { onOpen(AppScreen.QIBLA) }
+        )
+        Spacer(Modifier.height(14.dp))
         Card(
             modifier = Modifier.fillMaxWidth().premiumPress { onResumeReading() },
             colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -1567,7 +1856,7 @@ private fun HomeScreen(
                                 Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.10f), cardColor, cardColor))).padding(14.dp).height(104.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(module.color.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.30f), module.color.copy(alpha = 0.055f)))).border(1.dp, module.color.copy(alpha = 0.28f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
                                     Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(23.dp))
                                 }
                                 Column {
