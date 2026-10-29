@@ -301,7 +301,12 @@ fun MashxallApp(startScreen: String? = null) {
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
-    SideEffect { MashxallAppearance.accent = MashxallAppearance.colorFor(accentPalette) }
+    val animatedAccent by animateColorAsState(
+        targetValue = MashxallAppearance.colorFor(accentPalette),
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "Mashxall accent palette transition"
+    )
+    SideEffect { MashxallAppearance.accent = animatedAccent }
     var screen by rememberSaveable {
         mutableStateOf(
             startScreen?.takeIf { candidate ->
