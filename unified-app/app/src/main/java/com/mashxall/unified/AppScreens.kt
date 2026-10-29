@@ -3511,6 +3511,14 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         ) {
             itemsIndexed(visibleNames, key = { _, it -> it.number }) { itemIndex, name ->
                 var expanded by rememberSaveable(name.number) { mutableStateOf(false) }
+                val expandArrowRotation by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (expanded) 90f else 0f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    ),
+                    label = "Mashxall name card expand arrow"
+                )
                 val favorite = favoriteIds.contains(name.number.toString())
                 val description = when (language) {
                     AppLanguage.CKB -> name.ckb
@@ -3545,9 +3553,34 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }) {
                                 Text(if (favorite) "★" else "☆", color = Gold, fontSize = 23.sp)
                             }
-                            Text(if (expanded) "−" else "+", color = Gold, fontSize = 22.sp)
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = if (expanded) {
+                                    if (language == AppLanguage.EN) "Collapse details"
+                                    else if (language == AppLanguage.AR) "طي التفاصيل"
+                                    else "وردەکارییەکان بشارەوە"
+                                } else {
+                                    if (language == AppLanguage.EN) "Expand details"
+                                    else if (language == AppLanguage.AR) "عرض التفاصيل"
+                                    else "وردەکارییەکان پیشان بدە"
+                                },
+                                tint = Gold,
+                                modifier = Modifier.graphicsLayer { rotationZ = expandArrowRotation }.size(23.dp)
+                            )
                         }
-                        if (expanded) {
+                        AnimatedVisibility(
+                            visible = expanded,
+                            enter = androidx.compose.animation.expandVertically(
+                                animationSpec = tween(250)
+                            ) + fadeIn(tween(180)) + scaleIn(
+                                initialScale = 0.98f,
+                                animationSpec = tween(220)
+                            ),
+                            exit = androidx.compose.animation.shrinkVertically(
+                                animationSpec = tween(180)
+                            ) + fadeOut(tween(120))
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Spacer(Modifier.height(10.dp))
                             if (name.highlightSection.isNotBlank()) {
                                 Text(name.highlightSection, color = foreground, fontSize = 19.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
@@ -3593,6 +3626,7 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                         AppLanguage.CKB -> "زانیاریی زیادەی سەرچاوە: " + name.extraText
                                     }, color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
                                 )
+                            }
                             }
                         }
                     }
