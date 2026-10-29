@@ -18,6 +18,15 @@ class QuranSurahSwipeTest {
     }
 
     @Test
+    fun resumesTheLastReaderModeInsteadOfAlwaysForcingPageMushaf() {
+        assertEquals(true, shouldRestorePageMushaf(null, true))
+        assertEquals(true, shouldRestorePageMushaf("mushaf", true))
+        assertEquals(false, shouldRestorePageMushaf("verse", true))
+        assertEquals(false, shouldRestorePageMushaf("verse", false))
+        assertEquals(false, shouldRestorePageMushaf("mushaf", false))
+    }
+
+    @Test
     fun ignoresShortGesturesAndSurahBoundaries() {
         assertNull(quranSurahSwipeTarget(1, 110f))
         assertNull(quranSurahSwipeTarget(114, -110f))

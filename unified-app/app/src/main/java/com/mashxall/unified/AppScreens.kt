@@ -118,6 +118,7 @@ import java.util.Date
 import java.util.Calendar
 import java.util.Locale
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -414,7 +415,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             query = ""
             showSurahList = false
             openingMushaf = false
-            mushafMode = true
+            mushafMode = shouldRestorePageMushaf(
+                prefs.getString("quran_reader_mode", null),
+                prefs.contains("last_mushaf_page")
+            )
             onResumeMushafHandled()
         }
     }
@@ -579,12 +583,24 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChip(
-                    selected = !mushafMode, onClick = { mushafMode = false },
+                    selected = !mushafMode, onClick = {
+                        mushafMode = false
+                        prefs.edit().putString("quran_reader_mode", "verse").apply()
+                    },
                     label = { Text(tr(language, "verse_view"), fontSize = 11.sp, maxLines = 1) },
                     modifier = Modifier.weight(1f)
                 )
                 FilterChip(
-                    selected = mushafMode, onClick = { mushafMode = true; query = "" },
+                    selected = mushafMode, onClick = {
+                        query = ""
+                        mushafMode = true
+                        prefs.edit()
+                            .putString("quran_reader_mode", "mushaf")
+                            .putInt("last_mushaf_page", mushafPage)
+                            .putInt("last_surah", selected)
+                            .putInt("last_ayah_number", initialAyah)
+                            .apply()
+                    },
                     label = { Text(tr(language, "mushaf_view"), fontSize = 11.sp, maxLines = 1) },
                     modifier = Modifier.weight(1f)
                 )
@@ -646,6 +662,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     selectedAyahForSheet = null
                     mushafMode = false
                     showSurahList = false
+                    prefs.edit().putString("quran_reader_mode", "verse").apply()
                 },
                 darkMode = mushafDarkMode,
                 sepiaMode = mushafSepiaMode,
@@ -677,9 +694,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             Text(tr(language, "quran"), color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                             Text(
                                 when (language) {
-                                    AppLanguage.EN -> "Choose a surah to open the printed Mushaf"
-                                    AppLanguage.AR -> "اختر سورة لفتح المصحف المطبوع"
-                                    AppLanguage.CKB -> "سوورەتێک هەڵبژێرە بۆ کردنەوەی مصحەف"
+                                    AppLanguage.EN -> "Choose a surah to read; switch to the printed page Mushaf whenever you like"
+                                    AppLanguage.AR -> "اختر سورة للقراءة، ويمكنك الانتقال إلى المصحف المصوّر متى شئت"
+                                    AppLanguage.CKB -> "سوورەتێک هەڵبژێرە بۆ خوێندنەوە؛ هەر کاتێک دەتەوێت بگۆڕە بۆ مصحەفی پەڕەیی"
                                 }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp
                             )
                         }
@@ -715,17 +732,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 selected = item.number
                                 onSurah(item.number)
                                 query = ""
+                                selectedAyahForSheet = null
                                 showSurahList = false
-                                openingMushaf = true
-                                scope.launch {
-                                    val firstVerse = runCatching {
-                                        ContentRepository.loadAyahs(context, item.number, language.key, translationKey = "none").firstOrNull()
-                                    }.getOrNull()
-                                    mushafPage = (firstVerse?.page ?: 1).coerceIn(1, 604)
-                                    prefs.edit().putInt("last_mushaf_page", mushafPage).putInt("last_surah", item.number).putInt("last_ayah_number", 1).apply()
-                                    openingMushaf = false
-                                    mushafMode = true
-                                }
+                                openingMushaf = false
+                                mushafMode = false
+                                prefs.edit()
+                                    .putString("quran_reader_mode", "verse")
+                                    .putInt("last_surah", item.number)
+                                    .putInt("last_ayah_number", 1)
+                                    .apply()
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             },
                             colors = CardDefaults.cardColors(containerColor = cardColor),
                             shape = RoundedCornerShape(18.dp),
@@ -1808,6 +1824,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
 
 
 }
+
+internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boolean): Boolean =
+    hasSavedPage && !savedReaderMode.equals("verse", ignoreCase = true)
 
 /** In Arabic/Sorani reading order, a physical left swipe advances to the next surah. */
 internal fun quranSurahSwipeTarget(
@@ -5825,6 +5844,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
+    var onlineAdhanCount by remember { mutableIntStateOf(0) }
     var selectedAdhanAsset by rememberSaveable {
         mutableStateOf(prefs.getString("adhan_audio_asset", "") ?: "")
     }
@@ -6017,7 +6037,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         // saved by the user in the dedicated audio library. Scheduled alerts
         // store a private local-file reference, never a remote stream URL.
         val bundledAssets = ContentRepository.loadAudioItems(context)
-        val downloadedOnlineAssets = ContentRepository.loadOnlineAdhan(context).mapNotNull { item ->
+        val onlineCatalog = ContentRepository.loadOnlineAdhan(context)
+        onlineAdhanCount = onlineCatalog.size
+        val downloadedOnlineAssets = onlineCatalog.mapNotNull { item ->
             val file = onlineAdhanOfflineFile(context, item)
             if (file.isFile && file.length() > 512L) {
                 AudioItem(
@@ -6064,27 +6086,34 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     LaunchedEffect(selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {
         PrayerTimesWidgetProvider.requestRefresh(context)
     }
-    LaunchedEffect(selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, currentLocalDateKey) {
+    LaunchedEffect(selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, currentLocalDateKey) {
         loading = true
         times = null
+        tomorrowTimes = null
         val targetDate = Date(clockNowMillis)
-        times = when {
-            locationMode == "gps" && gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
-                context, gpsLatitude!!, gpsLongitude!!, targetDate
-            )
-            locationMode == "gps" -> null
-            manualLatitude != null && manualLongitude != null -> {
-                ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
-                    ?: ContentRepository.loadPrayerTimesAtLocation(
-                        context, manualLatitude!!, manualLongitude!!, targetDate
-                    )
+        times = try {
+            when {
+                locationMode == "gps" && gpsLatitude != null && gpsLongitude != null -> ContentRepository.loadPrayerTimesAtLocation(
+                    context, gpsLatitude!!, gpsLongitude!!, targetDate
+                )
+                locationMode == "gps" -> null
+                manualLatitude != null && manualLongitude != null -> {
+                    ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
+                        ?: ContentRepository.loadPrayerTimesAtLocation(
+                            context, manualLatitude!!, manualLongitude!!, targetDate
+                        )
+                }
+                else -> {
+                    ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
+                        ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                            ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, targetDate)
+                        }
+                }
             }
-            else -> {
-                ContentRepository.loadPrayerTimes(context, selectedCity, targetDate, manualCountry)
-                    ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, targetDate)
-                    }
-            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
         }
         loading = false
     }
@@ -6092,28 +6121,35 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude,
         manualCountry, currentLocalDateKey
     ) {
+        tomorrowTimes = null
         val tomorrow = Calendar.getInstance().apply {
             timeInMillis = clockNowMillis
             add(Calendar.DAY_OF_YEAR, 1)
         }.time
-        tomorrowTimes = when {
-            locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
-                ContentRepository.loadPrayerTimesAtLocation(
-                    context, gpsLatitude!!, gpsLongitude!!, tomorrow
-                )
-            locationMode == "gps" -> null
-            manualLatitude != null && manualLongitude != null -> {
-                ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                    ?: ContentRepository.loadPrayerTimesAtLocation(
-                        context, manualLatitude!!, manualLongitude!!, tomorrow
+        tomorrowTimes = try {
+            when {
+                locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
+                    ContentRepository.loadPrayerTimesAtLocation(
+                        context, gpsLatitude!!, gpsLongitude!!, tomorrow
                     )
+                locationMode == "gps" -> null
+                manualLatitude != null && manualLongitude != null -> {
+                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                        ?: ContentRepository.loadPrayerTimesAtLocation(
+                            context, manualLatitude!!, manualLongitude!!, tomorrow
+                        )
+                }
+                else -> {
+                    ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
+                        ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
+                            ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrow)
+                        }
+                }
             }
-            else -> {
-                ContentRepository.loadPrayerTimes(context, selectedCity, tomorrow, manualCountry)
-                    ?: ContentRepository.findCityByName(context, selectedCity, manualCountry)?.let { city ->
-                        ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrow)
-                    }
-            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
         }
     }
     val nextPrayerTarget = remember(times, tomorrowTimes, clockNowMillis) {
@@ -6540,12 +6576,59 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 Spacer(Modifier.height(6.dp))
                 Text(
                     when (language) {
-                        AppLanguage.EN -> "${visibleAdhanAssets.size} of ${adhanAssets.size} audio files"
-                        AppLanguage.AR -> "${visibleAdhanAssets.size} من ${adhanAssets.size} ملفًا صوتيًا"
-                        AppLanguage.CKB -> "${visibleAdhanAssets.size} لە ${adhanAssets.size} فایل دەنگییەکە"
+                        AppLanguage.EN -> "${visibleAdhanAssets.size} of ${adhanAssets.size} audio files on this device"
+                        AppLanguage.AR -> "${visibleAdhanAssets.size} من ${adhanAssets.size} ملفًا صوتيًا على الجهاز"
+                        AppLanguage.CKB -> "${visibleAdhanAssets.size} لە ${adhanAssets.size} فایل دەنگییەکانی مۆبایل"
                     }, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
                 )
-                LazyColumn(Modifier.height(340.dp)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = DeepGreen),
+                    shape = RoundedCornerShape(13.dp)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Full online Adhan & mosque library"
+                                AppLanguage.AR -> "مكتبة الأذان والمساجد الكاملة عبر الإنترنت"
+                                AppLanguage.CKB -> "کتێبخانەی تەواوی بانگ و مزگەوت بە ئۆنلاین"
+                            },
+                            color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> onlineAdhanCount.toString() + " source-linked recordings • 175 muezzins and 56 mosque/location recordings. Download a track in the online library, return here, and select its saved copy for alerts."
+                                AppLanguage.AR -> onlineAdhanCount.toString() + " تسجيلًا من المصدر الأصلي • 175 مؤذنًا و56 تسجيل مسجد/موقع. نزّل التسجيل من المكتبة ثم ارجع واختر النسخة المحفوظة للتنبيهات."
+                                AppLanguage.CKB -> onlineAdhanCount.toString() + " تۆماری بە سەرچاوەوە بەستراو • ١٧٥ موئەزین و٥٦ تۆماری مزگەوت/شوێن. لە کتێبخانەکە دایبگرە، بگەڕێوە و وەشانی پارێزراو بۆ ئاگادارکردنەوە هەڵبژێرە."
+                            },
+                            color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp, lineHeight = 15.sp
+                        )
+                        Spacer(Modifier.height(7.dp))
+                        OutlinedButton(
+                            onClick = {
+                                AudioController.stop()
+                                previewingAdhan = ""
+                                chooseAdhanSound = false
+                                onBrowseAdhanLibrary()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Browse all " + onlineAdhanCount + " online recordings"
+                                    AppLanguage.AR -> "تصفح جميع التسجيلات (" + onlineAdhanCount + ")"
+                                    AppLanguage.CKB -> "بینینی هەموو تۆمارەکان (" + onlineAdhanCount + ")"
+                                },
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(5.dp))
+                LazyColumn(Modifier.height(260.dp)) {
                 items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
                     Row(
                         Modifier.fillMaxWidth().clickable {

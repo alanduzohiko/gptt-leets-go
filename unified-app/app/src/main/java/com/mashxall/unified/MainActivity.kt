@@ -121,6 +121,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -453,9 +454,8 @@ fun MashxallApp(startScreen: String? = null) {
                                     language, foreground, cardColor, selectedCity, use24Hour,
                                     onOpen = { target -> navigateTo(target.key) },
                                     onResumeReading = {
-                                        // First-time users should still see the surah list;
-                                        // resume only after a real Mushaf page was saved.
-                                        resumeMushafRequested = prefs.contains("last_mushaf_page")
+                                        // First-time users see the surah list; returning users resume their saved reader mode.
+                                        resumeMushafRequested = prefs.contains("last_surah") || prefs.contains("last_mushaf_page")
                                         navigateTo(AppScreen.QURAN.key)
                                     }
                                 )
@@ -1030,11 +1030,14 @@ private fun HomeScreen(
             delay(60_000L)
         }
     }
-    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
         loadingTimes = true
+        // Remove the previous city's timetable immediately; never leave stale times under a new location label.
+        prayerTimes = null
+        tomorrowPrayerTimes = null
         val date = Date(clockNow)
         val country = prefs.getString("selected_city_country", "") ?: ""
-        prayerTimes = runCatching {
+        prayerTimes = try {
             when {
                 locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
@@ -1044,18 +1047,23 @@ private fun HomeScreen(
                         ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date)
                     }
             }
-        }.getOrNull()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
         loadingTimes = false
     }
 
-    LaunchedEffect(selectedCity, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+    LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", "")) {
+        tomorrowPrayerTimes = null
         val tomorrowCalendar = Calendar.getInstance().apply {
             time = Date(clockNow)
             add(Calendar.DAY_OF_YEAR, 1)
         }
         val tomorrowDate = tomorrowCalendar.time
         val country = prefs.getString("selected_city_country", "") ?: ""
-        tomorrowPrayerTimes = runCatching {
+        tomorrowPrayerTimes = try {
             when {
                 locationMode == "gps" && gpsLatitude != null && gpsLongitude != null ->
                     ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, tomorrowDate)
@@ -1065,7 +1073,11 @@ private fun HomeScreen(
                         ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, tomorrowDate)
                     }
             }
-        }.getOrNull()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
     }
 
     val saveLocationFix: (Location) -> Unit = { fix ->
