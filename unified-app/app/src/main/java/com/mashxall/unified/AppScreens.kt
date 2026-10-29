@@ -2803,6 +2803,10 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 
 }
 
+internal fun nextAzkarRepetition(currentCount: Int, targetCount: Int): Int =
+    if (targetCount <= 0) currentCount.coerceAtLeast(0)
+    else (currentCount.coerceAtLeast(0) + 1).coerceAtMost(targetCount)
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
@@ -3022,6 +3026,17 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0).coerceIn(0, item.count.coerceAtLeast(1)))
         }
         val targetCount = item.count.coerceAtLeast(1)
+        val incrementCount: () -> Unit = {
+            val nextCount = nextAzkarRepetition(count, targetCount)
+            if (nextCount != count) {
+                count = nextCount
+                progressPrefs.edit().putInt(item.id.toString(), nextCount).apply()
+                haptic.performHapticFeedback(
+                    if (nextCount >= targetCount) HapticFeedbackType.LongPress
+                    else HapticFeedbackType.TextHandleMove
+                )
+            }
+        }
         val countPulse = remember(item.id) { Animatable(1f) }
         LaunchedEffect(count) {
             countPulse.snapTo(0.94f)
@@ -3036,7 +3051,29 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Column(Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 10.dp)) {
                 Text(title, color = Gold, fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 29.sp)
                 Spacer(Modifier.height(13.dp))
-                Text(cleanHadithDisplayText(item.arabic), color = foreground, fontSize = 25.sp, lineHeight = 44.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                Text(
+                    cleanHadithDisplayText(item.arabic),
+                    color = foreground,
+                    fontSize = 25.sp,
+                    lineHeight = 44.sp,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(enabled = count < targetCount, onClick = incrementCount)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                        .graphicsLayer { scaleX = countPulse.value; scaleY = countPulse.value }
+                )
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Tap the Arabic text to count"
+                        AppLanguage.AR -> "اضغط على نص الذكر للعدّ"
+                        AppLanguage.CKB -> "بۆ ژماردن لەسەر دەقی زیکرەکە دەست لێبدە"
+                    },
+                    color = foreground.copy(alpha = 0.46f),
+                    fontSize = 10.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
                 if (translation.isNotBlank()) {
                     Spacer(Modifier.height(14.dp))
                     Text(
@@ -3078,15 +3115,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }
                             Button(
                                 enabled = count < targetCount,
-                                onClick = {
-                                    val nextCount = (count + 1).coerceAtMost(targetCount)
-                                    count = nextCount
-                                    progressPrefs.edit().putInt(item.id.toString(), nextCount).apply()
-                                    haptic.performHapticFeedback(
-                                        if (nextCount >= targetCount) HapticFeedbackType.LongPress
-                                        else HapticFeedbackType.TextHandleMove
-                                    )
-                                }
+                                onClick = incrementCount
                             ) {
                                 Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(5.dp))
