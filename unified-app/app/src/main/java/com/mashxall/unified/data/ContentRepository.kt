@@ -1915,7 +1915,6 @@ object ContentRepository {
                 val asr = c.string("asr")
                 val maghrib = c.string("maghrib")
                 val isha = c.string("isha")
-                if (fajr.isBlank() || dhuhr.isBlank() || isha.isBlank()) return@use null
                 val hasFixedSchedule = c.int("has_fixed") == 1
                 val dependency = c.int("dependent_id")
                 val baseCity = c.string("base_city")
@@ -1924,18 +1923,20 @@ object ContentRepository {
                 } else {
                     "salawati:${c.string("city")}, ${c.string("country")}"
                 }
-                PrayerRow(
-                    city = c.string("city"),
-                    date = c.string("date"),
-                    fajr = fajr,
-                    sunrise = sunrise,
-                    dhuhr = dhuhr,
-                    asr = asr,
-                    maghrib = maghrib,
-                    isha = isha,
-                    source = source,
-                    latitude = c.double("lat"),
-                    longitude = c.double("lon")
+                salawatiOnlyPrayerTimes(
+                    PrayerRow(
+                        city = c.string("city"),
+                        date = c.string("date"),
+                        fajr = fajr,
+                        sunrise = sunrise,
+                        dhuhr = dhuhr,
+                        asr = asr,
+                        maghrib = maghrib,
+                        isha = isha,
+                        source = source,
+                        latitude = c.double("lat"),
+                        longitude = c.double("lon")
+                    )
                 )
             }
         }

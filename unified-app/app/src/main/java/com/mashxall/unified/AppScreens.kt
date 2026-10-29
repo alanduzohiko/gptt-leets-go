@@ -105,6 +105,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
 import com.mashxall.unified.notifications.PrayerAlarmScheduler
+import com.mashxall.unified.notifications.PrayerAlarmScheduleResult
+import com.mashxall.unified.notifications.prayerAlarmScheduleFailureMessage
+import com.mashxall.unified.notifications.prayerAlarmScheduleMessage
 import com.mashxall.unified.widgets.PrayerTimesWidgetProvider
 import com.caverock.androidsvg.SVG
 import java.io.File
@@ -1782,6 +1785,20 @@ internal fun mushafEdgeTapAction(xFraction: Float, page: Int, scale: Float, vers
     }
 }
 
+/**
+ * Physical left swipe advances the right-to-left Mushaf to the next page.
+ * Physical right swipe returns to the previous page. Small drags and boundary
+ * gestures are ignored so page selection and zooming remain usable.
+ */
+internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: Float = 72f): Int? {
+    if (page !in 1..604 || !horizontalDragPx.isFinite() || !thresholdPx.isFinite() || thresholdPx <= 0f) return null
+    return when {
+        horizontalDragPx < -thresholdPx && page < 604 -> page + 1
+        horizontalDragPx > thresholdPx && page > 1 -> page - 1
+        else -> null
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
@@ -1801,11 +1818,25 @@ private fun MushafPageViewer(
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val pageReveal = remember { Animatable(1f) }
+    val pageTurnOffset = remember { Animatable(0f) }
+    var lastAnimatedPage by remember { mutableIntStateOf(page) }
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(bitmap) {
+    LaunchedEffect(page, bitmap) {
         if (bitmap != null) {
+            val previousPage = lastAnimatedPage
+            lastAnimatedPage = page
+            val entryDirection = when {
+                page > previousPage -> 1f
+                page < previousPage -> -1f
+                else -> 0f
+            }
+            pageTurnOffset.snapTo(entryDirection * 28f)
             pageReveal.snapTo(0.94f)
+            val slideAnimation = launch {
+                pageTurnOffset.animateTo(0f, animationSpec = tween(220))
+            }
             pageReveal.animateTo(1f, animationSpec = tween(220))
+            slideAnimation.join()
         }
     }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
@@ -1991,12 +2022,8 @@ private fun MushafPageViewer(
                                     },
                                     onDragEnd = {
                                         if (scale <= 1.01f) {
-                                            val nextPage = when {
-                                                dragTotal < -72f && page < 604 -> page + 1
-                                                dragTotal > 72f && page > 1 -> page - 1
-                                                else -> page
-                                            }
-                                            if (nextPage != page) {
+                                            val nextPage = mushafSwipeTarget(page, dragTotal)
+                                            if (nextPage != null) {
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                 onPageChange(nextPage)
                                             }
@@ -2064,6 +2091,7 @@ private fun MushafPageViewer(
                             },
                             modifier = Modifier.fillMaxSize().graphicsLayer {
                                 alpha = pageReveal.value
+                                translationX = pageTurnOffset.value
                                 scaleX = 0.985f + pageReveal.value * 0.015f
                                 scaleY = 0.985f + pageReveal.value * 0.015f
                             }
@@ -5736,12 +5764,22 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
         if (adhanEnabled) {
             prefs.edit().putString("adhan_audio_asset", selectedAdhanAsset).apply()
-            PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
+            val result = try {
+                PrayerAlarmScheduler.scheduleUpcomingFromPreferences(context)
+            } catch (_: Exception) {
+                null
+            }
+            adhanMessage = if (result != null) {
+                prayerAlarmScheduleMessage(result, language)
+            } else {
+                prayerAlarmScheduleFailureMessage(language)
+            }
         } else {
             PrayerAlarmScheduler.cancelAll(context)
+            adhanMessage = ""
         }
     }
     LaunchedEffect(selectedCity, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {

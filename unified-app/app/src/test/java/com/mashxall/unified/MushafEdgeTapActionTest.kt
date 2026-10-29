@@ -5,6 +5,27 @@ import org.junit.Test
 
 class MushafEdgeTapActionTest {
     @Test
+    fun physicalLeftSwipeAdvancesToTheNextPage() {
+        assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = -100f))
+        assertEquals(81, mushafSwipeTarget(page = 80, horizontalDragPx = -100f))
+    }
+
+    @Test
+    fun physicalRightSwipeReturnsToThePreviousPage() {
+        assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = 100f))
+        assertEquals(79, mushafSwipeTarget(page = 80, horizontalDragPx = 100f))
+    }
+
+    @Test
+    fun smallSwipesAndOutOfBoundsPageTurnsAreIgnored() {
+        assertEquals(null, mushafSwipeTarget(page = 10, horizontalDragPx = -40f))
+        assertEquals(null, mushafSwipeTarget(page = 1, horizontalDragPx = 100f))
+        assertEquals(null, mushafSwipeTarget(page = 604, horizontalDragPx = -100f))
+        assertEquals(null, mushafSwipeTarget(page = 0, horizontalDragPx = -100f))
+        assertEquals(null, mushafSwipeTarget(page = 80, horizontalDragPx = Float.NaN))
+    }
+
+    @Test
     fun leftPageMarginAdvancesToTheNextPage() {
         assertEquals(
             MushafEdgeTapAction.NEXT_PAGE,
