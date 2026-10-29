@@ -85,12 +85,27 @@ class BundledAdhanAssetTest {
     }
 
     @Test
-    fun scheduledAdhanSelectionRejectsBlankOrGenericQuranPaths() {
-        assertEquals(true, isSelectableAdhanAssetPath("content/source/audio/adhan/adhan_fajr.mp3"))
-        assertEquals(true, isSelectableAdhanAssetPath("local:/data/user/0/com.mashxall.unified/files/adhan-audio/adhan-001.mp3"))
-        assertEquals(false, isSelectableAdhanAssetPath(""))
-        assertEquals(false, isSelectableAdhanAssetPath("content/quran/audio/abdul_basit/001.mp3"))
-        assertEquals(false, isSelectableAdhanAssetPath("content/azkar/audio/morning.mp3"))
+    fun scheduledAdhanSelectionUsesSourceMetadataInsteadOfFilenameGuessing() {
+        val sourceAdhan = AudioItem(
+            assetPath = "content/source/audio/005.mp3",
+            title = "Fajr call",
+            group = "adhan"
+        )
+        val quran = AudioItem(
+            assetPath = "content/quran/audio/abdul_basit/001.mp3",
+            title = "Abdul Basit 001",
+            group = "quran"
+        )
+        val adhkar = AudioItem(
+            assetPath = "content/azkar/audio/morning.mp3",
+            title = "Morning adhkar",
+            group = "azkar"
+        )
+        val available = filterSelectableAdhanAssets(listOf(sourceAdhan, quran, adhkar))
+        assertEquals(true, hasSelectableAdhanAsset(sourceAdhan.assetPath, available))
+        assertEquals(false, hasSelectableAdhanAsset(quran.assetPath, available))
+        assertEquals(false, hasSelectableAdhanAsset(adhkar.assetPath, available))
+        assertEquals(false, hasSelectableAdhanAsset("", available))
     }
 
     @Test

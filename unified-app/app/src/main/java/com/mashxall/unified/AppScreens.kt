@@ -3906,13 +3906,11 @@ internal fun bundledAdhanCategory(item: AudioItem): String? {
 internal fun filterSelectableAdhanAssets(items: List<AudioItem>): List<AudioItem> =
     items.filter { bundledAdhanCategory(it) != null }.distinctBy { it.assetPath }
 
-/** A source path is selectable for scheduled alerts only when it indicates a genuine Adhan/mosque recording. */
-internal fun isSelectableAdhanAssetPath(assetPath: String): Boolean {
-    if (assetPath.isBlank()) return false
-    val label = assetPath.substringAfterLast('/').substringBeforeLast('.').replace('_', ' ').replace('-', ' ')
-    val group = assetPath.substringBeforeLast('/').substringAfterLast('/')
-    return bundledAdhanCategory(AudioItem(assetPath, label, group)) != null
-}
+/** A selected path is valid only when it matches a source-classified Adhan/mosque catalogue entry. */
+internal fun hasSelectableAdhanAsset(assetPath: String, availableAssets: List<AudioItem>): Boolean =
+    assetPath.isNotBlank() && availableAssets.any {
+        it.assetPath == assetPath && bundledAdhanCategory(it) != null
+    }
 
 internal fun adhanSourceRequiredMessage(language: AppLanguage): String = when (language) {
     AppLanguage.EN -> "Choose an actual Adhan or mosque recording first. Open the online library, download a track, then return and select it here."
@@ -6192,6 +6190,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val manualCountry = prefs.getString("selected_city_country", "") ?: ""
     var adhanEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var adhanAssets by remember { mutableStateOf(emptyList<AudioItem>()) }
+    var adhanAssetsLoaded by remember { mutableStateOf(false) }
     var onlineAdhanCount by remember { mutableIntStateOf(0) }
     var selectedAdhanAsset by rememberSaveable {
         mutableStateOf(prefs.getString("adhan_audio_asset", "") ?: "")
@@ -6466,6 +6465,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     LaunchedEffect(isActive, language) {
         if (!isActive) return@LaunchedEffect
+        adhanAssetsLoaded = false
 
         // Only actual Adhan/mosque recordings are selectable for scheduled alerts.
         // Generic Quran recitation and unrelated source audio must never become an adhan by fallback.
@@ -6484,6 +6484,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         val availableAssets = filterSelectableAdhanAssets(bundledAssets + downloadedOnlineAssets)
         adhanAssets = availableAssets
+        adhanAssetsLoaded = true
         if (availableAssets.none { it.assetPath == selectedAdhanAsset }) {
             val recommended = availableAssets.firstOrNull()
             selectedAdhanAsset = recommended?.assetPath.orEmpty()
@@ -6496,10 +6497,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, adhanAssets, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, adhanAssets, adhanAssetsLoaded, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
         if (adhanEnabled) {
-            val selectedSourceIsValid = isSelectableAdhanAssetPath(selectedAdhanAsset) &&
-                (adhanAssets.isEmpty() || adhanAssets.any { it.assetPath == selectedAdhanAsset })
+            if (!adhanAssetsLoaded) return@LaunchedEffect
+            val selectedSourceIsValid = hasSelectableAdhanAsset(selectedAdhanAsset, adhanAssets)
             if (!selectedSourceIsValid) {
                 adhanEnabled = false
                 prefs.edit().putBoolean("adhan_enabled", false).putString("adhan_audio_asset", "").apply()
@@ -6521,7 +6522,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         } else {
             PrayerAlarmScheduler.cancelAll(context)
             // Preserve a useful error when no genuine Adhan source is selected.
-            if (isSelectableAdhanAssetPath(selectedAdhanAsset)) adhanMessage = ""
+            if (adhanAssetsLoaded && hasSelectableAdhanAsset(selectedAdhanAsset, adhanAssets)) adhanMessage = ""
         }
     }
     LaunchedEffect(selectedCity, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude) {
@@ -6878,9 +6879,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             prefs.edit().putBoolean("adhan_enabled", false).apply()
                             PrayerAlarmScheduler.cancelAll(context)
                             adhanMessage = ""
-                        } else if (!isSelectableAdhanAssetPath(selectedAdhanAsset) ||
-                            (adhanAssets.isNotEmpty() && adhanAssets.none { it.assetPath == selectedAdhanAsset })
-                        ) {
+                        } else if (!adhanAssetsLoaded || !hasSelectableAdhanAsset(selectedAdhanAsset, adhanAssets)) {
                             adhanMessage = adhanSourceRequiredMessage(language)
                         } else if (Build.VERSION.SDK_INT >= 33 &&
                             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
