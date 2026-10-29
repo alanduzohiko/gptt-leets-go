@@ -4305,7 +4305,7 @@ fun AudioScreen(
                             .staggeredEntrance(itemKey = item.id, index = itemIndex),
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(17.dp),
-                        border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f)
+                        border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.14f))
                     ) {
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
