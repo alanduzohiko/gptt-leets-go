@@ -675,11 +675,24 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                     }
                 },
                 icon = {
-                    Icon(
-                        icon,
-                        contentDescription = title,
-                        modifier = Modifier.size(21.dp)
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (screen == key) 1.13f else 0.94f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "Mashxall bottom navigation icon"
                     )
+                    Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+                        Icon(
+                            icon,
+                            contentDescription = title,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = iconScale
+                                scaleY = iconScale
+                            }.size(21.dp)
+                        )
+                    }
                 },
                 label = { Text(title, fontSize = 9.sp, maxLines = 1) },
                 alwaysShowLabel = true

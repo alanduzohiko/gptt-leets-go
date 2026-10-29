@@ -800,7 +800,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     contentPadding = PaddingValues(horizontal = 13.dp, vertical = 5.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    items(filteredSurahs, key = { it.number }) { item ->
+                    itemsIndexed(filteredSurahs, key = { _, item -> item.number }) { index, item ->
                         val placeLabel = when {
                             item.place.contains("meccan", ignoreCase = true) || item.place.contains("makki", ignoreCase = true) ->
                                 when (language) { AppLanguage.EN -> "Meccan"; AppLanguage.AR -> "مكية"; AppLanguage.CKB -> "مەککی" }
@@ -809,7 +809,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             else -> item.place
                         }
                         Card(
-                            modifier = Modifier.fillMaxWidth().premiumClickable(hapticFeedback = false) {
+                            modifier = Modifier.fillMaxWidth()
+                                .staggeredEntrance(itemKey = item.number, index = index)
+                                .premiumClickable(hapticFeedback = false) {
                                 selected = item.number
                                 onSurah(item.number)
                                 query = ""
@@ -898,13 +900,15 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
+            itemsIndexed(verses, key = { _, it -> it.surah.toString() + ":" + it.number }) { index, verse ->
                 var noteExpanded by rememberSaveable(verse.surah, verse.number) { mutableStateOf(false) }
                 var showRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
                 var loadingRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
                 var relatedHadiths by remember(verse.surah, verse.number) { mutableStateOf<List<AyahHadith>>(emptyList()) }
                 Card(
-                    modifier = Modifier.premiumClickable {
+                    modifier = Modifier
+                        .staggeredEntrance(itemKey = "${verse.surah}:${verse.number}", index = index)
+                        .premiumClickable {
                         selected = verse.surah
                         onOpenVerse(verse.surah, verse.number)
                         prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
@@ -2760,7 +2764,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             contentPadding = PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(hadithItems, key = { it.id }) { hadith ->
+            itemsIndexed(hadithItems, key = { _, item -> item.id }) { index, hadith ->
                 var showEnglish by rememberSaveable(hadith.id) { mutableStateOf(language == AppLanguage.EN) }
                 var showNotes by rememberSaveable(hadith.id) { mutableStateOf(false) }
                 val collection = when (language) {
@@ -2785,7 +2789,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.EN -> hadith.english
                 }
                 Card(
-                    modifier = Modifier.fillMaxWidth().premiumClickable { selectedHadithForDetails = hadith },
+                    modifier = Modifier.fillMaxWidth()
+                        .staggeredEntrance(itemKey = hadith.id, index = index)
+                        .premiumClickable { selectedHadithForDetails = hadith },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(19.dp),
                     border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
@@ -3131,7 +3137,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                items(categories, key = { it.id }) { category ->
+                itemsIndexed(categories, key = { _, item -> item.id }) { index, category ->
                     val label = when (language) {
                         AppLanguage.CKB -> category.ckb.ifBlank { category.arabic }
                         AppLanguage.AR -> category.arabic.ifBlank { category.ckb }
@@ -3139,7 +3145,9 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     }
                     val count = allItems.count { it.categoryId == category.id }
                     Card(
-                        modifier = Modifier.fillMaxWidth().premiumClickable { selectedCategory = category.id },
+                        modifier = Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = category.id, index = index)
+                            .premiumClickable { selectedCategory = category.id },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(20.dp),
                         border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))

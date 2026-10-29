@@ -1,5 +1,10 @@
 package com.mashxall.unified
 
+import android.animation.ValueAnimator
+import android.content.Context
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -24,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -34,9 +40,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 /**
  * Shared native touch response for tappable surfaces throughout Mashxall.
@@ -56,7 +64,7 @@ internal fun Modifier.premiumClickable(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (enabled && pressed) 0.975f else 1f,
+        targetValue = if (enabled && pressed) 0.955f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow
@@ -145,5 +153,68 @@ internal fun PremiumLoadingSkeleton(
                 )
             }
         }
+    }
+}
+
+
+/** Keep list entry motion brief, capped, and disabled with Android's motion scale. */
+internal fun staggerDelayMillis(index: Int): Long =
+    index.coerceIn(0, 8) * 28L
+
+private fun systemAllowsDecorativeMotion(context: Context): Boolean {
+    val animatorEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        ValueAnimator.areAnimatorsEnabled()
+    } else {
+        true
+    }
+    val durationScale = runCatching {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        )
+    }.getOrDefault(1f)
+    return animatorEnabled && durationScale > 0f
+}
+
+/**
+ * Entrance motion for real content rows: fade, a restrained upward settle and
+ * a small spring scale. Stable keys make the animation follow the item rather
+ * than its position when search results are reordered.
+ */
+@Composable
+internal fun Modifier.staggeredEntrance(
+    itemKey: Any,
+    index: Int,
+    enabled: Boolean = true
+): Modifier {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val progress = remember(itemKey) {
+        Animatable(if (motionAllowed && enabled) 0f else 1f)
+    }
+
+    LaunchedEffect(itemKey, index, motionAllowed, enabled) {
+        if (!motionAllowed || !enabled) {
+            progress.snapTo(1f)
+        } else {
+            progress.snapTo(0f)
+            delay(staggerDelayMillis(index))
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
+
+    return this.graphicsLayer {
+        val fraction = progress.value.coerceIn(0f, 1f)
+        alpha = fraction
+        translationY = (1f - fraction) * 18.dp.toPx()
+        scaleX = 0.965f + fraction * 0.035f
+        scaleY = 0.965f + fraction * 0.035f
     }
 }
