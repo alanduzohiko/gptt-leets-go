@@ -1059,6 +1059,59 @@ PY
     exit 1
   fi
 
+  # Exercise one real download so the smoke test proves offline state is persisted,
+  # not merely that a Download button is rendered.
+  download_adhan_coords="$(python3 - dist/runtime-test/window-audio-adhan.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"داگرتنی بانگ|تنزيل الأذان|Download adhan", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("content-desc", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$download_adhan_coords" ]]; then
+    echo "FAIL: could not find the first Adhan download action."
+    cat dist/runtime-test/window-audio-adhan.xml
+    exit 1
+  fi
+  read -r download_adhan_x download_adhan_y <<< "$download_adhan_coords"
+  adb shell input tap "$download_adhan_x" "$download_adhan_y"
+  adhan_offline_ok=0
+  for attempt in $(seq 1 20); do
+    sleep 3
+    rm -f dist/runtime-test/window-audio-adhan-offline.xml
+    adb shell rm -f /sdcard/mashxall-audio-adhan-offline.xml >/dev/null 2>&1 || true
+    adb shell uiautomator dump /sdcard/mashxall-audio-adhan-offline.xml > "dist/runtime-test/uiautomator-audio-adhan-offline-$attempt.txt" 2>&1 || true
+    if adb pull /sdcard/mashxall-audio-adhan-offline.xml dist/runtime-test/window-audio-adhan-offline.xml >/dev/null 2>&1 &&
+       grep -Eqi 'offline ready|جاهز دون إنترنت|ئامادەی بەبێ ئینتەرنێت' dist/runtime-test/window-audio-adhan-offline.xml; then
+      if adb shell run-as com.mashxall.unified ls files/adhan-audio >/dev/null 2>&1; then
+        adhan_offline_ok=1
+        echo "PASS: a source Adhan recording was downloaded and its offline-ready state persisted on device."
+        break
+      fi
+    fi
+    if grep -Eqi 'Download failed|فشل التنزيل|داگرتن سەرکەوتوو نەبوو' dist/runtime-test/window-audio-adhan-offline.xml 2>/dev/null; then
+      echo "WARN: an Adhan download attempt reported a network/source error; retrying (attempt $attempt/20)."
+    fi
+  done
+  if [[ "$adhan_offline_ok" -ne 1 ]]; then
+    echo "FAIL: selecting Download did not save an Adhan recording for offline use."
+    cat dist/runtime-test/window-audio-adhan-offline.xml 2>/dev/null || true
+    adb shell run-as com.mashxall.unified ls -la files/adhan-audio 2>/dev/null || true
+    exit 1
+  fi
+
   # Return to Quran reciters, select complete-surah mode, and search for
   # the distinctive single token Nufais. Verify the visible row advertises full coverage.
   reciters_tab_coords="$(python3 - dist/runtime-test/window-audio-adhan.xml <<'PY'
