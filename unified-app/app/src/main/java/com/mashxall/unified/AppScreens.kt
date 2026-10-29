@@ -4705,6 +4705,15 @@ internal fun audioPlaybackFailureMessage(language: AppLanguage, failure: AudioPl
     }
 }
 
+internal fun audioSequencePartialPlaybackMessage(language: AppLanguage, unavailableTrackCount: Int): String {
+    val count = unavailableTrackCount.coerceAtLeast(0)
+    return when (language) {
+        AppLanguage.EN -> "Playback continued, but $count audio segment(s) were unavailable. This recitation may be incomplete; check the connection or download the surah."
+        AppLanguage.AR -> "استمر التشغيل، لكن تعذّر تشغيل $count مقطعًا صوتيًا؛ قد تكون التلاوة غير مكتملة. تحقّق من الاتصال أو نزّل السورة."
+        AppLanguage.CKB -> "لێدانەکە بەردەوام بوو، بەڵام $count بەشی دەنگی بەردەست نەبوون؛ لەوانەیە خوێندنەوەکە ناتەواو بێت. پەیوەندی بپشکنە یان سوورەتەکە دابگرە."
+    }
+}
+
 private object AudioController {
     private var player: MediaPlayer? = null
     private var playbackGeneration: Int = 0
@@ -4729,10 +4738,25 @@ private object AudioController {
         }
         val generation = playbackGeneration
         var hasStartedPlayback = false
+        var unavailableTrackCount = 0
         lateinit var playAt: (Int) -> Unit
+
+        fun notifyPartialSequenceIfNeeded() {
+            if (hasStartedPlayback && unavailableTrackCount > 0 && generation == playbackGeneration) {
+                Toast.makeText(
+                    context,
+                    audioSequencePartialPlaybackMessage(
+                        AppLanguage.from(languageHint(context)),
+                        unavailableTrackCount
+                    ),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
         fun handleTrackFailure(index: Int) {
             if (generation != playbackGeneration) return
+            unavailableTrackCount += 1
             val decision = audioSequenceFailureDecision(index, sources.size, hasStartedPlayback)
             val nextIndex = decision.nextIndex
             if (nextIndex != null) {
@@ -4746,6 +4770,8 @@ private object AudioController {
                     audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
                     Toast.LENGTH_LONG
                 ).show()
+            } else {
+                notifyPartialSequenceIfNeeded()
             }
             callback(false)
             stop()
@@ -4754,6 +4780,7 @@ private object AudioController {
         playAt = fun(index: Int) {
             if (generation != playbackGeneration) return
             if (index >= sources.size) {
+                notifyPartialSequenceIfNeeded()
                 callback(false)
                 return
             }

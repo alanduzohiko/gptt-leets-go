@@ -37,6 +37,20 @@ class AudioPlaybackSequenceTest {
     }
 
     @Test
+    fun partialSequenceWarningClearlyStatesThatPlaybackMayBeIncompleteInEachLanguage() {
+        val english = audioSequencePartialPlaybackMessage(AppLanguage.EN, 3)
+        val arabic = audioSequencePartialPlaybackMessage(AppLanguage.AR, 3)
+        val sorani = audioSequencePartialPlaybackMessage(AppLanguage.CKB, 3)
+
+        assertTrue(english.contains("3 audio segment(s)"))
+        assertTrue(english.contains("may be incomplete"))
+        assertTrue(arabic.contains("3 مقطعًا صوتيًا"))
+        assertTrue(arabic.contains("غير مكتملة"))
+        assertTrue(sorani.contains("3 بەشی دەنگی"))
+        assertTrue(sorani.contains("ناتەواو"))
+    }
+
+    @Test
     fun sequenceEndsWithoutSkippingBeyondTheLastTrack() {
         assertEquals(
             AudioSequenceFailureDecision(nextIndex = null, showFailureMessage = true),
