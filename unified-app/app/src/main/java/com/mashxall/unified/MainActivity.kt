@@ -780,7 +780,7 @@ internal fun formatPrayerTime(raw: String, language: AppLanguage, use24Hour: Boo
 internal data class UpcomingPrayerTarget(val key: String, val timeMillis: Long)
 
 private fun parseSourcePrayerClock(raw: String): Pair<Int, Int>? {
-    val match = Regex("""^([01]\\d|2[0-3]):([0-5]\\d)$""").matchEntire(raw.trim()) ?: return null
+    val match = Regex("""^([01]\d|2[0-3]):([0-5]\d)$""").matchEntire(raw.trim()) ?: return null
     val hour = match.groupValues[1].toIntOrNull() ?: return null
     val minute = match.groupValues[2].toIntOrNull() ?: return null
     return hour to minute
