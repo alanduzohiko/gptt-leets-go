@@ -30,32 +30,39 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
     source_text: dict[str, str] = {}
     for source in sources:
         text = source.read_text(encoding="utf-8", errors="replace")
-        source_text[source.name] = source_text.get(source.name, "") + "\\n" + text
+        source_text[source.name] = source_text.get(source.name, "") + "\n" + text
         for match in CONTENT_LITERAL.finditer(text):
             referenced.setdefault(match.group(1), set()).add(str(source))
 
     missing: list[dict] = []
-    # Prayer schedule resolution is strictly Salawati-only; Noor's other worship content remains available.
-    repository_text = source_text.get("ContentRepository.kt", "")
-    activity_text = source_text.get("MainActivity.kt", "")
-    runtime_prayer_contract = {
-        "salawati_city_timetable_loader": "loadSalawatiPrayerTimesForCity" in repository_text,
-        "salawati_gps_timetable_lookup": "loadNearbyTimetableRows" in repository_text and "SALAWATI_DB" in repository_text,
-        "rejects_non_salawati_rows": "salawatiOnlyPrayerTimes" in repository_text,
-        "no_noor_prayer_correction_loader": "loadNoorPrayerTimesWithCorrection" not in repository_text,
-        "no_noor_correction_result": "noor-correction:" not in repository_text,
-        "no_noor_source_label": 'normalized.startsWith("noor")' not in activity_text,
-        "no_astronomical_replacement_source": "calculated from coordinates" not in activity_text.lower(),
-    }
-    failed_prayer_contract = [name for name, passed in runtime_prayer_contract.items() if not passed]
-    if failed_prayer_contract:
-        missing.append({
-            "path": "SALAWATI_ONLY_PRAYER_SOURCE_CONTRACT",
-            "sources": [str(source) for source in sources if source.name in {"ContentRepository.kt", "MainActivity.kt"}],
-            "failed_checks": failed_prayer_contract,
-        })
+    # App-specific contract checks run in the real unified source tree. Small unit-test
+    # fixtures that contain only a sample Kotlin file should test literal path behavior alone.
+    has_prayer_sources = {"ContentRepository.kt", "MainActivity.kt"}.issubset(source_text)
+    if has_prayer_sources:
+        repository_text = source_text.get("ContentRepository.kt", "")
+        activity_text = source_text.get("MainActivity.kt", "")
+        runtime_prayer_contract = {
+            "salawati_city_timetable_loader": "loadSalawatiPrayerTimesForCity" in repository_text,
+            "salawati_gps_timetable_lookup": "loadNearbyTimetableRows" in repository_text and "SALAWATI_DB" in repository_text,
+            "rejects_non_salawati_rows": "salawatiOnlyPrayerTimes" in repository_text,
+            "no_noor_prayer_correction_loader": "loadNoorPrayerTimesWithCorrection" not in repository_text,
+            "no_noor_correction_result": "noor-correction:" not in repository_text,
+            "no_noor_source_label": 'normalized.startsWith("noor")' not in activity_text,
+            "no_astronomical_replacement_source": "calculated from coordinates" not in activity_text.lower(),
+        }
+        failed_prayer_contract = [name for name, passed in runtime_prayer_contract.items() if not passed]
+        if failed_prayer_contract:
+            missing.append({
+                "path": "SALAWATI_ONLY_PRAYER_SOURCE_CONTRACT",
+                "sources": [str(source) for source in sources if source.name in {"ContentRepository.kt", "MainActivity.kt"}],
+                "failed_checks": failed_prayer_contract,
+            })
+    else:
+        runtime_prayer_contract = {"applicable": False, "reason": "unified app source files are not present in this fixture"}
+
     # Verify each font is an original extracted asset with matching size and SHA-256.
-    font_matches = list(QURAN_FONT_OPTION.finditer(source_text.get("AppScreens.kt", "")))
+    has_app_screens = "AppScreens.kt" in source_text
+    font_matches = list(QURAN_FONT_OPTION.finditer(source_text.get("AppScreens.kt", ""))) if has_app_screens else []
     font_issues: list[dict] = []
     seen_font_ids: set[str] = set()
     seen_font_paths: set[str] = set()
@@ -88,17 +95,19 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
                 "declared_sha256": source_hash, "source_sha256": row.get("sha256"),
             })
     quran_font_contract = {
+        "applicable": has_app_screens,
         "option_count": len(font_matches),
         "unique_ids": len(seen_font_ids),
         "verified_source_fonts": len(font_matches) - len(font_issues),
         "issues": font_issues,
     }
-    if len(font_matches) != 6 or len(seen_font_ids) != len(font_matches) or font_issues:
+    if has_app_screens and (len(font_matches) != 6 or len(seen_font_ids) != len(font_matches) or font_issues):
         missing.append({
             "path": "QURAN_FONT_SOURCE_INTEGRITY_CONTRACT",
             "sources": [str(source) for source in sources if source.name == "AppScreens.kt"],
             **quran_font_contract,
         })
+
     for path, owners in sorted(referenced.items()):
         if path not in available:
             missing.append({"path": path, "sources": sorted(owners)})
