@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import android.Manifest
+import android.widget.Toast
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -179,10 +180,16 @@ enum class AppLanguage(val key: String, val label: String) {
     }
 }
 
+internal fun homeBackExitMessage(language: AppLanguage): String = when (language) {
+    AppLanguage.EN -> "Press Back again to exit"
+    AppLanguage.AR -> "اضغط رجوع مرة أخرى للخروج"
+    AppLanguage.CKB -> "بۆ دەرچوون جارێکی تر دوگمەی گەڕانەوە دابگرە"
+}
+
 enum class AppScreen(val key: String) {
-    HOME("home"), QURAN("quran"), LIBRARY("library"), WORSHIP("worship"), PRAYER("prayer"), MORE("more"),
+    HOME("home"), QURAN("quran"), WORSHIP("worship"), PRAYER("prayer"), MORE("more"),
     TAFSIR("tafsir"), HADITH("hadith"), AZKAR("azkar"), NAMES("names"), TASBIH("tasbih"),
-    AUDIO("audio"), BOOKS("books"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
+    AUDIO("audio"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
 /** Preserve an explicit city choice instead of prompting for GPS on every empty GPS state. */
@@ -264,14 +271,14 @@ fun MashxallApp(startScreen: String? = null) {
     var screen by rememberSaveable {
         mutableStateOf(
             startScreen?.takeIf { candidate ->
-                AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
+                AppScreen.entries.any { it.key == candidate }
             } ?: AppScreen.HOME.key
         )
     }
     var navigationStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(startScreen) {
         val requested = startScreen?.takeIf { candidate ->
-            AppScreen.entries.any { it.key == candidate } || candidate == "pdf"
+            AppScreen.entries.any { it.key == candidate }
         }
         if (requested != null) {
             screen = requested
@@ -297,8 +304,8 @@ fun MashxallApp(startScreen: String? = null) {
             } ?: ""
         )
     }
-    var selectedPdf by rememberSaveable { mutableStateOf("") }
     var immersiveMushaf by rememberSaveable { mutableStateOf(false) }
+    var lastHomeBackPressAt by rememberSaveable { mutableStateOf(0L) }
     val layoutDirection = if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
     val rootScreens = setOf("home", "quran", "azkar", "more", "settings")
     val isRoot = screen in rootScreens
@@ -338,7 +345,20 @@ fun MashxallApp(startScreen: String? = null) {
         audioAutoPlayRequested = false
     }
 
+    LaunchedEffect(screen) {
+        lastHomeBackPressAt = 0L
+    }
+
     BackHandler(enabled = !immersiveMushaf && screen != AppScreen.HOME.key) { navigateBack() }
+    BackHandler(enabled = !immersiveMushaf && screen == AppScreen.HOME.key) {
+        val now = System.currentTimeMillis()
+        if (lastHomeBackPressAt > 0L && now - lastHomeBackPressAt <= 2000L) {
+            activity?.finish()
+        } else {
+            lastHomeBackPressAt = now
+            Toast.makeText(context, homeBackExitMessage(language), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val background = if (dark) Ink else Color(0xFFF4F1E7)
     val foreground = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23)
@@ -393,10 +413,10 @@ fun MashxallApp(startScreen: String? = null) {
                         ) { visibleScreen ->
                             Box(Modifier.fillMaxSize()) {
                                 when (visibleScreen) {
-                                "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) }
+                                "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
                                     language, foreground, cardColor, selectedCity,
-                                    onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) },
+                                    onOpen = { target -> navigateTo(target.key) },
                                     onResumeReading = {
                                         // First-time users should still see the surah list;
                                         // resume only after a real Mushaf page was saved.
@@ -431,9 +451,19 @@ fun MashxallApp(startScreen: String? = null) {
                                         selectedSurah = s
                                         selectedAyah = a
                                         audioStartsAtReciters = true
+                                        audioStartsAtAdhan = false
                                         audioAutoPlayRequested = true
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo("audio")
+                                    },
+                                    onBrowseReciters = { s, a ->
+                                        selectedSurah = s
+                                        selectedAyah = a
+                                        audioStartsAtReciters = true
+                                        audioStartsAtAdhan = false
+                                        audioAutoPlayRequested = false
+                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                        navigateTo(AppScreen.AUDIO.key)
                                     },
                                     onImmersiveMushaf = { immersiveMushaf = it },
                                     resumeLastMushaf = resumeMushafRequested,
@@ -441,8 +471,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     openSettingsOnEntry = quranSettingsRequested,
                                     onSettingsRequestConsumed = { quranSettingsRequested = false }
                                 )
-                                "library" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
-                                "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                                                "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, onCity = { city ->
                                     selectedCity = city.name
@@ -468,9 +497,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     focusAdhan = audioStartsAtAdhan,
                                     autoPlayRequested = audioAutoPlayRequested
                                 )
-                                "books" -> BooksScreen(language, foreground, cardColor, onOpenPdf = { path -> selectedPdf = path; navigateTo("pdf") })
-                                "pdf" -> PdfReaderScreen(language, foreground, selectedPdf)
-                                "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
+                                                                                                "bookmarks" -> BookmarksScreen(language, foreground, cardColor, onOpen = { s, a ->
                                     selectedSurah = s; selectedAyah = a
                                     prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                     navigationStack = emptyList()
@@ -504,7 +531,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     navigateTo("quran")
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
-                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(if (target == AppScreen.BOOKS) AppScreen.LIBRARY.key else target.key) })
+                                else -> HomeScreen(language, foreground, cardColor, selectedCity, onOpen = { target -> navigateTo(target.key) })
                                 }
                             }
                         }
@@ -660,8 +687,7 @@ private fun MoreScreen(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
                                         .animateContentSize()
                                         .premiumPress {
-                                            val target = if (module.screen == AppScreen.LIBRARY) AppScreen.LIBRARY else module.screen
-                                            onOpen(target)
+                                            onOpen(module.screen)
                                         },
                                     colors = CardDefaults.cardColors(containerColor = cardColor),
                                     shape = RoundedCornerShape(21.dp),

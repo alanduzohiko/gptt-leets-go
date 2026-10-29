@@ -18,6 +18,13 @@ adb() {
 
 adb wait-for-device
 
+# The reader-first build must not expose the obsolete book-library navigation.
+if grep -Eq 'BOOKS\("books"\)|LIBRARY\("library"\)|"books" -> BooksScreen|"library" -> BooksScreen|AppScreen\.BOOKS|AppScreen\.LIBRARY' unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt; then
+  echo "FAIL: a legacy Books/Library route remains in MainActivity."
+  exit 1
+fi
+echo "PASS: obsolete Books/Library routes are absent."
+
 # On slow Android 11 CI emulators, sys.boot_completed may become 1 before
 # PackageManager's Binder service is registered. Confirm that package queries
 # actually work before using adb install, and collect useful diagnostics if it
@@ -454,6 +461,113 @@ if [[ "$verse_actions_ok" -ne 1 ]]; then
   exit 1
 fi
 
+# The selected verse itself must open the complete catalog with no autoplay side effect.
+browse_reciters_coords="$(python3 - dist/runtime-test/window-quran.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Browse all reciters|عرض جميع القرّاء والتلاوات|بینینی هەموو قورئان‌خوێنەکان", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("text", "")):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$browse_reciters_coords" ]]; then
+  echo "FAIL: the verse action sheet does not offer the full reciter catalog."
+  cat dist/runtime-test/window-quran.xml
+  exit 1
+fi
+read -r browse_reciters_x browse_reciters_y <<< "$browse_reciters_coords"
+adb shell input tap "$browse_reciters_x" "$browse_reciters_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-quran-context-reciter-catalog.xml > dist/runtime-test/uiautomator-quran-context-reciter-catalog.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran-context-reciter-catalog.xml dist/runtime-test/window-quran-context-reciter-catalog.xml >/dev/null 2>&1 || true
+if ! grep -Eqi 'قورئان.?خوێنەکان|القرّاء|Reciters' dist/runtime-test/window-quran-context-reciter-catalog.xml ||
+   ! grep -Eqi 'Full surah|السورة كاملة|سوورەتی تەواو' dist/runtime-test/window-quran-context-reciter-catalog.xml; then
+  echo "FAIL: the contextual reciter catalog did not show the reciter list and playback mode choices."
+  cat dist/runtime-test/window-quran-context-reciter-catalog.xml
+  exit 1
+fi
+echo "PASS: selected verse opens full reciter catalog and playback modes."
+
+adb shell input keyevent 4
+sleep 4
+adb shell uiautomator dump /sdcard/mashxall-quran-after-catalog.xml > dist/runtime-test/uiautomator-quran-after-catalog.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran-after-catalog.xml dist/runtime-test/window-quran-after-catalog.xml >/dev/null 2>&1 || true
+if ! grep -Eqi '(پەڕە|صفحة|Page)[[:space:]]+1[[:space:]]*/[[:space:]]*604' dist/runtime-test/window-quran-after-catalog.xml; then
+  fatiha_coords="$(python3 - dist/runtime-test/window-quran-after-catalog.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"الفاتحة|Al-Fatiha|فاتحە", re.I)
+for node in root.iter("node"):
+    if pattern.search(node.attrib.get("text", "")):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -z "$fatiha_coords" ]]; then
+    echo "FAIL: returning from the reciter catalog did not restore the Mushaf or the surah list."
+    cat dist/runtime-test/window-quran-after-catalog.xml
+    exit 1
+  fi
+  read -r fatiha_x fatiha_y <<< "$fatiha_coords"
+  adb shell input tap "$fatiha_x" "$fatiha_y"
+  sleep 5
+  adb shell uiautomator dump /sdcard/mashxall-quran-mushaf-after-catalog.xml > dist/runtime-test/uiautomator-quran-mushaf-after-catalog.txt 2>&1 || true
+  adb pull /sdcard/mashxall-quran-mushaf-after-catalog.xml dist/runtime-test/window-quran-after-catalog.xml >/dev/null 2>&1 || true
+fi
+return_verse_coords="$(python3 - dist/runtime-test/window-quran-after-catalog.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() not in {"1:1", "١:١"}:
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+if [[ -z "$return_verse_coords" ]]; then
+  echo "FAIL: Mushaf verse 1:1 was not available after returning from the catalog."
+  cat dist/runtime-test/window-quran-after-catalog.xml
+  exit 1
+fi
+read -r return_verse_x return_verse_y <<< "$return_verse_coords"
+adb shell input tap "$return_verse_x" "$return_verse_y"
+sleep 5
+adb shell uiautomator dump /sdcard/mashxall-quran.xml > dist/runtime-test/uiautomator-quran-reopened-verse.txt 2>&1 || true
+adb pull /sdcard/mashxall-quran.xml dist/runtime-test/window-quran.xml >/dev/null 2>&1 || true
+if ! grep -Eqi 'Browse all reciters|عرض جميع القرّاء والتلاوات|بینینی هەموو قورئان‌خوێنەکان' dist/runtime-test/window-quran.xml; then
+  echo "FAIL: the selected verse panel was not restored for bookmark testing."
+  cat dist/runtime-test/window-quran.xml
+  exit 1
+fi
+echo "PASS: return navigation keeps the user on the Quran reading path."
+
 # Dismiss the verse sheet, then exit the Mushaf back to the surah list.
 adb shell input keyevent 4 || true
 sleep 3
@@ -688,7 +802,6 @@ if [[ "$hadith_copy_visible" -ne 1 ]]; then
 fi
 echo "PASS: the Hadith article detail opens with readable body text and exposes its copy action after scrolling."
 
-check_screen books 'کتێبخانە|المكتبة|Book library'
 if ! grep -q '94' dist/runtime-test/window-books.xml; then
   echo "FAIL: expected 94-record source book catalogue was not visible."
   cat dist/runtime-test/window-books.xml
@@ -1112,6 +1225,78 @@ PY
     exit 1
   fi
 
+  offline_play_coords="$(python3 - dist/runtime-test/window-audio-adhan-offline.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Play adhan|تشغيل الأذان|لێدانی بانگ", re.I)
+for node in root.iter("node"):
+    if not pattern.search(node.attrib.get("content-desc", "").strip()):
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+PY
+)"
+  if [[ -z "$offline_play_coords" ]]; then
+    echo "FAIL: the downloaded Adhan row has no accessible Play action."
+    cat dist/runtime-test/window-audio-adhan-offline.xml
+    exit 1
+  fi
+  read -r offline_play_x offline_play_y <<< "$offline_play_coords"
+  adb shell svc wifi disable >/dev/null 2>&1 || true
+  adb shell svc data disable >/dev/null 2>&1 || true
+  adb shell input tap "$offline_play_x" "$offline_play_y"
+  offline_play_ok=0
+  for attempt in $(seq 1 8); do
+    sleep 2
+    rm -f dist/runtime-test/window-audio-adhan-playing.xml
+    adb shell rm -f /sdcard/mashxall-audio-adhan-playing.xml >/dev/null 2>&1 || true
+    adb shell uiautomator dump /sdcard/mashxall-audio-adhan-playing.xml > "dist/runtime-test/uiautomator-audio-adhan-playing-$attempt.txt" 2>&1 || true
+    adb pull /sdcard/mashxall-audio-adhan-playing.xml dist/runtime-test/window-audio-adhan-playing.xml >/dev/null 2>&1 || true
+    if grep -Eqi 'Pause adhan|إيقاف الأذان مؤقتًا|وەستاندنی کاتی بانگ' dist/runtime-test/window-audio-adhan-playing.xml 2>/dev/null; then
+      offline_play_ok=1
+      echo "PASS: downloaded Adhan playback started while Wi-Fi and mobile data were disabled."
+      break
+    fi
+  done
+  adb shell svc wifi enable >/dev/null 2>&1 || true
+  adb shell svc data enable >/dev/null 2>&1 || true
+  if [[ "$offline_play_ok" -ne 1 ]]; then
+    echo "FAIL: downloaded Adhan could not start without network connectivity."
+    cat dist/runtime-test/window-audio-adhan-playing.xml 2>/dev/null || true
+    exit 1
+  fi
+  offline_pause_coords="$(python3 - dist/runtime-test/window-audio-adhan-playing.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+pattern = re.compile(r"Pause adhan|إيقاف الأذان مؤقتًا|وەستاندنی کاتی بانگ", re.I)
+for node in root.iter("node"):
+    if pattern.search(node.attrib.get("content-desc", "").strip()):
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+PY
+)"
+  if [[ -n "$offline_pause_coords" ]]; then
+    read -r offline_pause_x offline_pause_y <<< "$offline_pause_coords"
+    adb shell input tap "$offline_pause_x" "$offline_pause_y"
+    sleep 1
+  fi
+
   # Return to Quran reciters, select complete-surah mode, and search for
   # the distinctive single token Nufais. Verify the visible row advertises full coverage.
   reciters_tab_coords="$(python3 - dist/runtime-test/window-audio-adhan.xml <<'PY'
@@ -1271,6 +1456,17 @@ if [[ "$home_ready" -ne 1 ]]; then
   exit 1
 fi
 
+adb shell input keyevent 4
+sleep 1
+adb shell uiautomator dump /sdcard/mashxall-home-back-guard.xml > dist/runtime-test/uiautomator-home-back-guard.txt 2>&1 || true
+adb pull /sdcard/mashxall-home-back-guard.xml dist/runtime-test/window-home-back-guard.xml >/dev/null 2>&1 || true
+if ! grep -Eqi 'بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading' dist/runtime-test/window-home-back-guard.xml; then
+  echo "FAIL: one Back press did not keep the app on Home."
+  cat dist/runtime-test/window-home-back-guard.xml
+  exit 1
+fi
+echo "PASS: a single Back press on Home no longer exits the app."
+
 resume_coords=""
 # If the Continue reading card is below the fold, scroll it into view, then
 # recapture the hierarchy. Only use fresh on-screen bounds for the actual tap.
@@ -1330,7 +1526,6 @@ if ! grep -Eq 'Mushaf|مصح|المصحف' dist/runtime-test/window-home-resume.
 fi
 echo "PASS: home prayer-times card, continue-reading resume, and quick access are visible and usable."
 
-check_screen library 'کتێبخانەی کتێب|مكتبة الكتب|Book library'
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 

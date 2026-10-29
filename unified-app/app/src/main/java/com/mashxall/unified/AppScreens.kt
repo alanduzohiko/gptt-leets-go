@@ -213,7 +213,7 @@ private fun ReaderSettingsCategoryCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -1416,19 +1416,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         AudioController.stop()
                                         sheetAudioPlaying = false
                                     } else {
-                                        scope.launch {
-                                            val reciters = ContentRepository.loadReciters(context)
-                                            val savedId = prefs.getInt("preferred_reciter_id", -1)
-                                            val chosen = reciters.firstOrNull { it.id == savedId }
-                                                ?: reciters.firstOrNull { it.audioType == 0 }
-                                                ?: reciters.firstOrNull()
-                                            if (chosen == null) {
-                                                Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                val url = ContentRepository.reciterSampleUrl(chosen, target.first, target.second)
-                                                sheetAudioPlaying = true
-                                                AudioController.playRemote(context, url) { isPlaying -> sheetAudioPlaying = isPlaying }
-                                            }
+                                        val mode = ReaderPlaybackSettings.normalize(readerPlaybackMode)
+                                        val chosenId = resolveCompatibleReciterId(mode, preferredReaderReciterId, readerReciters)
+                                        val chosen = readerReciters.firstOrNull { it.id == chosenId }
+                                            ?: readerReciters.firstOrNull { it.audioType == 0 }
+                                            ?: readerReciters.firstOrNull()
+                                        val ayahCount = surahs.firstOrNull { it.number == target.first }?.ayahCount ?: 0
+                                        val startAyah = if (mode == "full") 1 else target.second
+                                        val sequence = if (chosen != null && ayahCount > 0) {
+                                            reciterAudioSequence(context, chosen, target.first, startAyah, ayahCount)
+                                        } else emptyList()
+                                        if (sequence.isEmpty()) {
+                                            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            sheetAudioPlaying = true
+                                            AudioController.playSequence(context, sequence) { isPlaying -> sheetAudioPlaying = isPlaying }
                                         }
                                     }
                                 }
@@ -1437,6 +1439,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Spacer(Modifier.width(3.dp))
                                 Text(if (language == AppLanguage.EN) "Play" else if (language == AppLanguage.AR) "تشغيل" else "لێدان", fontSize = 10.sp)
                             }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                AudioController.stop()
+                                sheetAudioPlaying = false
+                                onBrowseReciters(target.first, target.second)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.GraphicEq, null, modifier = Modifier.size(17.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Browse all reciters"
+                                    AppLanguage.AR -> "عرض جميع القرّاء والتلاوات"
+                                    AppLanguage.CKB -> "بینینی هەموو قورئان‌خوێنەکان"
+                                },
+                                fontSize = 11.sp
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                         TextButton(
@@ -3513,7 +3535,7 @@ fun AudioScreen(
                 color = foreground.copy(alpha = 0.64f), fontSize = 10.sp, lineHeight = 15.sp
             )
             Text(
-                "Source catalog: Kiwifu/adhan-mp3 • audio stays online until you choose Download.",
+                audioCatalogSourceNotice(language),
                 color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, lineHeight = 13.sp
             )
             Spacer(Modifier.height(4.dp))
@@ -3552,23 +3574,33 @@ fun AudioScreen(
                         ) {
                             IconButton(
                                 onClick = {
-                                    if (playing == playKey) {
+                                    if (playing == playKey || playing == "loading:$playKey") {
                                         AudioController.stop()
                                         playing = ""
                                     } else {
                                         val source = if (localSaved) "local:${file.absolutePath}" else item.url
-                                        playing = playKey
+                                        playing = "loading:$playKey"
                                         AudioController.playSequence(context, listOf(source)) { state ->
-                                            if (!state) playing = ""
+                                            playing = if (state) playKey else ""
                                         }
                                     }
                                 }
                             ) {
-                                Icon(
-                                    if (playing == playKey) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-                                    contentDescription = if (playing == playKey) "Pause adhan" else "Play adhan",
-                                    tint = Gold, modifier = Modifier.size(29.dp)
-                                )
+                                when (playing) {
+                                    playKey -> Icon(
+                                        Icons.Outlined.PauseCircle,
+                                        contentDescription = adhanAudioActionDescription(language, true),
+                                        tint = Gold, modifier = Modifier.size(29.dp)
+                                    )
+                                    "loading:$playKey" -> CircularProgressIndicator(
+                                        color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)
+                                    )
+                                    else -> Icon(
+                                        Icons.Outlined.PlayCircle,
+                                        contentDescription = adhanAudioActionDescription(language, false),
+                                        tint = Gold, modifier = Modifier.size(29.dp)
+                                    )
+                                }
                             }
                             Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
                                 Text(title, color = foreground, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 2, lineHeight = 16.sp)
@@ -3916,6 +3948,43 @@ fun AudioScreen(
     }
 }
 
+
+internal enum class AudioPlaybackFailure {
+    RECITATION_SEGMENT,
+    LOCAL_ASSET,
+    STREAM
+}
+
+internal fun adhanAudioActionDescription(language: AppLanguage, isPlaying: Boolean): String = when (language) {
+    AppLanguage.EN -> if (isPlaying) "Pause adhan" else "Play adhan"
+    AppLanguage.AR -> if (isPlaying) "إيقاف الأذان مؤقتًا" else "تشغيل الأذان"
+    AppLanguage.CKB -> if (isPlaying) "وەستاندنی کاتی بانگ" else "لێدانی بانگ"
+}
+
+internal fun audioCatalogSourceNotice(language: AppLanguage): String = when (language) {
+    AppLanguage.EN -> "Source catalog: Kiwifu/adhan-mp3 • recordings stay online until you choose Download."
+    AppLanguage.AR -> "كتالوج المصدر: Kiwifu/adhan-mp3 • تبقى التسجيلات عبر الإنترنت حتى تختار تنزيلها."
+    AppLanguage.CKB -> "کاتەلۆگی سەرچاوە: Kiwifu/adhan-mp3 • تۆمارەکان ئۆنلاین دەمێننەوە تا داگرتن هەڵدەبژێریت."
+}
+
+internal fun audioPlaybackFailureMessage(language: AppLanguage, failure: AudioPlaybackFailure): String = when (language) {
+    AppLanguage.EN -> when (failure) {
+        AudioPlaybackFailure.RECITATION_SEGMENT -> "A recitation segment could not be played. Check the connection or download the surah."
+        AudioPlaybackFailure.LOCAL_ASSET -> "The audio file could not be opened. Try another recording."
+        AudioPlaybackFailure.STREAM -> "Streaming is unavailable. Try another reciter or check the connection."
+    }
+    AppLanguage.AR -> when (failure) {
+        AudioPlaybackFailure.RECITATION_SEGMENT -> "تعذّر تشغيل مقطع من التلاوة؛ تحقّق من الاتصال أو نزّل السورة."
+        AudioPlaybackFailure.LOCAL_ASSET -> "تعذّر فتح الملف الصوتي؛ جرّب تسجيلاً آخر."
+        AudioPlaybackFailure.STREAM -> "البث غير متاح؛ جرّب قارئًا آخر أو تحقّق من الاتصال."
+    }
+    AppLanguage.CKB -> when (failure) {
+        AudioPlaybackFailure.RECITATION_SEGMENT -> "نەتوانرا بەشێک لە خوێندنەوەکە پەخش بکرێت؛ پەیوەندی بپشکنە یان سوورەتەکە دابگرە."
+        AudioPlaybackFailure.LOCAL_ASSET -> "نەتوانرا فایلە دەنگییەکە بکرێتەوە؛ تۆمارێکی تر تاقی بکەرەوە."
+        AudioPlaybackFailure.STREAM -> "پەخش بەردەست نییە؛ قورئان‌خوێنێکی تر یان پەیوەندییەکە تاقی بکەرەوە."
+    }
+}
+
 private object AudioController {
     private var player: MediaPlayer? = null
     private var playbackGeneration: Int = 0
@@ -3970,7 +4039,7 @@ private object AudioController {
                         callback(false)
                         Toast.makeText(
                             context,
-                            if (languageHint(context) == "en") "A recitation segment could not be played. Check the connection or download the surah." else "تعذر تشغيل مقطع من التلاوة؛ تحقق من الاتصال أو نزّل السورة.",
+                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.RECITATION_SEGMENT),
                             Toast.LENGTH_LONG
                         ).show()
                         stop()
@@ -4003,7 +4072,7 @@ private object AudioController {
             }
         } catch (_: Exception) {
             callback(false)
-            Toast.makeText(context, tr(AppLanguage.CKB, "no_data"), Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.LOCAL_ASSET), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -4016,7 +4085,7 @@ private object AudioController {
                 setOnCompletionListener { callback(false); stop() }
                 setOnErrorListener { _, _, _ ->
                     callback(false)
-                    Toast.makeText(context, if (languageHint(context) == "en") "Stream unavailable; try another reciter or connection." else "تعذر تشغيل البث؛ جرّب قارئًا آخر أو تحقق من الاتصال.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
                     stop()
                     true
                 }
@@ -4024,7 +4093,7 @@ private object AudioController {
             }
         } catch (_: Exception) {
             callback(false)
-            Toast.makeText(context, "Stream unavailable; check the connection.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
         }
     }
 
