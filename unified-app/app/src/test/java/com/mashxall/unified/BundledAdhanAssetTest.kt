@@ -65,6 +65,42 @@ class BundledAdhanAssetTest {
     }
 
     @Test
+    fun selectablePrayerAlertAssetsFilterOutGenericSourceAudioAndDeduplicatePaths() {
+        val adhan = AudioItem(
+            assetPath = "content/source/audio/adhan/adhan_fajr.mp3",
+            title = "Fajr adhan",
+            group = "adhan"
+        )
+        val quran = AudioItem(
+            assetPath = "content/quran/audio/abdul_basit/001.mp3",
+            title = "Abdul Basit 001",
+            group = "quran"
+        )
+        val adhkar = AudioItem(
+            assetPath = "content/azkar/audio/morning.mp3",
+            title = "Morning adhkar",
+            group = "azkar"
+        )
+        assertEquals(listOf(adhan), filterSelectableAdhanAssets(listOf(quran, adhan, adhkar, adhan)))
+    }
+
+    @Test
+    fun scheduledAdhanSelectionRejectsBlankOrGenericQuranPaths() {
+        assertEquals(true, isSelectableAdhanAssetPath("content/source/audio/adhan/adhan_fajr.mp3"))
+        assertEquals(true, isSelectableAdhanAssetPath("local:/data/user/0/com.mashxall.unified/files/adhan-audio/adhan-001.mp3"))
+        assertEquals(false, isSelectableAdhanAssetPath(""))
+        assertEquals(false, isSelectableAdhanAssetPath("content/quran/audio/abdul_basit/001.mp3"))
+        assertEquals(false, isSelectableAdhanAssetPath("content/azkar/audio/morning.mp3"))
+    }
+
+    @Test
+    fun noSelectionExplainsTheRequiredActionInAllSupportedLanguages() {
+        assertEquals(true, adhanSourceRequiredMessage(AppLanguage.EN).contains("download a track"))
+        assertEquals(true, adhanSourceRequiredMessage(AppLanguage.AR).contains("نزّل تسجيلًا"))
+        assertEquals(true, adhanSourceRequiredMessage(AppLanguage.CKB).contains("دەنگێک دابگرە"))
+    }
+
+    @Test
     fun doesNotMixGenericQuranRecitationOrAdhkarIntoAdhanLibrary() {
         assertNull(
             bundledAdhanCategory(
