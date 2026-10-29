@@ -297,6 +297,7 @@ internal fun loadQuranTextTypeface(context: Context, fontId: String): Typeface? 
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var selected by rememberSaveable { mutableIntStateOf(initialSurah) }
     var verses by remember { mutableStateOf<List<Ayah>>(emptyList()) }
@@ -391,13 +392,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
     }
-    androidx.activity.compose.BackHandler(enabled = mushafMode || openingMushaf) {
+    androidx.activity.compose.BackHandler(enabled = !showSurahList || openingMushaf) {
         if (selectedAyahForSheet != null) selectedAyahForSheet = null
         else if (openingMushaf) {
             openingMushaf = false
             showSurahList = true
         } else {
             mushafMode = false
+            query = ""
             showSurahList = true
         }
     }
@@ -414,14 +416,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             openingMushaf = false
             mushafMode = true
             onResumeMushafHandled()
-        }
-    }
-    // Do not let a restored or legacy state expose the old text-only reader.
-    // Quran entry is the surah list; an explicitly selected/resumed surah opens
-    // the graphic Mushaf page viewer.
-    LaunchedEffect(showSurahList, mushafMode, openingMushaf, resumeLastMushaf) {
-        if (!showSurahList && !mushafMode && !openingMushaf && !resumeLastMushaf) {
-            showSurahList = true
         }
     }
     LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList) {
@@ -647,6 +641,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 language = language,
                 foreground = foreground,
                 page = mushafPage,
+                onVerseView = {
+                    query = ""
+                    selectedAyahForSheet = null
+                    mushafMode = false
+                    showSurahList = false
+                },
                 darkMode = mushafDarkMode,
                 sepiaMode = mushafSepiaMode,
                 onPageChange = { requested ->
@@ -775,7 +775,32 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
         } else if (verses.isEmpty()) {
             LoadingOrEmpty(loading, language, foreground)
-        } else LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        } else LazyColumn(
+            state = listState,
+            modifier = Modifier.pointerInput(selected, query, loading) {
+                if (query.isNotBlank() || loading) return@pointerInput
+                var horizontalDrag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { horizontalDrag = 0f },
+                    onHorizontalDrag = { _, delta -> horizontalDrag += delta },
+                    onDragEnd = {
+                        val target = quranSurahSwipeTarget(selected, horizontalDrag)
+                        if (target != null && target != selected) {
+                            selected = target
+                            query = ""
+                            onSurah(target)
+                            prefs.edit().putInt("last_surah", target).putInt("last_ayah_number", 1).apply()
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            scope.launch { listState.animateScrollToItem(0) }
+                        }
+                        horizontalDrag = 0f
+                    },
+                    onDragCancel = { horizontalDrag = 0f }
+                )
+            },
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             items(verses, key = { it.surah.toString() + ":" + it.number }) { verse ->
                 var noteExpanded by rememberSaveable(verse.surah, verse.number) { mutableStateOf(false) }
                 var showRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
@@ -1784,6 +1809,20 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
 
 }
 
+/** In Arabic/Sorani reading order, a physical left swipe advances to the next surah. */
+internal fun quranSurahSwipeTarget(
+    surah: Int,
+    horizontalDragPx: Float,
+    thresholdPx: Float = 72f
+): Int? {
+    if (surah !in 1..114 || !horizontalDragPx.isFinite() || !thresholdPx.isFinite() || thresholdPx <= 0f) return null
+    return when {
+        horizontalDragPx < -thresholdPx && surah < 114 -> surah + 1
+        horizontalDragPx > thresholdPx && surah > 1 -> surah - 1
+        else -> null
+    }
+}
+
 internal enum class MushafEdgeTapAction {
     NEXT_PAGE,
     PREVIOUS_PAGE,
@@ -1825,6 +1864,7 @@ private fun MushafPageViewer(
     language: AppLanguage,
     foreground: Color,
     page: Int,
+    onVerseView: () -> Unit,
     darkMode: Boolean,
     sepiaMode: Boolean,
     onPageChange: (Int) -> Unit,
@@ -1919,6 +1959,17 @@ private fun MushafPageViewer(
         ) {
             IconButton(onClick = onExitFullscreen, modifier = Modifier.size(42.dp)) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Color.White)
+            }
+            IconButton(onClick = onVerseView, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Outlined.Subject,
+                    contentDescription = when (language) {
+                        AppLanguage.EN -> "Open verse-text reader and Tajweed"
+                        AppLanguage.AR -> "فتح قارئ نص الآيات والتجويد"
+                        AppLanguage.CKB -> "کردنەوەی خوێندنەوەی دەقی ئایەت و تەجوید"
+                    },
+                    tint = PaleGold
+                )
             }
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
                 Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
