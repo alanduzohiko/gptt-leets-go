@@ -5355,6 +5355,45 @@ private fun formatPrayerCountdown(remainingMillis: Long): String {
     return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
 }
 
+/**
+ * Present the verified timetable source as human-readable UI copy. Raw source
+ * keys and database routing labels should never leak into the prayer screen.
+ */
+internal fun prayerSourceDescription(source: String, language: AppLanguage): String {
+    val normalized = source.substringBefore(" • ").trim().lowercase(Locale.ROOT)
+    val isSalawati = normalized.startsWith("salawati")
+    if (!isSalawati) {
+        return when (language) {
+            AppLanguage.EN -> "Prayer timetable source unavailable"
+            AppLanguage.AR -> "مصدر جدول الصلاة غير متاح"
+            AppLanguage.CKB -> "سەرچاوەی خشتەی نوێژ بەردەست نییە"
+        }
+    }
+
+    val linkedLocality = normalized.startsWith("salawati-dependent")
+    val distanceKm = Regex("""(\d+(?:\.\d+)?)\s*km\b""", RegexOption.IGNORE_CASE)
+        .find(source)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+
+    val timetableLabel = when (language) {
+        AppLanguage.EN -> if (linkedLocality) "Salawati original timetable (linked locality)" else "Salawati original timetable"
+        AppLanguage.AR -> if (linkedLocality) "جدول صلواتي الأصلي (مدينة مرتبطة)" else "جدول صلواتي الأصلي"
+        AppLanguage.CKB -> if (linkedLocality) "خشتەی ڕەسەنی صەڵەواتی (شاری بەستراو)" else "خشتەی ڕەسەنی صەڵەواتی"
+    }
+    val distanceLabel = distanceKm?.let { distance ->
+        val formatted = String.format(Locale.US, "%.1f", distance)
+        when (language) {
+            AppLanguage.EN -> " • nearest source schedule $formatted km away"
+            AppLanguage.AR -> " • أقرب جدول مصدر يبعد $formatted كم"
+            AppLanguage.CKB -> " • نزیکترین خشتەی سەرچاوە $formatted کیلۆمەتر دوورە"
+        }
+    }.orEmpty()
+    return when (language) {
+        AppLanguage.EN -> "Source: $timetableLabel$distanceLabel. Times shown in local phone time."
+        AppLanguage.AR -> "المصدر: $timetableLabel$distanceLabel. الأوقات بتوقيت الهاتف المحلي."
+        AppLanguage.CKB -> "سەرچاوە: $timetableLabel$distanceLabel. کاتەکان بە کاتی مۆبایلەکەتن."
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit) {
@@ -5760,11 +5799,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
             }
             Text(
-                when (language) {
-                    AppLanguage.EN -> "Source: ${times!!.source}. Times shown in local phone time."
-                    AppLanguage.AR -> "المصدر: ${times!!.source}. الأوقات بتوقيت الهاتف المحلي."
-                    AppLanguage.CKB -> "سەرچاوە: ${times!!.source}. کاتەکان بە کاتی مۆبایلەکەتن."
-                }, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
+                prayerSourceDescription(times!!.source, language),
+                color = foreground.copy(alpha = 0.48f), fontSize = 10.sp, lineHeight = 15.sp
             )
         }
 
