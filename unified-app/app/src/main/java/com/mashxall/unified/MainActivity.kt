@@ -853,30 +853,19 @@ private fun MoreScreen(
             tr(language, module.subtitleKey).contains(query.trim(), ignoreCase = true)
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    when (language) { AppLanguage.EN -> "More features"; AppLanguage.AR -> "المزيد من الميزات"; AppLanguage.CKB -> "تایبەتمەندیی زیاتر" },
-                    color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
-                )
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Audio, Qibla, Hadith and personal tools"
-                        AppLanguage.AR -> "الصوتيات والقبلة والأحاديث والأدوات الشخصية"
-                        AppLanguage.CKB -> "دەنگ، قیبلە، فەرموودە و ئامرازە کەسییەکان"
-                    }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
-                )
-            }
-            Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(15.dp))
-                    .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.25f), Gold.copy(alpha = 0.055f))))
-                    .border(1.dp, Gold.copy(alpha = 0.32f), RoundedCornerShape(15.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(Modifier.size(35.dp).border(1.dp, Gold.copy(alpha = 0.16f), CircleShape))
-                Icon(Icons.Outlined.MoreHoriz, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
-            }
-        }
+        PremiumSectionHero(
+            title = when (language) { AppLanguage.EN -> "More features"; AppLanguage.AR -> "المزيد من الميزات"; AppLanguage.CKB -> "تایبەتمەندیی زیاتر" },
+            subtitle = when (language) {
+                AppLanguage.EN -> "Audio, Qibla, Hadith and personal tools — all in one native space."
+                AppLanguage.AR -> "الصوتيات والقبلة والأحاديث والأدوات الشخصية في مساحة واحدة."
+                AppLanguage.CKB -> "دەنگ، قیبلە، فەرموودە و ئامرازە کەسییەکان لە یەک شوێندا."
+            },
+            icon = Icons.Outlined.Explore,
+            foreground = foreground,
+            accent = Gold,
+            metric = when (language) { AppLanguage.EN -> "${visibleModules.size} tools available"; AppLanguage.AR -> "${visibleModules.size} أداة متاحة"; AppLanguage.CKB -> "${visibleModules.size} ئامراز بەردەستە" },
+            eyebrow = when (language) { AppLanguage.EN -> "DISCOVER MASHXALL"; AppLanguage.AR -> "اكتشف مەشخەڵ"; AppLanguage.CKB -> "مەشخەڵ بناسە" }
+        )
         Spacer(Modifier.height(12.dp))
         PremiumSearchField(
             value = query,
