@@ -279,16 +279,36 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
 }
 
 @Composable
-private fun ReaderActionIcon(icon: ImageVector, description: String?, onClick: () -> Unit) {
+private fun ReaderActionIcon(
+    icon: ImageVector,
+    description: String?,
+    enabled: Boolean = true,
+    rotationDegrees: Float = 0f,
+    hapticFeedback: Boolean = true,
+    onClick: () -> Unit
+) {
+    val outline by animateColorAsState(
+        targetValue = if (enabled) Gold.copy(alpha = 0.32f) else Gold.copy(alpha = 0.10f),
+        animationSpec = tween(180),
+        label = "Reader action outline state"
+    )
     Box(
-        Modifier.size(32.dp).clip(CircleShape)
-            .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.20f), Gold.copy(alpha = 0.055f))))
-            .border(1.dp, Gold.copy(alpha = 0.23f), CircleShape)
-            .premiumClickable(hapticFeedback = true, onClick = onClick)
+        Modifier.size(34.dp).clip(CircleShape)
+            .background(Brush.linearGradient(listOf(
+                Gold.copy(alpha = if (enabled) 0.20f else 0.055f),
+                Gold.copy(alpha = if (enabled) 0.055f else 0.02f)
+            )))
+            .border(1.dp, outline, CircleShape)
+            .premiumClickable(enabled = enabled, hapticFeedback = hapticFeedback, onClick = onClick)
             .padding(6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = description, tint = Gold, modifier = Modifier.fillMaxSize())
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (enabled) Gold else Gold.copy(alpha = 0.30f),
+            modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotationDegrees }
+        )
     }
 }
 
@@ -2301,20 +2321,16 @@ private fun MushafPageViewer(
             Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 5.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onExitFullscreen, modifier = Modifier.size(42.dp)) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Color.White)
-            }
-            IconButton(onClick = onVerseView, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Outlined.AutoStories,
-                    contentDescription = when (language) {
-                        AppLanguage.EN -> "Open verse-text reader and Tajweed"
-                        AppLanguage.AR -> "فتح قارئ نص الآيات والتجويد"
-                        AppLanguage.CKB -> "کردنەوەی خوێندنەوەی دەقی ئایەت و تەجوید"
-                    },
-                    tint = PaleGold
-                )
-            }
+            ReaderActionIcon(Icons.Outlined.ArrowBack, tr(language, "back"), onClick = onExitFullscreen)
+            ReaderActionIcon(
+                Icons.Outlined.AutoStories,
+                when (language) {
+                    AppLanguage.EN -> "Open verse-text reader and Tajweed"
+                    AppLanguage.AR -> "فتح قارئ نص الآيات والتجويد"
+                    AppLanguage.CKB -> "کردنەوەی خوێندنەوەی دەقی ئایەت و تەجوید"
+                },
+                onClick = onVerseView
+            )
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
                 Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                 AnimatedContent(
@@ -2353,50 +2369,46 @@ private fun MushafPageViewer(
                     maxLines = 1
                 )
             }
-            IconButton(
-                onClick = {
-                    val target = pageVerses.firstOrNull()
-                    if (target != null) onPlaySurah(target.surah, 1)
-                },
-                enabled = !loading && pageVerses.isNotEmpty(),
-                modifier = Modifier.size(42.dp)
+            ReaderActionIcon(
+                Icons.Outlined.PlayCircle,
+                if (language == AppLanguage.EN) "Play surah" else if (language == AppLanguage.AR) "تشغيل السورة" else "خوێندنەوەی سوورەت",
+                enabled = !loading && pageVerses.isNotEmpty()
             ) {
-                Icon(Icons.Outlined.PlayCircle, contentDescription = if (language == AppLanguage.EN) "Play surah" else if (language == AppLanguage.AR) "تشغيل السورة" else "خوێندنەوەی سوورەت", tint = PaleGold, modifier = Modifier.size(25.dp))
+                pageVerses.firstOrNull()?.let { onPlaySurah(it.surah, 1) }
             }
-            IconButton(
-                onClick = {
-                    val target = selectedVerse ?: pageVerses.firstOrNull()
-                    if (target != null) {
-                        onBookmarkVerse(target.surah, target.ayah)
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        Toast.makeText(
-                            context,
-                            when (language) {
-                                AppLanguage.EN -> "Bookmark saved for " + target.surah + ":" + target.ayah
-                                AppLanguage.AR -> "حُفظت علامة للآية " + target.surah + ":" + target.ayah
-                                AppLanguage.CKB -> "ئایەت نیشانە کرا " + target.surah + ":" + target.ayah
-                            },
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                },
+            ReaderActionIcon(
+                Icons.Outlined.BookmarkBorder,
+                if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت",
                 enabled = !loading && pageVerses.isNotEmpty(),
-                modifier = Modifier.size(42.dp)
+                hapticFeedback = false
             ) {
-                Icon(Icons.Outlined.BookmarkBorder, contentDescription = if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت", tint = PaleGold, modifier = Modifier.size(22.dp))
+                (selectedVerse ?: pageVerses.firstOrNull())?.let { target ->
+                    onBookmarkVerse(target.surah, target.ayah)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    Toast.makeText(
+                        context,
+                        when (language) {
+                            AppLanguage.EN -> "Bookmark saved for " + target.surah + ":" + target.ayah
+                            AppLanguage.AR -> "حُفظت علامة للآية " + target.surah + ":" + target.ayah
+                            AppLanguage.CKB -> "ئایەت نیشانە کرا " + target.surah + ":" + target.ayah
+                        },
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
-            IconButton(onClick = onReaderSettings, modifier = Modifier.size(42.dp)) {
-                Icon(Icons.Outlined.Settings, contentDescription = tr(language, "settings"), tint = PaleGold, modifier = Modifier.size(23.dp))
-            }
+            ReaderActionIcon(Icons.Outlined.Settings, tr(language, "settings"), onClick = onReaderSettings)
         }
         Row(
             Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            IconButton(onClick = { onPageChange(page - 1) }, enabled = page > 1 && !loading, modifier = Modifier.size(37.dp)) {
-                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "previous"), tint = if (page > 1) Color.White else Color.Gray)
-            }
+            ReaderActionIcon(
+                Icons.Outlined.ChevronRight,
+                tr(language, "previous"),
+                enabled = page > 1 && !loading,
+                onClick = { onPageChange(page - 1) }
+            )
             OutlinedTextField(
                 value = pageInput,
                 onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
@@ -2405,16 +2417,23 @@ private fun MushafPageViewer(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
-            Button(
-                onClick = { pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange) },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                modifier = Modifier.height(42.dp)
+            PremiumChoicePill(
+                label = if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ",
+                selected = false,
+                accent = Gold,
+                foreground = if (darkMode) Color.White else DeepGreen,
+                leadingIcon = Icons.Outlined.Search,
+                enabled = pageInput.toIntOrNull()?.let { it in 1..604 } == true && pageInput.toIntOrNull() != page
             ) {
-                Text(if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ", fontSize = 11.sp)
+                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
             }
-            IconButton(onClick = { onPageChange(page + 1) }, enabled = page < 604 && !loading, modifier = Modifier.size(37.dp)) {
-                Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "next"), tint = if (page < 604) Color.White else Color.Gray, modifier = Modifier.rotate(180f))
-            }
+            ReaderActionIcon(
+                Icons.Outlined.ChevronRight,
+                tr(language, "next"),
+                enabled = page < 604 && !loading,
+                rotationDegrees = 180f,
+                onClick = { onPageChange(page + 1) }
+            )
         }
         val pageProgress by animateFloatAsState(
             targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
