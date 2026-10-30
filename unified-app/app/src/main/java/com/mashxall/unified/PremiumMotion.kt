@@ -29,6 +29,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -988,4 +989,53 @@ internal fun PremiumIconButton(
             modifier = Modifier.size(size * 0.48f).graphicsLayer { rotationZ = iconRotation }
         )
     }
+}
+
+
+/** Tactile wrapper for icon actions whose inner content changes (waveform, loader, play/pause). */
+@Composable
+internal fun PremiumIconActionSurface(
+    accent: Color,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    enabled: Boolean = true,
+    selected: Boolean = false,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val fill by animateColorAsState(
+        targetValue = when {
+            !enabled -> accent.copy(alpha = 0.025f)
+            selected -> accent.copy(alpha = 0.18f)
+            else -> accent.copy(alpha = 0.075f)
+        },
+        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        label = "Mashxall icon action surface fill"
+    )
+    val outline by animateColorAsState(
+        targetValue = accent.copy(alpha = if (enabled && selected) 0.50f else if (enabled) 0.19f else 0.08f),
+        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        label = "Mashxall icon action surface outline"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (enabled && selected) 1.055f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mashxall icon action surface scale"
+    )
+    Box(
+        modifier = modifier.size(size)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(size * 0.36f))
+            .background(Brush.linearGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.55f))))
+            .border(1.dp, outline, RoundedCornerShape(size * 0.36f))
+            .premiumClickable(
+                enabled = enabled,
+                onClickLabel = contentDescription,
+                role = Role.Button,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center,
+        content = content
+    )
 }

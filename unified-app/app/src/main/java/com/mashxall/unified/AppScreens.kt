@@ -4786,7 +4786,11 @@ fun AudioScreen(
                                 Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                IconButton(
+                                PremiumIconActionSurface(
+                                    contentDescription = adhanAudioActionDescription(language, playing == playKey),
+                                    accent = Gold,
+                                    size = 40.dp,
+                                    selected = playing == playKey,
                                     onClick = {
                                         if (playing == playKey || playing == "loading:$playKey") {
                                             AudioController.stop()
@@ -4806,12 +4810,12 @@ fun AudioScreen(
                                             contentDescription = adhanAudioActionDescription(language, true)
                                         )
                                         "loading:$playKey" -> CircularProgressIndicator(
-                                            color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)
+                                            color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(22.dp)
                                         )
                                         else -> Icon(
                                             Icons.Outlined.PlayCircle,
                                             contentDescription = adhanAudioActionDescription(language, false),
-                                            tint = Gold, modifier = Modifier.size(29.dp)
+                                            tint = Gold, modifier = Modifier.size(27.dp)
                                         )
                                     }
                                 }
@@ -4886,7 +4890,11 @@ fun AudioScreen(
                             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(
+                            PremiumIconActionSurface(
+                                contentDescription = adhanAudioActionDescription(language, playing == playKey),
+                                accent = Gold,
+                                size = 40.dp,
+                                selected = playing == playKey,
                                 onClick = {
                                     if (playing == playKey || playing == "loading:$playKey") {
                                         AudioController.stop()
@@ -4895,12 +4903,12 @@ fun AudioScreen(
                                         val source = if (localSaved) "local:${file.absolutePath}" else item.url
                                         playing = "loading:$playKey"
                                         AudioController.playSequence(
-                                        context,
-                                        listOf(source),
-                                        failure = if (localSaved) AudioPlaybackFailure.LOCAL_ASSET else AudioPlaybackFailure.STREAM
-                                    ) { state ->
-                                        playing = if (state) playKey else ""
-                                    }
+                                            context,
+                                            listOf(source),
+                                            failure = if (localSaved) AudioPlaybackFailure.LOCAL_ASSET else AudioPlaybackFailure.STREAM
+                                        ) { state ->
+                                            playing = if (state) playKey else ""
+                                        }
                                     }
                                 }
                             ) {
@@ -4911,12 +4919,12 @@ fun AudioScreen(
                                         contentDescription = adhanAudioActionDescription(language, true)
                                     )
                                     "loading:$playKey" -> CircularProgressIndicator(
-                                        color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)
+                                        color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(22.dp)
                                     )
                                     else -> Icon(
                                         Icons.Outlined.PlayCircle,
                                         contentDescription = adhanAudioActionDescription(language, false),
-                                        tint = Gold, modifier = Modifier.size(29.dp)
+                                        tint = Gold, modifier = Modifier.size(27.dp)
                                     )
                                 }
                             }
@@ -5241,8 +5249,12 @@ fun AudioScreen(
                                     fontSize = 9.sp, maxLines = 2
                                 )
                             }
-                            IconButton(
+                            PremiumIconActionSurface(
+                                contentDescription = playLabel,
+                                accent = Gold,
+                                size = 40.dp,
                                 enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
+                                selected = playing == playKey,
                                 onClick = {
                                     if (playing == playKey) {
                                         AudioController.stop()
@@ -5271,7 +5283,7 @@ fun AudioScreen(
                                             Icons.Outlined.PlayCircle,
                                             contentDescription = playLabel,
                                             tint = Gold,
-                                            modifier = Modifier.size(29.dp)
+                                            modifier = Modifier.size(27.dp)
                                         )
                                     }
                                 }
