@@ -60,7 +60,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -3614,7 +3613,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     textAlign = TextAlign.End,
                     modifier = Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable(enabled = count < targetCount, onClick = incrementCount)
+                        .premiumClickable(enabled = count < targetCount, hapticFeedback = false, onClick = incrementCount)
                         .padding(horizontal = 8.dp, vertical = 5.dp)
                         .graphicsLayer { scaleX = countPulse.value; scaleY = countPulse.value }
                 )
