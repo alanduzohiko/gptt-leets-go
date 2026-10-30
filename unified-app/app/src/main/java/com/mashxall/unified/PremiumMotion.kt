@@ -388,7 +388,7 @@ internal fun PremiumChoicePill(
             .clip(RoundedCornerShape(15.dp))
             .background(Brush.horizontalGradient(listOf(fill, fill.copy(alpha = (fill.alpha * 0.58f).coerceAtLeast(0.02f)))))
             .border(1.dp, outline, RoundedCornerShape(15.dp))
-            .premiumClickable(hapticFeedback = false, onClick = onClick)
+            .premiumClickable(hapticFeedback = true, onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -280,7 +280,7 @@ private fun ReaderActionIcon(icon: ImageVector, description: String?, onClick: (
         Modifier.size(32.dp).clip(CircleShape)
             .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.20f), Gold.copy(alpha = 0.055f))))
             .border(1.dp, Gold.copy(alpha = 0.23f), CircleShape)
-            .premiumClickable(hapticFeedback = false, onClick = onClick)
+            .premiumClickable(hapticFeedback = true, onClick = onClick)
             .padding(6.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -310,7 +310,7 @@ private fun ReaderModeSegment(
     Row(
         modifier.clip(RoundedCornerShape(15.dp)).background(fill)
             .border(1.dp, stroke, RoundedCornerShape(15.dp))
-            .premiumClickable(hapticFeedback = false, onClick = onClick)
+            .premiumClickable(hapticFeedback = true, onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
@@ -811,7 +811,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Row(
                     Modifier.clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.12f))
                         .border(1.dp, Gold.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
-                        .premiumClickable(hapticFeedback = false) { chooseSurah = true }
+                        .premiumClickable(hapticFeedback = true) { chooseSurah = true }
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -833,7 +833,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
                     .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.12f), cardColor)))
                     .border(1.dp, Gold.copy(alpha = 0.22f), RoundedCornerShape(17.dp))
-                    .premiumClickable(hapticFeedback = false) { chooseTranslation = true }
+                    .premiumClickable(hapticFeedback = true) { chooseTranslation = true }
                     .padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -997,7 +997,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Card(
                             modifier = Modifier.fillMaxWidth()
                                 .staggeredEntrance(itemKey = item.number, index = index)
-                                .premiumClickable(hapticFeedback = false) {
+                                .premiumClickable(hapticFeedback = true) {
                                 selected = item.number
                                 onSurah(item.number)
                                 query = ""
@@ -3167,7 +3167,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 Modifier.size(37.dp).clip(CircleShape)
                                     .background(hadithFavoriteFill)
                                     .border(1.dp, hadithFavoriteOutline, CircleShape)
-                                    .premiumClickable(hapticFeedback = false) {
+                                    .premiumClickable(hapticFeedback = true) {
                                         val nextSaved = if (hadithIsFavorite) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
                                         favoriteHadithIds = nextSaved
                                         favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
@@ -3599,7 +3599,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     Modifier.size(36.dp).clip(CircleShape)
                                         .background(Gold.copy(alpha = if (isFavorite) 0.18f else 0.055f))
                                         .border(1.dp, Gold.copy(alpha = if (isFavorite) 0.48f else 0.18f), CircleShape)
-                                        .premiumClickable(hapticFeedback = false) {
+                                        .premiumClickable(hapticFeedback = true) {
                                             val id = item.id.toString()
                                             favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
                                             favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
@@ -3935,7 +3935,7 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 Modifier.size(38.dp).clip(CircleShape)
                                     .background(Gold.copy(alpha = if (favorite) 0.18f else 0.045f))
                                     .border(1.dp, Gold.copy(alpha = if (favorite) 0.48f else 0.17f), CircleShape)
-                                    .premiumClickable(hapticFeedback = false) {
+                                    .premiumClickable(hapticFeedback = true) {
                                         val key = name.number.toString()
                                         favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
                                         favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
@@ -8692,7 +8692,7 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 Modifier.size(38.dp).clip(CircleShape)
                                     .background(Gold.copy(alpha = if (isFavorite) 0.18f else 0.045f))
                                     .border(1.dp, Gold.copy(alpha = if (isFavorite) 0.48f else 0.17f), CircleShape)
-                                    .premiumClickable(hapticFeedback = false) {
+                                    .premiumClickable(hapticFeedback = true) {
                                         val key = item.id.toString()
                                         favorites = if (isFavorite) favorites - key else favorites + key
                                         favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
