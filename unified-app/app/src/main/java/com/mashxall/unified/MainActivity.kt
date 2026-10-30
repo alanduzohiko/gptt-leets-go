@@ -2041,12 +2041,13 @@ private fun SettingsScreen(
         Spacer(Modifier.height(9.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             AppLanguage.entries.forEach { item ->
-                FilterChip(
+                PremiumChoicePill(
+                    label = item.label,
                     selected = item == language,
-                    onClick = { onLanguage(item) },
-                    label = { Text(item.label, fontSize = 12.sp) },
+                    accent = Gold,
+                    foreground = foreground,
                     modifier = Modifier.weight(1f)
-                )
+                ) { onLanguage(item) }
             }
         }
         Spacer(Modifier.height(20.dp))
