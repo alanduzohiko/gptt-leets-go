@@ -3633,32 +3633,18 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             )
             Spacer(Modifier.height(7.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                FilterChip(
+                PremiumChoicePill(
+                    label = when (language) { AppLanguage.EN -> "All names"; AppLanguage.AR -> "كل الأسماء"; AppLanguage.CKB -> "هەموو ناوەکان" },
                     selected = !favoritesOnly,
-                    onClick = { favoritesOnly = false },
-                    label = {
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "All names"
-                                AppLanguage.AR -> "كل الأسماء"
-                                AppLanguage.CKB -> "هەموو ناوەکان"
-                            }, fontSize = 11.sp
-                        )
-                    }
-                )
-                FilterChip(
+                    accent = Gold,
+                    foreground = foreground
+                ) { favoritesOnly = false }
+                PremiumChoicePill(
+                    label = when (language) { AppLanguage.EN -> "Favourites"; AppLanguage.AR -> "المفضلة"; AppLanguage.CKB -> "دڵخوازەکان" },
                     selected = favoritesOnly,
-                    onClick = { favoritesOnly = true },
-                    label = {
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "Favourites"
-                                AppLanguage.AR -> "المفضلة"
-                                AppLanguage.CKB -> "دڵخوازەکان"
-                            }, fontSize = 11.sp
-                        )
-                    }
-                )
+                    accent = Gold,
+                    foreground = foreground
+                ) { favoritesOnly = true }
             }
         }
         if (visibleNames.isEmpty()) {
@@ -3894,7 +3880,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         Box(
             Modifier.size(238.dp).clip(CircleShape).background(
                 androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF1E7259), DeepGreen, CardDark))
-            ).clickable {
+            ).premiumClickable(hapticFeedback = false) {
                 val result = nextTasbihTap(count, totalCount, targetCount)
                 if (result.accepted) {
                     count = result.roundCount
@@ -4263,19 +4249,20 @@ fun AudioScreen(
         Spacer(Modifier.height(9.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             items(listOf(0, 1, 2)) { index ->
-                FilterChip(
+                PremiumChoicePill(
+                    label = when (index) {
+                        0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
+                        1 -> if (language == AppLanguage.EN) "Reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
+                        else -> if (language == AppLanguage.EN) "Adhan & mosque audio" else if (language == AppLanguage.AR) "الأذان وأصوات المساجد" else "بانگ و دەنگی مزگەوت"
+                    },
                     selected = selectedTab == index,
-                    onClick = { selectedTab = index; AudioController.stop(); playing = "" },
-                    label = {
-                        Text(
-                            when (index) {
-                                0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
-                                1 -> if (language == AppLanguage.EN) "Reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
-                                else -> if (language == AppLanguage.EN) "Adhan & mosque audio" else if (language == AppLanguage.AR) "الأذان وأصوات المساجد" else "بانگ و دەنگی مزگەوت"
-                            }
-                        )
-                    }
-                )
+                    accent = Gold,
+                    foreground = foreground
+                ) {
+                    selectedTab = index
+                    AudioController.stop()
+                    playing = ""
+                }
             }
         }
         Spacer(Modifier.height(7.dp))
@@ -4357,38 +4344,33 @@ fun AudioScreen(
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), contentPadding = PaddingValues(vertical = 3.dp)) {
                 items(listOf("all", "muezzin", "mosque", "downloaded"), key = { it }) { category ->
                     val count = categoryCounts[category] ?: 0
-                    FilterChip(
+                    PremiumChoicePill(
+                        label = when (category) {
+                            "muezzin" -> when (language) {
+                                AppLanguage.EN -> "Muezzins ($count)"
+                                AppLanguage.AR -> "المؤذنون ($count)"
+                                AppLanguage.CKB -> "موئەزینەکان ($count)"
+                            }
+                            "mosque" -> when (language) {
+                                AppLanguage.EN -> "Mosques ($count)"
+                                AppLanguage.AR -> "المساجد ($count)"
+                                AppLanguage.CKB -> "مزگەوتەکان ($count)"
+                            }
+                            "downloaded" -> when (language) {
+                                AppLanguage.EN -> "Downloaded ($count)"
+                                AppLanguage.AR -> "المنزّل ($count)"
+                                AppLanguage.CKB -> "داگیراوەکان ($count)"
+                            }
+                            else -> when (language) {
+                                AppLanguage.EN -> "All ($count)"
+                                AppLanguage.AR -> "الكل ($count)"
+                                AppLanguage.CKB -> "هەموو ($count)"
+                            }
+                        },
                         selected = adhanCategory == category,
-                        onClick = { adhanCategory = category },
-                        label = {
-                            Text(
-                                when (category) {
-                                    "muezzin" -> when (language) {
-                                        AppLanguage.EN -> "Muezzins ($count)"
-                                        AppLanguage.AR -> "المؤذنون ($count)"
-                                        AppLanguage.CKB -> "موئەزینەکان ($count)"
-                                    }
-                                    "mosque" -> when (language) {
-                                        AppLanguage.EN -> "Mosques ($count)"
-                                        AppLanguage.AR -> "المساجد ($count)"
-                                        AppLanguage.CKB -> "مزگەوتەکان ($count)"
-                                    }
-                                    "downloaded" -> when (language) {
-                                        AppLanguage.EN -> "Downloaded ($count)"
-                                        AppLanguage.AR -> "المنزّل ($count)"
-                                        AppLanguage.CKB -> "داگیراوەکان ($count)"
-                                    }
-                                    else -> when (language) {
-                                        AppLanguage.EN -> "All ($count)"
-                                        AppLanguage.AR -> "الكل ($count)"
-                                        AppLanguage.CKB -> "هەموو ($count)"
-                                    }
-                                },
-                                fontSize = 10.sp,
-                                maxLines = 1
-                            )
-                        }
-                    )
+                        accent = Gold,
+                        foreground = foreground
+                    ) { adhanCategory = category }
                 }
             }
             Text(

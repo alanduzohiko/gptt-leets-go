@@ -2076,14 +2076,12 @@ private fun SettingsScreen(
                         "emerald" -> "زەمرەدی"; "sapphire" -> "شین"; "violet" -> "مۆر"; "rose" -> "پەمەیی"; "turquoise" -> "فیرۆزەیی"; else -> "زێڕین"
                     }
                 }
-                FilterChip(
+                PremiumChoicePill(
+                    label = label,
                     selected = accentPalette == palette,
-                    onClick = { onAccent(palette) },
-                    label = { Text(label, fontSize = 11.sp) },
-                    leadingIcon = {
-                        Box(Modifier.size(11.dp).clip(CircleShape).background(MashxallAppearance.colorFor(palette)))
-                    }
-                )
+                    accent = MashxallAppearance.colorFor(palette),
+                    foreground = foreground
+                ) { onAccent(palette) }
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -2110,7 +2108,12 @@ private fun SettingsScreen(
                         color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
                     )
                 }
-                FilterChip(selected = dark, onClick = { onDark(!dark) }, label = { Text(if (dark) "ON" else "OFF") })
+                PremiumChoicePill(
+                    label = if (dark) "ON" else "OFF",
+                    selected = dark,
+                    accent = Gold,
+                    foreground = foreground
+                ) { onDark(!dark) }
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -2140,28 +2143,20 @@ private fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    FilterChip(
+                    PremiumChoicePill(
+                        modifier = Modifier.weight(1f),
+                        label = when (language) { AppLanguage.EN -> "12-hour"; AppLanguage.AR -> "12 ساعة"; AppLanguage.CKB -> "١٢ کاتژمێر" },
                         selected = !use24Hour,
-                        onClick = { onTimeFormatChange(false) },
-                        label = {
-                            Text(
-                                when (language) { AppLanguage.EN -> "12-hour"; AppLanguage.AR -> "12 ساعة"; AppLanguage.CKB -> "١٢ کاتژمێر" },
-                                fontSize = 11.sp
-                            )
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
+                        accent = Gold,
+                        foreground = foreground
+                    ) { onTimeFormatChange(false) }
+                    PremiumChoicePill(
+                        modifier = Modifier.weight(1f),
+                        label = when (language) { AppLanguage.EN -> "24-hour"; AppLanguage.AR -> "24 ساعة"; AppLanguage.CKB -> "٢٤ کاتژمێر" },
                         selected = use24Hour,
-                        onClick = { onTimeFormatChange(true) },
-                        label = {
-                            Text(
-                                when (language) { AppLanguage.EN -> "24-hour"; AppLanguage.AR -> "24 ساعة"; AppLanguage.CKB -> "٢٤ کاتژمێر" },
-                                fontSize = 11.sp
-                            )
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
+                        accent = Gold,
+                        foreground = foreground
+                    ) { onTimeFormatChange(true) }
                 }
             }
         }

@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -29,12 +30,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -50,9 +54,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 /**
@@ -321,5 +327,55 @@ internal fun PremiumIconMedallion(
         ) {
             Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.40f))
         }
+    }
+}
+
+
+/** Selected-state control used across settings, audio filters, and reader options. */
+@Composable
+internal fun PremiumChoicePill(
+    label: String,
+    selected: Boolean,
+    accent: Color,
+    foreground: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val fill by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.17f) else foreground.copy(alpha = 0.035f),
+        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        label = "Mashxall choice pill fill"
+    )
+    val outline by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.58f) else foreground.copy(alpha = 0.11f),
+        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        label = "Mashxall choice pill outline"
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) foreground else foreground.copy(alpha = 0.68f),
+        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        label = "Mashxall choice pill label"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.985f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mashxall choice pill response"
+    )
+    Row(
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(15.dp))
+            .background(Brush.horizontalGradient(listOf(fill, fill.copy(alpha = (fill.alpha * 0.58f).coerceAtLeast(0.02f)))))
+            .border(1.dp, outline, RoundedCornerShape(15.dp))
+            .premiumClickable(hapticFeedback = false, onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = labelColor, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+        Spacer(Modifier.width(7.dp))
+        Box(
+            Modifier.size(7.dp).clip(CircleShape)
+                .background(if (selected) accent else foreground.copy(alpha = 0.18f))
+        )
     }
 }
