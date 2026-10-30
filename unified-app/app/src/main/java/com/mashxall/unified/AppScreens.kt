@@ -2977,6 +2977,17 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.CKB -> hadith.chapterName
                 }
                 val numberInBook = hadith.sortInBook.ifBlank { hadith.sort.toString() }
+                val hadithIsFavorite = favoriteHadithIds.contains(hadith.id)
+                val hadithFavoriteFill by animateColorAsState(
+                    targetValue = if (hadithIsFavorite) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
+                    animationSpec = tween(220),
+                    label = "Hadith favorite background"
+                )
+                val hadithFavoriteOutline by animateColorAsState(
+                    targetValue = if (hadithIsFavorite) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.12f),
+                    animationSpec = tween(220),
+                    label = "Hadith favorite outline"
+                )
                 val translatedText = when (language) {
                     AppLanguage.CKB -> hadith.sorani
                     AppLanguage.AR -> hadith.arabic
@@ -3001,15 +3012,27 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
                                 )
                             }
-                            TextButton(
-                                onClick = {
-                                    val nextSaved = if (favoriteHadithIds.contains(hadith.id)) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
-                                    favoriteHadithIds = nextSaved
-                                    favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
-                                },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            Box(
+                                Modifier.size(37.dp).clip(CircleShape)
+                                    .background(hadithFavoriteFill)
+                                    .border(1.dp, hadithFavoriteOutline, CircleShape)
+                                    .premiumClickable(hapticFeedback = false) {
+                                        val nextSaved = if (hadithIsFavorite) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
+                                        favoriteHadithIds = nextSaved
+                                        favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(if (favoriteHadithIds.contains(hadith.id)) "★" else "☆", color = Gold, fontSize = 22.sp)
+                                AnimatedContent(
+                                    targetState = hadithIsFavorite,
+                                    transitionSpec = {
+                                        (scaleIn(initialScale = 0.42f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                            (scaleOut(targetScale = 0.52f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                    },
+                                    label = "Hadith favorite star pulse"
+                                ) { saved ->
+                                    Text(if (saved) "★" else "☆", color = Gold, fontSize = 22.sp)
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -4736,13 +4759,22 @@ fun AudioScreen(
             if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, tr(language, "no_data"))
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 itemsIndexed(visibleAudio, key = { _, it -> it.assetPath }) { itemIndex, item ->
+                    val trackIsPlaying = playing == item.assetPath
+                    val trackBorder by animateColorAsState(
+                        targetValue = if (trackIsPlaying) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.09f),
+                        animationSpec = tween(230, easing = FastOutSlowInEasing),
+                        label = "Local audio active track border"
+                    )
                     Card(
                         modifier = Modifier.fillMaxWidth()
                             .staggeredEntrance(itemKey = item.assetPath, index = itemIndex),
                         colors = CardDefaults.cardColors(containerColor = cardColor),
-                        shape = RoundedCornerShape(18.dp)
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.dp, trackBorder)
                     ) {
-                        Row(Modifier.fillMaxWidth().premiumClickable {
+                        Row(Modifier.fillMaxWidth()
+                            .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = if (trackIsPlaying) 0.10f else 0.025f), cardColor)))
+                            .premiumClickable {
                             if (playing == item.assetPath) {
                                 AudioController.stop()
                                 playing = ""
@@ -4751,7 +4783,21 @@ fun AudioScreen(
                                 AudioController.play(context, item.assetPath) { state -> if (!state) playing = "" }
                             }
                         }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (playing == item.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(34.dp))
+                            AnimatedContent(
+                                targetState = trackIsPlaying,
+                                transitionSpec = {
+                                    (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                        (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                },
+                                label = "Audio play pause medallion"
+                            ) { active ->
+                                PremiumIconMedallion(
+                                    icon = if (active) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
+                                    tint = Gold,
+                                    size = 40.dp,
+                                    pulse = active
+                                )
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(item.title, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
