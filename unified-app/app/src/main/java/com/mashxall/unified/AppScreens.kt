@@ -7539,21 +7539,89 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         if (times == null) LoadingOrEmpty(loading, language, foreground) else {
             val timeItems = listOf(
-                tr(language, "fajr") to formatPrayerTime(times!!.fajr, language, use24Hour),
-                tr(language, "sunrise") to formatPrayerTime(times!!.sunrise, language, use24Hour),
-                tr(language, "dhuhr") to formatPrayerTime(times!!.dhuhr, language, use24Hour),
-                tr(language, "asr") to formatPrayerTime(times!!.asr, language, use24Hour),
-                tr(language, "maghrib") to formatPrayerTime(times!!.maghrib, language, use24Hour),
-                tr(language, "isha") to formatPrayerTime(times!!.isha, language, use24Hour)
+                Triple("fajr", tr(language, "fajr"), formatPrayerTime(times!!.fajr, language, use24Hour)),
+                Triple("sunrise", tr(language, "sunrise"), formatPrayerTime(times!!.sunrise, language, use24Hour)),
+                Triple("dhuhr", tr(language, "dhuhr"), formatPrayerTime(times!!.dhuhr, language, use24Hour)),
+                Triple("asr", tr(language, "asr"), formatPrayerTime(times!!.asr, language, use24Hour)),
+                Triple("maghrib", tr(language, "maghrib"), formatPrayerTime(times!!.maghrib, language, use24Hour)),
+                Triple("isha", tr(language, "isha"), formatPrayerTime(times!!.isha, language, use24Hour))
             )
             timeItems.chunked(2).forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    pair.forEach { (label, time) ->
-                        Card(Modifier.weight(1f).padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text(label, color = foreground.copy(alpha = 0.64f), fontSize = 12.sp)
-                                Spacer(Modifier.height(7.dp))
-                                Text(time, color = Gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                    pair.forEach { (key, label, time) ->
+                        val isUpcoming = nextPrayerTarget?.prayerKey == key
+                        val tileBorder by animateColorAsState(
+                            targetValue = if (isUpcoming) Gold.copy(alpha = 0.74f) else foreground.copy(alpha = 0.08f),
+                            animationSpec = tween(250, easing = FastOutSlowInEasing),
+                            label = "Upcoming prayer tile outline"
+                        )
+                        val tileFill by animateColorAsState(
+                            targetValue = if (isUpcoming) Gold.copy(alpha = 0.13f) else Color.Transparent,
+                            animationSpec = tween(250, easing = FastOutSlowInEasing),
+                            label = "Upcoming prayer tile surface"
+                        )
+                        Card(
+                            Modifier.weight(1f).padding(bottom = 10.dp).animateContentSize(),
+                            colors = CardDefaults.cardColors(containerColor = cardColor),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, tileBorder)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .background(Brush.horizontalGradient(listOf(tileFill, cardColor)))
+                                    .padding(horizontal = 11.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                PremiumIconMedallion(
+                                    icon = when (key) {
+                                        "fajr" -> Icons.Outlined.NightsStay
+                                        "sunrise" -> Icons.Outlined.WbSunny
+                                        "dhuhr" -> Icons.Outlined.LightMode
+                                        "asr" -> Icons.Outlined.Schedule
+                                        "maghrib" -> Icons.Outlined.WbTwilight
+                                        else -> Icons.Outlined.NightsStay
+                                    },
+                                    tint = if (isUpcoming) Gold else foreground.copy(alpha = 0.55f),
+                                    size = 34.dp,
+                                    pulse = isUpcoming
+                                )
+                                Spacer(Modifier.width(9.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        label,
+                                        color = if (isUpcoming) Gold else foreground.copy(alpha = 0.64f),
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isUpcoming) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    AnimatedContent(
+                                        targetState = time,
+                                        transitionSpec = {
+                                            (fadeIn(tween(150)) + scaleIn(initialScale = 0.94f, animationSpec = tween(180))) togetherWith
+                                                (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)))
+                                        },
+                                        label = "Prayer tile time update"
+                                    ) { displayedTime ->
+                                        Text(
+                                            displayedTime,
+                                            color = if (isUpcoming) Gold else foreground,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1
+                                        )
+                                    }
+                                    if (isUpcoming) {
+                                        Spacer(Modifier.height(3.dp))
+                                        Text(
+                                            when (language) { AppLanguage.EN -> "UP NEXT"; AppLanguage.AR -> "التالية"; AppLanguage.CKB -> "داهاتوو" },
+                                            color = Gold.copy(alpha = 0.84f),
+                                            fontSize = 7.sp,
+                                            letterSpacing = 0.7.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
