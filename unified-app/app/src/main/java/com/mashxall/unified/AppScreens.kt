@@ -49,6 +49,7 @@ import coil.compose.SubcomposeAsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -3389,6 +3390,11 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     }
                     val count = item.count.coerceAtLeast(1)
                     val completed = progressPrefs.getInt(item.id.toString(), 0)
+                    val repetitionProgress by animateFloatAsState(
+                        targetValue = (completed.toFloat() / count.toFloat()).coerceIn(0f, 1f),
+                        animationSpec = tween(420, easing = FastOutSlowInEasing),
+                        label = "Azkar repetition progress"
+                    )
                     Card(
                         modifier = Modifier.fillMaxWidth().premiumClickable { selectedItem = item },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -3432,12 +3438,26 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             )
                             Spacer(Modifier.height(8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    if (language == AppLanguage.EN) "Repeat: $completed / $count"
-                                    else if (language == AppLanguage.AR) "التكرار: $completed / $count"
-                                    else "ژمارە: $completed / $count",
-                                    color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, modifier = Modifier.weight(1f)
-                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        if (language == AppLanguage.EN) "Repeat: $completed / $count"
+                                        else if (language == AppLanguage.AR) "التكرار: $completed / $count"
+                                        else "ژمارە: $completed / $count",
+                                        color = foreground.copy(alpha = 0.58f), fontSize = 10.sp
+                                    )
+                                    Spacer(Modifier.height(5.dp))
+                                    Box(
+                                        Modifier.fillMaxWidth(0.88f).height(4.dp)
+                                            .clip(CircleShape)
+                                            .background(foreground.copy(alpha = 0.08f))
+                                    ) {
+                                        Box(
+                                            Modifier.fillMaxWidth(repetitionProgress).height(4.dp)
+                                                .clip(CircleShape)
+                                                .background(Brush.horizontalGradient(listOf(Gold, PaleGold)))
+                                        )
+                                    }
+                                }
                                 Text(
                                     when (language) { AppLanguage.EN -> "Open remembrance"; AppLanguage.AR -> "فتح الذكر"; AppLanguage.CKB -> "زیکرەکە بکەرەوە" },
                                     color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
@@ -3914,15 +3934,30 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 },
                 color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
             )
-            if (count >= target) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Target reached"
-                        AppLanguage.AR -> "تم بلوغ العدد المستهدف"
-                        AppLanguage.CKB -> "گەیشتن بە ژمارەی ئامانج"
-                    },
-                    color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
-                )
+            AnimatedVisibility(
+                visible = count >= target,
+                enter = fadeIn(tween(180)) + scaleIn(
+                    initialScale = 0.72f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+                ),
+                exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.92f, animationSpec = tween(120))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    PremiumIconMedallion(icon = Icons.Outlined.CheckCircle, tint = Gold, size = 25.dp, pulse = true)
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Target reached"
+                            AppLanguage.AR -> "تم بلوغ العدد المستهدف"
+                            AppLanguage.CKB -> "گەیشتن بە ژمارەی ئامانج"
+                        },
+                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
         if (language == AppLanguage.CKB && !selected?.meaningCkb.isNullOrBlank()) {
@@ -3980,7 +4015,19 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(count.toString(), color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.ExtraBold)
+                AnimatedContent(
+                    targetState = count,
+                    transitionSpec = {
+                        (fadeIn(tween(110)) + scaleIn(
+                            initialScale = 0.72f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+                        )) togetherWith
+                            (fadeOut(tween(90)) + scaleOut(targetScale = 1.20f, animationSpec = tween(100)))
+                    },
+                    label = "Tasbih rolling counter"
+                ) { displayedCount ->
+                    Text(displayedCount.toString(), color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.ExtraBold)
+                }
                 Text(if (language == AppLanguage.EN) "TAP TO COUNT" else if (language == AppLanguage.AR) "اضغط للعدّ" else "بۆ ژماردن لێی بدە", color = Gold, fontSize = 10.sp, letterSpacing = 1.4.sp)
                 if (targetCount > 0) {
                     Spacer(Modifier.height(3.dp))
