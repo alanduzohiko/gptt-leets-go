@@ -6949,6 +6949,138 @@ internal fun prayerSourceDescription(source: String, language: AppLanguage): Str
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+internal fun prayerJourneyProgressFraction(nowMillis: Long, fajrMillis: Long, ishaMillis: Long): Float {
+    if (ishaMillis <= fajrMillis) return 0f
+    return ((nowMillis - fajrMillis).toDouble() / (ishaMillis - fajrMillis).toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+}
+
+private data class PrayerJourneyMarker(
+    val key: String,
+    val label: String,
+    val fraction: Float
+)
+
+@Composable
+private fun PrayerJourneyTimeline(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    markers: List<PrayerJourneyMarker>,
+    progress: Float,
+    nextPrayerKey: String?
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = if (motionAllowed) tween(720, easing = FastOutSlowInEasing) else snap(),
+        label = "Prayer day timeline progress"
+    )
+    val cursorPulse = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Prayer timeline live marker")
+        val scale by transition.animateFloat(
+            initialValue = 0.88f,
+            targetValue = 1.16f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1050, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Prayer timeline cursor pulse"
+        )
+        scale
+    } else 1f
+    val percent = (progress * 100f).roundToInt().coerceIn(0, 100)
+    val title = when (language) {
+        AppLanguage.EN -> "Your prayer journey"
+        AppLanguage.AR -> "مسار صلوات يومك"
+        AppLanguage.CKB -> "ڕێڕەوی نوێژەکانی ڕۆژت"
+    }
+    val subtitle = when (language) {
+        AppLanguage.EN -> "From Fajr to Isha"
+        AppLanguage.AR -> "من الفجر إلى العشاء"
+        AppLanguage.CKB -> "لە بەیانەوە تا عیشا"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.055f), cardColor, cardColor)))
+                .padding(horizontal = 14.dp, vertical = 13.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(2.dp))
+                    Text(subtitle, color = foreground.copy(alpha = 0.52f), fontSize = 9.sp)
+                }
+                AnimatedContent(
+                    targetState = percent,
+                    transitionSpec = {
+                        (fadeIn(tween(120)) + scaleIn(initialScale = 0.88f, animationSpec = tween(160))) togetherWith
+                            (fadeOut(tween(90)) + scaleOut(targetScale = 1.06f, animationSpec = tween(90)))
+                    },
+                    label = "Prayer day percentage"
+                ) { value ->
+                    Text("$value%", color = Gold, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                }
+            }
+            Spacer(Modifier.height(15.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth().height(26.dp)) {
+                val trackWidth = maxWidth
+                Box(
+                    Modifier.align(Alignment.CenterStart).fillMaxWidth().height(4.dp)
+                        .clip(CircleShape).background(foreground.copy(alpha = 0.10f))
+                )
+                Box(
+                    Modifier.align(Alignment.CenterStart).fillMaxWidth(animatedProgress).height(4.dp)
+                        .clip(CircleShape)
+                        .background(Brush.horizontalGradient(listOf(Color(0xFF69B994), Gold)))
+                )
+                markers.forEach { marker ->
+                    val x = (trackWidth.value * marker.fraction.coerceIn(0f, 1f) - 4.5f).dp
+                    val completed = marker.fraction <= animatedProgress
+                    val selected = marker.key == nextPrayerKey
+                    Box(
+                        Modifier.align(Alignment.CenterStart).offset(x = x)
+                            .size(if (selected) 10.dp else 8.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) Gold else if (completed) Color(0xFF75C9A2) else foreground.copy(alpha = 0.38f))
+                            .border(1.dp, cardColor, CircleShape)
+                    )
+                }
+                if (markers.isNotEmpty()) {
+                    val cursorX = (trackWidth.value * animatedProgress - 6.dp.value).dp
+                    Box(
+                        Modifier.align(Alignment.CenterStart).offset(x = cursorX)
+                            .size(12.dp).graphicsLayer { scaleX = cursorPulse; scaleY = cursorPulse }
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFE4A0).copy(alpha = 0.22f))
+                            .border(1.5.dp, Gold, CircleShape)
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                markers.forEach { marker ->
+                    val selected = marker.key == nextPrayerKey
+                    Text(
+                        marker.label,
+                        color = if (selected) Gold else foreground.copy(alpha = 0.56f),
+                        fontSize = 8.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
@@ -7688,6 +7820,41 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         }
                     }
                 }
+            }
+            val journeyDate = Date(clockNowMillis)
+            val journeyStart = prayerTimestampForDate(journeyDate, times!!.fajr)
+            val journeyEnd = prayerTimestampForDate(journeyDate, times!!.isha)
+            val journeySchedule = listOf(
+                "fajr" to times!!.fajr,
+                "dhuhr" to times!!.dhuhr,
+                "asr" to times!!.asr,
+                "maghrib" to times!!.maghrib,
+                "isha" to times!!.isha
+            )
+            val journeyMarkers = if (journeyStart != null && journeyEnd != null && journeyEnd > journeyStart) {
+                journeySchedule.mapNotNull { (key, timeText) ->
+                    val instant = prayerTimestampForDate(journeyDate, timeText)
+                    instant?.let {
+                        PrayerJourneyMarker(
+                            key = key,
+                            label = tr(language, key),
+                            fraction = ((it - journeyStart).toDouble() / (journeyEnd - journeyStart).toDouble())
+                                .toFloat().coerceIn(0f, 1f)
+                        )
+                    }
+                }
+            } else emptyList()
+            if (journeyStart != null && journeyEnd != null && journeyMarkers.size == 5) {
+                Spacer(Modifier.height(4.dp))
+                PrayerJourneyTimeline(
+                    language = language,
+                    foreground = foreground,
+                    cardColor = cardColor,
+                    markers = journeyMarkers,
+                    progress = prayerJourneyProgressFraction(clockNowMillis, journeyStart, journeyEnd),
+                    nextPrayerKey = nextPrayerTarget?.prayerKey
+                )
+                Spacer(Modifier.height(12.dp))
             }
             Text(
                 prayerSourceDescription(times!!.source, language),

@@ -76,6 +76,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Shared native touch response for tappable surfaces throughout Mashxall.
@@ -737,6 +739,28 @@ private fun PremiumCompassOrbitFrame(tint: Color, size: Dp, rotation: Float) {
             Modifier.fillMaxSize()
                 .border(1.dp, tint.copy(alpha = 0.20f), CircleShape)
         )
+        Box(
+            Modifier.fillMaxSize().padding(size * 0.105f)
+                .border(1.dp, tint.copy(alpha = 0.13f), CircleShape)
+        )
+        Box(
+            Modifier.fillMaxSize().padding(size * 0.205f)
+                .border(0.7.dp, tint.copy(alpha = 0.085f), CircleShape)
+        )
+        (0 until 60).forEach { tick ->
+            val major = tick % 5 == 0
+            val radians = Math.toRadians(tick * 6.0 - 90.0)
+            val radius = size.value / 2f - if (major) 7.5f else 4.5f
+            val x = (radius * cos(radians)).dp
+            val y = (radius * sin(radians)).dp
+            Box(
+                Modifier.align(Alignment.Center).offset(x = x, y = y)
+                    .graphicsLayer { rotationZ = tick * 6f }
+                    .size(if (major) 1.8.dp else 1.dp, if (major) 9.dp else 4.dp)
+                    .clip(CircleShape)
+                    .background(tint.copy(alpha = if (major) 0.86f else 0.34f))
+            )
+        }
         Box(
             Modifier.align(Alignment.TopCenter).padding(top = 2.dp)
                 .size(9.dp).clip(CircleShape)
