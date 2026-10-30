@@ -668,3 +668,79 @@ internal fun PremiumSectionHero(
         }
     }
 }
+
+
+/**
+ * A restrained orbit around the Qibla compass. The orbit rotates independently
+ * from the sensor-driven needle so it adds depth without altering direction data.
+ */
+@Composable
+internal fun PremiumCompassOrbit(
+    tint: Color,
+    size: Dp = 232.dp
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    if (motionAllowed) {
+        PremiumAnimatedCompassOrbit(tint = tint, size = size)
+    } else {
+        PremiumCompassOrbitFrame(tint = tint, size = size, rotation = 0f)
+    }
+}
+
+@Composable
+private fun PremiumAnimatedCompassOrbit(tint: Color, size: Dp) {
+    val transition = rememberInfiniteTransition(label = "Qibla orbit rotation")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(24000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "Qibla orbit slow rotation"
+    )
+    PremiumCompassOrbitFrame(tint = tint, size = size, rotation = rotation)
+}
+
+@Composable
+private fun PremiumCompassOrbitFrame(tint: Color, size: Dp, rotation: Float) {
+    Box(
+        Modifier.size(size).graphicsLayer { rotationZ = rotation }
+    ) {
+        Box(
+            Modifier.fillMaxSize()
+                .border(1.dp, tint.copy(alpha = 0.20f), CircleShape)
+        )
+        Box(
+            Modifier.align(Alignment.TopCenter).padding(top = 2.dp)
+                .size(9.dp).clip(CircleShape)
+                .background(tint.copy(alpha = 0.92f))
+        )
+        Box(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp)
+                .size(5.dp).clip(CircleShape)
+                .background(tint.copy(alpha = 0.50f))
+        )
+        Box(
+            Modifier.align(Alignment.CenterStart).padding(start = 3.dp)
+                .size(5.dp).clip(CircleShape)
+                .background(tint.copy(alpha = 0.34f))
+        )
+        Box(
+            Modifier.align(Alignment.CenterEnd).padding(end = 3.dp)
+                .size(5.dp).clip(CircleShape)
+                .background(tint.copy(alpha = 0.34f))
+        )
+        Box(
+            Modifier.align(Alignment.TopStart).padding(start = size * 0.19f, top = size * 0.19f)
+                .size(3.dp).clip(CircleShape)
+                .background(tint.copy(alpha = 0.42f))
+        )
+        Box(
+            Modifier.align(Alignment.BottomEnd).padding(end = size * 0.19f, bottom = size * 0.19f)
+                .size(3.dp).clip(CircleShape)
+                .background(tint.copy(alpha = 0.42f))
+        )
+    }
+}

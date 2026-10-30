@@ -8131,6 +8131,10 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                         .border(2.dp, (if (aligned) Color(0xFF62C995) else Gold).copy(alpha = 0.9f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
+                    PremiumCompassOrbit(
+                        tint = if (aligned) Color(0xFF62C995) else Gold,
+                        size = 236.dp
+                    )
                     Icon(
                         Icons.Outlined.Explore,
                         contentDescription = null,
