@@ -1344,21 +1344,25 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 }
                             },
                             confirmButton = {
-                                TextButton(onClick = { showRelatedHadith = false }) {
-                                    Text(if (language == AppLanguage.EN) "Close" else if (language == AppLanguage.AR) "إغلاق" else "داخستن")
-                                }
+                                PremiumChoicePill(
+                                    label = if (language == AppLanguage.EN) "Close" else if (language == AppLanguage.AR) "إغلاق" else "داخستن",
+                                    selected = false,
+                                    accent = Gold,
+                                    foreground = foreground
+                                ) { showRelatedHadith = false }
                             }
                         )
                         if (verse.note.isNotBlank()) {
-                            TextButton(onClick = { noteExpanded = !noteExpanded }) {
-                                Text(
-                                    if (noteExpanded) {
-                                        if (language == AppLanguage.EN) "Hide verse note" else if (language == AppLanguage.AR) "إخفاء ملاحظة الآية" else "تێبینی ئایەت بشارەوە"
-                                    } else {
-                                        if (language == AppLanguage.EN) "Verse note" else if (language == AppLanguage.AR) "ملاحظة الآية" else "تێبینی ئایەت"
-                                    }, fontSize = 10.sp
-                                )
-                            }
+                            PremiumChoicePill(
+                                label = if (noteExpanded) {
+                                    if (language == AppLanguage.EN) "Hide verse note" else if (language == AppLanguage.AR) "إخفاء ملاحظة الآية" else "تێبینی ئایەت بشارەوە"
+                                } else {
+                                    if (language == AppLanguage.EN) "Verse note" else if (language == AppLanguage.AR) "ملاحظة الآية" else "تێبینی ئایەت"
+                                },
+                                selected = noteExpanded,
+                                accent = Gold,
+                                foreground = foreground
+                            ) { noteExpanded = !noteExpanded }
                             if (noteExpanded) Text(verse.note.replace("<br>", "\n").replace("<br/>", "\n"), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 19.sp)
                         }
                         if (verse.translation.isNotBlank()) {
@@ -5855,21 +5859,26 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
             }
         }
         Spacer(Modifier.height(12.dp))
-        Button(onClick = {
+        PremiumActionButton(
+            label = if (language == AppLanguage.EN) "Save encrypted backup" else if (language == AppLanguage.AR) "حفظ نسخة احتياطية مشفّرة" else "پاشەکەوتی نهێنیکراو هەڵبگرە",
+            icon = Icons.Outlined.CheckCircle,
+            accent = Color(0xFF8FC6A8),
+            foreground = foreground,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             exportPassword = ""
             confirmExportPassword = ""
             exportError = ""
             showExportPasswordDialog = true
-        }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (language == AppLanguage.EN) "Save encrypted backup" else if (language == AppLanguage.AR) "حفظ نسخة احتياطية مشفّرة" else "پاشەکەوتی نهێنیکراو هەڵبگرە")
         }
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "text/json", "*/*")) },
+        PremiumActionButton(
+            label = if (language == AppLanguage.EN) "Restore from a backup file" else if (language == AppLanguage.AR) "استعادة من ملف نسخة احتياطية" else "لە فایلی پاشەکەوتەوە بیگەڕێنەوە",
+            icon = Icons.Outlined.Download,
+            accent = Gold,
+            foreground = foreground,
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (language == AppLanguage.EN) "Restore from a backup file" else if (language == AppLanguage.AR) "استعادة من ملف نسخة احتياطية" else "لە فایلی پاشەکەوتەوە بیگەڕێنەوە")
-        }
+        ) { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "text/json", "*/*")) }
         Spacer(Modifier.height(12.dp))
         if (status.isNotBlank()) Text(status, color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 18.sp)
         Spacer(Modifier.height(12.dp))
@@ -6420,16 +6429,14 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                             }
                         }
                         if (item.url.startsWith("http", ignoreCase = true)) {
-                            TextButton(onClick = {
+                            PremiumChoicePill(
+                                label = if (language == AppLanguage.EN) "Open source book link" else if (language == AppLanguage.AR) "فتح رابط الكتاب" else "بەستەری کتێب بکەرەوە",
+                                selected = false,
+                                accent = Color(0xFF9EB9E9),
+                                foreground = foreground
+                            ) {
                                 try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) }
                                 catch (_: Exception) { Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show() }
-                            }) {
-                                Text(
-                                    if (language == AppLanguage.EN) "Open source book link"
-                                    else if (language == AppLanguage.AR) "فتح رابط الكتاب"
-                                    else "بەستەری کتێب بکەرەوە",
-                                    fontSize = 11.sp
-                                )
                             }
                         }
                     }
@@ -8980,8 +8987,14 @@ fun WordAnalysisScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedPart = null; selectedWord = null }) {
-                    Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو",
+                    selected = false,
+                    accent = Color(0xFFBCA8F2),
+                    foreground = foreground
+                ) {
+                    selectedPart = null
+                    selectedWord = null
                 }
             }
         )
