@@ -90,6 +90,10 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.NightsStay
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.WbTwilight
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -6399,7 +6403,7 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
-                .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.11f), cardColor)))
+                .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.11f), Color(0xFF18382F))))
                 .border(1.dp, Gold.copy(alpha = 0.17f), RoundedCornerShape(17.dp))
                 .padding(horizontal = 11.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
