@@ -4559,10 +4559,10 @@ fun AudioScreen(
                                     }
                                 ) {
                                     when (playing) {
-                                        playKey -> Icon(
-                                            Icons.Outlined.PauseCircle,
-                                            contentDescription = adhanAudioActionDescription(language, true),
-                                            tint = Gold, modifier = Modifier.size(29.dp)
+                                        playKey -> PremiumAudioWaveform(
+                                            active = true,
+                                            accent = Gold,
+                                            contentDescription = adhanAudioActionDescription(language, true)
                                         )
                                         "loading:$playKey" -> CircularProgressIndicator(
                                             color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)
@@ -4664,10 +4664,10 @@ fun AudioScreen(
                                 }
                             ) {
                                 when (playing) {
-                                    playKey -> Icon(
-                                        Icons.Outlined.PauseCircle,
-                                        contentDescription = adhanAudioActionDescription(language, true),
-                                        tint = Gold, modifier = Modifier.size(29.dp)
+                                    playKey -> PremiumAudioWaveform(
+                                        active = true,
+                                        accent = Gold,
+                                        contentDescription = adhanAudioActionDescription(language, true)
                                     )
                                     "loading:$playKey" -> CircularProgressIndicator(
                                         color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)
@@ -5024,7 +5024,7 @@ fun AudioScreen(
                                     label = "Reciter active audio waveform transition"
                                 ) { active ->
                                     if (active) {
-                                        PremiumAudioWaveform(active = true, accent = Gold)
+                                        PremiumAudioWaveform(active = true, accent = Gold, contentDescription = playLabel)
                                     } else {
                                         Icon(
                                             Icons.Outlined.PlayCircle,

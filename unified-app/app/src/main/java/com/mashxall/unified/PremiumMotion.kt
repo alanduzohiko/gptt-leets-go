@@ -56,6 +56,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
@@ -386,7 +388,8 @@ internal fun PremiumChoicePill(
 internal fun PremiumAudioWaveform(
     active: Boolean,
     accent: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null
 ) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
@@ -394,7 +397,9 @@ internal fun PremiumAudioWaveform(
         PremiumAnimatedWaveformBars(accent = accent, modifier = modifier)
     } else {
         Row(
-            modifier = modifier.width(34.dp).height(24.dp),
+            modifier = modifier.width(34.dp).height(24.dp).semantics(mergeDescendants = true) {
+                if (contentDescription != null) this.contentDescription = contentDescription
+            },
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -439,7 +444,9 @@ private fun PremiumAnimatedWaveformBars(
         label = "Audio wave bar five"
     )
     Row(
-        modifier = modifier.width(34.dp).height(24.dp),
+        modifier = modifier.width(34.dp).height(24.dp).semantics(mergeDescendants = true) {
+            if (contentDescription != null) this.contentDescription = contentDescription
+        },
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
