@@ -5297,23 +5297,18 @@ fun AudioScreen(
                                     },
                                     color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
                                 )
-                                TextButton(
-                                    onClick = {
-                                        preferredReciterId = reciter.id
-                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                PremiumChoicePill(
+                                    label = if (preferredReciterId == reciter.id) {
+                                        if (language == AppLanguage.EN) "Preferred" else if (language == AppLanguage.AR) "المفضّل" else "دڵخواز"
+                                    } else {
+                                        if (language == AppLanguage.EN) "Set preferred" else if (language == AppLanguage.AR) "تعيين كمفضّل" else "دڵخواز دیاری بکە"
                                     },
-                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(25.dp)
+                                    selected = preferredReciterId == reciter.id,
+                                    accent = Gold,
+                                    foreground = foreground
                                 ) {
-                                    Text(
-                                        if (preferredReciterId == reciter.id) {
-                                            if (language == AppLanguage.EN) "★ Preferred reciter" else if (language == AppLanguage.AR) "★ القارئ المفضّل" else "★ قورئان‌خوێنی دڵخواز"
-                                        } else {
-                                            if (language == AppLanguage.EN) "☆ Set as preferred" else if (language == AppLanguage.AR) "☆ تعيين كمفضّل" else "☆ دڵخواز دیاری بکە"
-                                        },
-                                        color = if (preferredReciterId == reciter.id) Gold else foreground.copy(alpha = 0.58f),
-                                        fontSize = 9.sp, maxLines = 1
-                                    )
+                                    preferredReciterId = reciter.id
+                                    prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
                                 }
                                 Text(
                                     when {
@@ -9169,23 +9164,25 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                    PremiumChoicePill(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) "Favourite" else if (language == AppLanguage.AR) "مفضلة" else "دڵخواز",
+                        selected = favorites.contains(item.id.toString()),
+                        accent = Gold,
+                        foreground = foreground,
+                        leadingIcon = Icons.Outlined.Favorite
+                    ) {
                         val key = item.id.toString()
                         favorites = if (favorites.contains(key)) favorites - key else favorites + key
                         favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
-                    }) {
-                        AnimatedContent(
-                            targetState = favorites.contains(item.id.toString()),
-                            transitionSpec = {
-                                (scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                    (scaleOut(targetScale = 0.6f, animationSpec = tween(100)) + fadeOut(tween(100)))
-                            },
-                            label = "Farmuda sheet favourite pulse"
-                        ) { saved -> Text(if (saved) "★" else "☆", color = Gold) }
-                        Spacer(Modifier.width(5.dp))
-                        Text(if (language == AppLanguage.EN) "Favourite" else if (language == AppLanguage.AR) "مفضلة" else "دڵخواز", fontSize = 11.sp)
                     }
-                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                    PremiumActionButton(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی",
+                        icon = Icons.Outlined.ContentCopy,
+                        accent = Gold,
+                        foreground = foreground
+                    ) {
                         val combined = buildList {
                             add(title)
                             if (item.arabic.isNotBlank()) add(item.arabic)
@@ -9195,10 +9192,6 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall supplication", combined))
                         Toast.makeText(context, if (language == AppLanguage.EN) "Text copied" else if (language == AppLanguage.AR) "تم نسخ النص" else "دەقەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
-                    }) {
-                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text(if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی", fontSize = 11.sp)
                     }
                 }
                 Spacer(Modifier.height(24.dp))
