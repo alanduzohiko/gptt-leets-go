@@ -2172,6 +2172,19 @@ private fun MushafPageViewer(
     val haptic = LocalHapticFeedback.current
     val pageReveal = remember { Animatable(1f) }
     val pageTurnOffset = remember { Animatable(0f) }
+    val pageTurnRotation = remember { Animatable(0f) }
+    var pageTurnPivot by remember { mutableFloatStateOf(0.5f) }
+    var swipePreviewX by remember(page) { mutableFloatStateOf(0f) }
+    val animatedSwipePreviewX by animateFloatAsState(
+        targetValue = swipePreviewX,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mushaf finger-follow page drag"
+    )
+    val animatedSwipeRotationY by animateFloatAsState(
+        targetValue = (swipePreviewX / 160f).coerceIn(-1f, 1f) * 5.5f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mushaf finger-follow page tilt"
+    )
     var lastAnimatedPage by remember { mutableIntStateOf(page) }
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(page, bitmap) {
@@ -2183,13 +2196,19 @@ private fun MushafPageViewer(
                 page < previousPage -> -1f
                 else -> 0f
             }
-            pageTurnOffset.snapTo(entryDirection * 28f)
+            pageTurnPivot = if (entryDirection > 0f) 0.08f else 0.92f
+            pageTurnOffset.snapTo(entryDirection * 34f)
+            pageTurnRotation.snapTo(entryDirection * 7.5f)
             pageReveal.snapTo(0.94f)
             val slideAnimation = launch {
-                pageTurnOffset.animateTo(0f, animationSpec = tween(220))
+                pageTurnOffset.animateTo(0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
             }
-            pageReveal.animateTo(1f, animationSpec = tween(220))
+            val rotationAnimation = launch {
+                pageTurnRotation.animateTo(0f, animationSpec = tween(260, easing = FastOutSlowInEasing))
+            }
+            pageReveal.animateTo(1f, animationSpec = tween(240, easing = FastOutSlowInEasing))
             slideAnimation.join()
+            rotationAnimation.join()
         }
     }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
@@ -2380,9 +2399,16 @@ private fun MushafPageViewer(
                             .pointerInput(page, scale) {
                                 var dragTotal = 0f
                                 detectHorizontalDragGestures(
-                                    onDragStart = { dragTotal = 0f },
+                                    onDragStart = {
+                                        dragTotal = 0f
+                                        swipePreviewX = 0f
+                                    },
                                     onHorizontalDrag = { _, amount ->
-                                        if (scale <= 1.01f) dragTotal += amount
+                                        if (scale <= 1.01f) {
+                                            dragTotal += amount
+                                            swipePreviewX = (swipePreviewX + amount)
+                                                .coerceIn(-size.width * 0.34f, size.width * 0.34f)
+                                        }
                                     },
                                     onDragEnd = {
                                         if (scale <= 1.01f) {
@@ -2390,11 +2416,17 @@ private fun MushafPageViewer(
                                             if (nextPage != null) {
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                 onPageChange(nextPage)
+                                            } else {
+                                                // A short gesture returns the paper to its resting position.
+                                                swipePreviewX = 0f
                                             }
                                         }
                                         dragTotal = 0f
                                     },
-                                    onDragCancel = { dragTotal = 0f }
+                                    onDragCancel = {
+                                        dragTotal = 0f
+                                        swipePreviewX = 0f
+                                    }
                                 )
                             }
                             .pointerInput(page, scale, bitmap) {
@@ -2455,7 +2487,14 @@ private fun MushafPageViewer(
                             },
                             modifier = Modifier.fillMaxSize().graphicsLayer {
                                 alpha = pageReveal.value
-                                translationX = pageTurnOffset.value
+                                translationX = pageTurnOffset.value + animatedSwipePreviewX
+                                rotationY = pageTurnRotation.value + animatedSwipeRotationY
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(pageTurnPivot, 0.5f)
+                                cameraDistance = 28.dp.toPx()
+                                shadowElevation = (
+                                    pageTurnRotation.value * pageTurnRotation.value +
+                                        animatedSwipeRotationY * animatedSwipeRotationY
+                                    ) * 0.12f
                                 scaleX = 0.985f + pageReveal.value * 0.015f
                                 scaleY = 0.985f + pageReveal.value * 0.015f
                             }
