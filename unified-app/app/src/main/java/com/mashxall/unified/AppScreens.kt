@@ -2950,16 +2950,24 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "hadith"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> if (selectedMode == 1) "$totalMatches articles" else "$totalMatches narrations found • $offset loaded"
-                    AppLanguage.AR -> if (selectedMode == 1) "$totalMatches مقالة" else "عُثر على $totalMatches رواية • تم تحميل $offset"
-                    AppLanguage.CKB -> if (selectedMode == 1) "$totalMatches وتار" else "$totalMatches فەرموودە دۆزرایەوە • $offset بارکراوە"
-                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            PremiumSectionHero(
+                title = tr(language, "hadith"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Explore trusted narrations, collections and study articles."
+                    AppLanguage.AR -> "تصفّح الروايات والمجموعات والمقالات العلمية."
+                    AppLanguage.CKB -> "فەرموودە، کۆمەڵەکان و وتارەکانی خوێندنەوە بپشکنە."
+                },
+                icon = Icons.Outlined.AutoStories,
+                foreground = foreground,
+                accent = Gold,
+                metric = when (language) {
+                    AppLanguage.EN -> "$totalMatches results • $offset loaded"
+                    AppLanguage.AR -> "$totalMatches نتيجة • تم تحميل $offset"
+                    AppLanguage.CKB -> "$totalMatches ئەنجام • $offset بارکراوە"
+                },
+                eyebrow = when (language) { AppLanguage.EN -> "KNOWLEDGE & NARRATION"; AppLanguage.AR -> "العلم والرواية"; AppLanguage.CKB -> "زانست و فەرموودە" }
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 PremiumChoicePill(
                     label = if (language == AppLanguage.EN) "Narrations" else if (language == AppLanguage.AR) "الأحاديث" else "فەرموودە",
@@ -3422,30 +3430,34 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val showCategoryLanding = selectedCategory == 0 && query.isBlank() && selectedTab == 0
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (selectedCategory != 0) {
+            if (selectedCategory != 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { selectedCategory = 0; selectedItem = null }) {
                         Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold)
                     }
-                }
-                Column(Modifier.weight(1f)) {
                     Text(
-                        if (selectedCategory == 0) tr(language, "azkar")
-                        else categories.firstOrNull { it.id == selectedCategory }?.let {
-                            when (language) { AppLanguage.CKB -> it.ckb; AppLanguage.AR -> it.arabic; AppLanguage.EN -> it.english }
-                        } ?: tr(language, "azkar"),
-                        color = foreground, fontSize = 23.sp, fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> if (selectedCategory == 0) "Choose a topic to read its adhkar separately." else "${visibleItems.size} remembrance entries"
-                            AppLanguage.AR -> if (selectedCategory == 0) "اختر قسمًا لعرض أذكاره في صفحة مستقلة." else "${visibleItems.size} ذكرًا"
-                            AppLanguage.CKB -> if (selectedCategory == 0) "بابەتێک هەڵبژێرە بۆ خوێندنەوەی زیکرەکانی." else "${visibleItems.size} زیکر"
-                        }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
+                        when (language) { AppLanguage.EN -> "All remembrance topics"; AppLanguage.AR -> "كل أقسام الأذكار"; AppLanguage.CKB -> "هەموو بابەتەکانی زیکر" },
+                        color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
                     )
                 }
+                Spacer(Modifier.height(4.dp))
             }
-            Spacer(Modifier.height(8.dp))
+            PremiumSectionHero(
+                title = if (selectedCategory == 0) tr(language, "azkar") else categories.firstOrNull { it.id == selectedCategory }?.let {
+                    when (language) { AppLanguage.CKB -> it.ckb; AppLanguage.AR -> it.arabic; AppLanguage.EN -> it.english }
+                } ?: tr(language, "azkar"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> if (selectedCategory == 0) "Choose a collection and build a daily rhythm of remembrance." else "Read, repeat and keep your selected remembrance."
+                    AppLanguage.AR -> if (selectedCategory == 0) "اختر مجموعة واجعل الذكر جزءًا من يومك." else "اقرأ الذكر وكرّره واحتفظ بالمفضّل."
+                    AppLanguage.CKB -> if (selectedCategory == 0) "کۆمەڵەیەک هەڵبژێرە و زیکر بکە بە بەشێک لە ڕۆژەکەت." else "زیکرەکە بخوێنەوە و دووبارەی بکەرەوە."
+                },
+                icon = Icons.Outlined.Spa,
+                foreground = foreground,
+                accent = Color(0xFF7AC6A7),
+                metric = when (language) { AppLanguage.EN -> "${visibleItems.size} entries"; AppLanguage.AR -> "${visibleItems.size} ذكرًا"; AppLanguage.CKB -> "${visibleItems.size} زیکر" },
+                eyebrow = when (language) { AppLanguage.EN -> "DAILY REMEMBRANCE"; AppLanguage.AR -> "الأذكار اليومية"; AppLanguage.CKB -> "زیکری ڕۆژانە" }
+            )
+            Spacer(Modifier.height(10.dp))
             SearchBox(query, { query = it; if (it.isNotBlank()) selectedCategory = 0 }, tr(language, "search_azkar"))
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -3796,16 +3808,24 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "names"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(5.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "${visibleNames.size} of ${names.size} names • ${favoriteIds.size} favourites"
-                    AppLanguage.AR -> "${visibleNames.size} من ${names.size} اسمًا • ${favoriteIds.size} مفضلة"
-                    AppLanguage.CKB -> "${visibleNames.size} لە ${names.size} ناو • ${favoriteIds.size} دڵخواز"
-                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            PremiumSectionHero(
+                title = tr(language, "names"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Reflect on the beautiful names and their meanings."
+                    AppLanguage.AR -> "تدبّر الأسماء الحسنى ومعانيها ومراجعها."
+                    AppLanguage.CKB -> "لە ناوە جوانەکان و ماناکانیان ورد ببەوە."
+                },
+                icon = Icons.Outlined.Favorite,
+                foreground = foreground,
+                accent = Color(0xFFE6A8C1),
+                metric = when (language) {
+                    AppLanguage.EN -> "${visibleNames.size} shown • ${favoriteIds.size} saved"
+                    AppLanguage.AR -> "${visibleNames.size} معروض • ${favoriteIds.size} محفوظ"
+                    AppLanguage.CKB -> "${visibleNames.size} پیشان دەدرێت • ${favoriteIds.size} پاشەکەوتکراو"
+                },
+                eyebrow = when (language) { AppLanguage.EN -> "THE BEAUTIFUL NAMES"; AppLanguage.AR -> "الأَسْمَاءُ الْحُسْنَى"; AppLanguage.CKB -> "ناوە جوانەکان" }
             )
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(10.dp))
             SearchBox(
                 query, { query = it },
                 when (language) {
@@ -4048,8 +4068,20 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         prefs.edit().putInt("tasbih_preset_id", selectedId).apply()
     }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(tr(language, "tasbih"), color = foreground, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(10.dp))
+        PremiumSectionHero(
+            title = tr(language, "tasbih"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "A focused counter with saved rounds and gentle tactile feedback."
+                AppLanguage.AR -> "عداد هادئ يحفظ جولاتك ويستجيب للمس."
+                AppLanguage.CKB -> "ژمێرەرێکی ئارام کە خولەکانت دەپارێزێت و بە دەست لێدان وەڵام دەداتەوە."
+            },
+            icon = Icons.Outlined.Spa,
+            foreground = foreground,
+            accent = Color(0xFF82CDB1),
+            metric = when (language) { AppLanguage.EN -> "ALL-TIME • DAILY PRACTICE"; AppLanguage.AR -> "مداومة • ذكر يومي"; AppLanguage.CKB -> "بەردەوامی • زیکری ڕۆژانە" },
+            eyebrow = when (language) { AppLanguage.EN -> "MINDFUL WORSHIP"; AppLanguage.AR -> "عِبَادَةٌ بِحُضُور"; AppLanguage.CKB -> "پەرستش بە ئاگایی" }
+        )
+        Spacer(Modifier.height(11.dp))
         if (presets.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
                 items(presets, key = { it.id }) { preset ->
@@ -4489,10 +4521,20 @@ fun AudioScreen(
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(tr(language, "audio"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text(tr(language, "offline"), color = foreground.copy(alpha = 0.58f), fontSize = 12.sp)
-        Spacer(Modifier.height(9.dp))
+        PremiumSectionHero(
+            title = tr(language, "audio"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "Reciters, bundled recordings and Adhan libraries in one place."
+                AppLanguage.AR -> "القرّاء والتسجيلات المضمّنة ومكتبات الأذان في مكان واحد."
+                AppLanguage.CKB -> "قورئان‌خوێن، تۆمارە ناوخۆییەکان و کتێبخانەی بانگ لە یەک شوێندا."
+            },
+            icon = Icons.Outlined.GraphicEq,
+            foreground = foreground,
+            accent = Color(0xFFE9B17B),
+            metric = when (language) { AppLanguage.EN -> "OFFLINE + STREAMING"; AppLanguage.AR -> "دون اتصال + بث"; AppLanguage.CKB -> "بەبێ ئینتەرنێت + پەخش" },
+            eyebrow = when (language) { AppLanguage.EN -> "SOUND & RECITATION"; AppLanguage.AR -> "الصوت والتلاوة"; AppLanguage.CKB -> "دەنگ و تلاوەت" }
+        )
+        Spacer(Modifier.height(10.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             items(listOf(0, 1, 2)) { index ->
                 PremiumChoicePill(
@@ -5976,20 +6018,18 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "Book library"
-                    AppLanguage.AR -> "مكتبة الكتب"
-                    AppLanguage.CKB -> "کتێبخانەی کتێب"
-                }, color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "${books.size} catalogue records • ${pdfs.size} bundled PDFs • ${downloadedPaths.size} downloaded • ${favoriteIds.size} favourites"
-                    AppLanguage.AR -> "${books.size} سجلًا • ${pdfs.size} PDF مرفق • ${downloadedPaths.size} منزّل • ${favoriteIds.size} مفضلة"
-                    AppLanguage.CKB -> "${books.size} تۆمار • ${pdfs.size} PDFی ناوخۆیی • ${downloadedPaths.size} داگیراو • ${favoriteIds.size} دڵخواز"
-                }, color = foreground.copy(alpha = 0.55f), fontSize = 11.sp
+            PremiumSectionHero(
+                title = when (language) { AppLanguage.EN -> "Book library"; AppLanguage.AR -> "مكتبة الكتب"; AppLanguage.CKB -> "کتێبخانەی کتێب" },
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Browse source books, open bundled PDFs and keep favourites."
+                    AppLanguage.AR -> "تصفّح الكتب الأصلية وافتح ملفات PDF واحفظ المفضّل."
+                    AppLanguage.CKB -> "کتێبە ڕەسەنەکان بپشکنە، PDF بکەرەوە و دڵخوازەکان بپارێزە."
+                },
+                icon = Icons.Outlined.MenuBook,
+                foreground = foreground,
+                accent = Color(0xFF9EB9E9),
+                metric = when (language) { AppLanguage.EN -> "${books.size} records • ${pdfs.size} PDFs"; AppLanguage.AR -> "${books.size} سجل • ${pdfs.size} PDF"; AppLanguage.CKB -> "${books.size} تۆمار • ${pdfs.size} PDF" },
+                eyebrow = when (language) { AppLanguage.EN -> "READING COLLECTION"; AppLanguage.AR -> "مجموعات القراءة"; AppLanguage.CKB -> "کۆمەڵەی خوێندنەوە" }
             )
             Spacer(Modifier.height(10.dp))
             SearchBox(query, { query = it }, tr(language, "search"))
@@ -6398,16 +6438,20 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "lexicon"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "$totalMatches entries found • $offset loaded"
-                    AppLanguage.AR -> "عُثر على $totalMatches مدخل • تم تحميل $offset"
-                    AppLanguage.CKB -> "$totalMatches دەروازە دۆزرایەوە • $offset بارکراوە"
-                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            PremiumSectionHero(
+                title = tr(language, "lexicon"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Explore words, roots, explanations and source references."
+                    AppLanguage.AR -> "استكشف المفردات والجذور والشروح والمراجع."
+                    AppLanguage.CKB -> "وشە، ڕەگ، ڕوونکردنەوە و سەرچاوەکان بپشکنە."
+                },
+                icon = Icons.Outlined.Search,
+                foreground = foreground,
+                accent = Color(0xFFB9A7F1),
+                metric = when (language) { AppLanguage.EN -> "$totalMatches results • $offset loaded"; AppLanguage.AR -> "$totalMatches نتيجة • $offset محمّل"; AppLanguage.CKB -> "$totalMatches ئەنجام • $offset بارکراوە" },
+                eyebrow = when (language) { AppLanguage.EN -> "ARABIC & KURDISH WORDS"; AppLanguage.AR -> "المفردات العربية والكردية"; AppLanguage.CKB -> "وشە عەرەبی و کوردییەکان" }
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             SearchBox(query, { query = it }, tr(language, "search_words"))
         }
         if (entries.isEmpty()) {
@@ -8386,14 +8430,18 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val visibleRecords = records.filter { !favoritesOnly || favorites.contains(it.id.toString()) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "farmuda"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "${records.size} source records • ${favorites.size} favourites"
-                    AppLanguage.AR -> "${records.size} سجلًا من المصدر • ${favorites.size} مفضلة"
-                    AppLanguage.CKB -> "${records.size} تۆماری سەرچاوە • ${favorites.size} دڵخواز"
-                }, color = foreground.copy(alpha = 0.54f), fontSize = 11.sp
+            PremiumSectionHero(
+                title = tr(language, "farmuda"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Browse curated source entries and save the ones you value."
+                    AppLanguage.AR -> "تصفّح السجلات الأصلية واحفظ ما يهمّك منها."
+                    AppLanguage.CKB -> "تۆمارە ڕەسەنەکان بپشکنە و ئەوانەی گرنگن بۆت پاشەکەوت بکە."
+                },
+                icon = Icons.Outlined.Spa,
+                foreground = foreground,
+                accent = Color(0xFFE6B17F),
+                metric = when (language) { AppLanguage.EN -> "${records.size} source entries • ${favorites.size} saved"; AppLanguage.AR -> "${records.size} سجل • ${favorites.size} محفوظ"; AppLanguage.CKB -> "${records.size} تۆمار • ${favorites.size} پاشەکەوتکراو" },
+                eyebrow = when (language) { AppLanguage.EN -> "CURATED COLLECTION"; AppLanguage.AR -> "مختارات موثوقة"; AppLanguage.CKB -> "کۆکراوەی هەڵبژێردراو" }
             )
             Spacer(Modifier.height(10.dp))
             SearchBox(query, { query = it }, tr(language, "search"))

@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -557,5 +558,113 @@ internal fun PremiumSearchField(
                 unfocusedLeadingIconColor = accent
             )
         )
+    }
+}
+
+
+/**
+ * Editorial section masthead shared by the content-heavy areas. It gives each
+ * destination a recognizable identity while preserving the same app-wide
+ * motion language, palette response and reading-friendly hierarchy.
+ */
+@Composable
+internal fun PremiumSectionHero(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    foreground: Color,
+    accent: Color,
+    eyebrow: String = "MASHXALL • DAILY COMPANION",
+    metric: String? = null,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = true,
+        modifier = modifier.fillMaxWidth(),
+        enter = fadeIn(animationSpec = tween(360, easing = FastOutSlowInEasing)) +
+            scaleIn(initialScale = 0.965f, animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )) +
+            slideInVertically(initialOffsetY = { it / 7 }, animationSpec = tween(360, easing = FastOutSlowInEasing))
+    ) {
+        Box(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(25.dp))
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF0B3028),
+                            Color(0xFF174D3C),
+                            Color(0xFF102F29)
+                        )
+                    )
+                )
+                .border(1.dp, accent.copy(alpha = 0.34f), RoundedCornerShape(25.dp))
+        ) {
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 44.dp, y = (-62).dp)
+                    .size(166.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.23f), Color.Transparent)))
+            )
+            Box(
+                Modifier.align(Alignment.BottomStart).offset(x = (-42).dp, y = 38.dp)
+                    .size(94.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFF63B894).copy(alpha = 0.15f), Color.Transparent)))
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        eyebrow,
+                        color = accent.copy(alpha = 0.96f),
+                        fontSize = 8.sp,
+                        letterSpacing = 1.15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Text(
+                        title,
+                        color = Color(0xFFFFF8E9),
+                        fontSize = 21.sp,
+                        lineHeight = 27.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        subtitle,
+                        color = Color.White.copy(alpha = 0.74f),
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp,
+                        maxLines = 2
+                    )
+                    if (!metric.isNullOrBlank()) {
+                        Spacer(Modifier.height(9.dp))
+                        Row(
+                            Modifier.clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.075f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                                .padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.size(5.dp).clip(CircleShape).background(accent))
+                            Spacer(Modifier.width(6.dp))
+                            Text(metric, color = Color.White.copy(alpha = 0.92f), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                    }
+                }
+                Spacer(Modifier.width(11.dp))
+                PremiumIconMedallion(
+                    icon = icon,
+                    tint = accent,
+                    size = 62.dp,
+                    pulse = true
+                )
+            }
+        }
     }
 }
