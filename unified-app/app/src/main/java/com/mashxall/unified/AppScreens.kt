@@ -2000,59 +2000,52 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                         }
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                AudioController.stop()
-                                sheetAudioPlaying = false
-                                onBrowseReciters(target.first, target.second)
+                        PremiumActionButton(
+                            label = when (language) {
+                                AppLanguage.EN -> "Browse all reciters"
+                                AppLanguage.AR -> "عرض جميع القرّاء والتلاوات"
+                                AppLanguage.CKB -> "بینینی هەموو قورئان‌خوێنەکان"
                             },
+                            icon = Icons.Outlined.GraphicEq,
+                            accent = Gold,
+                            foreground = foreground,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Outlined.GraphicEq, null, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Browse all reciters"
-                                    AppLanguage.AR -> "عرض جميع القرّاء والتلاوات"
-                                    AppLanguage.CKB -> "بینینی هەموو قورئان‌خوێنەکان"
-                                },
-                                fontSize = 11.sp
-                            )
+                            AudioController.stop()
+                            sheetAudioPlaying = false
+                            onBrowseReciters(target.first, target.second)
                         }
                         Spacer(Modifier.height(8.dp))
-                        TextButton(
-                            onClick = {
-                                val shareText = buildList {
-                                    add((surah?.arabicName ?: "") + " • " + target.first + ":" + target.second)
-                                    add(sheetVerse!!.arabic)
-                                    if (sheetVerse!!.translation.isNotBlank()) add(sheetVerse!!.translation)
-                                    if (sheetTafsir.isNotBlank()) add(sheetTafsir)
-                                }.joinToString("\n\n")
-                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, shareText)
-                                }
-                                context.startActivity(
-                                    Intent.createChooser(
-                                        sendIntent,
-                                        when (language) {
-                                            AppLanguage.EN -> "Share Quran verse"
-                                            AppLanguage.AR -> "مشاركة الآية"
-                                            AppLanguage.CKB -> "ئایەت بڵاو بکەرەوە"
-                                        }
-                                    )
-                                )
+                        PremiumActionButton(
+                            label = when (language) {
+                                AppLanguage.EN -> "Share verse, translation and selected tafsir"
+                                AppLanguage.AR -> "مشاركة الآية والترجمة والتفسير المختار"
+                                AppLanguage.CKB -> "بڵاوکردنەوەی ئایەت، وەرگێڕان و تەفسیر"
                             },
+                            icon = Icons.Outlined.Share,
+                            accent = Gold,
+                            foreground = foreground,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Outlined.Share, null, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Share verse, translation and selected tafsir"
-                                    AppLanguage.AR -> "مشاركة الآية والترجمة والتفسير المختار"
-                                    AppLanguage.CKB -> "بڵاوکردنەوەی ئایەت، وەرگێڕان و تەفسیر"
-                                }, fontSize = 11.sp
+                            val shareText = buildList {
+                                add((surah?.arabicName ?: "") + " • " + target.first + ":" + target.second)
+                                add(sheetVerse!!.arabic)
+                                if (sheetVerse!!.translation.isNotBlank()) add(sheetVerse!!.translation)
+                                if (sheetTafsir.isNotBlank()) add(sheetTafsir)
+                            }.joinToString("\n\n")
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(
+                                Intent.createChooser(
+                                    sendIntent,
+                                    when (language) {
+                                        AppLanguage.EN -> "Share Quran verse"
+                                        AppLanguage.AR -> "مشاركة الآية"
+                                        AppLanguage.CKB -> "ئایەت بڵاو بکەرەوە"
+                                    }
+                                )
                             )
                         }
                         Spacer(Modifier.height(4.dp))
@@ -2919,10 +2912,13 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(
-                    onClick = { onChangeVerse(previousVerse.first, previousVerse.second) },
+                PremiumIconButton(
+                    icon = Icons.Outlined.ArrowBack,
+                    contentDescription = if (language == AppLanguage.EN) "Previous verse" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو",
+                    accent = Color(0xFFC3A6EA),
+                    size = 38.dp,
                     enabled = surah > 1 || ayah > 1
-                ) { Text("‹") }
+                ) { onChangeVerse(previousVerse.first, previousVerse.second) }
                 Column(
                     modifier = Modifier.weight(1f).premiumClickable { chooseSurah = true }.padding(horizontal = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -2936,10 +2932,13 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                         color = foreground, fontSize = 11.sp, textAlign = TextAlign.Center
                     )
                 }
-                OutlinedButton(
-                    onClick = { onChangeVerse(nextVerse.first, nextVerse.second) },
+                PremiumIconButton(
+                    icon = Icons.Outlined.ChevronRight,
+                    contentDescription = if (language == AppLanguage.EN) "Next verse" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر",
+                    accent = Color(0xFFC3A6EA),
+                    size = 38.dp,
                     enabled = nextVerse != (surah to ayah)
-                ) { Text("›") }
+                ) { onChangeVerse(nextVerse.first, nextVerse.second) }
             }
         }
         Card(
@@ -3844,30 +3843,32 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             modifier = Modifier.graphicsLayer { scaleX = countPulse.value; scaleY = countPulse.value }
                         )
                         Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            PremiumChoicePill(
+                                modifier = Modifier.weight(1f),
+                                label = if (language == AppLanguage.EN) "Reset" else if (language == AppLanguage.AR) "إعادة" else "سفر",
+                                selected = false,
+                                accent = Color(0xFFE58A82),
+                                foreground = foreground
+                            ) {
                                 count = 0
                                 progressPrefs.edit().putInt(item.id.toString(), 0).apply()
-                            }) {
-                                Text(if (language == AppLanguage.EN) "Reset" else if (language == AppLanguage.AR) "إعادة" else "سفر")
                             }
-                            Button(
-                                enabled = count < targetCount,
-                                onClick = incrementCount
-                            ) {
-                                Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(5.dp))
-                                Text(
-                                    when {
-                                        count >= targetCount && language == AppLanguage.EN -> "Completed"
-                                        count >= targetCount && language == AppLanguage.AR -> "اكتمل"
-                                        count >= targetCount -> "تەواو بوو"
-                                        language == AppLanguage.EN -> "Count"
-                                        language == AppLanguage.AR -> "تسبيح"
-                                        else -> "ژماردن"
-                                    }
-                                )
-                            }
+                            PremiumActionButton(
+                                modifier = Modifier.weight(1f),
+                                label = when {
+                                    count >= targetCount && language == AppLanguage.EN -> "Completed"
+                                    count >= targetCount && language == AppLanguage.AR -> "اكتمل"
+                                    count >= targetCount -> "تەواو بوو"
+                                    language == AppLanguage.EN -> "Count"
+                                    language == AppLanguage.AR -> "تسبيح"
+                                    else -> "ژماردن"
+                                },
+                                icon = Icons.Outlined.CheckCircle,
+                                accent = Gold,
+                                foreground = foreground,
+                                enabled = count < targetCount
+                            ) { incrementCount() }
                         }
                         if (count >= targetCount) {
                             Spacer(Modifier.height(8.dp))
@@ -7821,16 +7822,16 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             Spacer(Modifier.height(6.dp))
             Text(locationMessage, color = foreground.copy(alpha = 0.65f), fontSize = 11.sp, lineHeight = 16.sp)
             if (!locating) {
-                TextButton(onClick = locateNow) {
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "Try location again"
-                            AppLanguage.AR -> "إعادة محاولة تحديد الموقع"
-                            AppLanguage.CKB -> "دووبارە شوێن دیاری بکە"
-                        },
-                        color = Gold, fontSize = 11.sp
-                    )
-                }
+                PremiumChoicePill(
+                    label = when (language) {
+                        AppLanguage.EN -> "Try location again"
+                        AppLanguage.AR -> "إعادة محاولة تحديد الموقع"
+                        AppLanguage.CKB -> "دووبارە شوێن دیاری بکە"
+                    },
+                    selected = false,
+                    accent = Gold,
+                    foreground = foreground
+                ) { locateNow() }
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -8139,7 +8140,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                     AppLanguage.CKB -> "ئاگادارکردنەوەی ورد ڕێگەپێدراو نییە؛ ئەندرۆید لەوانەیە دوا بخات."
                                 }, color = foreground.copy(alpha = 0.6f), fontSize = 10.sp, lineHeight = 15.sp
                             )
-                            TextButton(onClick = {
+                            PremiumActionButton(
+                                label = if (language == AppLanguage.EN) "Allow exact alarms" else if (language == AppLanguage.AR) "السماح بالمنبهات الدقيقة" else "ڕێگەدان بە ئاگادارکردنەوەی ورد",
+                                icon = Icons.Outlined.Schedule,
+                                accent = Gold,
+                                foreground = foreground,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 try {
                                     context.startActivity(
                                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
@@ -8152,8 +8159,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                         AppLanguage.CKB -> "مۆڵەتی کاتژمێری ورد لە ڕێکخستنەکانی ئەندرۆید بکەرەوە."
                                     }
                                 }
-                            }) {
-                                Text(if (language == AppLanguage.EN) "Allow exact alarms" else if (language == AppLanguage.AR) "السماح بالمنبهات الدقيقة" else "ڕێگەدان بە ئاگادارکردنەوەی ورد")
                             }
                         }
                     }
@@ -8830,13 +8835,20 @@ fun WordAnalysisScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(surahText, { surahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "surah")) }, singleLine = true)
                 OutlinedTextField(ayahText, { ayahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "ayah")) }, singleLine = true)
-                Button(onClick = {
+                PremiumActionButton(
+                    label = if (language == AppLanguage.EN) "Study" else if (language == AppLanguage.AR) "تحليل" else "بپشکنە",
+                    icon = Icons.Outlined.Search,
+                    accent = Color(0xFFBCA8F2),
+                    foreground = foreground,
+                    modifier = Modifier.weight(0.92f),
+                    enabled = !loading
+                ) {
                     val s = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
                     val a = ayahText.toIntOrNull()?.coerceAtLeast(1) ?: 1
                     surahText = s.toString()
                     ayahText = a.toString()
                     loadAnalysis(s, a)
-                }) { Text("→") }
+                }
             }
         }
         if (!selected || items.isEmpty()) LoadingOrEmpty(loading, language, foreground, if (selected) tr(language, "not_found") else tr(language, "choose_surah"))
