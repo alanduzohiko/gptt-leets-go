@@ -2477,6 +2477,14 @@ private fun MushafPageViewer(
                 )
             }
         }
+        PremiumPageScrubber(
+            currentPage = page,
+            pageCount = 604,
+            pageLabel = if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "انتقل إلى صفحة" else "بڕۆ بۆ پەڕە",
+            foreground = if (darkMode) Color.White.copy(alpha = 0.82f) else DeepGreen,
+            accent = Gold,
+            modifier = Modifier.padding(horizontal = 9.dp)
+        ) { selectedPage -> onPageChange(selectedPage) }
         Spacer(Modifier.height(7.dp))
 
         Card(
@@ -6465,6 +6473,16 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
             Box(Modifier.fillMaxWidth(readingProgress).fillMaxHeight().clip(CircleShape)
                 .background(Brush.horizontalGradient(listOf(Gold, Color(0xFF7BC6A7)))))
         }
+        PremiumPageScrubber(
+            currentPage = pageIndex + 1,
+            pageCount = pageCount,
+            pageLabel = if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "انتقل إلى صفحة" else "بڕۆ بۆ پەڕە",
+            foreground = foreground,
+            accent = Gold,
+            modifier = Modifier.padding(top = 3.dp)
+        ) { selectedPage ->
+            pageIndex = (selectedPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+        }
         Spacer(Modifier.height(9.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
             PremiumChoicePill(
@@ -6644,28 +6662,29 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
                 if (hasMore) {
                     item(key = "load-more-lexicon") {
-                        OutlinedButton(
-                            enabled = !loadingMore,
-                            onClick = {
-                                if (!loadingMore) scope.launch {
-                                    loadingMore = true
+                        PremiumActionButton(
+                            label = when (language) {
+                                AppLanguage.EN -> if (loadingMore) "Loading more entries…" else "Load more entries"
+                                AppLanguage.AR -> if (loadingMore) "جارٍ تحميل المزيد…" else "تحميل المزيد من النتائج"
+                                AppLanguage.CKB -> if (loadingMore) "زیاتر بار دەکرێت…" else "دەروازەی زیاتر باربکە"
+                            },
+                            icon = Icons.Outlined.Search,
+                            accent = Color(0xFFB9A7F1),
+                            foreground = foreground,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !loadingMore
+                        ) {
+                            if (!loadingMore) scope.launch {
+                                loadingMore = true
+                                try {
                                     val next = ContentRepository.searchLexicon(context, query.trim(), offset, 100)
                                     entries = entries + next
                                     offset += next.size
                                     hasMore = next.size == 100 && offset < totalMatches
+                                } finally {
                                     loadingMore = false
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (loadingMore) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            else Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Load more entries"
-                                    AppLanguage.AR -> "تحميل المزيد من النتائج"
-                                    AppLanguage.CKB -> "دەروازەی زیاتر باربکە"
-                                }
-                            )
+                            }
                         }
                     }
                 }

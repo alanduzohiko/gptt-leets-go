@@ -53,9 +53,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
@@ -78,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.roundToInt
 
 /**
  * Shared native touch response for tappable surfaces throughout Mashxall.
@@ -847,5 +851,68 @@ internal fun PremiumActionButton(
         )
         Spacer(Modifier.width(8.dp))
         Text("›", color = accent.copy(alpha = fillAlpha), fontSize = 24.sp, fontWeight = FontWeight.Light)
+    }
+}
+
+
+/**
+ * Accessible page navigation for long-form readers. The preview value follows
+ * the user's finger; a page is rendered only after the drag is released, so
+ * rapid scrubbing never starts hundreds of expensive PDF/SVG render jobs.
+ */
+@Composable
+internal fun PremiumPageScrubber(
+    currentPage: Int,
+    pageCount: Int,
+    pageLabel: String,
+    foreground: Color,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onPageSelected: (Int) -> Unit
+) {
+    if (pageCount <= 1) return
+    val safeCurrent = currentPage.coerceIn(1, pageCount)
+    val previewPage = remember(safeCurrent, pageCount) {
+        mutableStateOf(safeCurrent.toFloat())
+    }
+    val haptic = LocalHapticFeedback.current
+    val previewNumber = previewPage.value.roundToInt().coerceIn(1, pageCount)
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                pageLabel.uppercase(),
+                color = foreground.copy(alpha = 0.55f),
+                fontSize = 8.sp,
+                letterSpacing = 0.8.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "$previewNumber / $pageCount",
+                color = accent,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+        Slider(
+            value = previewPage.value,
+            onValueChange = { previewPage.value = it },
+            onValueChangeFinished = {
+                val selected = previewPage.value.roundToInt().coerceIn(1, pageCount)
+                if (selected != safeCurrent) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onPageSelected(selected)
+                }
+            },
+            valueRange = 1f..pageCount.toFloat(),
+            colors = SliderDefaults.colors(
+                thumbColor = accent,
+                activeTrackColor = accent,
+                inactiveTrackColor = foreground.copy(alpha = 0.14f),
+                activeTickColor = accent,
+                inactiveTickColor = foreground.copy(alpha = 0.10f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
