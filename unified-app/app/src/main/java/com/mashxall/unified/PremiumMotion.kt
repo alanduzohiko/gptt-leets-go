@@ -578,15 +578,21 @@ internal fun PremiumSectionHero(
     metric: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     AnimatedVisibility(
         visible = true,
         modifier = modifier.fillMaxWidth(),
-        enter = fadeIn(animationSpec = tween(360, easing = FastOutSlowInEasing)) +
-            scaleIn(initialScale = 0.965f, animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )) +
-            slideInVertically(initialOffsetY = { it / 7 }, animationSpec = tween(360, easing = FastOutSlowInEasing))
+        enter = if (motionAllowed) {
+            fadeIn(animationSpec = tween(360, easing = FastOutSlowInEasing)) +
+                scaleIn(initialScale = 0.965f, animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )) +
+                slideInVertically(initialOffsetY = { it / 7 }, animationSpec = tween(360, easing = FastOutSlowInEasing))
+        } else {
+            fadeIn(animationSpec = tween(0))
+        }
     ) {
         Box(
             Modifier.fillMaxWidth()
