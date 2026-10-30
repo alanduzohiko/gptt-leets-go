@@ -6431,7 +6431,8 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                 selected = false,
                 accent = Gold,
                 foreground = foreground,
-                leadingIcon = Icons.Outlined.ArrowBack
+                leadingIcon = Icons.Outlined.ArrowBack,
+                enabled = pageIndex > 0 && !loading
             ) { pageIndex = (pageIndex - 1).coerceAtLeast(0) }
             AnimatedContent(
                 targetState = if (pageCount > 0) pageIndex + 1 else 0,
@@ -6454,7 +6455,8 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                 selected = false,
                 accent = Gold,
                 foreground = foreground,
-                leadingIcon = Icons.Outlined.ChevronRight
+                leadingIcon = Icons.Outlined.ChevronRight,
+                enabled = pageCount > 0 && pageIndex < pageCount - 1 && !loading
             ) { pageIndex = (pageIndex + 1).coerceAtMost((pageCount - 1).coerceAtLeast(0)) }
         }
         Spacer(Modifier.height(8.dp))

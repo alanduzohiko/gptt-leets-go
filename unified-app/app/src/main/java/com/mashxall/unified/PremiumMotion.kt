@@ -358,22 +358,31 @@ internal fun PremiumChoicePill(
     foreground: Color,
     modifier: Modifier = Modifier,
     leadingIcon: ImageVector? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.17f) else foreground.copy(alpha = 0.035f),
+        targetValue = when {
+            !enabled -> foreground.copy(alpha = 0.025f)
+            selected -> accent.copy(alpha = 0.17f)
+            else -> foreground.copy(alpha = 0.035f)
+        },
         animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall choice pill fill"
     )
     val outline by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.58f) else foreground.copy(alpha = 0.11f),
+        targetValue = when {
+            !enabled -> foreground.copy(alpha = 0.06f)
+            selected -> accent.copy(alpha = 0.58f)
+            else -> foreground.copy(alpha = 0.11f)
+        },
         animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall choice pill outline"
     )
     val labelColor by animateColorAsState(
-        targetValue = if (selected) foreground else foreground.copy(alpha = 0.68f),
+        targetValue = if (enabled && selected) foreground else foreground.copy(alpha = if (enabled) 0.68f else 0.38f),
         animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall choice pill label"
     )
@@ -388,7 +397,7 @@ internal fun PremiumChoicePill(
             .clip(RoundedCornerShape(15.dp))
             .background(Brush.horizontalGradient(listOf(fill, fill.copy(alpha = (fill.alpha * 0.58f).coerceAtLeast(0.02f)))))
             .border(1.dp, outline, RoundedCornerShape(15.dp))
-            .premiumClickable(hapticFeedback = true, onClick = onClick)
+            .premiumClickable(enabled = enabled, hapticFeedback = true, onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -396,7 +405,7 @@ internal fun PremiumChoicePill(
             Icon(
                 leadingIcon,
                 contentDescription = null,
-                tint = if (selected) accent else foreground.copy(alpha = 0.68f),
+                tint = if (enabled && selected) accent else foreground.copy(alpha = if (enabled) 0.68f else 0.30f),
                 modifier = Modifier.size(14.dp)
             )
             Spacer(Modifier.width(6.dp))
@@ -405,7 +414,7 @@ internal fun PremiumChoicePill(
         Spacer(Modifier.width(7.dp))
         Box(
             Modifier.size(7.dp).clip(CircleShape)
-                .background(if (selected) accent else foreground.copy(alpha = 0.18f))
+                .background(if (enabled && selected) accent else foreground.copy(alpha = if (enabled) 0.18f else 0.07f))
         )
     }
 }
