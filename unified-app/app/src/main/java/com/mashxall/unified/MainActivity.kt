@@ -465,25 +465,31 @@ fun MashxallApp(startScreen: String? = null) {
                             transitionSpec = {
                                 val enterFrom = if (layoutDirection == LayoutDirection.Ltr) 1 else -1
                                 val exitTo = -enterFrom
-                                (fadeIn(animationSpec = tween(240, easing = FastOutSlowInEasing)) +
-                                    scaleIn(initialScale = 0.94f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                (fadeIn(animationSpec = tween(260, easing = FastOutSlowInEasing)) +
+                                    scaleIn(
+                                        initialScale = 0.88f,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMediumLow
+                                        )
+                                    ) +
                                     slideInHorizontally(
                                         animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
                                             stiffness = Spring.StiffnessMediumLow
                                         )
                                     ) { fullWidth ->
-                                        fullWidth * enterFrom / 8
+                                        fullWidth * enterFrom / 6
                                     }) togetherWith
-                                    (fadeOut(animationSpec = tween(180)) +
-                                        scaleOut(targetScale = 0.975f, animationSpec = tween(180, easing = FastOutSlowInEasing)) +
+                                    (fadeOut(animationSpec = tween(190, easing = FastOutSlowInEasing)) +
+                                        scaleOut(targetScale = 0.955f, animationSpec = tween(190, easing = FastOutSlowInEasing)) +
                                         slideOutHorizontally(
                                             animationSpec = spring(
                                                 dampingRatio = Spring.DampingRatioNoBouncy,
                                                 stiffness = Spring.StiffnessMediumLow
                                             )
                                         ) { fullWidth ->
-                                            fullWidth * exitTo / 24
+                                            fullWidth * exitTo / 14
                                         })
                             },
                             label = "Mashxall native screen transition"
