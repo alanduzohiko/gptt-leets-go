@@ -2829,7 +2829,13 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                 ) { Text("›") }
             }
         }
-        Card(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp)) {
+        Card(
+            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)
+                .staggeredEntrance(itemKey = "tafsir:$selectedBook:$surah:$ayah", index = 0)
+                .animateContentSize(),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(22.dp)
+        ) {
             when {
                 loading -> LoadingOrEmpty(true, language, foreground)
                 text.isBlank() -> Column(Modifier.padding(18.dp)) {
@@ -6026,9 +6032,12 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                         }, color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp
                     )
                 }
-                items(visiblePdfs, key = { it }) { path ->
+                itemsIndexed(visiblePdfs, key = { _, path -> path }) { pdfIndex, path ->
                     Card(
-                        Modifier.premiumClickable { onOpenPdf(path) },
+                        Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = "pdf:$path", index = pdfIndex)
+                            .animateContentSize()
+                            .premiumClickable { onOpenPdf(path) },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(15.dp)
                     ) {
@@ -6055,9 +6064,12 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                     )
                 }
             }
-            items(visibleBooks, key = { "book-" + it.id }) { item ->
+            itemsIndexed(visibleBooks, key = { _, item -> "book-" + item.id }) { bookIndex, item ->
                 val favorite = favoriteIds.contains(item.id.toString())
                 Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .staggeredEntrance(itemKey = "book:${item.id}", index = bookIndex)
+                        .animateContentSize(),
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(18.dp),
                     border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.17f))
@@ -6121,7 +6133,18 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                                             favoritePrefs.edit().putStringSet("book_ids", favoriteIds).apply()
                                         },
                                         modifier = Modifier.size(30.dp)
-                                    ) { Text(if (favorite) "★" else "☆", color = Gold, fontSize = 21.sp) }
+                                    ) {
+                                        AnimatedContent(
+                                            targetState = favorite,
+                                            transitionSpec = {
+                                                (scaleIn(initialScale = 0.42f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                                    (scaleOut(targetScale = 0.52f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                            },
+                                            label = "Book favourite star pulse"
+                                        ) { saved ->
+                                            Text(if (saved) "★" else "☆", color = Gold, fontSize = 21.sp)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -6305,7 +6328,21 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
             OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0 && !loading) {
                 Text(tr(language, "previous"))
             }
-            Text(if (pageCount > 0) tr(language, "page") + " " + (pageIndex + 1) + " / " + pageCount else tr(language, "open_pdf"), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            AnimatedContent(
+                targetState = if (pageCount > 0) pageIndex + 1 else 0,
+                transitionSpec = {
+                    (fadeIn(tween(120)) + slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(150))) togetherWith
+                        (fadeOut(tween(90)) + slideOutVertically(targetOffsetY = { -it / 3 }, animationSpec = tween(90)))
+                },
+                label = "PDF page number rollover"
+            ) { visiblePage ->
+                Text(
+                    if (visiblePage > 0) tr(language, "page") + " " + visiblePage + " / " + pageCount else tr(language, "open_pdf"),
+                    color = Gold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             OutlinedButton(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(pageCount - 1) }, enabled = pageCount > 0 && pageIndex < pageCount - 1 && !loading) {
                 Text(tr(language, "next"))
             }
@@ -6314,7 +6351,23 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
         Box(Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1B2925)), contentAlignment = Alignment.Center) {
             when {
                 loading -> CircularProgressIndicator(color = Gold)
-                bitmap != null -> Image(bitmap!!.asImageBitmap(), contentDescription = assetPath.substringAfterLast('/'), contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                bitmap != null -> AnimatedContent(
+                    targetState = bitmap,
+                    transitionSpec = {
+                        (fadeIn(tween(160)) + scaleIn(initialScale = 0.975f, animationSpec = tween(210))) togetherWith
+                            (fadeOut(tween(110)) + scaleOut(targetScale = 1.015f, animationSpec = tween(110)))
+                    },
+                    label = "PDF reader page transition"
+                ) { visibleBitmap ->
+                    if (visibleBitmap != null) {
+                        Image(
+                            visibleBitmap.asImageBitmap(),
+                            contentDescription = assetPath.substringAfterLast('/'),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
                 loadFailed -> Text(tr(language, "data_notice"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
             }
         }
@@ -6364,8 +6417,14 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 contentPadding = PaddingValues(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$index" }) { _, item ->
-                    Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp)) {
+                itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$index" }) { itemIndex, item ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                            .staggeredEntrance(itemKey = "${item.title}:${item.root}:$itemIndex", index = itemIndex)
+                            .animateContentSize(),
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
                         Column(Modifier.padding(14.dp)) {
                             Text(item.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             if (item.root.isNotBlank()) {
@@ -8187,8 +8246,14 @@ fun WordAnalysisScreen(
                     }, color = foreground.copy(alpha = 0.57f), fontSize = 11.sp
                 )
             }
-            items(items, key = { it.position }) { word ->
-                Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(17.dp)) {
+            itemsIndexed(items, key = { _, word -> word.position }) { wordIndex, word ->
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .staggeredEntrance(itemKey = word.position, index = wordIndex)
+                        .animateContentSize(),
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(17.dp)
+                ) {
                     Column(Modifier.fillMaxWidth().padding(13.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Box(Modifier.size(28.dp).clip(CircleShape).background(DeepGreen), contentAlignment = Alignment.Center) {
@@ -8358,7 +8423,7 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 } else tr(language, "not_found")
             )
         } else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            items(visibleRecords, key = { it.id }) { item ->
+            itemsIndexed(visibleRecords, key = { _, item -> item.id }) { recordIndex, item ->
                 val isFavorite = favorites.contains(item.id.toString())
                 val title = item.title.ifBlank { item.badiniTitle }
                 val preview = when (language) {
@@ -8370,7 +8435,10 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
                     border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f)),
-                    modifier = Modifier.fillMaxWidth().premiumClickable { selectedRecord = item }
+                    modifier = Modifier.fillMaxWidth()
+                        .staggeredEntrance(itemKey = item.id, index = recordIndex)
+                        .animateContentSize()
+                        .premiumClickable { selectedRecord = item }
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
