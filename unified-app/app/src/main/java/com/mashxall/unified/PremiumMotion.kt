@@ -793,3 +793,59 @@ private fun PremiumCompassOrbitFrame(tint: Color, size: Dp, rotation: Float) {
         )
     }
 }
+
+
+/** Prominent native action surface shared by high-value screen actions. */
+@Composable
+internal fun PremiumActionButton(
+    label: String,
+    icon: ImageVector,
+    accent: Color,
+    foreground: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val fillAlpha by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0.45f,
+        animationSpec = tween(180),
+        label = "Mashxall action button enabled state"
+    )
+    val outline by animateColorAsState(
+        targetValue = accent.copy(alpha = if (enabled) 0.48f else 0.18f),
+        animationSpec = tween(180),
+        label = "Mashxall action button outline"
+    )
+    Row(
+        modifier = modifier.clip(RoundedCornerShape(17.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(accent.copy(alpha = 0.22f * fillAlpha), accent.copy(alpha = 0.065f * fillAlpha))
+                )
+            )
+            .border(1.dp, outline, RoundedCornerShape(17.dp))
+            .premiumClickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(32.dp).clip(RoundedCornerShape(11.dp))
+                .background(accent.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = accent.copy(alpha = fillAlpha), modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            color = foreground.copy(alpha = fillAlpha),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            lineHeight = 15.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text("›", color = accent.copy(alpha = fillAlpha), fontSize = 24.sp, fontWeight = FontWeight.Light)
+    }
+}

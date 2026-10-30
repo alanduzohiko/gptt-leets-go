@@ -7982,21 +7982,18 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         }
                     })
                 }
-                OutlinedButton(
-                    onClick = onBrowseAdhanLibrary,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "Browse full adhan & mosque library"
-                            AppLanguage.AR -> "فتح مكتبة الأذان وأصوات المساجد الكاملة"
-                            AppLanguage.CKB -> "کردنەوەی کتێبخانەی تەواوی بانگ و دەنگی مزگەوت"
-                        },
-                        fontSize = 11.sp
-                    )
-                }
+                PremiumActionButton(
+                    label = when (language) {
+                        AppLanguage.EN -> "Browse full adhan & mosque library"
+                        AppLanguage.AR -> "فتح مكتبة الأذان وأصوات المساجد الكاملة"
+                        AppLanguage.CKB -> "کردنەوەی کتێبخانەی تەواوی بانگ و دەنگی مزگەوت"
+                    },
+                    icon = Icons.Outlined.GraphicEq,
+                    accent = Gold,
+                    foreground = foreground,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onBrowseAdhanLibrary
+                )
                 Text(
                     when (language) {
                         AppLanguage.EN -> "Choose a source recording, download it in the library, then return here to select it for scheduled prayer alerts."
@@ -8007,18 +8004,21 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 )
                 if (adhanEnabled) {
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = { adhanSoundQuery = ""; chooseAdhanSound = true }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Outlined.VolumeUp, null, tint = Gold, modifier = Modifier.size(17.dp))
-                        Spacer(Modifier.width(8.dp))
-                        val soundLabel = adhanAssets.firstOrNull { it.assetPath == selectedAdhanAsset }?.title
-                            ?: selectedAdhanAsset.substringAfterLast('/')
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "Adhan sound: $soundLabel"
-                                AppLanguage.AR -> "صوت الأذان: $soundLabel"
-                                AppLanguage.CKB -> "دەنگی بانگ: $soundLabel"
-                            }, fontSize = 11.sp, maxLines = 1
-                        )
+                    val soundLabel = adhanAssets.firstOrNull { it.assetPath == selectedAdhanAsset }?.title
+                        ?: selectedAdhanAsset.substringAfterLast('/')
+                    PremiumActionButton(
+                        label = when (language) {
+                            AppLanguage.EN -> "Adhan sound: $soundLabel"
+                            AppLanguage.AR -> "صوت الأذان: $soundLabel"
+                            AppLanguage.CKB -> "دەنگی بانگ: $soundLabel"
+                        },
+                        icon = Icons.Outlined.VolumeUp,
+                        accent = Gold,
+                        foreground = foreground,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        adhanSoundQuery = ""
+                        chooseAdhanSound = true
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -8183,25 +8183,21 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp, lineHeight = 15.sp
                         )
                         Spacer(Modifier.height(7.dp))
-                        OutlinedButton(
-                            onClick = {
-                                AudioController.stop()
-                                previewingAdhan = ""
-                                chooseAdhanSound = false
-                                onBrowseAdhanLibrary()
+                        PremiumActionButton(
+                            label = when (language) {
+                                AppLanguage.EN -> "Browse all " + onlineAdhanCount + " online recordings"
+                                AppLanguage.AR -> "تصفح جميع التسجيلات (" + onlineAdhanCount + ")"
+                                AppLanguage.CKB -> "بینینی هەموو تۆمارەکان (" + onlineAdhanCount + ")"
                             },
+                            icon = Icons.Outlined.GraphicEq,
+                            accent = Gold,
+                            foreground = foreground,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Browse all " + onlineAdhanCount + " online recordings"
-                                    AppLanguage.AR -> "تصفح جميع التسجيلات (" + onlineAdhanCount + ")"
-                                    AppLanguage.CKB -> "بینینی هەموو تۆمارەکان (" + onlineAdhanCount + ")"
-                                },
-                                fontSize = 10.sp
-                            )
+                            AudioController.stop()
+                            previewingAdhan = ""
+                            chooseAdhanSound = false
+                            onBrowseAdhanLibrary()
                         }
                     }
                 }
