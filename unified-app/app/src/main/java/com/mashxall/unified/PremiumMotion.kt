@@ -49,6 +49,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -808,6 +809,7 @@ internal fun PremiumActionButton(
     foreground: Color,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    loading: Boolean = false,
     onClick: () -> Unit
 ) {
     val fillAlpha by animateFloatAsState(
@@ -837,7 +839,15 @@ internal fun PremiumActionButton(
                 .background(accent.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = accent.copy(alpha = fillAlpha), modifier = Modifier.size(18.dp))
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = accent.copy(alpha = fillAlpha),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(icon, contentDescription = null, tint = accent.copy(alpha = fillAlpha), modifier = Modifier.size(18.dp))
+            }
         }
         Spacer(Modifier.width(10.dp))
         Text(
@@ -849,8 +859,10 @@ internal fun PremiumActionButton(
             lineHeight = 15.sp,
             modifier = Modifier.weight(1f)
         )
-        Spacer(Modifier.width(8.dp))
-        Text("›", color = accent.copy(alpha = fillAlpha), fontSize = 24.sp, fontWeight = FontWeight.Light)
+        if (!loading) {
+            Spacer(Modifier.width(8.dp))
+            Text("›", color = accent.copy(alpha = fillAlpha), fontSize = 24.sp, fontWeight = FontWeight.Light)
+        }
     }
 }
 
@@ -913,6 +925,67 @@ internal fun PremiumPageScrubber(
                 inactiveTickColor = foreground.copy(alpha = 0.10f)
             ),
             modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+
+/** Compact expressive icon button for navigation, location and favourite actions. */
+@Composable
+internal fun PremiumIconButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    enabled: Boolean = true,
+    selected: Boolean = false,
+    rotationDegrees: Float = 0f,
+    onClick: () -> Unit
+) {
+    val fill by animateColorAsState(
+        targetValue = when {
+            !enabled -> accent.copy(alpha = 0.025f)
+            selected -> accent.copy(alpha = 0.18f)
+            else -> accent.copy(alpha = 0.075f)
+        },
+        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        label = "Mashxall icon button fill"
+    )
+    val outline by animateColorAsState(
+        targetValue = accent.copy(alpha = if (enabled && selected) 0.50f else if (enabled) 0.19f else 0.08f),
+        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        label = "Mashxall icon button outline"
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (enabled && selected) 1.12f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mashxall icon button scale"
+    )
+    val iconRotation by animateFloatAsState(
+        targetValue = rotationDegrees + if (selected) -8f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mashxall icon button rotation"
+    )
+    Box(
+        modifier = modifier.size(size)
+            .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+            .clip(RoundedCornerShape(size * 0.36f))
+            .background(Brush.linearGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.55f))))
+            .border(1.dp, outline, RoundedCornerShape(size * 0.36f))
+            .premiumClickable(
+                enabled = enabled,
+                onClickLabel = contentDescription,
+                role = Role.Button,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = accent.copy(alpha = if (enabled) 1f else 0.30f),
+            modifier = Modifier.size(size * 0.48f).graphicsLayer { rotationZ = iconRotation }
         )
     }
 }

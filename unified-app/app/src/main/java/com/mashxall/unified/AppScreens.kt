@@ -3497,8 +3497,15 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             if (selectedCategory != 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { selectedCategory = 0; selectedItem = null }) {
-                        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold)
+                    PremiumIconButton(
+                        icon = Icons.Outlined.ChevronRight,
+                        contentDescription = if (language == AppLanguage.EN) "All remembrance topics" else if (language == AppLanguage.AR) "كل أقسام الأذكار" else "هەموو بابەتەکانی زیکر",
+                        accent = Gold,
+                        size = 36.dp,
+                        rotationDegrees = 180f
+                    ) {
+                        selectedCategory = 0
+                        selectedItem = null
                     }
                     Text(
                         when (language) { AppLanguage.EN -> "All remembrance topics"; AppLanguage.AR -> "كل أقسام الأذكار"; AppLanguage.CKB -> "هەموو بابەتەکانی زیکر" },
@@ -6232,24 +6239,16 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                                         Text(item.branch, color = foreground.copy(alpha = 0.52f), fontSize = 10.sp, maxLines = 1)
                                     }
                                     Spacer(Modifier.weight(1f))
-                                    IconButton(
-                                        onClick = {
-                                            val key = item.id.toString()
-                                            favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
-                                            favoritePrefs.edit().putStringSet("book_ids", favoriteIds).apply()
-                                        },
-                                        modifier = Modifier.size(30.dp)
+                                    PremiumIconButton(
+                                        icon = Icons.Outlined.BookmarkBorder,
+                                        contentDescription = if (language == AppLanguage.EN) "Save book" else if (language == AppLanguage.AR) "حفظ الكتاب" else "کتێب پاشەکەوت بکە",
+                                        accent = Gold,
+                                        size = 32.dp,
+                                        selected = favorite
                                     ) {
-                                        AnimatedContent(
-                                            targetState = favorite,
-                                            transitionSpec = {
-                                                (scaleIn(initialScale = 0.42f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                                    (scaleOut(targetScale = 0.52f, animationSpec = tween(100)) + fadeOut(tween(100)))
-                                            },
-                                            label = "Book favourite star pulse"
-                                        ) { saved ->
-                                            Text(if (saved) "★" else "☆", color = Gold, fontSize = 21.sp)
-                                        }
+                                        val key = item.id.toString()
+                                        favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
+                                        favoritePrefs.edit().putStringSet("book_ids", favoriteIds).apply()
                                     }
                                 }
                             }
@@ -6274,60 +6273,61 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                         }
                         Spacer(Modifier.height(8.dp))
                         val localPdfPath = downloadedPaths[item.id]
-                        Button(
-                            enabled = item.id !in downloadingIds,
+                        PremiumActionButton(
+                            label = when (language) {
+                                AppLanguage.EN -> when {
+                                    item.id in downloadingIds -> "Downloading PDF…"
+                                    localPdfPath != null -> "Open offline PDF"
+                                    else -> "Download PDF and open"
+                                }
+                                AppLanguage.AR -> when {
+                                    item.id in downloadingIds -> "جارٍ تنزيل PDF…"
+                                    localPdfPath != null -> "فتح PDF دون إنترنت"
+                                    else -> "تنزيل PDF وفتحه"
+                                }
+                                AppLanguage.CKB -> when {
+                                    item.id in downloadingIds -> "PDF دادەگیرێت…"
+                                    localPdfPath != null -> "PDF بکەرەوە (بێ ئینتەرنێت)"
+                                    else -> "PDF دابگرە و بیکەرەوە"
+                                }
+                            },
+                            icon = if (localPdfPath != null) Icons.Outlined.MenuBook else Icons.Outlined.ChevronRight,
+                            accent = Color(0xFF9EB9E9),
+                            foreground = foreground,
                             modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                if (localPdfPath != null && validDownloadedPdf(File(localPdfPath))) {
-                                    onOpenPdf(localPdfPath)
-                                } else {
-                                    downloadingIds = downloadingIds + item.id
-                                    bookScope.launch {
-                                        try {
-                                            val downloaded = downloadCatalogueBook(context, item)
-                                            downloadedPaths = downloadedPaths + (item.id to downloaded.absolutePath)
-                                            Toast.makeText(
-                                                context,
-                                                when (language) {
-                                                    AppLanguage.EN -> "Book downloaded and saved offline"
-                                                    AppLanguage.AR -> "تم تنزيل الكتاب وحفظه للقراءة دون إنترنت"
-                                                    AppLanguage.CKB -> "کتێبەکە داگیرا و بۆ خوێندنەوەی بێ ئینتەرنێت پاشەکەوت کرا"
-                                                }, Toast.LENGTH_LONG
-                                            ).show()
-                                            onOpenPdf(downloaded.absolutePath)
-                                        } catch (_: Exception) {
-                                            Toast.makeText(
-                                                context,
-                                                when (language) {
-                                                    AppLanguage.EN -> "Download failed: check internet or try again later."
-                                                    AppLanguage.AR -> "فشل التنزيل؛ تحقق من الإنترنت أو حاول لاحقًا."
-                                                    AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە."
-                                                }, Toast.LENGTH_LONG
-                                            ).show()
-                                        } finally {
-                                            downloadingIds = downloadingIds - item.id
-                                        }
+                            enabled = item.id !in downloadingIds,
+                            loading = item.id in downloadingIds
+                        ) {
+                            if (localPdfPath != null && validDownloadedPdf(File(localPdfPath))) {
+                                onOpenPdf(localPdfPath)
+                            } else {
+                                downloadingIds = downloadingIds + item.id
+                                bookScope.launch {
+                                    try {
+                                        val downloaded = downloadCatalogueBook(context, item)
+                                        downloadedPaths = downloadedPaths + (item.id to downloaded.absolutePath)
+                                        Toast.makeText(
+                                            context,
+                                            when (language) {
+                                                AppLanguage.EN -> "Book downloaded and saved offline"
+                                                AppLanguage.AR -> "تم تنزيل الكتاب وحفظه للقراءة دون إنترنت"
+                                                AppLanguage.CKB -> "کتێبەکە داگیرا و بۆ خوێندنەوەی بێ ئینتەرنێت پاشەکەوت کرا"
+                                            }, Toast.LENGTH_LONG
+                                        ).show()
+                                        onOpenPdf(downloaded.absolutePath)
+                                    } catch (_: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            when (language) {
+                                                AppLanguage.EN -> "Download failed: check internet or try again later."
+                                                AppLanguage.AR -> "فشل التنزيل؛ تحقق من الإنترنت أو حاول لاحقًا."
+                                                AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە."
+                                            }, Toast.LENGTH_LONG
+                                        ).show()
+                                    } finally {
+                                        downloadingIds = downloadingIds - item.id
                                     }
                                 }
-                            }
-                        ) {
-                            if (item.id in downloadingIds) {
-                                CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (language == AppLanguage.EN) "Downloading PDF…" else if (language == AppLanguage.AR) "جارٍ تنزيل PDF…" else "PDF دادەگیرێت…")
-                            } else {
-                                Icon(
-                                    if (localPdfPath != null) Icons.Outlined.MenuBook else Icons.Outlined.ChevronRight,
-                                    null, modifier = Modifier.size(17.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    when (language) {
-                                        AppLanguage.EN -> if (localPdfPath != null) "Open offline PDF" else "Download PDF and open"
-                                        AppLanguage.AR -> if (localPdfPath != null) "فتح PDF دون إنترنت" else "تنزيل PDF وفتحه"
-                                        AppLanguage.CKB -> if (localPdfPath != null) "PDF بکەرەوە (بێ ئینتەرنێت)" else "PDF دابگرە و بیکەرەوە"
-                                    }
-                                )
                             }
                         }
                         if (item.url.startsWith("http", ignoreCase = true)) {
@@ -7678,27 +7678,30 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             Text(tr(language, "select_city"), color = Color(0xFFB9CDC5), fontSize = 10.sp)
                         }
                     }
-                    IconButton(onClick = locateNow) {
-                        Icon(
-                            Icons.Outlined.GpsFixed,
-                            contentDescription = when (language) {
-                                AppLanguage.EN -> "Refresh location"
-                                AppLanguage.AR -> "تحديث الموقع"
-                                AppLanguage.CKB -> "نوێکردنەوەی شوێن"
-                            },
-                            tint = Gold
-                        )
-                    }
-                    IconButton(onClick = { citySearch = ""; chooseCity = true }) {
-                        Icon(
-                            Icons.Outlined.Search,
-                            contentDescription = when (language) {
-                                AppLanguage.EN -> "Search for a city"
-                                AppLanguage.AR -> "البحث عن مدينة"
-                                AppLanguage.CKB -> "گەڕان بەدوای شارێکدا"
-                            },
-                            tint = Gold
-                        )
+                    PremiumIconButton(
+                        icon = Icons.Outlined.GpsFixed,
+                        contentDescription = when (language) {
+                            AppLanguage.EN -> "Refresh location"
+                            AppLanguage.AR -> "تحديث الموقع"
+                            AppLanguage.CKB -> "نوێکردنەوەی شوێن"
+                        },
+                        accent = Gold,
+                        size = 38.dp,
+                        selected = locating,
+                        onClick = locateNow
+                    )
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Search,
+                        contentDescription = when (language) {
+                            AppLanguage.EN -> "Search for a city"
+                            AppLanguage.AR -> "البحث عن مدينة"
+                            AppLanguage.CKB -> "گەڕان بەدوای شارێکدا"
+                        },
+                        accent = Gold,
+                        size = 38.dp
+                    ) {
+                        citySearch = ""
+                        chooseCity = true
                     }
                 }
                 Spacer(Modifier.height(7.dp))
