@@ -3835,7 +3835,7 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.AR -> "تدبّر الأسماء الحسنى ومعانيها ومراجعها."
                     AppLanguage.CKB -> "لە ناوە جوانەکان و ماناکانیان ورد ببەوە."
                 },
-                icon = Icons.Outlined.Favorite,
+                icon = Icons.Outlined.Spa,
                 foreground = foreground,
                 accent = Color(0xFFE6A8C1),
                 metric = when (language) {
