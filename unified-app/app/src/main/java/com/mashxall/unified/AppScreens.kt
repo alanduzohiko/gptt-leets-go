@@ -5019,10 +5019,25 @@ fun AudioScreen(
                                     }
                                 }
                             ) {
-                                Icon(
-                                    if (playing == playKey) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-                                    contentDescription = playLabel, tint = Gold, modifier = Modifier.size(29.dp)
-                                )
+                                AnimatedContent(
+                                    targetState = playing == playKey,
+                                    transitionSpec = {
+                                        (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                            (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                    },
+                                    label = "Reciter active audio waveform transition"
+                                ) { active ->
+                                    if (active) {
+                                        PremiumAudioWaveform(active = true, accent = Gold)
+                                    } else {
+                                        Icon(
+                                            Icons.Outlined.PlayCircle,
+                                            contentDescription = playLabel,
+                                            tint = Gold,
+                                            modifier = Modifier.size(29.dp)
+                                        )
+                                    }
+                                }
                             }
                             IconButton(
                                 enabled = downloadProgress == null && surahAyahCount > 0 && surahNumber <= reciter.surahTotal,
