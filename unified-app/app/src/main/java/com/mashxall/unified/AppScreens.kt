@@ -1644,38 +1644,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
-                                    FilterChip(
+                                    PremiumChoicePill(
+                                        modifier = Modifier.weight(1f),
+                                        label = if (language == AppLanguage.EN) "Full surah" else if (language == AppLanguage.AR) "السورة كاملة" else "سوورەتی تەواو",
                                         selected = readerPlaybackMode == "full",
-                                        onClick = {
-                                            ReaderPlaybackSettings.mode = "full"
-                                            prefs.edit().putString("reciter_playback_mode", "full").apply()
-                                        },
+                                        accent = Gold,
+                                        foreground = foreground
+                                    ) {
+                                        ReaderPlaybackSettings.mode = "full"
+                                        prefs.edit().putString("reciter_playback_mode", "full").apply()
+                                    }
+                                    PremiumChoicePill(
                                         modifier = Modifier.weight(1f),
-                                        label = {
-                                            Text(
-                                                if (language == AppLanguage.EN) "Full surah"
-                                                else if (language == AppLanguage.AR) "السورة كاملة"
-                                                else "سوورەتی تەواو",
-                                                fontSize = 10.sp
-                                            )
-                                        }
-                                    )
-                                    FilterChip(
+                                        label = if (language == AppLanguage.EN) "From selected ayah" else if (language == AppLanguage.AR) "من الآية المحددة" else "لە ئایەتی هەڵبژێردراوەوە",
                                         selected = readerPlaybackMode == "verse",
-                                        onClick = {
-                                            ReaderPlaybackSettings.mode = "verse"
-                                            prefs.edit().putString("reciter_playback_mode", "verse").apply()
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        label = {
-                                            Text(
-                                                if (language == AppLanguage.EN) "From selected ayah"
-                                                else if (language == AppLanguage.AR) "من الآية المحددة"
-                                                else "لە ئایەتی هەڵبژێردراوەوە",
-                                                fontSize = 10.sp
-                                            )
-                                        }
-                                    )
+                                        accent = Gold,
+                                        foreground = foreground
+                                    ) {
+                                        ReaderPlaybackSettings.mode = "verse"
+                                        prefs.edit().putString("reciter_playback_mode", "verse").apply()
+                                    }
                                 }
                                 Text(
                                     when {
@@ -1993,34 +1981,37 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         Spacer(Modifier.height(4.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             item {
-                                FilterChip(
-                                    selected = false, onClick = { readerSettingsSection = "overview"; showReaderSettings = true },
-                                    label = { Text(if (language == AppLanguage.EN) "Translation / tafsir" else if (language == AppLanguage.AR) "الترجمة / التفسير" else "وەرگێڕان / تەفسیر", fontSize = 10.sp) }
-                                )
+                                PremiumChoicePill(
+                                    label = if (language == AppLanguage.EN) "Translation / tafsir" else if (language == AppLanguage.AR) "الترجمة / التفسير" else "وەرگێڕان / تەفسیر",
+                                    selected = false,
+                                    accent = Gold,
+                                    foreground = foreground
+                                ) { readerSettingsSection = "overview"; showReaderSettings = true }
                             }
                             item {
-                                FilterChip(
-                                    selected = showSheetHadith, onClick = { showSheetHadith = !showSheetHadith },
-                                    label = { Text(
-                                        (if (language == AppLanguage.EN) "Related Hadith (" else if (language == AppLanguage.AR) "الأحاديث المرتبطة (" else "فەرموودەی پەیوەندیدار (") + sheetRelatedHadith.size + ")",
-                                        fontSize = 10.sp
-                                    ) }
-                                )
+                                PremiumChoicePill(
+                                    label = (if (language == AppLanguage.EN) "Related Hadith (" else if (language == AppLanguage.AR) "الأحاديث المرتبطة (" else "فەرموودەی پەیوەندیدار (") + sheetRelatedHadith.size + ")",
+                                    selected = showSheetHadith,
+                                    accent = Gold,
+                                    foreground = foreground
+                                ) { showSheetHadith = !showSheetHadith }
                             }
                             item {
-                                FilterChip(
-                                    selected = showSheetWordStudy, onClick = {
-                                        showSheetWordStudy = !showSheetWordStudy
-                                        if (showSheetWordStudy && sheetWords.isEmpty()) {
-                                            sheetWordLoading = true
-                                            scope.launch {
-                                                sheetWords = ContentRepository.loadWordAnalysis(context, target.first, target.second)
-                                                sheetWordLoading = false
-                                            }
+                                PremiumChoicePill(
+                                    label = if (language == AppLanguage.EN) "Word study" else if (language == AppLanguage.AR) "تحليل الكلمات" else "شیکردنەوەی وشە",
+                                    selected = showSheetWordStudy,
+                                    accent = Gold,
+                                    foreground = foreground
+                                ) {
+                                    showSheetWordStudy = !showSheetWordStudy
+                                    if (showSheetWordStudy && sheetWords.isEmpty()) {
+                                        sheetWordLoading = true
+                                        scope.launch {
+                                            sheetWords = ContentRepository.loadWordAnalysis(context, target.first, target.second)
+                                            sheetWordLoading = false
                                         }
-                                    },
-                                    label = { Text(if (language == AppLanguage.EN) "Word study" else if (language == AppLanguage.AR) "تحليل الكلمات" else "شیکردنەوەی وشە", fontSize = 10.sp) }
-                                )
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(11.dp))
@@ -2684,7 +2675,12 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(ContentRepository.tafsirBooks) { book ->
-                    FilterChip(selected = selectedBook == book.id, onClick = { selectedBook = book.id }, label = { Text(tafsirLabel(book, language), fontSize = 11.sp, maxLines = 1) })
+                    PremiumChoicePill(
+                        label = tafsirLabel(book, language),
+                        selected = selectedBook == book.id,
+                        accent = Gold,
+                        foreground = foreground
+                    ) { selectedBook = book.id }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -5872,16 +5868,18 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
             SearchBox(query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                FilterChip(
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "All books" else if (language == AppLanguage.AR) "كل الكتب" else "هەموو کتێبەکان",
                     selected = !favoritesOnly,
-                    onClick = { favoritesOnly = false },
-                    label = { Text(if (language == AppLanguage.EN) "All books" else if (language == AppLanguage.AR) "كل الكتب" else "هەموو کتێبەکان", fontSize = 11.sp) }
-                )
-                FilterChip(
+                    accent = Gold,
+                    foreground = foreground
+                ) { favoritesOnly = false }
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "Favourites" else if (language == AppLanguage.AR) "المفضلة" else "دڵخوازەکان",
                     selected = favoritesOnly,
-                    onClick = { favoritesOnly = true },
-                    label = { Text(if (language == AppLanguage.EN) "Favourites" else if (language == AppLanguage.AR) "المفضلة" else "دڵخوازەکان", fontSize = 11.sp) }
-                )
+                    accent = Gold,
+                    foreground = foreground
+                ) { favoritesOnly = true }
             }
         }
         if (visibleBooks.isEmpty() && visiblePdfs.isEmpty()) {
@@ -8215,16 +8213,18 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             SearchBox(query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                FilterChip(
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "All records" else if (language == AppLanguage.AR) "كل السجلات" else "هەموو تۆمارەکان",
                     selected = !favoritesOnly,
-                    onClick = { favoritesOnly = false },
-                    label = { Text(if (language == AppLanguage.EN) "All records" else if (language == AppLanguage.AR) "كل السجلات" else "هەموو تۆمارەکان", fontSize = 11.sp) }
-                )
-                FilterChip(
+                    accent = Gold,
+                    foreground = foreground
+                ) { favoritesOnly = false }
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "Favourites" else if (language == AppLanguage.AR) "المفضلة" else "دڵخوازەکان",
                     selected = favoritesOnly,
-                    onClick = { favoritesOnly = true },
-                    label = { Text(if (language == AppLanguage.EN) "Favourites" else if (language == AppLanguage.AR) "المفضلة" else "دڵخوازەکان", fontSize = 11.sp) }
-                )
+                    accent = Gold,
+                    foreground = foreground
+                ) { favoritesOnly = true }
             }
         }
         if (visibleRecords.isEmpty()) {
