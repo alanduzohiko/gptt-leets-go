@@ -1441,11 +1441,17 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }.padding(vertical = 11.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = translationKey == choice.id, onClick = {
+                        PremiumIconButton(
+                            icon = Icons.Outlined.CheckCircle,
+                            contentDescription = if (language == AppLanguage.EN) "Select translation" else if (language == AppLanguage.AR) "اختيار الترجمة" else "وەرگێڕان هەڵبژێرە",
+                            accent = Gold,
+                            size = 30.dp,
+                            selected = translationKey == choice.id
+                        ) {
                             translationKey = choice.id
                             prefs.edit().putString("quran_translation", choice.id).apply()
                             chooseTranslation = false
-                        })
+                        }
                         Spacer(Modifier.width(6.dp))
                         Text(label, color = foreground, fontSize = 13.sp)
                     }
@@ -1466,9 +1472,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         ) {
             Column(Modifier.fillMaxWidth().padding(17.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (readerSettingsSection != "overview") IconButton(onClick = { readerSettingsSection = "overview" }) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = tr(language, "back"), tint = Gold)
-                    }
+                    if (readerSettingsSection != "overview") PremiumIconButton(
+                        icon = Icons.Outlined.ArrowBack,
+                        contentDescription = tr(language, "back"),
+                        accent = Gold,
+                        size = 36.dp,
+                        rotationDegrees = if (language == AppLanguage.CKB) 0f else 0f
+                    ) { readerSettingsSection = "overview" }
                     Column(Modifier.weight(1f)) {
                         Text(
                             when (language) { AppLanguage.EN -> "Quran reader settings"; AppLanguage.AR -> "إعدادات قارئ القرآن"; AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوەی قورئان" },
@@ -1486,8 +1496,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             color = foreground.copy(alpha = 0.62f), fontSize = 11.sp
                         )
                     }
-                    TextButton(onClick = { showReaderSettings = false; readerSettingsSection = "overview" }) {
-                        Text("×", color = Gold, fontSize = 25.sp)
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = if (language == AppLanguage.EN) "Close reader settings" else if (language == AppLanguage.AR) "إغلاق إعدادات القارئ" else "ڕێکخستنەکانی خوێندنەوە دابخە",
+                        accent = Gold,
+                        size = 36.dp
+                    ) {
+                        showReaderSettings = false
+                        readerSettingsSection = "overview"
                     }
                 }
                 Spacer(Modifier.height(9.dp))
@@ -1630,7 +1646,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             Text(label, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             if (translationKey == choice.id) Text(if (language == AppLanguage.EN) "Selected" else if (language == AppLanguage.AR) "محددة" else "هەڵبژێردراوە", color = Gold, fontSize = 10.sp)
                                         }
-                                        RadioButton(selected = translationKey == choice.id, onClick = { translationKey = choice.id; prefs.edit().putString("quran_translation", choice.id).apply() })
+                                        PremiumIconButton(
+                                            icon = Icons.Outlined.CheckCircle,
+                                            contentDescription = if (language == AppLanguage.EN) "Select translation" else if (language == AppLanguage.AR) "اختيار الترجمة" else "وەرگێڕان هەڵبژێرە",
+                                            accent = Gold,
+                                            size = 31.dp,
+                                            selected = translationKey == choice.id
+                                        ) { translationKey = choice.id; prefs.edit().putString("quran_translation", choice.id).apply() }
                                     }
                                 }
                             }
@@ -1650,7 +1672,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             Text(label, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             if (selectedTafsirBook == book.id) Text(if (language == AppLanguage.EN) "Selected" else if (language == AppLanguage.AR) "محدد" else "هەڵبژێردراوە", color = Gold, fontSize = 10.sp)
                                         }
-                                        RadioButton(selected = selectedTafsirBook == book.id, onClick = { selectedTafsirBook = book.id; prefs.edit().putString("quran_tafsir_book", book.id).apply() })
+                                        PremiumIconButton(
+                                            icon = Icons.Outlined.CheckCircle,
+                                            contentDescription = if (language == AppLanguage.EN) "Select tafsir" else if (language == AppLanguage.AR) "اختيار التفسير" else "تەفسیر هەڵبژێرە",
+                                            accent = Gold,
+                                            size = 31.dp,
+                                            selected = selectedTafsirBook == book.id
+                                        ) { selectedTafsirBook = book.id; prefs.edit().putString("quran_tafsir_book", book.id).apply() }
                                     }
                                 }
                             }
@@ -1711,7 +1739,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
-                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
+                                        PremiumIconButton(
+                                            icon = Icons.Outlined.CheckCircle,
+                                            contentDescription = if (language == AppLanguage.EN) "Choose this reciter" else if (language == AppLanguage.AR) "اختيار هذا القارئ" else "ئەم قورئان‌خوێنە هەڵبژێرە",
+                                            accent = Gold,
+                                            size = 31.dp,
+                                            selected = preferredReaderReciterId == reciter.id
+                                        ) { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }
                                     }
                                 }
                             }
@@ -1726,7 +1760,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
-                                        RadioButton(selected = preferredReaderReciterId == reciter.id, onClick = { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() })
+                                        PremiumIconButton(
+                                            icon = Icons.Outlined.CheckCircle,
+                                            contentDescription = if (language == AppLanguage.EN) "Choose this reciter" else if (language == AppLanguage.AR) "اختيار هذا القارئ" else "ئەم قورئان‌خوێنە هەڵبژێرە",
+                                            accent = Gold,
+                                            size = 31.dp,
+                                            selected = preferredReaderReciterId == reciter.id
+                                        ) { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }
                                     }
                                 }
                             }
@@ -1820,13 +1860,22 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Spacer(Modifier.height(11.dp))
                 Divider(color = Gold.copy(alpha = 0.20f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { showReaderSettings = false; readerSettingsSection = "overview" }) {
-                        Text(if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو")
+                    PremiumChoicePill(
+                        label = if (language == AppLanguage.EN) "Done" else if (language == AppLanguage.AR) "تم" else "تەواو",
+                        selected = false,
+                        accent = Gold,
+                        foreground = foreground
+                    ) {
+                        showReaderSettings = false
+                        readerSettingsSection = "overview"
                     }
                     Spacer(Modifier.weight(1f))
-                    if (readerSettingsSection != "overview") OutlinedButton(onClick = { readerSettingsSection = "overview" }) {
-                        Text(if (language == AppLanguage.EN) "All settings" else if (language == AppLanguage.AR) "كل الإعدادات" else "هەموو ڕێکخستنەکان")
-                    }
+                    if (readerSettingsSection != "overview") PremiumChoicePill(
+                        label = if (language == AppLanguage.EN) "All settings" else if (language == AppLanguage.AR) "كل الإعدادات" else "هەموو ڕێکخستنەکان",
+                        selected = true,
+                        accent = Gold,
+                        foreground = foreground
+                    ) { readerSettingsSection = "overview" }
                 }
             }
         }
@@ -1857,7 +1906,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }, color = foreground.copy(alpha = 0.58f), fontSize = 11.sp
                         )
                     }
-                    TextButton(onClick = { readerSettingsSection = "overview"; showReaderSettings = true }) { Text("⚙", color = Gold, fontSize = 22.sp) }
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Settings,
+                        contentDescription = if (language == AppLanguage.EN) "Open Quran reader settings" else if (language == AppLanguage.AR) "فتح إعدادات القارئ" else "ڕێکخستنەکانی خوێندنەوە بکەرەوە",
+                        accent = Gold,
+                        size = 36.dp
+                    ) { readerSettingsSection = "overview"; showReaderSettings = true }
                 }
                 Spacer(Modifier.height(11.dp))
                 when {
