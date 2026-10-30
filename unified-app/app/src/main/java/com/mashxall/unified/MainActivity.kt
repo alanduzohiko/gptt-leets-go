@@ -440,7 +440,7 @@ fun MashxallApp(startScreen: String? = null) {
         CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection) {
             Surface(color = background, modifier = Modifier.fillMaxSize()) {
                 Scaffold(
-                    containerColor = background,
+                    containerColor = Color.Transparent,
                     contentWindowInsets = if (immersiveMushaf) WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) else WindowInsets.statusBars,
                     bottomBar = {
                         if (isRoot && !immersiveMushaf) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
@@ -489,6 +489,7 @@ fun MashxallApp(startScreen: String? = null) {
                             label = "Mashxall native screen transition"
                         ) { visibleScreen ->
                             Box(Modifier.fillMaxSize()) {
+                                PremiumAmbientBackdrop(Modifier.fillMaxSize(), accent = Gold, dark = dark)
                                 when (visibleScreen) {
                                 "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
@@ -764,7 +765,7 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                     label = "Mashxall navigation label tint"
                 )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1.12f else 0.91f,
+                    targetValue = if (selected) 1.20f else 0.90f,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                     label = "Mashxall navigation icon spring"
                 )
@@ -790,7 +791,7 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                         Icon(
                             icon, contentDescription = title,
                             tint = iconTint,
-                            modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+                            modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale; rotationZ = if (selected) 5f else 0f }
                         )
                     }
                     Spacer(Modifier.height(3.dp))
@@ -882,10 +883,12 @@ private fun MoreScreen(
                                 visible = true,
                                 modifier = Modifier.weight(1f),
                                 enter = fadeIn(animationSpec = tween(320, delayMillis = delayMillis)) +
-                                    slideInVertically(initialOffsetY = { it / 9 }, animationSpec = tween(320, delayMillis = delayMillis))
+                                    scaleIn(initialScale = 0.88f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
+                                    slideInVertically(initialOffsetY = { it / 5 }, animationSpec = tween(380, delayMillis = delayMillis))
                             ) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
+                                        .staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
                                         .animateContentSize()
                                         .premiumPress {
                                             onOpen(module.screen)
@@ -900,15 +903,7 @@ private fun MoreScreen(
                                             .padding(12.dp),
                                         verticalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Box(
-                                            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp))
-                                                .background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.30f), module.color.copy(alpha = 0.055f))))
-                                                .border(1.dp, module.color.copy(alpha = 0.34f), RoundedCornerShape(13.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Box(Modifier.size(31.dp).border(1.dp, module.color.copy(alpha = 0.20f), CircleShape))
-                                            Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(22.dp))
-                                        }
+                                        PremiumIconMedallion(icon = module.icon, tint = module.color, size = 42.dp)
                                         Column {
                                             Text(
                                                 tr(language, module.titleKey),
@@ -1074,15 +1069,11 @@ private fun HomePrayerCountdown(
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+            Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.055f), cardColor, cardColor)))
+                .padding(horizontal = 13.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(39.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.13f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(22.dp))
-            }
+            PremiumIconMedallion(icon = Icons.Outlined.Schedule, tint = Gold, size = 46.dp, pulse = true)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -1093,7 +1084,16 @@ private fun HomePrayerCountdown(
                     },
                     color = foreground.copy(alpha = 0.58f), fontSize = 10.sp
                 )
-                Text(nowText, color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                AnimatedContent(
+                    targetState = nowText,
+                    transitionSpec = {
+                        (fadeIn(tween(140)) + scaleIn(initialScale = 0.92f, animationSpec = tween(180))) togetherWith
+                            (fadeOut(tween(110)) + scaleOut(targetScale = 1.04f, animationSpec = tween(110)))
+                    },
+                    label = "Live prayer clock digit motion"
+                ) { clock ->
+                    Text(clock, color = foreground, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                }
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -1110,14 +1110,12 @@ private fun HomePrayerCountdown(
                     AnimatedContent(
                         targetState = countdown,
                         transitionSpec = {
-                            (fadeIn(animationSpec = tween(120)) +
-                                slideInVertically(
-                                    animationSpec = tween(160, easing = FastOutSlowInEasing)
-                                ) { height -> height / 3 }) togetherWith
-                                (fadeOut(animationSpec = tween(100)) +
-                                    slideOutVertically(
-                                        animationSpec = tween(100, easing = FastOutSlowInEasing)
-                                    ) { height -> -height / 3 })
+                            (fadeIn(animationSpec = tween(150)) +
+                                scaleIn(initialScale = 0.86f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
+                                slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) { height -> height / 2 }) togetherWith
+                                (fadeOut(animationSpec = tween(110)) +
+                                    scaleOut(targetScale = 1.08f, animationSpec = tween(110)) +
+                                    slideOutVertically(animationSpec = tween(110, easing = FastOutSlowInEasing)) { height -> -height / 3 })
                         },
                         label = "Next prayer countdown digit transition"
                     ) { animatedCountdown ->
@@ -1175,6 +1173,15 @@ private fun PremiumHomeHero(
     } else {
         1f to -8f
     }
+    val orbitRotation = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall hero orbit")
+        val rotation by transition.animateFloat(
+            initialValue = -18f, targetValue = 18f,
+            animationSpec = infiniteRepeatable(animation = tween(7200, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+            label = "Mashxall hero orbit rotation"
+        )
+        rotation
+    } else 0f
     val title = when (language) {
         AppLanguage.EN -> "A moment of calm"
         AppLanguage.AR -> "مساحة من السكينة"
@@ -1211,6 +1218,16 @@ private fun PremiumHomeHero(
                 .background(Brush.linearGradient(listOf(Color(0xFF0B3028), Color(0xFF145540), Color(0xFF0C382F))))
                 .border(1.dp, Gold.copy(alpha = 0.42f), RoundedCornerShape(29.dp))
         ) {
+            Box(Modifier.align(Alignment.TopEnd).offset(x = 30.dp, y = (-52).dp).size(188.dp)
+                .graphicsLayer { rotationZ = orbitRotation }.border(1.dp, Gold.copy(alpha = 0.18f), CircleShape))
+            Box(Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-31).dp).size(144.dp)
+                .graphicsLayer { rotationZ = -orbitRotation * 1.35f }.border(1.dp, Color.White.copy(alpha = 0.075f), CircleShape))
+            Box(Modifier.align(Alignment.TopEnd).offset(x = (-41).dp, y = 34.dp).size(7.dp)
+                .clip(CircleShape).background(PaleGold.copy(alpha = 0.85f)))
+            Box(Modifier.align(Alignment.TopEnd).offset(x = (-95).dp, y = 91.dp).size(4.dp)
+                .clip(CircleShape).background(Color.White.copy(alpha = 0.75f)))
+            Box(Modifier.align(Alignment.TopEnd).offset(x = (-17).dp, y = 139.dp).size(5.dp)
+                .clip(CircleShape).background(Color(0xFF8BD7B2).copy(alpha = 0.9f)))
             Box(
                 Modifier.align(Alignment.TopEnd).offset(x = 44.dp, y = (-66).dp).size(174.dp)
                     .clip(CircleShape)
@@ -1242,19 +1259,16 @@ private fun PremiumHomeHero(
                     }
                     Spacer(Modifier.width(9.dp))
                     Box(
-                        Modifier.size(78.dp).clip(CircleShape)
-                            .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color.White.copy(alpha = 0.025f))))
-                            .border(1.dp, Gold.copy(alpha = 0.38f), CircleShape)
+                        Modifier.size(82.dp).clip(CircleShape)
+                            .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.25f), Color.White.copy(alpha = 0.025f))))
+                            .border(1.dp, Gold.copy(alpha = 0.44f), CircleShape)
                             .graphicsLayer { scaleX = moonMotion.first; scaleY = moonMotion.first },
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(Modifier.size(62.dp).border(1.dp, Gold.copy(alpha = 0.25f), CircleShape))
-                        Icon(
-                            Icons.Outlined.NightsStay,
-                            contentDescription = null,
-                            tint = Gold,
-                            modifier = Modifier.size(42.dp).graphicsLayer { rotationZ = moonMotion.second }
-                        )
+                        Box(Modifier.size(70.dp).border(1.dp, Gold.copy(alpha = 0.30f), CircleShape))
+                        Box(Modifier.size(56.dp).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape))
+                        Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Gold,
+                            modifier = Modifier.size(44.dp).graphicsLayer { rotationZ = moonMotion.second })
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -1853,10 +1867,12 @@ private fun HomeScreen(
                         visible = true,
                         modifier = Modifier.weight(1f).padding(bottom = 10.dp),
                         enter = fadeIn(animationSpec = tween(durationMillis = 520, delayMillis = delayMillis)) +
-                            slideInVertically(initialOffsetY = { height -> height / 7 }, animationSpec = tween(durationMillis = 520, delayMillis = delayMillis))
+                            scaleIn(initialScale = 0.88f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
+                            slideInVertically(initialOffsetY = { height -> height / 5 }, animationSpec = tween(durationMillis = 520, delayMillis = delayMillis))
                     ) {
                         Card(
-                            modifier = Modifier.fillMaxWidth().animateContentSize().premiumPress { onOpen(module.screen) },
+                            modifier = Modifier.fillMaxWidth().staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
+                                .animateContentSize().premiumPress { onOpen(module.screen) },
                             shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = cardColor),
                             border = BorderStroke(0.8.dp, module.color.copy(alpha = 0.42f))
                         ) {
@@ -1864,9 +1880,7 @@ private fun HomeScreen(
                                 Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.10f), cardColor, cardColor))).padding(14.dp).height(104.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.30f), module.color.copy(alpha = 0.055f)))).border(1.dp, module.color.copy(alpha = 0.28f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                                    Icon(module.icon, contentDescription = null, tint = module.color, modifier = Modifier.size(23.dp))
-                                }
+                                PremiumIconMedallion(icon = module.icon, tint = module.color, size = 44.dp)
                                 Column {
                                     Text(tr(language, module.titleKey), color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                     Spacer(Modifier.height(2.dp))

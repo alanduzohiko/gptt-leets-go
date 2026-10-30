@@ -375,15 +375,7 @@ private fun QuranSurahWelcomeCard(
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(
-                    Modifier.size(66.dp).clip(CircleShape)
-                        .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color.White.copy(alpha = 0.025f))))
-                        .border(1.dp, Gold.copy(alpha = 0.37f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(Modifier.size(51.dp).border(1.dp, Gold.copy(alpha = 0.22f), CircleShape))
-                    Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = Gold, modifier = Modifier.size(34.dp))
-                }
+                PremiumIconMedallion(icon = Icons.Outlined.AutoStories, tint = Gold, size = 66.dp, pulse = true)
                 Box(
                     Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.075f))
                         .border(1.dp, Color.White.copy(alpha = 0.17f), CircleShape)
@@ -1085,6 +1077,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             itemsIndexed(verses, key = { _, it -> it.surah.toString() + ":" + it.number }) { index, verse ->
+                val verseIsFocused = selectedAyahForSheet == (verse.surah to verse.number)
+                val verseBorder by animateColorAsState(
+                    targetValue = if (verseIsFocused) Gold.copy(alpha = 0.72f) else Gold.copy(alpha = 0.18f),
+                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    label = "Quran focused verse outline"
+                )
                 var noteExpanded by rememberSaveable(verse.surah, verse.number) { mutableStateOf(false) }
                 var showRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
                 var loadingRelatedHadith by remember(verse.surah, verse.number) { mutableStateOf(false) }
@@ -1101,9 +1099,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.18f))
+                    border = BorderStroke(1.dp, verseBorder)
                 ) {
-                    Column(Modifier.padding(15.dp)) {
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(Brush.linearGradient(listOf(cardColor, Gold.copy(alpha = if (verseIsFocused) 0.055f else 0.018f), cardColor)))
+                            .padding(15.dp)
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF19725A)))).border(1.dp, Gold.copy(alpha = 0.34f), CircleShape), contentAlignment = Alignment.Center) {
                                 Text(verse.number.toString(), color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -3800,23 +3802,6 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
-internal data class TasbihTapResult(
-    val roundCount: Int,
-    val totalCount: Int,
-    val accepted: Boolean
-)
-
-/** Enforce the source-defined round target while preserving the all-time total. */
-internal fun nextTasbihTap(roundCount: Int, totalCount: Int, targetCount: Int): TasbihTapResult {
-    val safeRound = roundCount.coerceAtLeast(0)
-    val safeTotal = totalCount.coerceAtLeast(0)
-    if ((targetCount > 0 && safeRound >= targetCount) ||
-        safeRound == Int.MAX_VALUE ||
-        safeTotal == Int.MAX_VALUE
-    ) {
-        return TasbihTapResult(safeRound, safeTotal, accepted = false)
-    }
-    return TasbihTapResult(
         roundCount = (safeRound + 1).let { next -> if (targetCount > 0) next.coerceAtMost(targetCount) else next },
         totalCount = safeTotal + 1,
         accepted = true

@@ -24,26 +24,34 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 
 /**
@@ -64,7 +72,7 @@ internal fun Modifier.premiumClickable(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (enabled && pressed) 0.955f else 1f,
+        targetValue = if (enabled && pressed) 0.942f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow
@@ -76,6 +84,9 @@ internal fun Modifier.premiumClickable(
     this.graphicsLayer {
         scaleX = scale
         scaleY = scale
+        translationY = if (enabled && pressed) 1.7.dp.toPx() else 0f
+        rotationZ = if (enabled && pressed) 0.28f else 0f
+        shadowElevation = if (enabled && pressed) 2.5.dp.toPx() else 0f
     }.clickable(
         interactionSource = interactionSource,
         indication = LocalIndication.current,
@@ -167,7 +178,7 @@ internal fun PremiumLoadingSkeleton(
 
 /** Keep list entry motion brief, capped, and disabled with Android's motion scale. */
 internal fun staggerDelayMillis(index: Int): Long =
-    index.coerceIn(0, 8) * 28L
+    index.coerceIn(0, 8) * 40L
 
 internal fun systemAllowsDecorativeMotion(context: Context): Boolean {
     val animatorEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -211,7 +222,7 @@ internal fun Modifier.staggeredEntrance(
             progress.animateTo(
                 targetValue = 1f,
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 )
             )
@@ -221,8 +232,93 @@ internal fun Modifier.staggeredEntrance(
     return this.graphicsLayer {
         val fraction = progress.value.coerceIn(0f, 1f)
         alpha = fraction
-        translationY = (1f - fraction) * 18.dp.toPx()
-        scaleX = 0.965f + fraction * 0.035f
-        scaleY = 0.965f + fraction * 0.035f
+        translationY = (1f - fraction) * 24.dp.toPx()
+        scaleX = 0.94f + fraction * 0.06f
+        scaleY = 0.94f + fraction * 0.06f
+    }
+}
+
+
+/** Slow ambient light fields add depth without competing with reading content. */
+@Composable
+internal fun PremiumAmbientBackdrop(
+    modifier: Modifier = Modifier,
+    accent: Color,
+    dark: Boolean
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val drift = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall ambient drift")
+        val x by transition.animateFloat(
+            initialValue = -22f, targetValue = 24f,
+            animationSpec = infiniteRepeatable(animation = tween(8200, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "Mashxall ambient horizontal drift"
+        )
+        val y by transition.animateFloat(
+            initialValue = 16f, targetValue = -18f,
+            animationSpec = infiniteRepeatable(animation = tween(10400, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "Mashxall ambient vertical drift"
+        )
+        x to y
+    } else {
+        0f to 0f
+    }
+    val glowAlpha = if (dark) 0.13f else 0.07f
+    Box(modifier = modifier) {
+        Box(
+            Modifier.align(Alignment.TopEnd).offset(x = drift.first.dp + 42.dp, y = drift.second.dp - 62.dp)
+                .size(250.dp).clip(CircleShape)
+                .background(Brush.radialGradient(listOf(accent.copy(alpha = glowAlpha), Color.Transparent)))
+        )
+        Box(
+            Modifier.align(Alignment.BottomStart).offset(x = -82.dp - drift.first.dp, y = 72.dp - drift.second.dp)
+                .size(220.dp).clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF3DA987).copy(alpha = if (dark) 0.12f else 0.055f), Color.Transparent)))
+        )
+        Box(
+            Modifier.align(Alignment.CenterEnd).offset(x = 54.dp + drift.first.dp, y = -104.dp + drift.second.dp)
+                .size(104.dp).clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF6DA8C7).copy(alpha = if (dark) 0.055f else 0.035f), Color.Transparent)))
+        )
+    }
+}
+
+/** A reusable layered icon medallion. Continuous pulsing is opt-in and motion-aware. */
+@Composable
+internal fun PremiumIconMedallion(
+    icon: ImageVector,
+    tint: Color,
+    size: Dp = 48.dp,
+    pulse: Boolean = false,
+    contentDescription: String? = null
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val pulseScale = if (pulse && motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall medallion pulse")
+        val value by transition.animateFloat(
+            initialValue = 0.955f, targetValue = 1.045f,
+            animationSpec = infiniteRepeatable(animation = tween(1800, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+            label = "Mashxall medallion scale"
+        )
+        value
+    } else {
+        1f
+    }
+    Box(
+        Modifier.size(size).graphicsLayer { scaleX = pulseScale; scaleY = pulseScale }
+            .clip(CircleShape)
+            .background(Brush.radialGradient(listOf(tint.copy(alpha = 0.24f), tint.copy(alpha = 0.075f), tint.copy(alpha = 0.025f))))
+            .border(1.dp, tint.copy(alpha = 0.42f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(Modifier.size(size * 0.78f).border(1.dp, tint.copy(alpha = 0.22f), CircleShape))
+        Box(
+            Modifier.size(size * 0.56f).clip(CircleShape).background(tint.copy(alpha = 0.07f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.40f))
+        }
     }
 }

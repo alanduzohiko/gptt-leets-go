@@ -7,10 +7,10 @@ class PremiumMotionPolicyTest {
     @Test
     fun staggerDelayStartsImmediatelyAndCapsTheCascade() {
         assertEquals(0L, staggerDelayMillis(0))
-        assertEquals(28L, staggerDelayMillis(1))
-        assertEquals(112L, staggerDelayMillis(4))
-        assertEquals(224L, staggerDelayMillis(8))
-        assertEquals(224L, staggerDelayMillis(99))
+        assertEquals(40L, staggerDelayMillis(1))
+        assertEquals(160L, staggerDelayMillis(4))
+        assertEquals(320L, staggerDelayMillis(8))
+        assertEquals(320L, staggerDelayMillis(99))
     }
 
     @Test
