@@ -2305,7 +2305,18 @@ private fun MushafPageViewer(
             }
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
                 Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
-                Text(tr(language, "page") + " " + page + " / 604", color = PaleGold, fontSize = 10.sp)
+                AnimatedContent(
+                    targetState = page,
+                    transitionSpec = {
+                        (fadeIn(tween(130)) + scaleIn(initialScale = 0.92f, animationSpec = tween(170)) +
+                            slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(170))) togetherWith
+                            (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)) +
+                                slideOutVertically(targetOffsetY = { -it / 4 }, animationSpec = tween(100)))
+                    },
+                    label = "Mushaf toolbar page number transition"
+                ) { visiblePage ->
+                    Text(tr(language, "page") + " " + visiblePage + " / 604", color = PaleGold, fontSize = 10.sp)
+                }
             }
             val toolbarVerse = selectedVerse ?: pageVerses.firstOrNull()
             TextButton(
