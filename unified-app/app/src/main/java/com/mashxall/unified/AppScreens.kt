@@ -2651,16 +2651,24 @@ fun BookmarksScreen(
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(tr(language, "bookmarks"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(5.dp))
-        Text(
-            when (language) {
-                AppLanguage.EN -> "${bookmarks.size} saved verses • add personal notes to remember why each verse matters"
-                AppLanguage.AR -> "${bookmarks.size} آية محفوظة • أضف ملاحظاتك الشخصية لكل آية"
-                AppLanguage.CKB -> "${bookmarks.size} ئایەت پاشەکەوت کراوە • تێبینی تایبەتی بۆ هەر ئایەتێک زیاد بکە"
-            }, color = foreground.copy(alpha = 0.56f), fontSize = 11.sp, lineHeight = 17.sp
+        PremiumSectionHero(
+            title = tr(language, "bookmarks"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "Return to meaningful verses and keep a personal note beside each one."
+                AppLanguage.AR -> "عُد إلى آياتك المختارة ودوّن ملاحظاتك بجانبها."
+                AppLanguage.CKB -> "بگەڕێوە بۆ ئایەتە هەڵبژێردراوەکانت و تێبینی تایبەتی لە تەنیشتیان بنووسە."
+            },
+            icon = Icons.Outlined.BookmarkBorder,
+            foreground = foreground,
+            accent = Gold,
+            metric = when (language) {
+                AppLanguage.EN -> "${bookmarks.size} saved verses"
+                AppLanguage.AR -> "${bookmarks.size} آية محفوظة"
+                AppLanguage.CKB -> "${bookmarks.size} ئایەتی پاشەکەوتکراو"
+            },
+            eyebrow = when (language) { AppLanguage.EN -> "YOUR PERSONAL COLLECTION"; AppLanguage.AR -> "مجموعتك الشخصية"; AppLanguage.CKB -> "کۆمەڵەی تایبەتی تۆ" }
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         SearchBox(query, { query = it }, if (language == AppLanguage.EN) "Search surah, verse or note…" else if (language == AppLanguage.AR) "ابحث في السورة أو الآية أو الملاحظة…" else "لە سوورەت، ئایەت یان تێبینی بگەڕێ…")
         Spacer(Modifier.height(8.dp))
         if (visibleBookmarks.isEmpty()) {
@@ -2792,8 +2800,20 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp)) {
-            Text(tr(language, "tafsir"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
+            PremiumSectionHero(
+                title = tr(language, "tafsir"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Explore verse explanations and move through the Quran one ayah at a time."
+                    AppLanguage.AR -> "تدبّر تفسير الآيات وانتقل بين آيات القرآن بسهولة."
+                    AppLanguage.CKB -> "تەفسیری ئایەتەکان بخوێنەوە و بە ئاسانی لە نێوانیاندا بگوازەرەوە."
+                },
+                icon = Icons.Outlined.AutoStories,
+                foreground = foreground,
+                accent = Color(0xFFC3A6EA),
+                metric = "114 " + when (language) { AppLanguage.EN -> "surahs"; AppLanguage.AR -> "سورة"; AppLanguage.CKB -> "سوورەت" },
+                eyebrow = when (language) { AppLanguage.EN -> "QURAN REFLECTION"; AppLanguage.AR -> "تدبّر القرآن"; AppLanguage.CKB -> "تێڕامان لە قورئان" }
+            )
+            Spacer(Modifier.height(10.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(ContentRepository.tafsirBooks) { book ->
                     PremiumChoicePill(
@@ -7285,7 +7305,24 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(tr(language, "prayer"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        PremiumSectionHero(
+            title = tr(language, "prayer"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "Accurate local prayer times, location-aware timetable and Adhan controls."
+                AppLanguage.AR -> "مواقيت محلية دقيقة، وجدول مرتبط بموقعك، وتحكم بتنبيهات الأذان."
+                AppLanguage.CKB -> "کاتی وردی نوێژ، خشتەی پەیوەست بە شوێن و کۆنترۆڵی ئاگادارکردنەوەی بانگ."
+            },
+            icon = Icons.Outlined.Schedule,
+            foreground = foreground,
+            accent = Color(0xFF84B9EA),
+            metric = when (language) {
+                AppLanguage.EN -> if (locationMode == "gps" && gpsLatitude != null) "GPS LOCATION ACTIVE" else "SALAWATI SOURCE"
+                AppLanguage.AR -> if (locationMode == "gps" && gpsLatitude != null) "الموقع عبر GPS مفعّل" else "مصدر صلواتي"
+                AppLanguage.CKB -> if (locationMode == "gps" && gpsLatitude != null) "شوێنی GPS چالاکە" else "سەرچاوەی صەڵەواتی"
+            },
+            eyebrow = when (language) { AppLanguage.EN -> "YOUR DAILY PRAYER RHYTHM"; AppLanguage.AR -> "مواقيت عبادتك اليومية"; AppLanguage.CKB -> "کاتی نوێژی ڕۆژانەت" }
+        )
+        Spacer(Modifier.height(10.dp))
         Card(
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = RoundedCornerShape(18.dp),
@@ -8063,16 +8100,20 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(tr(language, "qibla"), color = foreground, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            when (language) {
-                AppLanguage.EN -> "A live compass pointing toward the Kaaba"
-                AppLanguage.AR -> "بوصلة حية تشير إلى الكعبة المشرفة"
-                AppLanguage.CKB -> "کۆمپاوی زیندوو بەرەو کەعبەی پیرۆز"
-            }, color = foreground.copy(alpha = 0.58f), fontSize = 12.sp, textAlign = TextAlign.Center
+        PremiumSectionHero(
+            title = tr(language, "qibla"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "A live, sensor-aware compass guiding you toward the Kaaba."
+                AppLanguage.AR -> "بوصلة مباشرة تستخدم مستشعر الهاتف لتوجيهك نحو الكعبة."
+                AppLanguage.CKB -> "کۆمپاوسێکی ڕاستەوخۆ بە سێنسەری مۆبایل ئاراستەت بەرەو کەعبە دەکات."
+            },
+            icon = Icons.Outlined.Explore,
+            foreground = foreground,
+            accent = Color(0xFF82CDB1),
+            metric = if (bearing != null) String.format(Locale.US, "%.1f°", bearing) else when (language) { AppLanguage.EN -> "WAITING FOR LOCATION"; AppLanguage.AR -> "بانتظار الموقع"; AppLanguage.CKB -> "چاوەڕێی شوێن" },
+            eyebrow = when (language) { AppLanguage.EN -> "SACRED DIRECTION"; AppLanguage.AR -> "الاتجاه المقدّس"; AppLanguage.CKB -> "ئاڕاستەی پیرۆز" }
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth().animateContentSize(),
@@ -8256,8 +8297,18 @@ fun WordAnalysisScreen(
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(tr(language, "word_by_word"), color = foreground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text(tr(language, "word_by_word_sub"), color = foreground.copy(alpha = 0.6f), fontSize = 12.sp)
+            PremiumSectionHero(
+                title = tr(language, "word_by_word"),
+                subtitle = when (language) {
+                    AppLanguage.EN -> "Study every word, root and grammatical role in its Quranic context."
+                    AppLanguage.AR -> "ادرس كل كلمة وجذرها ووظيفتها النحوية في سياق الآية."
+                    AppLanguage.CKB -> "هەر وشەیەک، ڕەگ و ڕۆڵی ڕێزمانی لە چوارچێوەی ئایەتدا بخوێنەوە."
+                },
+                icon = Icons.Outlined.Language,
+                foreground = foreground,
+                accent = Color(0xFFBCA8F2),
+                eyebrow = when (language) { AppLanguage.EN -> "QURAN WORD STUDY"; AppLanguage.AR -> "دراسة مفردات القرآن"; AppLanguage.CKB -> "خوێندنی وشەکانی قورئان" }
+            )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(surahText, { surahText = it.filter(Char::isDigit).take(3) }, modifier = Modifier.weight(1f), label = { Text(tr(language, "surah")) }, singleLine = true)
