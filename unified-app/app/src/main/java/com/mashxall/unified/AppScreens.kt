@@ -263,11 +263,12 @@ private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: 
 
 @Composable
 private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: String) {
-    OutlinedTextField(
-        value = value, onValueChange = onValue, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text(placeholder, fontSize = 13.sp) },
-        leadingIcon = { Icon(Icons.Outlined.Search, null, tint = Gold) },
-        shape = RoundedCornerShape(17.dp)
+    PremiumSearchField(
+        value = value,
+        onValueChange = onValue,
+        placeholder = placeholder,
+        accent = Gold,
+        foreground = MainText
     )
 }
 

@@ -5,6 +5,11 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -36,8 +41,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -455,5 +467,88 @@ private fun PremiumAnimatedWaveformBars(
                 Modifier.weight(1f).height(barHeight.dp).clip(CircleShape).background(accent)
             )
         }
+    }
+}
+
+
+/** Shared, focus-reactive search field with a gentle icon turn and animated clear action. */
+@Composable
+internal fun PremiumSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    accent: Color,
+    foreground: Color,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val outline by animateColorAsState(
+        targetValue = if (focused) accent.copy(alpha = 0.76f) else foreground.copy(alpha = 0.14f),
+        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        label = "Mashxall search focus outline"
+    )
+    val focusScale by animateFloatAsState(
+        targetValue = if (focused) 1.008f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mashxall search focus scale"
+    )
+    val iconRotation by animateFloatAsState(
+        targetValue = if (focused) -12f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "Mashxall search icon response"
+    )
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        modifier = modifier.fillMaxWidth()
+            .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+            .clip(shape)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        accent.copy(alpha = if (focused) 0.095f else 0.035f),
+                        foreground.copy(alpha = 0.018f)
+                    )
+                )
+            )
+            .border(1.dp, outline, shape)
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            interactionSource = interactionSource,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(placeholder, fontSize = 13.sp, color = foreground.copy(alpha = 0.48f)) },
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = iconRotation }
+                )
+            },
+            trailingIcon = {
+                AnimatedVisibility(
+                    visible = value.isNotEmpty(),
+                    enter = fadeIn(tween(120)) + scaleIn(initialScale = 0.65f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                    exit = fadeOut(tween(90)) + scaleOut(targetScale = 0.65f, animationSpec = tween(90))
+                ) {
+                    IconButton(onClick = { onValueChange("") }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = foreground.copy(alpha = 0.60f))
+                    }
+                }
+            },
+            shape = shape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                cursorColor = accent,
+                focusedLeadingIconColor = accent,
+                unfocusedLeadingIconColor = accent
+            )
+        )
     }
 }

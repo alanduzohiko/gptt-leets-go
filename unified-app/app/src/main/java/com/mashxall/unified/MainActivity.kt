@@ -864,14 +864,12 @@ private fun MoreScreen(
             }
         }
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
+        PremiumSearchField(
             value = query,
             onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(18.dp),
-            label = { Text(when (language) { AppLanguage.EN -> "Find a feature"; AppLanguage.AR -> "ابحث عن ميزة"; AppLanguage.CKB -> "بەدوای تایبەتمەندییەکدا بگەڕێ" }) },
-            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
+            placeholder = when (language) { AppLanguage.EN -> "Find a feature"; AppLanguage.AR -> "ابحث عن ميزة"; AppLanguage.CKB -> "بەدوای تایبەتمەندییەکدا بگەڕێ" },
+            accent = Gold,
+            foreground = foreground
         )
         Spacer(Modifier.height(10.dp))
         if (visibleModules.isEmpty()) {
