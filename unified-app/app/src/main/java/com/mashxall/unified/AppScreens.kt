@@ -2198,7 +2198,7 @@ private fun MushafPageViewer(
         label = "Mushaf finger-follow page drag"
     )
     val animatedSwipeRotationY by animateFloatAsState(
-        targetValue = (swipePreviewX / 160f).coerceIn(-1f, 1f) * 5.5f,
+        targetValue = (swipePreviewX / 160f).coerceIn(-1f, 1f) * 8.25f,
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mushaf finger-follow page tilt"
     )
@@ -2219,9 +2219,9 @@ private fun MushafPageViewer(
                 pageReveal.snapTo(1f)
             } else {
                 pageTurnPivot = if (entryDirection > 0f) 0.08f else 0.92f
-                pageTurnOffset.snapTo(entryDirection * 34f)
-                pageTurnRotation.snapTo(entryDirection * 7.5f)
-                pageReveal.snapTo(0.94f)
+                pageTurnOffset.snapTo(entryDirection * 48f)
+                pageTurnRotation.snapTo(entryDirection * 12f)
+                pageReveal.snapTo(0.92f)
                 val slideAnimation = launch {
                     pageTurnOffset.animateTo(0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
                 }
@@ -2575,9 +2575,9 @@ private fun MushafPageViewer(
                                 shadowElevation = (
                                     pageTurnRotation.value * pageTurnRotation.value +
                                         animatedSwipeRotationY * animatedSwipeRotationY
-                                    ) * 0.12f
-                                scaleX = 0.985f + pageReveal.value * 0.015f
-                                scaleY = 0.985f + pageReveal.value * 0.015f
+                                    ) * 0.18f
+                                scaleX = 0.97f + pageReveal.value * 0.03f
+                                scaleY = 0.97f + pageReveal.value * 0.03f
                             }
                         )
                         if (verseRects.isNotEmpty()) {
