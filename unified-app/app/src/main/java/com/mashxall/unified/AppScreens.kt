@@ -6330,6 +6330,11 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     var bitmap by remember(assetPath) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
+    val readingProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pageCount > 0) ((pageIndex + 1).toFloat() / pageCount.toFloat()).coerceIn(0f, 1f) else 0f,
+        animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing),
+        label = "PDF reading progress"
+    )
 
     LaunchedEffect(pageIndex, pageProgressKey) {
         preferences.edit().putInt(pageProgressKey, pageIndex.coerceAtLeast(0)).apply()
@@ -6392,12 +6397,38 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Text(assetPath.substringAfterLast('/'), color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0 && !loading) {
-                Text(tr(language, "previous"))
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
+                .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.11f), cardColor)))
+                .border(1.dp, Gold.copy(alpha = 0.17f), RoundedCornerShape(17.dp))
+                .padding(horizontal = 11.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PremiumIconMedallion(icon = Icons.Outlined.MenuBook, tint = Gold, size = 36.dp)
+            Spacer(Modifier.width(9.dp))
+            Column(Modifier.weight(1f)) {
+                Text(assetPath.substringAfterLast('/'), color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                Text(
+                    when (language) { AppLanguage.EN -> "CONTINUE READING"; AppLanguage.AR -> "متابعة القراءة"; AppLanguage.CKB -> "بەردەوام بە لە خوێندنەوە" },
+                    color = Gold.copy(alpha = 0.88f), fontSize = 8.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Bold
+                )
             }
+        }
+        Spacer(Modifier.height(7.dp))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(foreground.copy(alpha = 0.08f))) {
+            Box(Modifier.fillMaxWidth(readingProgress).fillMaxHeight().clip(CircleShape)
+                .background(Brush.horizontalGradient(listOf(Gold, Color(0xFF7BC6A7)))))
+        }
+        Spacer(Modifier.height(9.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            PremiumChoicePill(
+                modifier = Modifier.weight(1f),
+                label = tr(language, "previous"),
+                selected = false,
+                accent = Gold,
+                foreground = foreground,
+                leadingIcon = Icons.Outlined.ArrowBack
+            ) { pageIndex = (pageIndex - 1).coerceAtLeast(0) }
             AnimatedContent(
                 targetState = if (pageCount > 0) pageIndex + 1 else 0,
                 transitionSpec = {
@@ -6413,9 +6444,14 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            OutlinedButton(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(pageCount - 1) }, enabled = pageCount > 0 && pageIndex < pageCount - 1 && !loading) {
-                Text(tr(language, "next"))
-            }
+            PremiumChoicePill(
+                modifier = Modifier.weight(1f),
+                label = tr(language, "next"),
+                selected = false,
+                accent = Gold,
+                foreground = foreground,
+                leadingIcon = Icons.Outlined.ChevronRight
+            ) { pageIndex = (pageIndex + 1).coerceAtMost((pageCount - 1).coerceAtLeast(0)) }
         }
         Spacer(Modifier.height(8.dp))
         Box(
