@@ -2369,7 +2369,44 @@ private fun MushafPageViewer(
                 Icon(Icons.Outlined.ChevronRight, contentDescription = tr(language, "next"), tint = if (page < 604) Color.White else Color.Gray, modifier = Modifier.rotate(180f))
             }
         }
-        Spacer(Modifier.height(4.dp))
+        val pageProgress by animateFloatAsState(
+            targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
+            animationSpec = tween(380, easing = FastOutSlowInEasing),
+            label = "Mushaf total page progress"
+        )
+        Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "READING PROGRESS"
+                        AppLanguage.AR -> "تقدم القراءة"
+                        AppLanguage.CKB -> "پێشکەوتنی خوێندنەوە"
+                    },
+                    color = if (darkMode) PaleGold.copy(alpha = 0.72f) else DeepGreen.copy(alpha = 0.66f),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    String.format(Locale.US, "%.1f%%", pageProgress * 100f),
+                    color = if (darkMode) PaleGold else DeepGreen,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
+                    .background(if (darkMode) Color.White.copy(alpha = 0.10f) else DeepGreen.copy(alpha = 0.10f))
+            ) {
+                Box(
+                    Modifier.fillMaxWidth(pageProgress).fillMaxHeight().clip(CircleShape)
+                        .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), PaleGold, Gold)))
+                )
+            }
+        }
+        Spacer(Modifier.height(7.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
