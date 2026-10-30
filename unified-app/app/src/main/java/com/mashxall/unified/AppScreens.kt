@@ -9,6 +9,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -2184,6 +2185,7 @@ private fun MushafPageViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val pageReveal = remember { Animatable(1f) }
     val pageTurnOffset = remember { Animatable(0f) }
     val pageTurnRotation = remember { Animatable(0f) }
@@ -2191,12 +2193,12 @@ private fun MushafPageViewer(
     var swipePreviewX by remember(page) { mutableFloatStateOf(0f) }
     val animatedSwipePreviewX by animateFloatAsState(
         targetValue = swipePreviewX,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mushaf finger-follow page drag"
     )
     val animatedSwipeRotationY by animateFloatAsState(
         targetValue = (swipePreviewX / 160f).coerceIn(-1f, 1f) * 5.5f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mushaf finger-follow page tilt"
     )
     var lastAnimatedPage by remember { mutableIntStateOf(page) }
@@ -2210,19 +2212,25 @@ private fun MushafPageViewer(
                 page < previousPage -> -1f
                 else -> 0f
             }
-            pageTurnPivot = if (entryDirection > 0f) 0.08f else 0.92f
-            pageTurnOffset.snapTo(entryDirection * 34f)
-            pageTurnRotation.snapTo(entryDirection * 7.5f)
-            pageReveal.snapTo(0.94f)
-            val slideAnimation = launch {
-                pageTurnOffset.animateTo(0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
+            if (!motionAllowed || entryDirection == 0f) {
+                pageTurnOffset.snapTo(0f)
+                pageTurnRotation.snapTo(0f)
+                pageReveal.snapTo(1f)
+            } else {
+                pageTurnPivot = if (entryDirection > 0f) 0.08f else 0.92f
+                pageTurnOffset.snapTo(entryDirection * 34f)
+                pageTurnRotation.snapTo(entryDirection * 7.5f)
+                pageReveal.snapTo(0.94f)
+                val slideAnimation = launch {
+                    pageTurnOffset.animateTo(0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
+                }
+                val rotationAnimation = launch {
+                    pageTurnRotation.animateTo(0f, animationSpec = tween(260, easing = FastOutSlowInEasing))
+                }
+                pageReveal.animateTo(1f, animationSpec = tween(240, easing = FastOutSlowInEasing))
+                slideAnimation.join()
+                rotationAnimation.join()
             }
-            val rotationAnimation = launch {
-                pageTurnRotation.animateTo(0f, animationSpec = tween(260, easing = FastOutSlowInEasing))
-            }
-            pageReveal.animateTo(1f, animationSpec = tween(240, easing = FastOutSlowInEasing))
-            slideAnimation.join()
-            rotationAnimation.join()
         }
     }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
@@ -2401,7 +2409,7 @@ private fun MushafPageViewer(
         }
         val pageProgress by animateFloatAsState(
             targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
-            animationSpec = tween(380, easing = FastOutSlowInEasing),
+            animationSpec = if (motionAllowed) tween(380, easing = FastOutSlowInEasing) else snap(),
             label = "Mushaf total page progress"
         )
         Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp)) {

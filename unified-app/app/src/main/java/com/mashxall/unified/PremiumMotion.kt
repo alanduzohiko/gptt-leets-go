@@ -20,6 +20,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -90,14 +91,16 @@ internal fun Modifier.premiumClickable(
     hapticFeedback: Boolean = true,
     onClick: () -> Unit
 ): Modifier = composed {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (enabled && pressed) 0.942f else 1f,
-        animationSpec = spring(
+        animationSpec = if (motionAllowed) spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow
-        ),
+        ) else snap(),
         label = "Mashxall native press scale"
     )
     val haptics = LocalHapticFeedback.current
@@ -105,9 +108,9 @@ internal fun Modifier.premiumClickable(
     this.graphicsLayer {
         scaleX = scale
         scaleY = scale
-        translationY = if (enabled && pressed) 1.7.dp.toPx() else 0f
-        rotationZ = if (enabled && pressed) 0.28f else 0f
-        shadowElevation = if (enabled && pressed) 2.5.dp.toPx() else 0f
+        translationY = if (motionAllowed && enabled && pressed) 1.7.dp.toPx() else 0f
+        rotationZ = if (motionAllowed && enabled && pressed) 0.28f else 0f
+        shadowElevation = if (motionAllowed && enabled && pressed) 2.5.dp.toPx() else 0f
     }.clickable(
         interactionSource = interactionSource,
         indication = LocalIndication.current,
@@ -355,24 +358,26 @@ internal fun PremiumChoicePill(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
         targetValue = if (selected) accent.copy(alpha = 0.17f) else foreground.copy(alpha = 0.035f),
-        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall choice pill fill"
     )
     val outline by animateColorAsState(
         targetValue = if (selected) accent.copy(alpha = 0.58f) else foreground.copy(alpha = 0.11f),
-        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall choice pill outline"
     )
     val labelColor by animateColorAsState(
         targetValue = if (selected) foreground else foreground.copy(alpha = 0.68f),
-        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall choice pill label"
     )
     val scale by animateFloatAsState(
         targetValue = if (selected) 1f else 0.985f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall choice pill response"
     )
     Row(
@@ -481,21 +486,23 @@ internal fun PremiumSearchField(
     foreground: Color,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val outline by animateColorAsState(
         targetValue = if (focused) accent.copy(alpha = 0.76f) else foreground.copy(alpha = 0.14f),
-        animationSpec = tween(230, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall search focus outline"
     )
     val focusScale by animateFloatAsState(
         targetValue = if (focused) 1.008f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall search focus scale"
     )
     val iconRotation by animateFloatAsState(
         targetValue = if (focused) -12f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall search icon response"
     )
     val shape = RoundedCornerShape(18.dp)
