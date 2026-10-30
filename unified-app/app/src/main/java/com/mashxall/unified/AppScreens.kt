@@ -4956,45 +4956,62 @@ fun AudioScreen(
                                 )
                             }
                             when {
-                                downloadProgress != null -> CircularProgressIndicator(
-                                    modifier = Modifier.padding(horizontal = 8.dp).size(21.dp),
-                                    color = Gold, strokeWidth = 2.dp
-                                )
-                                localSaved -> IconButton(onClick = {
-                                    if (playing == playKey) {
-                                        AudioController.stop()
-                                        playing = ""
-                                    }
-                                    file.delete()
-                                    offlineAdhanRevision++
-                                    audioNotice = if (language == AppLanguage.EN) "Offline copy removed; the online recording is still available."
-                                        else if (language == AppLanguage.AR) "أزيلت النسخة المحفوظة؛ ما زال التسجيل متاحًا عبر الإنترنت."
-                                        else "وەشانی بەبێ ئینتەرنێت لابرا؛ تۆمارە ئۆنلاینەکە هێشتا بەردەستە."
-                                }) {
-                                    Icon(Icons.Outlined.CheckCircle, contentDescription = if (language == AppLanguage.EN) "Remove offline copy" else if (language == AppLanguage.AR) "حذف النسخة المحفوظة" else "لابردنی وەشانی پارێزراو", tint = Color(0xFF62C995), modifier = Modifier.size(24.dp))
+                                downloadProgress != null -> PremiumIconActionSurface(
+                                    contentDescription = if (language == AppLanguage.EN) "Downloading Adhan" else if (language == AppLanguage.AR) "جارٍ تنزيل الأذان" else "بانگ دادەگیرێت",
+                                    accent = Gold,
+                                    size = 40.dp,
+                                    enabled = false,
+                                    selected = true,
+                                    onClick = {}
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
                                 }
-                                else -> IconButton(onClick = {
-                                    downloadingAdhan = downloadingAdhan + (item.id to "downloading")
-                                    audioNotice = ""
-                                    scope.launch {
-                                        try {
-                                            downloadOnlineAdhan(context, item)
-                                            offlineAdhanRevision++
-                                            audioNotice = if (language == AppLanguage.EN) "Saved ${item.titleEnglish} for offline playback."
-                                                else if (language == AppLanguage.AR) "تم حفظ ${item.titleArabic} للتشغيل دون إنترنت."
-                                                else "تۆماری ${item.titleArabic} بۆ بەکارهێنانی بەبێ ئینتەرنێت پارێزرا."
-                                        } catch (error: Exception) {
-                                            audioNotice = when (language) {
-                                                AppLanguage.EN -> "Download failed. Check the connection and try again."
-                                                AppLanguage.AR -> "فشل التنزيل. تحقّق من الاتصال ثم حاول مجددًا."
-                                                AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
+                                localSaved -> PremiumIconActionSurface(
+                                    contentDescription = if (language == AppLanguage.EN) "Remove offline copy" else if (language == AppLanguage.AR) "حذف النسخة المحفوظة" else "لابردنی وەشانی پارێزراو",
+                                    accent = Color(0xFF62C995),
+                                    size = 40.dp,
+                                    selected = true,
+                                    onClick = {
+                                        if (playing == playKey) {
+                                            AudioController.stop()
+                                            playing = ""
+                                        }
+                                        file.delete()
+                                        offlineAdhanRevision++
+                                        audioNotice = if (language == AppLanguage.EN) "Offline copy removed; the online recording is still available."
+                                            else if (language == AppLanguage.AR) "أزيلت النسخة المحفوظة؛ ما زال التسجيل متاحًا عبر الإنترنت."
+                                            else "وەشانی بەبێ ئینتەرنێت لابرا؛ تۆمارە ئۆنلاینەکە هێشتا بەردەستە."
+                                    }
+                                ) {
+                                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF62C995), modifier = Modifier.size(23.dp))
+                                }
+                                else -> PremiumIconActionSurface(
+                                    contentDescription = if (language == AppLanguage.EN) "Download Adhan" else if (language == AppLanguage.AR) "تنزيل الأذان" else "داگرتنی بانگ",
+                                    accent = Gold,
+                                    size = 40.dp,
+                                    onClick = {
+                                        downloadingAdhan = downloadingAdhan + (item.id to "downloading")
+                                        audioNotice = ""
+                                        scope.launch {
+                                            try {
+                                                downloadOnlineAdhan(context, item)
+                                                offlineAdhanRevision++
+                                                audioNotice = if (language == AppLanguage.EN) "Saved ${item.titleEnglish} for offline playback."
+                                                    else if (language == AppLanguage.AR) "تم حفظ ${item.titleArabic} للتشغيل دون إنترنت."
+                                                    else "تۆماری ${item.titleArabic} بۆ بەکارهێنانی بەبێ ئینتەرنێت پارێزرا."
+                                            } catch (error: Exception) {
+                                                audioNotice = when (language) {
+                                                    AppLanguage.EN -> "Download failed. Check the connection and try again."
+                                                    AppLanguage.AR -> "فشل التنزيل. تحقّق من الاتصال ثم حاول مجددًا."
+                                                    AppLanguage.CKB -> "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
+                                                }
+                                            } finally {
+                                                downloadingAdhan = downloadingAdhan - item.id
                                             }
-                                        } finally {
-                                            downloadingAdhan = downloadingAdhan - item.id
                                         }
                                     }
-                                }) {
-                                    Icon(Icons.Outlined.Download, contentDescription = if (language == AppLanguage.EN) "Download adhan" else if (language == AppLanguage.AR) "تنزيل الأذان" else "داگرتنی بانگ", tint = Gold, modifier = Modifier.size(23.dp))
+                                ) {
+                                    Icon(Icons.Outlined.Download, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
                                 }
                             }
                         }
@@ -5293,8 +5310,12 @@ fun AudioScreen(
                                     }
                                 }
                             }
-                            IconButton(
+                            PremiumIconActionSurface(
+                                contentDescription = if (language == AppLanguage.EN) "Download full surah" else if (language == AppLanguage.AR) "تنزيل السورة كاملة" else "داگرتنی تەواوی سوورەت",
+                                accent = if (localComplete) Color(0xFF62C995) else Gold,
+                                size = 40.dp,
                                 enabled = downloadProgress == null && surahAyahCount > 0 && surahNumber <= reciter.surahTotal,
+                                selected = localComplete,
                                 onClick = {
                                     if (localComplete) {
                                         audioNotice = if (language == AppLanguage.EN) "This surah is already saved for offline playback."
@@ -5324,9 +5345,9 @@ fun AudioScreen(
                                 }
                             ) {
                                 when {
-                                    downloadProgress != null -> CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
-                                    localComplete -> Icon(Icons.Outlined.CheckCircle, contentDescription = if (language == AppLanguage.EN) "Saved offline" else if (language == AppLanguage.AR) "محفوظ دون اتصال" else "بەبێ ئینتەرنێت پارێزراوە", tint = Color(0xFF62C995), modifier = Modifier.size(24.dp))
-                                    else -> Icon(Icons.Outlined.Download, contentDescription = if (language == AppLanguage.EN) "Download full surah" else if (language == AppLanguage.AR) "تنزيل السورة كاملة" else "داگرتنی تەواوی سوورەت", tint = Gold, modifier = Modifier.size(24.dp))
+                                    downloadProgress != null -> CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
+                                    localComplete -> Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF62C995), modifier = Modifier.size(23.dp))
+                                    else -> Icon(Icons.Outlined.Download, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
                                 }
                             }
                         }
@@ -8267,14 +8288,20 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         }.padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = selectedAdhanAsset == sound.assetPath, onClick = {
+                        PremiumIconButton(
+                            icon = Icons.Outlined.CheckCircle,
+                            contentDescription = if (language == AppLanguage.EN) "Select this Adhan" else if (language == AppLanguage.AR) "اختيار هذا الأذان" else "ئەم بانگە هەڵبژێرە",
+                            accent = Gold,
+                            size = 29.dp,
+                            selected = selectedAdhanAsset == sound.assetPath
+                        ) {
                             AudioController.stop()
                             previewingAdhan = ""
                             selectedAdhanAsset = sound.assetPath
                             prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
                             adhanMessage = ""
                             chooseAdhanSound = false
-                        })
+                        }
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text(sound.title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
