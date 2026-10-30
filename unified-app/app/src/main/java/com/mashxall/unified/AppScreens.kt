@@ -1871,58 +1871,58 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         }
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
+                            PremiumChoicePill(
                                 modifier = Modifier.weight(1f),
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                    clipboard?.setPrimaryClip(ClipData.newPlainText("Quran verse", sheetVerse!!.arabic + "\n\n" + sheetVerse!!.translation))
-                                    Toast.makeText(context, if (language == AppLanguage.EN) "Verse copied" else if (language == AppLanguage.AR) "تم نسخ الآية" else "ئایەتەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
-                                }
+                                label = if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی",
+                                selected = false,
+                                accent = Gold,
+                                foreground = foreground,
+                                leadingIcon = Icons.Outlined.ContentCopy
                             ) {
-                                Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text(if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی", fontSize = 10.sp)
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                clipboard?.setPrimaryClip(ClipData.newPlainText("Quran verse", sheetVerse!!.arabic + "\n\n" + sheetVerse!!.translation))
+                                Toast.makeText(context, if (language == AppLanguage.EN) "Verse copied" else if (language == AppLanguage.AR) "تم نسخ الآية" else "ئایەتەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
                             }
-                            OutlinedButton(
+                            PremiumChoicePill(
                                 modifier = Modifier.weight(1f),
-                                onClick = {
-                                    onBookmark(target.first, target.second)
-                                    Toast.makeText(context, if (language == AppLanguage.EN) "Verse saved" else if (language == AppLanguage.AR) "تم حفظ الآية" else "ئایەت پاشەکەوت کرا", Toast.LENGTH_SHORT).show()
-                                }
+                                label = if (language == AppLanguage.EN) "Save" else if (language == AppLanguage.AR) "حفظ" else "پاشەکەوت",
+                                selected = false,
+                                accent = Gold,
+                                foreground = foreground,
+                                leadingIcon = Icons.Outlined.BookmarkBorder
                             ) {
-                                Icon(Icons.Outlined.BookmarkBorder, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text(if (language == AppLanguage.EN) "Save" else if (language == AppLanguage.AR) "حفظ" else "پاشەکەوت", fontSize = 10.sp)
+                                onBookmark(target.first, target.second)
+                                Toast.makeText(context, if (language == AppLanguage.EN) "Verse saved" else if (language == AppLanguage.AR) "تم حفظ الآية" else "ئایەت پاشەکەوت کرا", Toast.LENGTH_SHORT).show()
                             }
-                            OutlinedButton(
+                            PremiumChoicePill(
                                 modifier = Modifier.weight(1f),
-                                onClick = {
-                                    if (sheetAudioPlaying) {
-                                        AudioController.stop()
-                                        sheetAudioPlaying = false
+                                label = if (language == AppLanguage.EN) if (sheetAudioPlaying) "Pause" else "Play"
+                                    else if (language == AppLanguage.AR) if (sheetAudioPlaying) "إيقاف" else "تشغيل"
+                                    else if (sheetAudioPlaying) "وەستان" else "لێدان",
+                                selected = sheetAudioPlaying,
+                                accent = Gold,
+                                foreground = foreground,
+                                leadingIcon = if (sheetAudioPlaying) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle
+                            ) {
+                                if (sheetAudioPlaying) {
+                                    AudioController.stop()
+                                    sheetAudioPlaying = false
+                                } else {
+                                    val mode = ReaderPlaybackSettings.normalize(readerPlaybackMode)
+                                    val chosenId = resolveCompatibleReciterId(mode, preferredReaderReciterId, readerReciters)
+                                    val chosen = readerReciters.firstOrNull { it.id == chosenId }
+                                        ?: readerReciters.firstOrNull { it.audioType == 0 }
+                                        ?: readerReciters.firstOrNull()
+                                    val ayahCount = surahs.firstOrNull { it.number == target.first }?.ayahCount ?: 0
+                                    val startAyah = if (mode == "full") 1 else target.second
+                                    val sequence = if (chosen != null && ayahCount > 0) reciterAudioSequence(context, chosen, target.first, startAyah, ayahCount) else emptyList()
+                                    if (sequence.isEmpty()) {
+                                        Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
                                     } else {
-                                        val mode = ReaderPlaybackSettings.normalize(readerPlaybackMode)
-                                        val chosenId = resolveCompatibleReciterId(mode, preferredReaderReciterId, readerReciters)
-                                        val chosen = readerReciters.firstOrNull { it.id == chosenId }
-                                            ?: readerReciters.firstOrNull { it.audioType == 0 }
-                                            ?: readerReciters.firstOrNull()
-                                        val ayahCount = surahs.firstOrNull { it.number == target.first }?.ayahCount ?: 0
-                                        val startAyah = if (mode == "full") 1 else target.second
-                                        val sequence = if (chosen != null && ayahCount > 0) {
-                                            reciterAudioSequence(context, chosen, target.first, startAyah, ayahCount)
-                                        } else emptyList()
-                                        if (sequence.isEmpty()) {
-                                            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            sheetAudioPlaying = true
-                                            AudioController.playSequence(context, sequence) { isPlaying -> sheetAudioPlaying = isPlaying }
-                                        }
+                                        sheetAudioPlaying = true
+                                        AudioController.playSequence(context, sequence) { isPlaying -> sheetAudioPlaying = isPlaying }
                                     }
                                 }
-                            ) {
-                                Icon(if (sheetAudioPlaying) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text(if (language == AppLanguage.EN) "Play" else if (language == AppLanguage.AR) "تشغيل" else "لێدان", fontSize = 10.sp)
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -3374,23 +3374,32 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
                 Spacer(Modifier.height(15.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
-                        val nextSaved = if (favoriteHadithIds.contains(hadith.id)) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
+                    val hadithSaved = favoriteHadithIds.contains(hadith.id)
+                    PremiumChoicePill(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) if (hadithSaved) "Saved" else "Save"
+                            else if (language == AppLanguage.AR) if (hadithSaved) "محفوظ" else "حفظ"
+                            else if (hadithSaved) "پاشەکەوتکراو" else "پاشەکەوت",
+                        selected = hadithSaved,
+                        accent = Gold,
+                        foreground = foreground,
+                        leadingIcon = Icons.Outlined.BookmarkBorder
+                    ) {
+                        val nextSaved = if (hadithSaved) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
                         favoriteHadithIds = nextSaved
                         favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
-                    }) {
-                        Text(if (favoriteHadithIds.contains(hadith.id)) "★" else "☆", color = Gold)
-                        Spacer(Modifier.width(5.dp))
-                        Text(if (language == AppLanguage.EN) "Save" else if (language == AppLanguage.AR) "حفظ" else "پاشەکەوت", fontSize = 11.sp)
                     }
-                    OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                    PremiumChoicePill(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی",
+                        selected = false,
+                        accent = Gold,
+                        foreground = foreground,
+                        leadingIcon = Icons.Outlined.ContentCopy
+                    ) {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", collection + "\n" + chapter + "\n\n" + cleanHadithDisplayText(hadith.arabic) + "\n\n" + cleanHadithDisplayText(hadith.sorani) + "\n\n" + cleanHadithDisplayText(hadith.english) + "\n" + numberInBook))
                         Toast.makeText(context, if (language == AppLanguage.EN) "Hadith copied" else if (language == AppLanguage.AR) "تم نسخ الحديث" else "فەرموودەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
-                    }) {
-                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text(if (language == AppLanguage.EN) "Copy" else if (language == AppLanguage.AR) "نسخ" else "کۆپی", fontSize = 11.sp)
                     }
                 }
                 Spacer(Modifier.height(24.dp))
@@ -3782,21 +3791,21 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                OutlinedButton(
+                PremiumChoicePill(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        val id = item.id.toString()
-                        favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
-                        favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
-                    }
+                    label = when (language) {
+                        AppLanguage.EN -> if (isFavorite) "Remove from favourites" else "Add to favourites"
+                        AppLanguage.AR -> if (isFavorite) "إزالة من المفضلة" else "أضف إلى المفضلة"
+                        AppLanguage.CKB -> if (isFavorite) "لە دڵخوازەکان بیسڕەوە" else "بیخە ناو دڵخوازەکان"
+                    },
+                    selected = isFavorite,
+                    accent = Gold,
+                    foreground = foreground,
+                    leadingIcon = Icons.Outlined.BookmarkBorder
                 ) {
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> if (isFavorite) "★ Remove from favourites" else "☆ Add to favourites"
-                            AppLanguage.AR -> if (isFavorite) "★ إزالة من المفضلة" else "☆ أضف إلى المفضلة"
-                            AppLanguage.CKB -> if (isFavorite) "★ لە دڵخوازەکان بیسڕەوە" else "☆ بیخە ناو دڵخوازەکان"
-                        }, color = if (isFavorite) Gold else foreground
-                    )
+                    val id = item.id.toString()
+                    favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
+                    favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
                 }
                 Spacer(Modifier.height(24.dp))
             }

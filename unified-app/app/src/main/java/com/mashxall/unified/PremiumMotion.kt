@@ -357,6 +357,7 @@ internal fun PremiumChoicePill(
     accent: Color,
     foreground: Color,
     modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -391,6 +392,15 @@ internal fun PremiumChoicePill(
             .padding(horizontal = 11.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (leadingIcon != null) {
+            Icon(
+                leadingIcon,
+                contentDescription = null,
+                tint = if (selected) accent else foreground.copy(alpha = 0.68f),
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+        }
         Text(label, color = labelColor, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
         Spacer(Modifier.width(7.dp))
         Box(
