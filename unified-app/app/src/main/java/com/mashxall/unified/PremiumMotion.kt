@@ -379,3 +379,74 @@ internal fun PremiumChoicePill(
         )
     }
 }
+
+
+/** A live five-bar audio meter. Its animation exists only while a track is playing. */
+@Composable
+internal fun PremiumAudioWaveform(
+    active: Boolean,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    if (active && motionAllowed) {
+        PremiumAnimatedWaveformBars(accent = accent, modifier = modifier)
+    } else {
+        Row(
+            modifier = modifier.width(34.dp).height(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf(7, 12, 17, 10, 6).forEachIndexed { index, barHeight ->
+                Box(
+                    Modifier.weight(1f).height(barHeight.dp).clip(CircleShape).background(accent.copy(alpha = if (active) 0.84f else 0.42f))
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PremiumAnimatedWaveformBars(
+    accent: Color,
+    modifier: Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "Mashxall active audio waveform")
+    val h1 by transition.animateFloat(
+        initialValue = 6f, targetValue = 18f,
+        animationSpec = infiniteRepeatable(animation = tween(390, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        label = "Audio wave bar one"
+    )
+    val h2 by transition.animateFloat(
+        initialValue = 15f, targetValue = 7f,
+        animationSpec = infiniteRepeatable(animation = tween(510, easing = FastOutSlowInEasing, delayMillis = 40), repeatMode = RepeatMode.Reverse),
+        label = "Audio wave bar two"
+    )
+    val h3 by transition.animateFloat(
+        initialValue = 8f, targetValue = 20f,
+        animationSpec = infiniteRepeatable(animation = tween(460, easing = FastOutSlowInEasing, delayMillis = 90), repeatMode = RepeatMode.Reverse),
+        label = "Audio wave bar three"
+    )
+    val h4 by transition.animateFloat(
+        initialValue = 18f, targetValue = 6f,
+        animationSpec = infiniteRepeatable(animation = tween(540, easing = FastOutSlowInEasing, delayMillis = 130), repeatMode = RepeatMode.Reverse),
+        label = "Audio wave bar four"
+    )
+    val h5 by transition.animateFloat(
+        initialValue = 7f, targetValue = 15f,
+        animationSpec = infiniteRepeatable(animation = tween(430, easing = FastOutSlowInEasing, delayMillis = 180), repeatMode = RepeatMode.Reverse),
+        label = "Audio wave bar five"
+    )
+    Row(
+        modifier = modifier.width(34.dp).height(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        listOf(h1, h2, h3, h4, h5).forEach { barHeight ->
+            Box(
+                Modifier.weight(1f).height(barHeight.dp).clip(CircleShape).background(accent)
+            )
+        }
+    }
+}

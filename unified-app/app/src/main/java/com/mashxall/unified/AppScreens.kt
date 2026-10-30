@@ -4803,7 +4803,10 @@ fun AudioScreen(
                                 Text(item.title, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                 Text(item.group, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp)
                             }
-                            Icon(Icons.Outlined.VolumeUp, null, tint = foreground.copy(alpha = 0.5f))
+                            PremiumAudioWaveform(
+                                active = trackIsPlaying,
+                                accent = if (trackIsPlaying) Gold else foreground.copy(alpha = 0.52f)
+                            )
                         }
                     }
                 }
