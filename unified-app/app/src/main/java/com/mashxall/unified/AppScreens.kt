@@ -94,6 +94,7 @@ import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.MenuBook
