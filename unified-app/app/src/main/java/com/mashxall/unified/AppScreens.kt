@@ -2832,49 +2832,45 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                FilterChip(
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "Narrations" else if (language == AppLanguage.AR) "الأحاديث" else "فەرموودە",
                     selected = selectedMode == 0,
-                    onClick = { selectedMode = 0 },
-                    label = { Text(if (language == AppLanguage.EN) "Narrations" else if (language == AppLanguage.AR) "الأحاديث" else "فەرموودە", fontSize = 11.sp) }
-                )
-                FilterChip(
+                    accent = Gold,
+                    foreground = foreground
+                ) { selectedMode = 0 }
+                PremiumChoicePill(
+                    label = if (language == AppLanguage.EN) "Articles (11)" else if (language == AppLanguage.AR) "المقالات (11)" else "وتارەکان (11)",
                     selected = selectedMode == 1,
-                    onClick = { selectedMode = 1 },
-                    label = { Text(if (language == AppLanguage.EN) "Articles (11)" else if (language == AppLanguage.AR) "المقالات (11)" else "وتارەکان (11)", fontSize = 11.sp) }
-                )
+                    accent = Gold,
+                    foreground = foreground
+                ) { selectedMode = 1 }
             }
             Spacer(Modifier.height(8.dp))
             SearchBox(query, { query = it }, tr(language, "search_hadith"))
             if (selectedMode == 0) LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 item(key = "saved-hadith-filter") {
-                    FilterChip(
+                    PremiumChoicePill(
+                        label = when (language) {
+                            AppLanguage.EN -> "Saved (${favoriteHadithIds.size})"
+                            AppLanguage.AR -> "المحفوظات (${favoriteHadithIds.size})"
+                            AppLanguage.CKB -> "پاشەکەوتکراوەکان (${favoriteHadithIds.size})"
+                        },
                         selected = savedOnly,
-                        onClick = { savedOnly = !savedOnly },
-                        label = {
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Saved (${favoriteHadithIds.size})"
-                                    AppLanguage.AR -> "المحفوظات (${favoriteHadithIds.size})"
-                                    AppLanguage.CKB -> "پاشەکەوتکراوەکان (${favoriteHadithIds.size})"
-                                }, fontSize = 10.sp
-                            )
-                        }
-                    )
+                        accent = Gold,
+                        foreground = foreground
+                    ) { savedOnly = !savedOnly }
                 }
                 item(key = "all-hadith-collections") {
-                    FilterChip(
+                    PremiumChoicePill(
+                        label = when (language) {
+                            AppLanguage.EN -> "All books"
+                            AppLanguage.AR -> "كل الكتب"
+                            AppLanguage.CKB -> "هەموو کتێبەکان"
+                        },
                         selected = selectedCollectionId == 0,
-                        onClick = { selectedCollectionId = 0 },
-                        label = {
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "All books"
-                                    AppLanguage.AR -> "كل الكتب"
-                                    AppLanguage.CKB -> "هەموو کتێبەکان"
-                                }, fontSize = 10.sp
-                            )
-                        }
-                    )
+                        accent = Gold,
+                        foreground = foreground
+                    ) { selectedCollectionId = 0 }
                 }
                 items(collections, key = { it.id }) { collection ->
                     val label = when (language) {
@@ -2882,11 +2878,12 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         AppLanguage.AR -> collection.nameArabic.ifBlank { collection.name }
                         AppLanguage.CKB -> collection.name.ifBlank { collection.nameArabic }
                     }
-                    FilterChip(
+                    PremiumChoicePill(
+                        label = "$label · ${collection.hadithCount}",
                         selected = selectedCollectionId == collection.id,
-                        onClick = { selectedCollectionId = collection.id },
-                        label = { Text("$label · ${collection.hadithCount}", fontSize = 10.sp, maxLines = 1) }
-                    )
+                        accent = Gold,
+                        foreground = foreground
+                    ) { selectedCollectionId = collection.id }
                 }
             }
         }
@@ -3301,22 +3298,19 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(listOf(0, 1, 2, 3)) { index ->
-                    FilterChip(
-                        selected = selectedTab == index,
-                        onClick = {
-                            selectedTab = index
-                            selectedCategory = 0
+                    PremiumChoicePill(
+                        label = when (language) {
+                            AppLanguage.CKB -> listOf("بەشەکان", "بەیانی", "ئێواران", "دڵخوازەکان")[index]
+                            AppLanguage.AR -> listOf("الأقسام", "الصباح", "المساء", "المفضلة")[index]
+                            AppLanguage.EN -> listOf("Categories", "Morning", "Evening", "Favourites")[index]
                         },
-                        label = {
-                            Text(
-                                when (language) {
-                                    AppLanguage.CKB -> listOf("بەشەکان", "بەیانی", "ئێواران", "دڵخوازەکان")[index]
-                                    AppLanguage.AR -> listOf("الأقسام", "الصباح", "المساء", "المفضلة")[index]
-                                    AppLanguage.EN -> listOf("Categories", "Morning", "Evening", "Favourites")[index]
-                                }, fontSize = 11.sp
-                            )
-                        }
-                    )
+                        selected = selectedTab == index,
+                        accent = Gold,
+                        foreground = foreground
+                    ) {
+                        selectedTab = index
+                        selectedCategory = 0
+                    }
                 }
             }
         }
@@ -3402,11 +3396,29 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     if (categoryLabel.isNotBlank()) Text(categoryLabel, color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
                                     Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp)
                                 }
-                                TextButton(onClick = {
-                                    val id = item.id.toString()
-                                    favoriteIds = if (favoriteIds.contains(id)) favoriteIds - id else favoriteIds + id
-                                    favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
-                                }) { Text(if (favoriteIds.contains(item.id.toString())) "★" else "☆", color = Gold, fontSize = 22.sp) }
+                                val isFavorite = favoriteIds.contains(item.id.toString())
+                                Box(
+                                    Modifier.size(36.dp).clip(CircleShape)
+                                        .background(Gold.copy(alpha = if (isFavorite) 0.18f else 0.055f))
+                                        .border(1.dp, Gold.copy(alpha = if (isFavorite) 0.48f else 0.18f), CircleShape)
+                                        .premiumClickable(hapticFeedback = false) {
+                                            val id = item.id.toString()
+                                            favoriteIds = if (isFavorite) favoriteIds - id else favoriteIds + id
+                                            favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AnimatedContent(
+                                        targetState = isFavorite,
+                                        transitionSpec = {
+                                            (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
+                                                (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        },
+                                        label = "Azkar favourite star pulse"
+                                    ) { saved ->
+                                        Text(if (saved) "★" else "☆", color = Gold, fontSize = 22.sp)
+                                    }
+                                }
                             }
                             Spacer(Modifier.height(7.dp))
                             Text(
@@ -3699,12 +3711,27 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     Text(description, color = foreground, fontSize = 12.sp, lineHeight = 18.sp)
                                 }
                             }
-                            IconButton(onClick = {
-                                val key = name.number.toString()
-                                favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
-                                favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
-                            }) {
-                                Text(if (favorite) "★" else "☆", color = Gold, fontSize = 23.sp)
+                            Box(
+                                Modifier.size(38.dp).clip(CircleShape)
+                                    .background(Gold.copy(alpha = if (favorite) 0.18f else 0.045f))
+                                    .border(1.dp, Gold.copy(alpha = if (favorite) 0.48f else 0.17f), CircleShape)
+                                    .premiumClickable(hapticFeedback = false) {
+                                        val key = name.number.toString()
+                                        favoriteIds = if (favorite) favoriteIds - key else favoriteIds + key
+                                        favoritePrefs.edit().putStringSet("favorite_ids", favoriteIds).apply()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AnimatedContent(
+                                    targetState = favorite,
+                                    transitionSpec = {
+                                        (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
+                                            (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                    },
+                                    label = "Divine name favorite star pulse"
+                                ) { saved ->
+                                    Text(if (saved) "★" else "☆", color = Gold, fontSize = 23.sp)
+                                }
                             }
                             Icon(
                                 Icons.Outlined.ChevronRight,
@@ -3789,6 +3816,23 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+internal data class TasbihTapResult(
+    val roundCount: Int,
+    val totalCount: Int,
+    val accepted: Boolean
+)
+
+/** Enforce source-defined round target while preserving the all-time total. */
+internal fun nextTasbihTap(roundCount: Int, totalCount: Int, targetCount: Int): TasbihTapResult {
+    val safeRound = roundCount.coerceAtLeast(0)
+    val safeTotal = totalCount.coerceAtLeast(0)
+    if ((targetCount > 0 && safeRound >= targetCount) ||
+        safeRound == Int.MAX_VALUE ||
+        safeTotal == Int.MAX_VALUE
+    ) {
+        return TasbihTapResult(safeRound, safeTotal, accepted = false)
+    }
+    return TasbihTapResult(
         roundCount = (safeRound + 1).let { next -> if (targetCount > 0) next.coerceAtMost(targetCount) else next },
         totalCount = safeTotal + 1,
         accepted = true
@@ -3838,11 +3882,15 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         if (presets.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
                 items(presets, key = { it.id }) { preset ->
-                    FilterChip(
+                    PremiumChoicePill(
+                        label = preset.zikr.replace("\n", " ").take(18),
                         selected = selectedId == preset.id,
-                        onClick = { selectedId = preset.id; count = prefs.getInt("tasbih_count_${preset.id}", 0) },
-                        label = { Text(preset.zikr.replace("\n", " ").take(18), fontSize = 11.sp, maxLines = 1) }
-                    )
+                        accent = Gold,
+                        foreground = foreground
+                    ) {
+                        selectedId = preset.id
+                        count = prefs.getInt("tasbih_count_${preset.id}", 0)
+                    }
                 }
             }
         }
@@ -4712,40 +4760,32 @@ fun AudioScreen(
                 color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                FilterChip(
+                PremiumChoicePill(
+                    modifier = Modifier.weight(1f),
+                    label = if (language == AppLanguage.EN) "Full surah" else if (language == AppLanguage.AR) "السورة كاملة" else "سوورەتی تەواو",
                     selected = playbackMode == "full",
-                    onClick = {
-                        ReaderPlaybackSettings.mode = "full"
-                        prefs.edit().putString("reciter_playback_mode", "full").apply()
-                        AudioController.stop()
-                        playing = ""
-                        autoPlayKey = ""
-                    },
+                    accent = Gold,
+                    foreground = foreground
+                ) {
+                    ReaderPlaybackSettings.mode = "full"
+                    prefs.edit().putString("reciter_playback_mode", "full").apply()
+                    AudioController.stop()
+                    playing = ""
+                    autoPlayKey = ""
+                }
+                PremiumChoicePill(
                     modifier = Modifier.weight(1f),
-                    label = {
-                        Text(
-                            if (language == AppLanguage.EN) "Full surah" else if (language == AppLanguage.AR) "السورة كاملة" else "سوورەتی تەواو",
-                            fontSize = 11.sp
-                        )
-                    }
-                )
-                FilterChip(
+                    label = if (language == AppLanguage.EN) "From selected ayah" else if (language == AppLanguage.AR) "من الآية المحددة" else "لە ئایەتی هەڵبژێردراوەوە",
                     selected = playbackMode == "verse",
-                    onClick = {
-                        ReaderPlaybackSettings.mode = "verse"
-                        prefs.edit().putString("reciter_playback_mode", "verse").apply()
-                        AudioController.stop()
-                        playing = ""
-                        autoPlayKey = ""
-                    },
-                    modifier = Modifier.weight(1f),
-                    label = {
-                        Text(
-                            if (language == AppLanguage.EN) "From selected ayah" else if (language == AppLanguage.AR) "من الآية المحددة" else "لە ئایەتی هەڵبژێردراوەوە",
-                            fontSize = 11.sp
-                        )
-                    }
-                )
+                    accent = Gold,
+                    foreground = foreground
+                ) {
+                    ReaderPlaybackSettings.mode = "verse"
+                    prefs.edit().putString("reciter_playback_mode", "verse").apply()
+                    AudioController.stop()
+                    playing = ""
+                    autoPlayKey = ""
+                }
             }
             Text(
                 when {
