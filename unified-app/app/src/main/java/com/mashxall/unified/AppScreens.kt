@@ -2718,17 +2718,25 @@ fun BookmarksScreen(
                                     Text(tr(language, "surah") + " " + saved.first, color = foreground, fontWeight = FontWeight.SemiBold)
                                     Text(tr(language, "ayah") + " " + saved.second, color = foreground.copy(alpha = 0.55f), fontSize = 12.sp)
                                 }
-                                TextButton(onClick = {
-                                    editorKey = key
-                                    editorText = notes[key].orEmpty()
-                                }) {
-                                    Text(if (notes[key].isNullOrBlank()) {
+                                PremiumChoicePill(
+                                    label = if (notes[key].isNullOrBlank()) {
                                         if (language == AppLanguage.EN) "Note +" else if (language == AppLanguage.AR) "ملاحظة +" else "تێبینی +"
                                     } else {
                                         if (language == AppLanguage.EN) "Edit note" else if (language == AppLanguage.AR) "تعديل" else "دەستکاری"
-                                    }, color = Gold, fontSize = 10.sp)
+                                    },
+                                    selected = !notes[key].isNullOrBlank(),
+                                    accent = Gold,
+                                    foreground = foreground
+                                ) {
+                                    editorKey = key
+                                    editorText = notes[key].orEmpty()
                                 }
-                                TextButton(onClick = {
+                                PremiumIconButton(
+                                    icon = Icons.Outlined.Close,
+                                    contentDescription = if (language == AppLanguage.EN) "Remove bookmark" else if (language == AppLanguage.AR) "إزالة العلامة" else "نیشانەکە بسڕەوە",
+                                    accent = Color(0xFFE58A82),
+                                    size = 32.dp
+                                ) {
                                     val remaining = bookmarks.filterNot { it == saved }
                                     bookmarks = remaining
                                     val nextNotes = notes - key
@@ -2738,15 +2746,19 @@ fun BookmarksScreen(
                                         .putStringSet("bookmarks", remaining.map { it.first.toString() + ":" + it.second.toString() }.toSet())
                                         .putString("bookmark_notes", json.toString())
                                         .apply()
-                                }) { Text("×", color = Gold, fontSize = 20.sp) }
+                                }
                             }
                             notes[key]?.takeIf { it.isNotBlank() }?.let { note ->
                                 Spacer(Modifier.height(5.dp))
                                 Text(note, color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 18.sp, maxLines = 3)
                             }
-                            TextButton(onClick = { onOpen(saved.first, saved.second) }) {
-                                Text(if (language == AppLanguage.EN) "Open at this verse →" else if (language == AppLanguage.AR) "فتح عند هذه الآية ←" else "لەسەر ئەم ئایەتە بکەرەوە ←", fontSize = 10.sp)
-                            }
+                            PremiumActionButton(
+                                label = if (language == AppLanguage.EN) "Open at this verse" else if (language == AppLanguage.AR) "فتح عند هذه الآية" else "لەسەر ئەم ئایەتە بکەرەوە",
+                                icon = Icons.Outlined.MenuBook,
+                                accent = Gold,
+                                foreground = foreground,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { onOpen(saved.first, saved.second) }
                         }
                     }
                 }
@@ -3187,27 +3199,17 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
                                 )
                             }
-                            Box(
-                                Modifier.size(37.dp).clip(CircleShape)
-                                    .background(hadithFavoriteFill)
-                                    .border(1.dp, hadithFavoriteOutline, CircleShape)
-                                    .premiumClickable(hapticFeedback = true) {
-                                        val nextSaved = if (hadithIsFavorite) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
-                                        favoriteHadithIds = nextSaved
-                                        favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
-                                    },
-                                contentAlignment = Alignment.Center
+                            PremiumIconButton(
+                                icon = Icons.Outlined.BookmarkBorder,
+                                contentDescription = if (language == AppLanguage.EN) "Save narration" else if (language == AppLanguage.AR) "حفظ الحديث" else "فەرموودە پاشەکەوت بکە",
+                                accent = Gold,
+                                size = 38.dp,
+                                selected = hadithIsFavorite,
+                                hapticFeedback = true
                             ) {
-                                AnimatedContent(
-                                    targetState = hadithIsFavorite,
-                                    transitionSpec = {
-                                        (scaleIn(initialScale = 0.42f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                            (scaleOut(targetScale = 0.52f, animationSpec = tween(100)) + fadeOut(tween(100)))
-                                    },
-                                    label = "Hadith favorite star pulse"
-                                ) { saved ->
-                                    Text(if (saved) "★" else "☆", color = Gold, fontSize = 22.sp)
-                                }
+                                val nextSaved = if (hadithIsFavorite) favoriteHadithIds - hadith.id else favoriteHadithIds + hadith.id
+                                favoriteHadithIds = nextSaved
+                                favoritePrefs.edit().putStringSet("hadith_ids", nextSaved.map { it.toString() }.toSet()).apply()
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -3235,11 +3237,22 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             }
             if (hasMore) {
                 item(key = "load-more-hadith") {
-                    OutlinedButton(
+                    PremiumActionButton(
+                        label = when (language) {
+                            AppLanguage.EN -> if (loadingMore) "Loading narrations…" else "Load more narrations"
+                            AppLanguage.AR -> if (loadingMore) "جارٍ تحميل الروايات…" else "تحميل المزيد من الروايات"
+                            AppLanguage.CKB -> if (loadingMore) "فەرموودەکان بار دەکرێن…" else "فەرموودەی زیاتر باربکە"
+                        },
+                        icon = Icons.Outlined.AutoStories,
+                        accent = Gold,
+                        foreground = foreground,
+                        modifier = Modifier.fillMaxWidth(),
                         enabled = !loadingMore,
-                        onClick = {
-                            if (!loadingMore) scope.launch {
-                                loadingMore = true
+                        loading = loadingMore
+                    ) {
+                        if (!loadingMore) scope.launch {
+                            loadingMore = true
+                            try {
                                 val nextPage = ContentRepository.loadHadiths(
                                     context,
                                     query.trim(),
@@ -3251,19 +3264,10 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 hadithItems = hadithItems + nextPage
                                 offset += nextPage.size
                                 hasMore = nextPage.size == 100 && offset < totalMatches
+                            } finally {
                                 loadingMore = false
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (loadingMore) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        else Text(
-                            when (language) {
-                                AppLanguage.EN -> "Load more narrations"
-                                AppLanguage.AR -> "تحميل المزيد من الروايات"
-                                AppLanguage.CKB -> "فەرموودەی زیاتر باربکە"
-                            }
-                        )
+                        }
                     }
                 }
             }
@@ -4287,8 +4291,14 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             color = foreground.copy(alpha = 0.63f), fontSize = 11.sp
         )
         Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = {
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
+            PremiumActionButton(
+                label = tr(language, "reset"),
+                icon = Icons.Outlined.Refresh,
+                accent = Color(0xFFE58A82),
+                foreground = foreground,
+                modifier = Modifier.weight(1f)
+            ) {
                 count = 0
                 totalCount = 0
                 prefs.edit()
@@ -4297,13 +4307,17 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     .putInt("tasbih_count", 0)
                     .apply()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            }) { Text(tr(language, "reset")) }
-            OutlinedButton(onClick = {
+            }
+            PremiumActionButton(
+                label = if (language == AppLanguage.EN) "New round" else if (language == AppLanguage.AR) "دورة جديدة" else "خولێکی نوێ",
+                icon = Icons.Outlined.Repeat,
+                accent = Gold,
+                foreground = foreground,
+                modifier = Modifier.weight(1f)
+            ) {
                 count = 0
                 prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply()
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            }) {
-                Text(if (language == AppLanguage.EN) "New round" else if (language == AppLanguage.AR) "دورة جديدة" else "خولێکی نوێ")
             }
         }
     }
@@ -8263,30 +8277,35 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             Text(sound.title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(sound.assetPath.substringAfterLast('/'), color = foreground.copy(alpha = 0.5f), fontSize = 10.sp)
                         }
-                        IconButton(onClick = {
-                            if (previewingAdhan == sound.assetPath) {
-                                AudioController.stop()
-                                previewingAdhan = ""
-                            } else {
-                                AudioController.stop()
-                                previewingAdhan = sound.assetPath
-                                if (sound.assetPath.startsWith("local:")) {
-                                    AudioController.playSequence(context, listOf(sound.assetPath)) { active ->
-                                        if (!active) previewingAdhan = ""
-                                    }
+                        PremiumIconActionSurface(
+                            contentDescription = if (language == AppLanguage.EN) "Preview audio" else if (language == AppLanguage.AR) "معاينة الصوت" else "تاقیکردنەوەی دەنگ",
+                            accent = Gold,
+                            size = 38.dp,
+                            selected = previewingAdhan == sound.assetPath,
+                            onClick = {
+                                if (previewingAdhan == sound.assetPath) {
+                                    AudioController.stop()
+                                    previewingAdhan = ""
                                 } else {
-                                    AudioController.play(context, sound.assetPath) { active ->
-                                        if (!active) previewingAdhan = ""
+                                    AudioController.stop()
+                                    previewingAdhan = sound.assetPath
+                                    if (sound.assetPath.startsWith("local:")) {
+                                        AudioController.playSequence(context, listOf(sound.assetPath)) { active ->
+                                            if (!active) previewingAdhan = ""
+                                        }
+                                    } else {
+                                        AudioController.play(context, sound.assetPath) { active ->
+                                            if (!active) previewingAdhan = ""
+                                        }
                                     }
                                 }
                             }
-                        }, modifier = Modifier.size(36.dp)) {
-                            Icon(
-                                if (previewingAdhan == sound.assetPath) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-                                contentDescription = if (language == AppLanguage.EN) "Preview audio" else if (language == AppLanguage.AR) "معاينة الصوت" else "تاقیکردنەوەی دەنگ",
-                                tint = Gold,
-                                modifier = Modifier.size(22.dp)
-                            )
+                        ) {
+                            if (previewingAdhan == sound.assetPath) {
+                                PremiumAudioWaveform(active = true, accent = Gold)
+                            } else {
+                                Icon(Icons.Outlined.PlayCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(24.dp))
+                            }
                         }
                     }
                 }
