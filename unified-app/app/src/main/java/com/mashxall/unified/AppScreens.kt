@@ -6418,7 +6418,26 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
             }
         }
         Spacer(Modifier.height(8.dp))
-        Box(Modifier.fillMaxSize().weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1B2925)), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize().weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF1B2925))
+                .pointerInput(pageIndex, pageCount, loading, bitmap) {
+                    if (loading || bitmap == null || pageCount <= 1) return@pointerInput
+                    var horizontalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { horizontalDrag = 0f },
+                        onHorizontalDrag = { _, delta -> horizontalDrag += delta },
+                        onDragEnd = {
+                            pdfSwipeTarget(pageIndex, pageCount, horizontalDrag)?.let { target ->
+                                pageIndex = target
+                            }
+                        },
+                        onDragCancel = { horizontalDrag = 0f }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
             when {
                 loading -> CircularProgressIndicator(color = Gold)
                 bitmap != null -> AnimatedContent(
