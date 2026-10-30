@@ -7655,18 +7655,36 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             }, color = Color(0xFFC7D8CD), fontSize = 10.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(5.dp))
-                        Text(
-                            tr(language, nextPrayerTarget.prayerKey),
-                            color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold
-                        )
+                        AnimatedContent(
+                            targetState = nextPrayerTarget.prayerKey,
+                            transitionSpec = {
+                                (fadeIn(tween(180)) + scaleIn(initialScale = 0.9f, animationSpec = tween(200))) togetherWith
+                                    (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)))
+                            },
+                            label = "Next prayer name transition"
+                        ) { prayerKey ->
+                            Text(
+                                tr(language, prayerKey),
+                                color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold
+                            )
+                        }
                         Spacer(Modifier.height(3.dp))
                         Text(formatPrayerTime(nextPrayerTarget.timeText, language, use24Hour), color = Color(0xFFF1D78D), fontSize = 14.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            formatPrayerCountdown(nextPrayerTarget.targetMillis - clockNowMillis),
-                            color = Gold, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold
-                        )
+                        AnimatedContent(
+                            targetState = formatPrayerCountdown(nextPrayerTarget.targetMillis - clockNowMillis),
+                            transitionSpec = {
+                                (fadeIn(tween(140)) + scaleIn(initialScale = 0.88f, animationSpec = tween(180))) togetherWith
+                                    (fadeOut(tween(90)) + scaleOut(targetScale = 1.06f, animationSpec = tween(90)))
+                            },
+                            label = "Prayer countdown rolling digits"
+                        ) { countdown ->
+                            Text(
+                                countdown,
+                                color = Gold, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold
+                            )
+                        }
                         Text(
                             when (language) {
                                 AppLanguage.EN -> "remaining"
@@ -7698,6 +7716,18 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 AppLanguage.AR -> "شغّل صوت الأذان الذي اخترته عند الصلاة، بما في ذلك التسجيلات المنزّلة دون إنترنت"
                                 AppLanguage.CKB -> "لە کاتی نوێژدا ئەو بانگە لێبدە کە هەڵتبژاردووە، لەوانەش ئەو تۆمارانەی بۆ بەبێ ئینتەرنێت داتگرتوون"
                             }, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp, lineHeight = 17.sp
+                        )
+                    }
+                    if (adhanEnabled) {
+                        PremiumAudioWaveform(
+                            active = true,
+                            accent = Gold,
+                            modifier = Modifier.padding(end = 5.dp),
+                            contentDescription = when (language) {
+                                AppLanguage.EN -> "Adhan notifications active"
+                                AppLanguage.AR -> "تنبيهات الأذان مفعّلة"
+                                AppLanguage.CKB -> "ئاگادارکردنەوەی بانگ چالاکە"
+                            }
                         )
                     }
                     Switch(checked = adhanEnabled, onCheckedChange = { enable ->
