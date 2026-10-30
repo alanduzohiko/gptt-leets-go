@@ -6334,6 +6334,24 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     var bitmap by remember(assetPath) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
+    val pdfMotionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    var pdfDragPreview by remember(pageIndex) { mutableFloatStateOf(0f) }
+    val animatedPdfDragX by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = pdfDragPreview,
+        animationSpec = if (pdfMotionAllowed) androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ) else androidx.compose.animation.core.snap(),
+        label = "PDF finger-follow page drag"
+    )
+    val animatedPdfTurnY by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = (pdfDragPreview / 170f).coerceIn(-1f, 1f) * 8f,
+        animationSpec = if (pdfMotionAllowed) androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ) else androidx.compose.animation.core.snap(),
+        label = "PDF page tilt"
+    )
     val readingProgress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pageCount > 0) ((pageIndex + 1).toFloat() / pageCount.toFloat()).coerceIn(0f, 1f) else 0f,
         animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing),
@@ -6468,14 +6486,26 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                     if (loading || bitmap == null || pageCount <= 1) return@pointerInput
                     var horizontalDrag = 0f
                     detectHorizontalDragGestures(
-                        onDragStart = { horizontalDrag = 0f },
-                        onHorizontalDrag = { _, delta -> horizontalDrag += delta },
+                        onDragStart = {
+                            horizontalDrag = 0f
+                            pdfDragPreview = 0f
+                        },
+                        onHorizontalDrag = { _, delta ->
+                            horizontalDrag += delta
+                            pdfDragPreview = (pdfDragPreview + delta).coerceIn(-size.width * 0.32f, size.width * 0.32f)
+                        },
                         onDragEnd = {
-                            pdfSwipeTarget(pageIndex, pageCount, horizontalDrag)?.let { target ->
+                            val target = pdfSwipeTarget(pageIndex, pageCount, horizontalDrag)
+                            if (target != null) {
                                 pageIndex = target
+                            } else {
+                                pdfDragPreview = 0f
                             }
                         },
-                        onDragCancel = { horizontalDrag = 0f }
+                        onDragCancel = {
+                            horizontalDrag = 0f
+                            pdfDragPreview = 0f
+                        }
                     )
                 },
             contentAlignment = Alignment.Center
@@ -6495,7 +6525,14 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                             visibleBitmap.asImageBitmap(),
                             contentDescription = assetPath.substringAfterLast('/'),
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                translationX = animatedPdfDragX
+                                rotationY = animatedPdfTurnY
+                                cameraDistance = 26.dp.toPx()
+                                scaleX = 1f - (kotlin.math.abs(animatedPdfTurnY) / 8f) * 0.015f
+                                scaleY = 1f - (kotlin.math.abs(animatedPdfTurnY) / 8f) * 0.015f
+                                shadowElevation = kotlin.math.abs(animatedPdfTurnY) * 0.35f
+                            }
                         )
                     }
                 }
