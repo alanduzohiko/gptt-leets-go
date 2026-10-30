@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.app.AlarmManager
@@ -2315,10 +2316,14 @@ private fun MushafPageViewer(
                 AnimatedContent(
                     targetState = page,
                     transitionSpec = {
-                        (fadeIn(tween(130)) + scaleIn(initialScale = 0.92f, animationSpec = tween(170)) +
-                            slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(170))) togetherWith
-                            (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)) +
-                                slideOutVertically(targetOffsetY = { -it / 4 }, animationSpec = tween(100)))
+                        if (!motionAllowed) {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        } else {
+                            (fadeIn(tween(130)) + scaleIn(initialScale = 0.92f, animationSpec = tween(170)) +
+                                slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(170))) togetherWith
+                                (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)) +
+                                    slideOutVertically(targetOffsetY = { -it / 4 }, animationSpec = tween(100)))
+                        }
                     },
                     label = "Mushaf toolbar page number transition"
                 ) { visiblePage ->

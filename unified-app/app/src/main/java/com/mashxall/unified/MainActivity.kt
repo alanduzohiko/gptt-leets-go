@@ -306,13 +306,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
     val animatedAccent by animateColorAsState(
         targetValue = MashxallAppearance.colorFor(accentPalette),
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
         label = "Mashxall accent palette transition"
     )
     SideEffect { MashxallAppearance.accent = animatedAccent }
@@ -410,22 +411,22 @@ fun MashxallApp(startScreen: String? = null) {
 
     val background by animateColorAsState(
         targetValue = if (dark) Ink else Color(0xFFF4F1E7),
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
         label = "Mashxall theme background"
     )
     val foreground by animateColorAsState(
         targetValue = if (dark) Color(0xFFF6F2E6) else Color(0xFF102A23),
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
         label = "Mashxall theme foreground"
     )
     val cardColor by animateColorAsState(
         targetValue = if (dark) Panel else Color.White,
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
         label = "Mashxall theme surface"
     )
     val surfaceVariant by animateColorAsState(
         targetValue = if (dark) Color(0xFF163A30) else Color(0xFFE8E3D6),
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
         label = "Mashxall theme surface variant"
     )
     MaterialTheme(
@@ -463,34 +464,38 @@ fun MashxallApp(startScreen: String? = null) {
                             targetState = screen,
                             modifier = Modifier.fillMaxSize(),
                             transitionSpec = {
-                                val enterFrom = if (layoutDirection == LayoutDirection.Ltr) 1 else -1
-                                val exitTo = -enterFrom
-                                (fadeIn(animationSpec = tween(260, easing = FastOutSlowInEasing)) +
-                                    scaleIn(
-                                        initialScale = 0.88f,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessMediumLow
-                                        )
-                                    ) +
-                                    slideInHorizontally(
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessMediumLow
-                                        )
-                                    ) { fullWidth ->
-                                        fullWidth * enterFrom / 6
-                                    }) togetherWith
-                                    (fadeOut(animationSpec = tween(190, easing = FastOutSlowInEasing)) +
-                                        scaleOut(targetScale = 0.955f, animationSpec = tween(190, easing = FastOutSlowInEasing)) +
-                                        slideOutHorizontally(
+                                if (!motionAllowed) {
+                                    fadeIn(animationSpec = tween(0)) togetherWith fadeOut(animationSpec = tween(0))
+                                } else {
+                                    val enterFrom = if (layoutDirection == LayoutDirection.Ltr) 1 else -1
+                                    val exitTo = -enterFrom
+                                    (fadeIn(animationSpec = tween(260, easing = FastOutSlowInEasing)) +
+                                        scaleIn(
+                                            initialScale = 0.88f,
                                             animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        ) +
+                                        slideInHorizontally(
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
                                                 stiffness = Spring.StiffnessMediumLow
                                             )
                                         ) { fullWidth ->
-                                            fullWidth * exitTo / 14
-                                        })
+                                            fullWidth * enterFrom / 6
+                                        }) togetherWith
+                                        (fadeOut(animationSpec = tween(190, easing = FastOutSlowInEasing)) +
+                                            scaleOut(targetScale = 0.955f, animationSpec = tween(190, easing = FastOutSlowInEasing)) +
+                                            slideOutHorizontally(
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )
+                                            ) { fullWidth ->
+                                                fullWidth * exitTo / 14
+                                            })
+                                }
                             },
                             label = "Mashxall native screen transition"
                         ) { visibleScreen ->
@@ -645,9 +650,11 @@ private fun AppHeader(
     onLanguage: (AppLanguage) -> Unit, onBack: () -> Unit,
     onSettings: () -> Unit, showBack: Boolean
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val logoScale by animateFloatAsState(
         targetValue = if (isDark) 1.045f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow) else tween(0),
         label = "Mashxall brand emblem response"
     )
     Box(
@@ -697,12 +704,12 @@ private fun AppHeader(
                     val selected = language == lang
                     val chipFill by animateColorAsState(
                         targetValue = if (selected) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
-                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = if (motionAllowed) 220 else 0, easing = FastOutSlowInEasing),
                         label = "Mashxall language chip"
                     )
                     val chipText by animateColorAsState(
                         targetValue = if (selected) Gold else foreground.copy(alpha = 0.72f),
-                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = if (motionAllowed) 220 else 0, easing = FastOutSlowInEasing),
                         label = "Mashxall language label"
                     )
                     Box(
@@ -732,6 +739,8 @@ private fun AppHeader(
 
 @Composable
 private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor: Color, foreground: Color, onSelect: (String) -> Unit) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     val items = listOf(
         Triple("home", tr(language, "home"), Icons.Outlined.Home),
@@ -757,23 +766,28 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                 val selected = screen == key
                 val selectedFill by animateColorAsState(
                     targetValue = if (selected) Gold.copy(alpha = 0.15f) else Color.Transparent,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    animationSpec = tween(durationMillis = if (motionAllowed) 220 else 0, easing = FastOutSlowInEasing),
                     label = "Mashxall navigation selection surface"
                 )
                 val iconTint by animateColorAsState(
                     targetValue = if (selected) Gold else foreground.copy(alpha = 0.62f),
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    animationSpec = tween(durationMillis = if (motionAllowed) 220 else 0, easing = FastOutSlowInEasing),
                     label = "Mashxall navigation icon tint"
                 )
                 val labelTint by animateColorAsState(
                     targetValue = if (selected) foreground else foreground.copy(alpha = 0.57f),
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    animationSpec = tween(durationMillis = if (motionAllowed) 220 else 0, easing = FastOutSlowInEasing),
                     label = "Mashxall navigation label tint"
                 )
                 val iconScale by animateFloatAsState(
                     targetValue = if (selected) 1.20f else 0.90f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                    animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else tween(0),
                     label = "Mashxall navigation icon spring"
+                )
+                val indicatorScale by animateFloatAsState(
+                    targetValue = if (selected) 1f else 0f,
+                    animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else tween(0),
+                    label = "Mashxall navigation active underline"
                 )
                 Column(
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(20.dp))
@@ -797,16 +811,16 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                         Icon(
                             icon, contentDescription = title,
                             tint = iconTint,
-                            modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale; rotationZ = if (selected) 5f else 0f }
+                            modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale; rotationZ = if (motionAllowed && selected) 5f else 0f }
                         )
                     }
                     Spacer(Modifier.height(3.dp))
                     Text(title, color = labelTint, fontSize = 9.sp, maxLines = 1, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
-                    if (selected) {
-                        Box(Modifier.padding(top = 3.dp).width(14.dp).height(2.dp).clip(CircleShape).background(Gold))
-                    } else {
-                        Spacer(Modifier.height(5.dp))
-                    }
+                    Box(
+                        Modifier.padding(top = 3.dp).width(14.dp).height(2.dp)
+                            .graphicsLayer { scaleX = indicatorScale; alpha = indicatorScale }
+                            .clip(CircleShape).background(Gold)
+                    )
                 }
             }
         }
