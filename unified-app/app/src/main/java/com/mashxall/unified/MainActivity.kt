@@ -1930,11 +1930,19 @@ private fun HomeScreen(
 @Composable
 fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(
-            tr(language, "about_data"),
-            color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
+        PremiumSectionHero(
+            title = tr(language, "about_data"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "A transparent index of recovered source material and the features wired to it."
+                AppLanguage.AR -> "فهرس واضح للمحتوى المستعاد من المصادر والميزات المرتبطة به."
+                AppLanguage.CKB -> "فهرستێکی ڕوون بۆ ناوەڕۆکی گەڕێندراوەوە و تایبەتمەندییە بەستراوەکانی."
+            },
+            icon = Icons.Outlined.AutoStories,
+            foreground = foreground,
+            accent = Color(0xFF9DB9E8),
+            eyebrow = when (language) { AppLanguage.EN -> "SOURCE LIBRARY"; AppLanguage.AR -> "مكتبة المصادر"; AppLanguage.CKB -> "کتێبخانەی سەرچاوەکان" }
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(14.dp))
         Text(
             when (language) {
                 AppLanguage.EN -> "Source assets from Noor Tafsir, Khairah and Salawati are catalogued separately, including Quran and tafsir data, Hadith, word analysis, lexicons, prayer data, adhkar, books, fonts and bundled audio where supplied."
@@ -1959,19 +1967,19 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
         Triple(AppScreen.TASBIH, Icons.Outlined.Spa, Color(0xFF8BB9F0))
     )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(
-            when (language) { AppLanguage.EN -> "Worship"; AppLanguage.AR -> "العبادات والأذكار"; AppLanguage.CKB -> "پەرستش و زیکر" },
-            color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
+        PremiumSectionHero(
+            title = when (language) { AppLanguage.EN -> "Worship"; AppLanguage.AR -> "العبادات والأذكار"; AppLanguage.CKB -> "پەرستش و زیکر" },
+            subtitle = when (language) {
+                AppLanguage.EN -> "Choose a practice and enter its own focused, responsive space."
+                AppLanguage.AR -> "اختر العبادة وافتح مساحتها المستقلة للقراءة والتفاعل."
+                AppLanguage.CKB -> "پەرستشێک هەڵبژێرە و بچۆ ناو شوێنی تایبەتی خوێندنەوە و کارلێک."
+            },
+            icon = Icons.Outlined.Spa,
+            foreground = foreground,
+            accent = Color(0xFF80C9AC),
+            eyebrow = when (language) { AppLanguage.EN -> "REFLECTION & PRACTICE"; AppLanguage.AR -> "الذكر والعمل"; AppLanguage.CKB -> "زیکر و کردار" }
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            when (language) {
-                AppLanguage.EN -> "Each topic opens its own focused reading screen. Audio libraries are managed separately in settings."
-                AppLanguage.AR -> "يفتح كل موضوع شاشة مستقلة للقراءة؛ أما مكتبات الصوت فتُدار من الإعدادات."
-                AppLanguage.CKB -> "هەر بابەتێک شاشەی تایبەتی خۆی هەیە؛ کتێبخانەی دەنگ لە ڕێکخستنەکانەوە بەڕێوەدەبرێت."
-            }, color = foreground.copy(alpha = 0.58f), fontSize = 12.sp, lineHeight = 19.sp
-        )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         worshipModules.forEachIndexed { index, (target, icon, tint) ->
             AnimatedVisibility(
                 visible = true,
@@ -2041,14 +2049,17 @@ private fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(tr(language, "settings"), color = foreground, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            when (language) {
-                AppLanguage.EN -> "Personalize reading, prayer, audio and the appearance of Mashxall."
-                AppLanguage.AR -> "خصّص القراءة ومواقيت الصلاة والصوتيات ومظهر مەشخەڵ."
-                AppLanguage.CKB -> "خوێندنەوە، کاتی نوێژ، دەنگ و ڕووکاری مەشخەڵ بەپێی دڵخوازی خۆت ڕێکبخە."
-            }, color = foreground.copy(alpha = 0.62f), fontSize = 12.sp, lineHeight = 19.sp
+        PremiumSectionHero(
+            title = tr(language, "settings"),
+            subtitle = when (language) {
+                AppLanguage.EN -> "Shape your reading, prayer, audio, language and visual experience."
+                AppLanguage.AR -> "خصّص القراءة والصلاة والصوت واللغة والتجربة البصرية."
+                AppLanguage.CKB -> "خوێندنەوە، نوێژ، دەنگ، زمان و ڕووکار بەپێی دڵخوازی خۆت ڕێکبخە."
+            },
+            icon = Icons.Outlined.Tune,
+            foreground = foreground,
+            accent = Gold,
+            eyebrow = when (language) { AppLanguage.EN -> "YOUR MASHXALL"; AppLanguage.AR -> "مەشخەڵ الخاص بك"; AppLanguage.CKB -> "مەشخەڵی تایبەتی تۆ" }
         )
         Spacer(Modifier.height(18.dp))
 

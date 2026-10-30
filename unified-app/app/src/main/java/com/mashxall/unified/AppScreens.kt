@@ -5671,22 +5671,23 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(
-            when (language) {
+        PremiumSectionHero(
+            title = when (language) {
                 AppLanguage.EN -> "Backup & restore"
                 AppLanguage.AR -> "النسخ الاحتياطي والاستعادة"
                 AppLanguage.CKB -> "پاشەکەوتکردن و گەڕاندنەوە"
-            }, color = foreground, fontSize = 24.sp, fontWeight = FontWeight.Bold
+            },
+            subtitle = when (language) {
+                AppLanguage.EN -> "Protect your personal settings and move them safely to another Android phone."
+                AppLanguage.AR -> "احمِ إعداداتك الشخصية وانقلها بأمان إلى هاتف Android آخر."
+                AppLanguage.CKB -> "ڕێکخستنە تایبەتییەکانت بپارێزە و بە سەلامەتی بیانگوازەوە بۆ مۆبایلێکی تری Android."
+            },
+            icon = Icons.Outlined.CheckCircle,
+            foreground = foreground,
+            accent = Color(0xFF8FC6A8),
+            eyebrow = when (language) { AppLanguage.EN -> "YOUR DATA • PROTECTED"; AppLanguage.AR -> "بياناتك • محمية"; AppLanguage.CKB -> "داتاکانت • پارێزراون" }
         )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            when (language) {
-                AppLanguage.EN -> "Export your personal settings to a password-protected encrypted file, or restore it later on this or another Android phone."
-                AppLanguage.AR -> "صدّر إعداداتك الشخصية إلى ملف مشفّر بكلمة مرور، أو استعده لاحقًا على هذا الهاتف أو هاتف Android آخر."
-                AppLanguage.CKB -> "زانیارییە تایبەتییەکانت بە وشەی نهێنی لە فایلێکی نهێنیکراودا هەڵگرە و دواتر لە هەر مۆبایلێکی Android بیگەڕێنەوە."
-            }, color = foreground.copy(alpha = 0.72f), fontSize = 13.sp, lineHeight = 21.sp
-        )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp)) {
                 Text(
@@ -8555,12 +8556,27 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     }, color = foreground.copy(alpha = 0.54f), fontSize = 10.sp
                                 )
                             }
-                            IconButton(onClick = {
-                                val key = item.id.toString()
-                                favorites = if (isFavorite) favorites - key else favorites + key
-                                favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
-                            }) {
-                                Text(if (isFavorite) "★" else "☆", color = Gold, fontSize = 22.sp)
+                            Box(
+                                Modifier.size(38.dp).clip(CircleShape)
+                                    .background(Gold.copy(alpha = if (isFavorite) 0.18f else 0.045f))
+                                    .border(1.dp, Gold.copy(alpha = if (isFavorite) 0.48f else 0.17f), CircleShape)
+                                    .premiumClickable(hapticFeedback = false) {
+                                        val key = item.id.toString()
+                                        favorites = if (isFavorite) favorites - key else favorites + key
+                                        favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AnimatedContent(
+                                    targetState = isFavorite,
+                                    transitionSpec = {
+                                        (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
+                                            (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                    },
+                                    label = "Farmuda favourite star pulse"
+                                ) { saved ->
+                                    Text(if (saved) "★" else "☆", color = Gold, fontSize = 22.sp)
+                                }
                             }
                         }
                         if (preview.isNotBlank()) {
@@ -8641,7 +8657,14 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         favorites = if (favorites.contains(key)) favorites - key else favorites + key
                         favoritesPrefs.edit().putStringSet("farmuda_ids", favorites).apply()
                     }) {
-                        Text(if (favorites.contains(item.id.toString())) "★" else "☆", color = Gold)
+                        AnimatedContent(
+                            targetState = favorites.contains(item.id.toString()),
+                            transitionSpec = {
+                                (scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                    (scaleOut(targetScale = 0.6f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                            },
+                            label = "Farmuda sheet favourite pulse"
+                        ) { saved -> Text(if (saved) "★" else "☆", color = Gold) }
                         Spacer(Modifier.width(5.dp))
                         Text(if (language == AppLanguage.EN) "Favourite" else if (language == AppLanguage.AR) "مفضلة" else "دڵخواز", fontSize = 11.sp)
                     }
