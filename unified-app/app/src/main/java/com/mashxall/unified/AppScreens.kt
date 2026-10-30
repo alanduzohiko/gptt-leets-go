@@ -110,6 +110,8 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -2136,6 +2138,20 @@ internal fun mushafEdgeTapAction(xFraction: Float, page: Int, scale: Float, vers
     }
 }
 
+/** Keep a zoomed Mushaf page pannable without allowing it to disappear beyond the viewport. */
+internal fun clampMushafPanOffset(
+    currentOffset: Float,
+    delta: Float,
+    scaledContentExtent: Float,
+    viewportExtent: Float
+): Float {
+    if (!currentOffset.isFinite() || !delta.isFinite() ||
+        !scaledContentExtent.isFinite() || !viewportExtent.isFinite() || viewportExtent <= 0f
+    ) return 0f
+    val limit = ((scaledContentExtent - viewportExtent) / 2f).coerceAtLeast(0f)
+    return (currentOffset + delta).coerceIn(-limit, limit)
+}
+
 /**
  * Physical left swipe advances the right-to-left Mushaf to the next page.
  * Physical right swipe returns to the previous page. Small drags and boundary
@@ -2219,11 +2235,16 @@ private fun MushafPageViewer(
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
+    var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 4f)
-        if (scale > 1.01f) {
-            offsetX += panChange.x
-            offsetY += panChange.y
+        val nextScale = (scale * zoomChange).coerceIn(1f, 4f)
+        scale = nextScale
+        if (nextScale > 1.01f && viewportSize.width > 0 && viewportSize.height > 0) {
+            val fit = minOf(viewportSize.width / 1148f, viewportSize.height / 1641f)
+            val scaledWidth = 1148f * fit * nextScale
+            val scaledHeight = 1641f * fit * nextScale
+            offsetX = clampMushafPanOffset(offsetX, panChange.x, scaledWidth, viewportSize.width.toFloat())
+            offsetY = clampMushafPanOffset(offsetY, panChange.y, scaledHeight, viewportSize.height.toFloat())
         } else {
             offsetX = 0f
             offsetY = 0f
@@ -2425,6 +2446,7 @@ private fun MushafPageViewer(
                     bitmap != null -> Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .onSizeChanged { viewportSize = it }
                             .graphicsLayer {
                                 scaleX = scale
                                 scaleY = scale
