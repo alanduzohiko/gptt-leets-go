@@ -150,7 +150,6 @@ import kotlin.math.tan
 private val Gold: Color get() = MashxallAppearance.accent
 private val PaleGold = Color(0xFFF4E5B4)
 private val DeepGreen = Color(0xFF103D32)
-private val MainText = Color(0xFFF6F2E6)
 private val CardDark = Color(0xFF102B25)
 private val MushafNightColorMatrix = ColorMatrix(
     floatArrayOf(
@@ -268,8 +267,8 @@ private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: Str
         value = value,
         onValueChange = onValue,
         placeholder = placeholder,
-        accent = Gold,
-        foreground = MainText
+        accent = MaterialTheme.colorScheme.primary,
+        foreground = MaterialTheme.colorScheme.onSurface
     )
 }
 
