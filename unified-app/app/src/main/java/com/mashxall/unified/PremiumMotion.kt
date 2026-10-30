@@ -942,8 +942,11 @@ internal fun PremiumIconButton(
     enabled: Boolean = true,
     selected: Boolean = false,
     rotationDegrees: Float = 0f,
+    circular: Boolean = false,
+    hapticFeedback: Boolean = true,
     onClick: () -> Unit
 ) {
+    val shape = if (circular) CircleShape else RoundedCornerShape(size * 0.36f)
     val fill by animateColorAsState(
         targetValue = when {
             !enabled -> accent.copy(alpha = 0.025f)
@@ -971,13 +974,14 @@ internal fun PremiumIconButton(
     Box(
         modifier = modifier.size(size)
             .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
-            .clip(RoundedCornerShape(size * 0.36f))
+            .clip(shape)
             .background(Brush.linearGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.55f))))
-            .border(1.dp, outline, RoundedCornerShape(size * 0.36f))
+            .border(1.dp, outline, shape)
             .premiumClickable(
                 enabled = enabled,
                 onClickLabel = contentDescription,
                 role = Role.Button,
+                hapticFeedback = hapticFeedback,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center

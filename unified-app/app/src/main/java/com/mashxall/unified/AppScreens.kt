@@ -292,29 +292,17 @@ private fun ReaderActionIcon(
     hapticFeedback: Boolean = true,
     onClick: () -> Unit
 ) {
-    val outline by animateColorAsState(
-        targetValue = if (enabled) Gold.copy(alpha = 0.32f) else Gold.copy(alpha = 0.10f),
-        animationSpec = tween(180),
-        label = "Reader action outline state"
+    PremiumIconButton(
+        icon = icon,
+        contentDescription = description,
+        accent = Gold,
+        size = 34.dp,
+        enabled = enabled,
+        rotationDegrees = rotationDegrees,
+        circular = true,
+        hapticFeedback = hapticFeedback,
+        onClick = onClick
     )
-    Box(
-        Modifier.size(34.dp).clip(CircleShape)
-            .background(Brush.linearGradient(listOf(
-                Gold.copy(alpha = if (enabled) 0.20f else 0.055f),
-                Gold.copy(alpha = if (enabled) 0.055f else 0.02f)
-            )))
-            .border(1.dp, outline, CircleShape)
-            .premiumClickable(enabled = enabled, hapticFeedback = hapticFeedback, onClick = onClick)
-            .padding(6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            icon,
-            contentDescription = description,
-            tint = if (enabled) Gold else Gold.copy(alpha = 0.30f),
-            modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotationDegrees }
-        )
-    }
 }
 
 @Composable
