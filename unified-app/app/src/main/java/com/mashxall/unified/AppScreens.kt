@@ -84,6 +84,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -1174,7 +1175,7 @@ internal fun loadQuranTextTypeface(context: Context, fontId: String): Typeface? 
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Unit, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
+fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Boolean, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -1193,6 +1194,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var surahProgressFilter by rememberSaveable { mutableStateOf("all") }
     var readingProgressRevision by rememberSaveable { mutableIntStateOf(0) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var bookmarkedVerses by remember {
+        mutableStateOf(prefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet())
+    }
+    val toggleBookmark: (Int, Int) -> Boolean = { surahNumber, ayahNumber ->
+        val saved = onBookmark(surahNumber, ayahNumber)
+        bookmarkedVerses = prefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet()
+        saved
+    }
     val surahAyahTotals = remember(surahs) { surahs.associate { it.number to it.ayahCount } }
     val progressBySurah = remember(surahAyahTotals, readingProgressRevision, initialSurah, initialAyah) {
         surahAyahTotals.mapValues { (number, _) ->
@@ -1822,7 +1831,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 },
                 onReaderSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
                 onPlaySurah = { surahNumber, ayahNumber -> onPlayAudio(surahNumber, ayahNumber) },
-                onBookmarkVerse = { surahNumber, ayahNumber -> onBookmark(surahNumber, ayahNumber) },
+                onBookmarkVerse = { surahNumber, ayahNumber ->
+                    val saved = toggleBookmark(surahNumber, ayahNumber)
+                    Toast.makeText(
+                        context,
+                        if (saved) {
+                            when (language) {
+                                AppLanguage.EN -> "Verse added to bookmarks"
+                                AppLanguage.AR -> "أُضيفت الآية إلى العلامات المرجعية"
+                                AppLanguage.CKB -> "ئایەتەکە زیاد کرا بۆ نیشانکراوەکان"
+                            }
+                        } else {
+                            when (language) {
+                                AppLanguage.EN -> "Verse removed from bookmarks"
+                                AppLanguage.AR -> "أُزيلت الآية من العلامات المرجعية"
+                                AppLanguage.CKB -> "ئایەتەکە لە نیشانکراوەکان لابرا"
+                            }
+                        },
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -2203,12 +2231,22 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             ) {
                                 onPlayAudio(verse.surah, verse.number)
                             }
-                            ReaderActionIcon(Icons.Outlined.BookmarkBorder, if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ الآية" else "ئایەت پاشەکەوت بکە") {
-                                onBookmark(verse.surah, verse.number)
+                            val verseBookmarked = bookmarkedVerses.contains(quranBookmarkKey(verse.surah, verse.number))
+                            ReaderActionIcon(
+                                if (verseBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                                if (language == AppLanguage.EN) {
+                                    if (verseBookmarked) "Remove bookmark" else "Bookmark verse"
+                                } else if (language == AppLanguage.AR) {
+                                    if (verseBookmarked) "إزالة العلامة المرجعية" else "حفظ الآية"
+                                } else {
+                                    if (verseBookmarked) "لابردنی نیشانە" else "ئایەت پاشەکەوت بکە"
+                                }
+                            ) {
+                                val saved = toggleBookmark(verse.surah, verse.number)
                                 val message = when (language) {
-                                    AppLanguage.CKB -> "ئایەتەکە پاشەکەوت کرا"
-                                    AppLanguage.AR -> "تم حفظ الآية في العلامات المرجعية"
-                                    AppLanguage.EN -> "Verse saved to bookmarks"
+                                    AppLanguage.CKB -> if (saved) "ئایەتەکە پاشەکەوت کرا" else "ئایەتەکە لە نیشانکراوەکان لابرا"
+                                    AppLanguage.AR -> if (saved) "تم حفظ الآية في العلامات المرجعية" else "تمت إزالة الآية من العلامات المرجعية"
+                                    AppLanguage.EN -> if (saved) "Verse saved to bookmarks" else "Bookmark removed"
                                 }
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }
@@ -3013,16 +3051,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 clipboard?.setPrimaryClip(ClipData.newPlainText("Quran verse", sheetVerse!!.arabic + "\n\n" + sheetVerse!!.translation))
                                 Toast.makeText(context, if (language == AppLanguage.EN) "Verse copied" else if (language == AppLanguage.AR) "تم نسخ الآية" else "ئایەتەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
                             }
+                            val sheetVerseBookmarked = bookmarkedVerses.contains(quranBookmarkKey(target.first, target.second))
                             PremiumChoicePill(
                                 modifier = Modifier.weight(1f),
-                                label = if (language == AppLanguage.EN) "Save" else if (language == AppLanguage.AR) "حفظ" else "پاشەکەوت",
-                                selected = false,
+                                label = when (language) {
+                                    AppLanguage.EN -> if (sheetVerseBookmarked) "Saved" else "Save"
+                                    AppLanguage.AR -> if (sheetVerseBookmarked) "محفوظة" else "حفظ"
+                                    AppLanguage.CKB -> if (sheetVerseBookmarked) "پاشەکەوتکراوە" else "پاشەکەوت"
+                                },
+                                selected = sheetVerseBookmarked,
                                 accent = Gold,
                                 foreground = foreground,
-                                leadingIcon = Icons.Outlined.BookmarkBorder
+                                leadingIcon = if (sheetVerseBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder
                             ) {
-                                onBookmark(target.first, target.second)
-                                Toast.makeText(context, if (language == AppLanguage.EN) "Verse saved" else if (language == AppLanguage.AR) "تم حفظ الآية" else "ئایەت پاشەکەوت کرا", Toast.LENGTH_SHORT).show()
+                                val saved = toggleBookmark(target.first, target.second)
+                                val message = when (language) {
+                                    AppLanguage.EN -> if (saved) "Verse saved" else "Bookmark removed"
+                                    AppLanguage.AR -> if (saved) "تم حفظ الآية" else "تمت إزالة العلامة المرجعية"
+                                    AppLanguage.CKB -> if (saved) "ئایەت پاشەکەوت کرا" else "نیشانەکە لابرا"
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }
                             PremiumChoicePill(
                                 modifier = Modifier.weight(1f),
@@ -6808,13 +6856,15 @@ fun AudioScreen(
                                 )
                             }
                             when {
-                                downloadProgress != null -> PremiumIconActionSurface(
-                                    contentDescription = if (language == AppLanguage.EN) "Downloading Adhan" else if (language == AppLanguage.AR) "جارٍ تنزيل الأذان" else "بانگ دادەگیرێت",
-                                    accent = Gold,
-                                    size = 40.dp,
-                                    enabled = false,
-                                    selected = true,
-                                    onClick = {}
+                                downloadProgress != null -> Box(
+                                    Modifier.size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Gold.copy(alpha = 0.11f))
+                                        .semantics {
+                                            contentDescription = if (language == AppLanguage.EN) "Downloading Adhan" else if (language == AppLanguage.AR) "جارٍ تنزيل الأذان" else "بانگ دادەگیرێت"
+                                            stateDescription = if (language == AppLanguage.EN) "Download in progress" else if (language == AppLanguage.AR) "التنزيل قيد التنفيذ" else "داگرتن بەردەوامە"
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     PremiumLoadingIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
                                 }

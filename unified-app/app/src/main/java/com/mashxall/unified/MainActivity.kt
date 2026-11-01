@@ -277,6 +277,87 @@ private data class HomeModule(
     val icon: ImageVector, val color: Color
 )
 
+internal fun bottomNavigationIconRotation(key: String): Float = when (key) {
+    "home" -> -8f
+    "quran" -> 0f
+    "azkar" -> -14f
+    "more" -> 13f
+    "settings" -> 42f
+    else -> 0f
+}
+
+internal fun bottomNavigationIconScale(key: String): Float = when (key) {
+    "home" -> 1.17f
+    "quran" -> 1.14f
+    "azkar" -> 1.20f
+    "more" -> 1.16f
+    "settings" -> 1.12f
+    else -> 1.14f
+}
+
+/** A distinct arrival tilt gives each feature tile its own visual personality. */
+internal fun homeModuleIconRestingRotation(key: String): Float = when (key) {
+    "quran" -> -7f
+    "bookmarks" -> -14f
+    "hadith" -> 8f
+    "azkar" -> -11f
+    "prayer" -> 4f
+    "names" -> 16f
+    "qibla" -> 23f
+    "lexicon" -> -6f
+    "farmuda" -> 11f
+    "tasbih" -> 2f
+    "audio" -> -10f
+    "backup" -> 18f
+    else -> 0f
+}
+
+@Composable
+private fun HomeModuleIcon(module: HomeModule, index: Int, size: androidx.compose.ui.unit.Dp) {
+    var entered by rememberSaveable(module.screen.key) { mutableStateOf(false) }
+    LaunchedEffect(module.screen.key) {
+        delay(staggerDelayMillis(index))
+        entered = true
+    }
+    val restingRotation = homeModuleIconRestingRotation(module.screen.key)
+    val arrivalRotation = restingRotation + if (index % 2 == 0) -19f else 19f
+    val rotation by animateFloatAsState(
+        targetValue = if (entered) restingRotation else arrivalRotation,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "Feature-specific icon arrival rotation"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.72f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "Feature-specific icon arrival scale"
+    )
+    val lift by animateFloatAsState(
+        targetValue = if (entered) 0f else 7f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "Feature-specific icon arrival lift"
+    )
+    PremiumIconMedallion(
+        icon = module.icon,
+        tint = module.color,
+        size = size,
+        modifier = Modifier.graphicsLayer {
+            rotationZ = rotation
+            scaleX = scale
+            scaleY = scale
+            translationY = lift.dp.toPx()
+        }
+    )
+}
+
 private val homeModules: List<HomeModule> get() = listOf(
     HomeModule(AppScreen.QURAN, "quran", "quran_sub", Icons.Outlined.MenuBook, Gold),
     HomeModule(AppScreen.BOOKMARKS, "bookmarks", "bookmarks_sub", Icons.Outlined.BookmarkBorder, Color(0xFFE0B86C)),
@@ -577,10 +658,19 @@ fun MashxallApp(startScreen: String? = null) {
                                         navigateTo("tafsir")
                                     },
                                     onBookmark = { s, a ->
-                                        selectedSurah = s; selectedAyah = a
-                                        val saved = prefs.getStringSet("bookmarks", emptySet())?.toMutableSet() ?: mutableSetOf()
-                                        saved.add(s.toString() + ":" + a.toString())
-                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).putStringSet("bookmarks", saved).apply()
+                                        selectedSurah = s
+                                        selectedAyah = a
+                                        val result = toggleQuranBookmark(
+                                            prefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet(),
+                                            s,
+                                            a
+                                        )
+                                        prefs.edit()
+                                            .putInt("last_surah", s)
+                                            .putInt("last_ayah_number", a)
+                                            .putStringSet("bookmarks", result.bookmarks)
+                                            .apply()
+                                        result.isBookmarked
                                     },
                                     onOpenVerse = { s, a ->
                                         selectedSurah = s
@@ -847,9 +937,17 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                     label = "Mashxall navigation label tint"
                 )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1.20f else 0.90f,
+                    targetValue = if (selected) bottomNavigationIconScale(key) else 0.90f,
                     animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else tween(0),
                     label = "Mashxall navigation icon spring"
+                )
+                val iconRotation by animateFloatAsState(
+                    targetValue = if (selected) bottomNavigationIconRotation(key) else 0f,
+                    animationSpec = if (motionAllowed) spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ) else tween(0),
+                    label = "Mashxall destination-specific icon motion"
                 )
                 val indicatorScale by animateFloatAsState(
                     targetValue = if (selected) 1f else 0f,
@@ -879,7 +977,12 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                         Icon(
                             icon, contentDescription = title,
                             tint = iconTint,
-                            modifier = Modifier.size(21.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale; rotationZ = if (motionAllowed && selected) 5f else 0f }
+                            modifier = Modifier.size(21.dp).graphicsLayer {
+                                scaleX = iconScale
+                                scaleY = iconScale
+                                rotationZ = if (motionAllowed) iconRotation else 0f
+                                translationY = if (selected) (-1.2).dp.toPx() else 0f
+                            }
                         )
                     }
                     Spacer(Modifier.height(3.dp))
@@ -991,7 +1094,7 @@ private fun MoreScreen(
                                             .padding(12.dp),
                                         verticalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        PremiumIconMedallion(icon = module.icon, tint = module.color, size = 42.dp)
+                                        HomeModuleIcon(module = module, index = rowIndex * 2 + columnIndex, size = 42.dp)
                                         Column {
                                             Text(
                                                 tr(language, module.titleKey),
@@ -2308,7 +2411,7 @@ private fun HomeScreen(
                                 Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.15f), cardColor, cardColor))).padding(14.dp).height(108.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
-                                PremiumIconMedallion(icon = module.icon, tint = module.color, size = 44.dp)
+                                HomeModuleIcon(module = module, index = rowIndex * 2 + columnIndex, size = 44.dp)
                                 Column {
                                     Text(tr(language, module.titleKey), color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                     Spacer(Modifier.height(2.dp))
