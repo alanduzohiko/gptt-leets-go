@@ -668,6 +668,7 @@ internal fun PremiumSearchField(
     placeholder: String,
     accent: Color,
     foreground: Color,
+    clearContentDescription: String = "Clear search",
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -732,7 +733,7 @@ internal fun PremiumSearchField(
                     ) else fadeOut(tween(0))
                 ) {
                     IconButton(onClick = { onValueChange("") }) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = foreground.copy(alpha = 0.60f))
+                        Icon(Icons.Outlined.Close, contentDescription = clearContentDescription, tint = foreground.copy(alpha = 0.60f))
                     }
                 }
             },
