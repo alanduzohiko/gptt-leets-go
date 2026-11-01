@@ -57,7 +57,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -78,10 +77,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -93,6 +94,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
@@ -384,6 +387,82 @@ internal fun PremiumOutlinedButton(
         interactionSource = interactionSource,
         content = content
     )
+}
+
+/**
+ * Mashxall's shared indeterminate ring. It uses a restrained two-layer track,
+ * a moving rounded arc and one terminal jewel. With Reduce Motion enabled the
+ * same status remains visible as a static open ring instead of spinning.
+ */
+@Composable
+internal fun PremiumLoadingIndicator(
+    modifier: Modifier = Modifier,
+    color: Color,
+    strokeWidth: Dp = 3.dp
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val rotation = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall loading ring")
+        val angle by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(980, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Mashxall loading ring rotation"
+        )
+        angle
+    } else 0f
+
+    Canvas(
+        modifier = modifier.semantics {
+            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+        }
+    ) {
+        val diameter = minOf(size.width, size.height)
+        if (diameter <= 0f) return@Canvas
+        val stroke = strokeWidth.toPx().coerceAtLeast(1.dp.toPx())
+        val arcDiameter = (diameter - stroke).coerceAtLeast(0f)
+        if (arcDiameter <= 0f) return@Canvas
+        val arcSize = Size(arcDiameter, arcDiameter)
+        val topLeft = Offset(
+            (size.width - arcDiameter) / 2f,
+            (size.height - arcDiameter) / 2f
+        )
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val radius = arcDiameter / 2f
+        drawArc(
+            color = color.copy(alpha = 0.13f),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = stroke)
+        )
+        drawArc(
+            color = color,
+            startAngle = rotation - 96f,
+            sweepAngle = 270f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+        val endAngle = Math.toRadians((rotation + 174f).toDouble())
+        drawCircle(
+            color = color.copy(alpha = 0.92f),
+            radius = stroke * 0.88f,
+            center = Offset(
+                center.x + (kotlin.math.cos(endAngle) * radius).toFloat(),
+                center.y + (kotlin.math.sin(endAngle) * radius).toFloat()
+            )
+        )
+    }
 }
 
 /**
@@ -1545,7 +1624,7 @@ internal fun PremiumActionButton(
             contentAlignment = Alignment.Center
         ) {
             if (loading) {
-                CircularProgressIndicator(
+                PremiumLoadingIndicator(
                     modifier = Modifier.size(18.dp),
                     color = accent.copy(alpha = fillAlpha),
                     strokeWidth = 2.dp
