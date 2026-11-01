@@ -602,7 +602,8 @@ private fun SurahOriginFilterChip(
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
         systemAllowsDecorativeMotion(context)
     }
-    val chipAnimation = if (motionAllowed) tween(190) else snap()
+    val chipAnimation: androidx.compose.animation.core.FiniteAnimationSpec<Color> =
+        if (motionAllowed) tween(190) else snap()
     val fill by animateColorAsState(
         targetValue = if (selected) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
         animationSpec = chipAnimation,
