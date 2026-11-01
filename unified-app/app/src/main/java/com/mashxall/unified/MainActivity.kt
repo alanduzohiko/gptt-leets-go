@@ -522,7 +522,12 @@ fun MashxallApp(startScreen: String? = null) {
                             label = "Mashxall native screen transition"
                         ) { visibleScreen ->
                             Box(Modifier.fillMaxSize()) {
-                                PremiumAmbientBackdrop(Modifier.fillMaxSize(), accent = Gold, dark = dark)
+                                PremiumAmbientBackdrop(
+                                    Modifier.fillMaxSize(),
+                                    accent = Gold,
+                                    dark = dark,
+                                    animated = visibleScreen == AppScreen.HOME.key
+                                )
                                 when (visibleScreen) {
                                 "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
