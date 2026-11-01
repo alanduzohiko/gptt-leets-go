@@ -1465,9 +1465,27 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     selected = surahNumber
                     onSurah(surahNumber)
                     onOpenVerse(surahNumber, ayahNumber)
-                    prefs.edit().putInt("last_surah", surahNumber).putInt("last_ayah_number", ayahNumber).apply()
+                    prefs.edit()
+                        .putString("quran_reader_mode", "mushaf")
+                        .putInt("last_surah", surahNumber)
+                        .putInt("last_ayah_number", ayahNumber)
+                        .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
+                        .putInt("last_mushaf_page", mushafPage)
+                        .apply()
                     query = ""
                     selectedAyahForSheet = surahNumber to ayahNumber
+                },
+                onReadingPosition = { surahNumber, ayahNumber ->
+                    selected = surahNumber
+                    onSurah(surahNumber)
+                    onOpenVerse(surahNumber, ayahNumber)
+                    prefs.edit()
+                        .putString("quran_reader_mode", "mushaf")
+                        .putInt("last_surah", surahNumber)
+                        .putInt("last_ayah_number", ayahNumber)
+                        .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
+                        .putInt("last_mushaf_page", mushafPage)
+                        .apply()
                 }
             )
         } else if (showSurahList) {
@@ -2903,7 +2921,8 @@ private fun MushafPageViewer(
     onReaderSettings: () -> Unit,
     onPlaySurah: (Int, Int) -> Unit,
     onBookmarkVerse: (Int, Int) -> Unit,
-    onVerseClick: (Int, Int) -> Unit
+    onVerseClick: (Int, Int) -> Unit,
+    onReadingPosition: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2988,7 +3007,11 @@ private fun MushafPageViewer(
         bitmap = null
         pageVerses = emptyList()
         try {
-            pageVerses = ContentRepository.loadMushafPageVerses(context, page)
+            val loadedPageVerses = ContentRepository.loadMushafPageVerses(context, page)
+            pageVerses = loadedPageVerses
+            loadedPageVerses.firstOrNull()?.let { firstVerse ->
+                onReadingPosition(firstVerse.surah, firstVerse.ayah)
+            }
             val source = ContentRepository.loadMushafPageSvg(context, page)
             bitmap = if (source == null) {
                 null
