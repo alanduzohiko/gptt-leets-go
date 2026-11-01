@@ -147,6 +147,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val Ink = Color(0xFF071E1A)
 private val DeepGreen = Color(0xFF103D32)
@@ -1098,6 +1099,7 @@ private fun sourcePrayerTimestamp(raw: String, referenceMillis: Long): Long? {
 @Composable
 private fun HomePrayerJourneyStrip(
     today: PrayerRow?,
+    language: AppLanguage,
     nextPrayerKey: String?,
     foreground: Color
 ) {
@@ -1116,14 +1118,13 @@ private fun HomePrayerJourneyStrip(
     if (source == null || fajr == null || isha == null || isha <= fajr) return
 
     val rawMarkers = listOf(
-        Triple("fajr", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "fajr"), source.fajr),
-        Triple("dhuhr", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "dhuhr"), source.dhuhr),
-        Triple("asr", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "asr"), source.asr),
-        Triple("maghrib", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "maghrib"), source.maghrib),
-        Triple("isha", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "isha"), source.isha)
+        "fajr" to source.fajr,
+        "dhuhr" to source.dhuhr,
+        "asr" to source.asr,
+        "maghrib" to source.maghrib,
+        "isha" to source.isha
     )
-    val language = AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb"))
-    val markers = rawMarkers.mapNotNull { (key, label, raw) ->
+    val markers = rawMarkers.mapNotNull { (key, raw) ->
         sourcePrayerTimestamp(raw, nowMillis)?.let { markerTime ->
             Triple(key, tr(language, key), prayerTimelineMarkerFraction(markerTime, fajr, isha))
         }
@@ -1888,6 +1889,7 @@ private fun HomeScreen(
                 )
                 HomePrayerJourneyStrip(
                     today = prayerTimes,
+                    language = language,
                     nextPrayerKey = upcomingPrayerKey,
                     foreground = foreground
                 )
