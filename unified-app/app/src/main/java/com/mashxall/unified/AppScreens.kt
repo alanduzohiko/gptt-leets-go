@@ -1986,7 +1986,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                             Spacer(Modifier.height(14.dp))
                             Text(if (language == AppLanguage.EN) "VERSE PANEL TEXT SIZE" else if (language == AppLanguage.AR) "حجم خط لوحة الآية" else "قەبارەی دەقی ئایەت", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Slider(value = verseTextScale, onValueChange = { verseTextScale = it; prefs.edit().putFloat("quran_verse_text_scale", it).apply() }, valueRange = 0.8f..1.6f, steps = 7)
+                            PremiumSlider(
+                                value = verseTextScale,
+                                onValueChange = { verseTextScale = it; prefs.edit().putFloat("quran_verse_text_scale", it).apply() },
+                                valueRange = 0.8f..1.6f,
+                                steps = 7,
+                                accent = Gold,
+                                foreground = foreground
+                            )
                             Text(String.format(Locale.US, "%.0f%%", verseTextScale * 100f), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
                             Spacer(Modifier.height(14.dp))
                             Divider(color = Gold.copy(alpha = 0.18f))
@@ -3721,7 +3728,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     Text(cleanHadithDisplayText(article.authorDetail), color = foreground.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = 20.sp)
                 }
                 Spacer(Modifier.height(12.dp))
-                OutlinedButton(
+                PremiumOutlinedButton(
                     onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith article", localizedTitle + "\n\n" + cleanHadithDisplayText(localizedBody)))
