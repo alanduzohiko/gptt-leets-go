@@ -204,6 +204,54 @@ internal fun matchesSurahOriginFilter(place: String, filter: String): Boolean {
     }
 }
 
+/** A validated snapshot of verse progress across the original surah index. */
+internal data class QuranReadingProgressSummary(
+    val totalAyahs: Int,
+    val readAyahs: Int,
+    val completedSurahs: Int,
+    val inProgressSurahs: Int
+) {
+    val fraction: Float
+        get() = if (totalAyahs > 0) readAyahs.toFloat() / totalAyahs.toFloat() else 0f
+}
+
+internal fun quranReadingProgressSummary(
+    surahTotals: Map<Int, Int>,
+    progressBySurah: Map<Int, Int>
+): QuranReadingProgressSummary {
+    var totalAyahs = 0
+    var readAyahs = 0
+    var completedSurahs = 0
+    var inProgressSurahs = 0
+    surahTotals.forEach { (surahNumber, rawTotal) ->
+        if (surahNumber !in 1..114 || rawTotal <= 0) return@forEach
+        val read = (progressBySurah[surahNumber] ?: 0).coerceIn(0, rawTotal)
+        totalAyahs += rawTotal
+        readAyahs += read
+        when {
+            read >= rawTotal -> completedSurahs++
+            read > 0 -> inProgressSurahs++
+        }
+    }
+    return QuranReadingProgressSummary(totalAyahs, readAyahs, completedSurahs, inProgressSurahs)
+}
+
+internal fun matchesSurahProgressFilter(
+    progressAyah: Int,
+    totalAyahs: Int,
+    filter: String
+): Boolean {
+    if (filter == "all") return true
+    if (totalAyahs <= 0) return false
+    val progress = progressAyah.coerceIn(0, totalAyahs)
+    return when (filter) {
+        "in_progress" -> progress > 0 && progress < totalAyahs
+        "completed" -> progress >= totalAyahs
+        "not_started" -> progress == 0
+        else -> true
+    }
+}
+
 /** Keep the list aligned with usable playback coverage instead of saving hidden partial editions as the default. */
 internal fun filterRecitersForPlaybackMode(
     reciters: List<Reciter>,
@@ -585,6 +633,125 @@ private fun QuranSurahWelcomeCard(
 }
 
 @Composable
+private fun QuranReadingProgressCard(
+    summary: QuranReadingProgressSummary,
+    foreground: Color,
+    cardColor: Color,
+    language: AppLanguage
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val progress by animateFloatAsState(
+        targetValue = summary.fraction.coerceIn(0f, 1f),
+        animationSpec = if (motionAllowed) tween(420) else snap(),
+        label = "Quran library-wide reading progress"
+    )
+    val percent = (summary.fraction.coerceIn(0f, 1f) * 100f).roundToInt()
+    val title = when (language) {
+        AppLanguage.EN -> "Your Quran journey"
+        AppLanguage.AR -> "رحلتك مع القرآن"
+        AppLanguage.CKB -> "گەشتەکەت لەگەڵ قورئان"
+    }
+    val readLabel = when (language) {
+        AppLanguage.EN -> "AYAT READ"
+        AppLanguage.AR -> "آية مقروءة"
+        AppLanguage.CKB -> "ئایەتی خوێندراو"
+    }
+    val completeLabel = when (language) {
+        AppLanguage.EN -> "SURAHS DONE"
+        AppLanguage.AR -> "سورة مكتملة"
+        AppLanguage.CKB -> "سوورەتی تەواو"
+    }
+    val activeLabel = when (language) {
+        AppLanguage.EN -> "IN PROGRESS"
+        AppLanguage.AR -> "قيد القراءة"
+        AppLanguage.CKB -> "لە خوێندنەوەدایە"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.20f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(Gold.copy(alpha = 0.075f), cardColor, DeepGreen.copy(alpha = 0.025f))
+                    )
+                )
+                .padding(horizontal = 13.dp, vertical = 12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(31.dp).clip(RoundedCornerShape(10.dp)).background(Gold.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = Gold, modifier = Modifier.size(17.dp))
+                }
+                Spacer(Modifier.width(9.dp))
+                Text(title, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                Text(percent.toString() + "%", color = Gold, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(foreground.copy(alpha = 0.08f))
+            ) {
+                Box(
+                    Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape)
+                        .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.68f), Gold)))
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                QuranProgressStat(
+                    value = summary.readAyahs.toString() + "/" + summary.totalAyahs,
+                    label = readLabel,
+                    modifier = Modifier.weight(1f),
+                    foreground = foreground
+                )
+                QuranProgressStat(
+                    value = summary.completedSurahs.toString() + "/114",
+                    label = completeLabel,
+                    modifier = Modifier.weight(1f),
+                    foreground = foreground
+                )
+                QuranProgressStat(
+                    value = summary.inProgressSurahs.toString(),
+                    label = activeLabel,
+                    modifier = Modifier.weight(1f),
+                    foreground = foreground
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuranProgressStat(
+    value: String,
+    label: String,
+    modifier: Modifier,
+    foreground: Color
+) {
+    Column(
+        modifier.clip(RoundedCornerShape(11.dp))
+            .background(foreground.copy(alpha = 0.035f))
+            .border(1.dp, foreground.copy(alpha = 0.055f), RoundedCornerShape(11.dp))
+            .padding(horizontal = 7.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(value, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = foreground.copy(alpha = 0.54f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
 private fun QuranSurahIndexCard(
     surah: Surah,
     placeLabel: String,
@@ -946,7 +1113,20 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var retryVerses by remember { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var surahOriginFilter by rememberSaveable { mutableStateOf("all") }
+    var surahProgressFilter by rememberSaveable { mutableStateOf("all") }
+    var readingProgressRevision by rememberSaveable { mutableIntStateOf(0) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    val surahAyahTotals = remember(surahs) { surahs.associate { it.number to it.ayahCount } }
+    val progressBySurah = remember(surahAyahTotals, readingProgressRevision, initialSurah, initialAyah) {
+        surahAyahTotals.mapValues { (number, _) ->
+            val storedProgress = prefs.getInt("quran_progress_ayah_$number", 0)
+            val currentPosition = if (number == initialSurah) initialAyah else 0
+            maxOf(storedProgress, currentPosition)
+        }
+    }
+    val readingProgressSummary = remember(surahAyahTotals, progressBySurah) {
+        quranReadingProgressSummary(surahAyahTotals, progressBySurah)
+    }
     var translationKey by rememberSaveable {
         mutableStateOf(prefs.getString("quran_translation", null) ?: when (language) {
             AppLanguage.EN -> "sahih"
@@ -1183,6 +1363,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     .putInt("last_ayah_number", ayahNumber)
                     .putInt("quran_progress_ayah_${surahNumber}", ayahNumber)
                     .apply()
+                readingProgressRevision++
                 onSurah(surahNumber)
                 onOpenVerse(surahNumber, ayahNumber)
             }
@@ -1562,6 +1743,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
                         .putInt("last_mushaf_page", mushafPage)
                         .apply()
+                    readingProgressRevision++
                     query = ""
                     selectedAyahForSheet = surahNumber to ayahNumber
                 },
@@ -1576,6 +1758,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
                         .putInt("last_mushaf_page", mushafPage)
                         .apply()
+                    readingProgressRevision++
                 }
             )
         } else if (showSurahList) {
@@ -1648,7 +1831,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 .apply()
                         }
                     )
-                    Spacer(Modifier.height(11.dp))
+                    Spacer(Modifier.height(10.dp))
+                    QuranReadingProgressCard(
+                        summary = readingProgressSummary,
+                        foreground = foreground,
+                        cardColor = cardColor,
+                        language = language
+                    )
+                    Spacer(Modifier.height(10.dp))
                     SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
                     Spacer(Modifier.height(8.dp))
                     Row(
@@ -1672,9 +1862,32 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             foreground = foreground
                         ) { surahOriginFilter = "medinan" }
                     }
+                    Spacer(Modifier.height(7.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        items(
+                            listOf(
+                                "all" to when (language) { AppLanguage.EN -> "All progress" ; AppLanguage.AR -> "كل التقدم" ; AppLanguage.CKB -> "هەموو" },
+                                "in_progress" to when (language) { AppLanguage.EN -> "In progress" ; AppLanguage.AR -> "قيد القراءة" ; AppLanguage.CKB -> "دەستی پێکراوە" },
+                                "completed" to when (language) { AppLanguage.EN -> "Completed" ; AppLanguage.AR -> "مكتملة" ; AppLanguage.CKB -> "تەواوکراوە" },
+                                "not_started" to when (language) { AppLanguage.EN -> "Not started" ; AppLanguage.AR -> "لم تبدأ" ; AppLanguage.CKB -> "دەست پێنەکراوە" }
+                            ),
+                            key = { it.first }
+                        ) { (filter, label) ->
+                            SurahOriginFilterChip(
+                                label = label,
+                                selected = surahProgressFilter == filter,
+                                foreground = foreground
+                            ) { surahProgressFilter = filter }
+                        }
+                    }
                 }
                 val filteredSurahs = surahs.filter { item ->
                     matchesSurahOriginFilter(item.place, surahOriginFilter) &&
+                        matchesSurahProgressFilter(
+                            progressAyah = progressBySurah[item.number] ?: 0,
+                            totalAyahs = item.ayahCount,
+                            filter = surahProgressFilter
+                        ) &&
                         (query.isBlank() || item.arabicName.contains(query.trim(), true) ||
                             item.englishName.contains(query.trim(), true) ||
                             item.number.toString() == query.trim())
@@ -1712,7 +1925,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             placeLabel = placeLabel,
                             index = index,
                             isLastRead = item.number == initialSurah,
-                            progressAyah = prefs.getInt("quran_progress_ayah_${item.number}", 0),
+                            progressAyah = progressBySurah[item.number] ?: 0,
                             language = language,
                             foreground = foreground,
                             cardColor = cardColor,
@@ -1841,6 +2054,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 .putInt("last_ayah_number", verse.number)
                                 .putInt("quran_progress_ayah_${verse.surah}", verse.number)
                                 .apply()
+                            readingProgressRevision++
                             query = ""
                             selectedAyahForSheet = verse.surah to verse.number
                         },
