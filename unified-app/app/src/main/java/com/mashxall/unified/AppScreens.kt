@@ -6937,6 +6937,7 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     val pdfMotionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     var pdfDragPreview by remember(pageIndex) { mutableFloatStateOf(0f) }
     var pdfZoom by rememberSaveable(assetPath) { mutableFloatStateOf(1f) }
+    val currentPdfZoom by rememberUpdatedState(pdfZoom)
     var pdfPanX by remember(assetPath) { mutableFloatStateOf(0f) }
     var pdfPanY by remember(assetPath) { mutableFloatStateOf(0f) }
     var pdfViewportSize by remember(assetPath) { mutableStateOf(IntSize.Zero) }
@@ -7123,6 +7124,34 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                 enabled = pageCount > 0 && pageIndex < pageCount - 1 && !loading
             ) { pageIndex = (pageIndex + 1).coerceAtMost((pageCount - 1).coerceAtLeast(0)) }
         }
+        if (pdfZoom > 1.01f) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    (if (language == AppLanguage.EN) "ZOOM " else if (language == AppLanguage.AR) "التكبير " else "گەورەکردن ") +
+                        ((pdfZoom * 10f).roundToInt() / 10f).toString() + "×",
+                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                )
+                PremiumChoicePill(
+                    label = when (language) {
+                        AppLanguage.EN -> "Reset zoom"
+                        AppLanguage.AR -> "إعادة ضبط التكبير"
+                        AppLanguage.CKB -> "گەورەکردنەوە سفر بکەرەوە"
+                    },
+                    selected = false,
+                    accent = Gold,
+                    foreground = foreground,
+                    leadingIcon = Icons.Outlined.Refresh
+                ) {
+                    pdfZoom = 1f
+                    pdfPanX = 0f
+                    pdfPanY = 0f
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Box(
             Modifier.fillMaxSize().weight(1f)
@@ -7130,8 +7159,8 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                 .background(Color(0xFF1B2925))
                 .onSizeChanged { pdfViewportSize = it }
                 .transformable(pdfTransformState, canPan = { pdfZoom > 1.01f })
-                .pointerInput(pageIndex, pageCount, loading, bitmap, pdfZoom) {
-                    if (loading || bitmap == null || pageCount <= 1 || pdfZoom > 1.01f) return@pointerInput
+                .pointerInput(pageIndex, pageCount, loading, bitmap) {
+                    if (loading || bitmap == null || pageCount <= 1) return@pointerInput
                     var horizontalDrag = 0f
                     detectHorizontalDragGestures(
                         onDragStart = {
@@ -7139,15 +7168,17 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                             pdfDragPreview = 0f
                         },
                         onHorizontalDrag = { _, delta ->
-                            horizontalDrag += delta
-                            pdfDragPreview = (pdfDragPreview + delta).coerceIn(-size.width * 0.32f, size.width * 0.32f)
+                            if (currentPdfZoom <= 1.01f) {
+                                horizontalDrag += delta
+                                pdfDragPreview = (pdfDragPreview + delta).coerceIn(-size.width * 0.32f, size.width * 0.32f)
+                            }
                         },
                         onDragEnd = {
-                            val target = pdfSwipeTarget(pageIndex, pageCount, horizontalDrag)
-                            if (target != null) {
-                                pageIndex = target
-                            } else {
+                            if (currentPdfZoom > 1.01f) {
                                 pdfDragPreview = 0f
+                            } else {
+                                val target = pdfSwipeTarget(pageIndex, pageCount, horizontalDrag)
+                                if (target != null) pageIndex = target else pdfDragPreview = 0f
                             }
                         },
                         onDragCancel = {
