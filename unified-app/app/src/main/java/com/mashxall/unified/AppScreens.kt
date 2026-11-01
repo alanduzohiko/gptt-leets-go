@@ -5563,15 +5563,23 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         }
                         AnimatedVisibility(
                             visible = expanded,
-                            enter = androidx.compose.animation.expandVertically(
-                                animationSpec = tween(250)
-                            ) + fadeIn(tween(180)) + scaleIn(
-                                initialScale = 0.98f,
-                                animationSpec = tween(220)
-                            ),
-                            exit = androidx.compose.animation.shrinkVertically(
-                                animationSpec = tween(180)
-                            ) + fadeOut(tween(120))
+                            enter = if (motionAllowed) {
+                                androidx.compose.animation.expandVertically(
+                                    animationSpec = tween(250)
+                                ) + fadeIn(tween(180)) + scaleIn(
+                                    initialScale = 0.98f,
+                                    animationSpec = tween(220)
+                                )
+                            } else {
+                                fadeIn(tween(0))
+                            },
+                            exit = if (motionAllowed) {
+                                androidx.compose.animation.shrinkVertically(
+                                    animationSpec = tween(180)
+                                ) + fadeOut(tween(120))
+                            } else {
+                                fadeOut(tween(0))
+                            }
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Spacer(Modifier.height(10.dp))

@@ -902,6 +902,10 @@ private fun MoreScreen(
     cardColor: Color,
     onOpen: (AppScreen) -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
     var query by rememberSaveable { mutableStateOf("") }
     val modules = listOf(
         HomeModule(AppScreen.PRAYER, "prayer", "prayer_sub", Icons.Outlined.Schedule, Color(0xFF82B7E8)),
@@ -962,9 +966,13 @@ private fun MoreScreen(
                             AnimatedVisibility(
                                 visible = true,
                                 modifier = Modifier.weight(1f),
-                                enter = fadeIn(animationSpec = tween(320, delayMillis = delayMillis)) +
-                                    scaleIn(initialScale = 0.88f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
-                                    slideInVertically(initialOffsetY = { it / 5 }, animationSpec = tween(380, delayMillis = delayMillis))
+                                enter = if (motionAllowed) {
+                                    fadeIn(animationSpec = tween(320, delayMillis = delayMillis)) +
+                                        scaleIn(initialScale = 0.88f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
+                                        slideInVertically(initialOffsetY = { it / 5 }, animationSpec = tween(380, delayMillis = delayMillis))
+                                } else {
+                                    fadeIn(animationSpec = tween(0))
+                                }
                             ) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
@@ -2382,6 +2390,10 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 
 @Composable
 fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
     val worshipModules = listOf(
         Triple(AppScreen.AZKAR, Icons.Outlined.Spa, Color(0xFF74C7A7)),
         Triple(AppScreen.FARMUDA, Icons.Outlined.VolunteerActivism, Color(0xFFE8B477)),
@@ -2405,9 +2417,13 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
         worshipModules.forEachIndexed { index, (target, icon, tint) ->
             AnimatedVisibility(
                 visible = true,
-                enter = fadeIn(animationSpec = tween(380, delayMillis = index * 55)) +
-                    slideInVertically(initialOffsetY = { it / 8 }, animationSpec = tween(380, delayMillis = index * 55)) +
-                    scaleIn(initialScale = 0.965f, animationSpec = tween(380, delayMillis = index * 55))
+                enter = if (motionAllowed) {
+                    fadeIn(animationSpec = tween(380, delayMillis = index * 55)) +
+                        slideInVertically(initialOffsetY = { it / 8 }, animationSpec = tween(380, delayMillis = index * 55)) +
+                        scaleIn(initialScale = 0.965f, animationSpec = tween(380, delayMillis = index * 55))
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
             ) {
                 Card(
                     Modifier.fillMaxWidth().padding(bottom = 10.dp).premiumClickable { onOpen(target) },

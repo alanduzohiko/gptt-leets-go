@@ -43,6 +43,27 @@ class PremiumInteractionWiringTests(unittest.TestCase):
                 self.assertIn("if (motionAllowed)", transition)
                 self.assertIn("fadeIn(tween(0)) togetherWith fadeOut(tween(0))", transition)
 
+    def test_more_worship_and_names_expansion_respect_reduce_motion(self):
+        main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
+        main = main_path.read_text(encoding="utf-8")
+
+        more = main.split("private fun MoreScreen(", 1)[1].split(
+            "\\n@Composable\\nfun LibraryScreen(", 1
+        )[0]
+        self.assertIn("motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion)", more)
+        self.assertIn("enter = if (motionAllowed)", more)
+        self.assertIn("fadeIn(animationSpec = tween(0))", more)
+
+        worship_full = main.split("fun WorshipScreen(", 1)[1]
+        self.assertIn("motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion)", worship_full)
+        self.assertIn("enter = if (motionAllowed)", worship_full)
+
+        names = APP_SCREENS.split("visible = expanded,", 1)[1][:700]
+        self.assertIn("enter = if (motionAllowed)", names)
+        self.assertIn("exit = if (motionAllowed)", names)
+        self.assertIn("fadeIn(tween(0))", names)
+        self.assertIn("fadeOut(tween(0))", names)
+
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 
