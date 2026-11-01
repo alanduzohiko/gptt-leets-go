@@ -2386,7 +2386,7 @@ private fun HomeScreen(
                             AppLanguage.AR -> "إعدادات الصلاة"
                             AppLanguage.CKB -> "ڕێکخستنەکانی نوێژ"
                         }, color = foreground.copy(alpha = 0.63f), fontSize = 11.sp,
-                        modifier = Modifier.premiumClickable(role = Role.Button, pressedScale = prayerTilePressScale(key)) { onOpen(AppScreen.PRAYER) }
+                        modifier = Modifier.premiumClickable(role = Role.Button, pressedScale = 0.976f) { onOpen(AppScreen.PRAYER) }
                     )
                 }
             }
