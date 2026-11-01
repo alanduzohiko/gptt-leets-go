@@ -53,4 +53,11 @@ class PremiumMotionPolicyTest {
         assertEquals(false, shouldAnimateAmbientBackdrop("hadith", motionAllowed = false))
     }
 
+    @Test
+    fun contentSizeMotionRespectsSystemPreferenceAndLocalDisable() {
+        assertEquals(true, shouldAnimateContentSize(motionAllowed = true))
+        assertEquals(false, shouldAnimateContentSize(motionAllowed = false))
+        assertEquals(false, shouldAnimateContentSize(motionAllowed = true, enabled = false))
+    }
+
 }
