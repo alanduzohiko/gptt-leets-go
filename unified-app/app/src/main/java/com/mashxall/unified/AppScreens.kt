@@ -9174,6 +9174,51 @@ private fun PrayerJourneyTimeline(
     }
 }
 
+internal fun prayerScheduleUnavailableMessage(
+    language: AppLanguage,
+    locationMode: String,
+    selectedCity: String,
+    nearestCityName: String = "",
+    nearestCityCountry: String = "",
+    nearestDistanceKm: String = ""
+): String {
+    val nearestDetails = if (nearestCityName.isBlank()) {
+        ""
+    } else {
+        when (language) {
+            AppLanguage.EN -> ". Closest listed Salawati locality: " +
+                listOf(nearestCityName, nearestCityCountry).filter { it.isNotBlank() }.joinToString(", ") +
+                nearestDistanceKm.takeIf { it.isNotBlank() }?.let { " ($it km)" }.orEmpty()
+            AppLanguage.AR -> ". أقرب بلدة مسجلة في صلواتي: " +
+                listOf(nearestCityName, nearestCityCountry).filter { it.isNotBlank() }.joinToString("، ") +
+                nearestDistanceKm.takeIf { it.isNotBlank() }?.let { " (على بعد $it كم)" }.orEmpty()
+            AppLanguage.CKB -> ". نزیکترین شوێنی تۆمارکراو لە صەڵەواتی: " +
+                listOf(nearestCityName, nearestCityCountry).filter { it.isNotBlank() }.joinToString("، ") +
+                nearestDistanceKm.takeIf { it.isNotBlank() }?.let { " ($it کیلۆمەتر)" }.orEmpty()
+        }
+    }
+    return if (locationMode == "gps") {
+        when (language) {
+            AppLanguage.EN -> "No verified original Salawati timetable matched this GPS position$nearestDetails. Refresh your location or choose a supported city. Prayer times are never guessed."
+            AppLanguage.AR -> "لم يُعثر على جدول مواقيت أصلي موثوق من صلواتي يطابق موقع GPS هذا$nearestDetails. حدّث موقعك أو اختر مدينة مدعومة؛ لن نخمن أوقات الصلاة."
+            AppLanguage.CKB -> "هیچ خشتەیەکی ڕەسەنی پشتڕاستکراو لە صەڵەواتی بۆ ئەم شوێنەی GPS نەدۆزرایەوە$nearestDetails. شوێنەکەت نوێ بکەرەوە یان شارێکی پشتگیریکراو هەڵبژێرە؛ کاتەکان ناخرێنەوە."
+        }
+    } else {
+        val city = selectedCity.ifBlank {
+            when (language) {
+                AppLanguage.EN -> "the selected city"
+                AppLanguage.AR -> "المدينة المحددة"
+                AppLanguage.CKB -> "شاری هەڵبژێردراو"
+            }
+        }
+        when (language) {
+            AppLanguage.EN -> "No verified original Salawati timetable is available for $city. Choose a supported city using the search control above; prayer times are never guessed."
+            AppLanguage.AR -> "لا يتوفر جدول مواقيت أصلي موثوق من صلواتي لمدينة $city. اختر مدينة مدعومة من زر البحث أعلاه؛ لن نخمن أوقات الصلاة."
+            AppLanguage.CKB -> "هیچ خشتەیەکی ڕەسەنی پشتڕاستکراوی صەڵەواتی بۆ شاری $city بەردەست نییە. لە دوگمەی گەڕانی سەرەوە شارێکی پشتگیریکراو هەڵبژێرە؛ کاتەکان ناخرێنەوە."
+        }
+    }
+}
+
 internal enum class PrayerTimetableStatus {
     UPDATING,
     SCHEDULE_READY,
@@ -9887,18 +9932,20 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         }
         Spacer(Modifier.height(14.dp))
-        if (!loading && times == null && locationMode == "gps" && nearestKnownCityLabel != null) {
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "This identifies the closest locality recorded in Salawati; it does not mean a valid timetable exists for it. Choose a supported city or retry GPS for the prayer source."
-                    AppLanguage.AR -> "هذا اسم أقرب بلدة مسجلة في صلواتي فقط، ولا يعني وجود جدول مواقيت صالح لها. اختر مدينة مدعومة أو حدّث GPS لمصدر المواقيت."
-                    AppLanguage.CKB -> "ئەمە تەنها ناوی نزیکترین شوێنی تۆمارکراوە لە صەڵەواتییە؛ واتای ئەوە نییە خشتەی کاتی نوێژی دروستی هەیە. شارێکی پشتگیریکراو هەڵبژێرە یان GPS نوێ بکەرەوە."
-                },
-                color = Gold, fontSize = 11.sp, lineHeight = 17.sp
-            )
-            Spacer(Modifier.height(6.dp))
-        }
-        if (times == null) LoadingOrEmpty(loading, language, foreground) else {
+        if (times == null) LoadingOrEmpty(
+            loading = loading,
+            language = language,
+            foreground = foreground,
+            message = prayerScheduleUnavailableMessage(
+                language = language,
+                locationMode = locationMode,
+                selectedCity = localizedKurdistanCityName(selectedCity, language.key).ifBlank { selectedCity },
+                nearestCityName = nearestKnownCityLabel.orEmpty(),
+                nearestCityCountry = nearestKnownCityCountry,
+                nearestDistanceKm = nearestKnownDistance
+            ),
+            onRetry = if (locationMode == "gps") ({ locateNow() }) else null
+        ) else {
             val timeItems = listOf(
                 Triple("fajr", tr(language, "fajr"), formatPrayerTime(times!!.fajr, language, use24Hour)),
                 Triple("sunrise", tr(language, "sunrise"), formatPrayerTime(times!!.sunrise, language, use24Hour)),
