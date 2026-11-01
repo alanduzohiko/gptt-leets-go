@@ -1950,7 +1950,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
                                         )
                                     }
-                                    Switch(
+                                    PremiumSwitch(
                                         checked = coloredTajweed,
                                         onCheckedChange = { enabled ->
                                             coloredTajweed = enabled
@@ -1971,7 +1971,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         Text(if (language == AppLanguage.EN) "Night reading mode" else if (language == AppLanguage.AR) "وضع القراءة الليلي" else "دۆخی خوێندنەوەی شەوانە", color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                         Text(if (language == AppLanguage.EN) "Invert paper and ink colours" else if (language == AppLanguage.AR) "اعكس لون الورق والحبر" else "ڕەنگی کاغەز و مەرەکەب بگۆڕە", color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
                                     }
-                                    Switch(checked = mushafDarkMode, onCheckedChange = { mushafDarkMode = it; if (it) mushafSepiaMode = false; prefs.edit().putBoolean("mushaf_dark_mode", it).putBoolean("mushaf_sepia_mode", mushafSepiaMode).apply() })
+                                    PremiumSwitch(checked = mushafDarkMode, onCheckedChange = { mushafDarkMode = it; if (it) mushafSepiaMode = false; prefs.edit().putBoolean("mushaf_dark_mode", it).putBoolean("mushaf_sepia_mode", mushafSepiaMode).apply() })
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -1981,7 +1981,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         Text(if (language == AppLanguage.EN) "Warm paper / sepia" else if (language == AppLanguage.AR) "الورق الدافئ / سيبيا" else "کاغەزی گەرم / سێپیا", color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                         Text(if (language == AppLanguage.EN) "Soft cream tone for long reading" else if (language == AppLanguage.AR) "لون كريمي هادئ للقراءة الطويلة" else "ڕەنگی کرێمی نەرم بۆ خوێندنەوەی درێژ", color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
                                     }
-                                    Switch(checked = mushafSepiaMode, onCheckedChange = { mushafSepiaMode = it; if (it) mushafDarkMode = false; prefs.edit().putBoolean("mushaf_sepia_mode", it).putBoolean("mushaf_dark_mode", mushafDarkMode).apply() })
+                                    PremiumSwitch(checked = mushafSepiaMode, onCheckedChange = { mushafSepiaMode = it; if (it) mushafDarkMode = false; prefs.edit().putBoolean("mushaf_sepia_mode", it).putBoolean("mushaf_dark_mode", mushafDarkMode).apply() })
                                 }
                             }
                             Spacer(Modifier.height(14.dp))
@@ -8755,7 +8755,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             }
                         )
                     }
-                    Switch(checked = adhanEnabled, onCheckedChange = { enable ->
+                    PremiumSwitch(checked = adhanEnabled, onCheckedChange = { enable ->
                         if (!enable) {
                             adhanEnabled = false
                             prefs.edit().putBoolean("adhan_enabled", false).apply()
