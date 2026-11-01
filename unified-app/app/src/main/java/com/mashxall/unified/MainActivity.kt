@@ -561,11 +561,18 @@ fun MashxallApp(startScreen: String? = null) {
                                     onSurah = { s ->
                                         selectedSurah = s
                                         selectedAyah = 1
-                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", 1).apply()
+                                        val progressKey = "quran_progress_ayah_$s"
+                                        val editor = prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", 1)
+                                        if (!prefs.contains(progressKey)) editor.putInt(progressKey, 1)
+                                        editor.apply()
                                     },
                                     onTafsir = { s, a ->
                                         selectedSurah = s; selectedAyah = a
-                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                        prefs.edit()
+                                            .putInt("last_surah", s)
+                                            .putInt("last_ayah_number", a)
+                                            .putInt("quran_progress_ayah_$s", a)
+                                            .apply()
                                         navigateTo("tafsir")
                                     },
                                     onBookmark = { s, a ->
@@ -577,7 +584,11 @@ fun MashxallApp(startScreen: String? = null) {
                                     onOpenVerse = { s, a ->
                                         selectedSurah = s
                                         selectedAyah = a
-                                        prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                        prefs.edit()
+                                            .putInt("last_surah", s)
+                                            .putInt("last_ayah_number", a)
+                                            .putInt("quran_progress_ayah_$s", a)
+                                            .apply()
                                     },
                                     onPlayAudio = { s, a ->
                                         selectedSurah = s
@@ -627,7 +638,11 @@ fun MashxallApp(startScreen: String? = null) {
                                 )
                                 "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
                                     selectedSurah = s; selectedAyah = a
-                                    prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
+                                    prefs.edit()
+                                        .putInt("last_surah", s)
+                                        .putInt("last_ayah_number", a)
+                                        .putInt("quran_progress_ayah_$s", a)
+                                        .apply()
                                 })
                                 "hadith" -> HadithScreen(language, foreground, cardColor)
                                 "azkar" -> AzkarScreen(language, foreground, cardColor)
