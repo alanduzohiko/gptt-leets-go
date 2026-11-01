@@ -64,6 +64,37 @@ class QuranResumeTargetTest {
     }
 
     @Test
+    fun freshInstallStartsWithTheOriginalPageBasedMushaf() {
+        val target = resolveQuranResumeTarget(
+            savedSurah = 1,
+            savedAyah = 1,
+            savedPage = 1,
+            savedReaderMode = null,
+            hasSavedPage = false,
+            hasReadingHistory = false
+        )
+        assertEquals(1, target.surah)
+        assertEquals(1, target.ayah)
+        assertEquals(1, target.mushafPage)
+        assertTrue(target.openMushaf)
+    }
+
+    @Test
+    fun existingVerseHistoryWithoutReaderModeDoesNotJumpToMushaf() {
+        val target = resolveQuranResumeTarget(
+            savedSurah = 7,
+            savedAyah = 24,
+            savedPage = 1,
+            savedReaderMode = null,
+            hasSavedPage = false,
+            hasReadingHistory = true
+        )
+        assertEquals(7, target.surah)
+        assertEquals(24, target.ayah)
+        assertFalse(target.openMushaf)
+    }
+
+    @Test
     fun legacyPageWithoutModeKeepsBackwardCompatibleMushafResume() {
         val target = resolveQuranResumeTarget(
             savedSurah = 5,

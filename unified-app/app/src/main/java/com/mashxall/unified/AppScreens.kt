@@ -1598,7 +1598,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 savedAyah = prefs.getInt("last_ayah_number", initialAyah),
                                 savedPage = prefs.getInt("last_mushaf_page", mushafPage),
                                 savedReaderMode = prefs.getString("quran_reader_mode", null),
-                                hasSavedPage = prefs.contains("last_mushaf_page")
+                                hasSavedPage = prefs.contains("last_mushaf_page"),
+                                hasReadingHistory = prefs.contains("last_surah") ||
+                                    prefs.contains("last_ayah_number") ||
+                                    prefs.contains("last_mushaf_page")
                             )
                             selected = resumeTarget.surah
                             mushafPage = resumeTarget.mushafPage
@@ -2915,12 +2918,13 @@ internal fun resolveQuranResumeTarget(
     savedAyah: Int,
     savedPage: Int,
     savedReaderMode: String?,
-    hasSavedPage: Boolean
+    hasSavedPage: Boolean,
+    hasReadingHistory: Boolean = hasSavedPage || savedReaderMode != null
 ): QuranResumeTarget = QuranResumeTarget(
     surah = savedSurah.coerceIn(1, 114),
     ayah = savedAyah.coerceAtLeast(1),
     mushafPage = savedPage.coerceIn(1, 604),
-    openMushaf = shouldRestorePageMushaf(savedReaderMode, hasSavedPage)
+    openMushaf = !hasReadingHistory || shouldRestorePageMushaf(savedReaderMode, hasSavedPage)
 )
 
 internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boolean): Boolean =
