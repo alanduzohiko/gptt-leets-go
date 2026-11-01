@@ -234,7 +234,13 @@ internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: 
 }
 
 @Composable
-private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
+private fun LoadingOrEmpty(
+    loading: Boolean,
+    language: AppLanguage,
+    foreground: Color,
+    message: String = tr(language, "no_data"),
+    onRetry: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val enter = if (motionAllowed) {
@@ -256,8 +262,8 @@ private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: 
         }
         AnimatedVisibility(
             visible = !loading,
-            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180)),
-            exit = fadeOut(tween(120))
+            enter = enter,
+            exit = exit
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 22.dp),
@@ -282,6 +288,20 @@ private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: 
                     lineHeight = 21.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (onRetry != null) {
+                    PremiumActionButton(
+                        label = when (language) {
+                            AppLanguage.EN -> "Try again"
+                            AppLanguage.AR -> "إعادة المحاولة"
+                            AppLanguage.CKB -> "دووبارە هەوڵ بدەوە"
+                        },
+                        icon = Icons.Outlined.Refresh,
+                        accent = Gold,
+                        foreground = foreground,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onRetry
+                    )
+                }
             }
         }
     }
@@ -9411,16 +9431,26 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var query by rememberSaveable { mutableStateOf("") }
     var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var retryLoad by remember { mutableIntStateOf(0) }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var favorites by remember {
         mutableStateOf(favoritesPrefs.getStringSet("farmuda_ids", emptySet()).orEmpty().toSet())
     }
     var selectedRecord by remember { mutableStateOf<FarmudaItem?>(null) }
 
-    LaunchedEffect(query) {
+    LaunchedEffect(query, retryLoad) {
         loading = true
-        records = ContentRepository.loadFarmuda(context, query.trim())
-        loading = false
+        loadFailed = false
+        try {
+            records = ContentRepository.loadFarmuda(context, query.trim())
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            records = emptyList()
+            loadFailed = true
+        } finally {
+            loading = false
+        }
     }
     val visibleRecords = records.filter { !favoritesOnly || favorites.contains(it.id.toString()) }
     Column(Modifier.fillMaxSize()) {
@@ -9458,12 +9488,19 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         }
         if (visibleRecords.isEmpty()) {
             LoadingOrEmpty(
-                loading, language, foreground,
-                if (favoritesOnly && favorites.isEmpty()) {
-                    if (language == AppLanguage.EN) "No favourites yet. Tap the star on a record to save it."
-                    else if (language == AppLanguage.AR) "لا توجد مفضلات بعد. اضغط النجمة لحفظ السجل."
-                    else "هێشتا دڵخواز نییە؛ بۆ پاشەکەوتکردن ئەستێرەکە دابگرە."
-                } else tr(language, "not_found")
+                loading = loading,
+                language = language,
+                foreground = foreground,
+                message = when {
+                    loadFailed && language == AppLanguage.EN -> "Could not load this collection. Check the data and try again."
+                    loadFailed && language == AppLanguage.AR -> "تعذّر تحميل هذه المجموعة. تحقّق من البيانات ثم أعد المحاولة."
+                    loadFailed -> "نەتوانرا ئەم کۆکراوەیە باربکرێت؛ داتا بپشکنە و دووبارە هەوڵ بدەوە."
+                    favoritesOnly && favorites.isEmpty() && language == AppLanguage.EN -> "No favourites yet. Tap the star on a record to save it."
+                    favoritesOnly && favorites.isEmpty() && language == AppLanguage.AR -> "لا توجد مفضلات بعد. اضغط النجمة لحفظ السجل."
+                    favoritesOnly && favorites.isEmpty() -> "هێشتا دڵخواز نییە؛ بۆ پاشەکەوتکردن ئەستێرەکە دابگرە."
+                    else -> tr(language, "not_found")
+                },
+                onRetry = if (loadFailed) ({ retryLoad++ }) else null
             )
         } else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             itemsIndexed(visibleRecords, key = { _, item -> item.id }) { recordIndex, item ->
