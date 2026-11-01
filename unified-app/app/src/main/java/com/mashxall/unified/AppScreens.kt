@@ -242,7 +242,7 @@ private fun LoadingOrEmpty(
     onRetry: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val enter = if (motionAllowed) {
         fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180))
     } else {
@@ -355,7 +355,7 @@ private fun ReaderModeSegment(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
         targetValue = if (selected) Gold.copy(alpha = 0.16f) else foreground.copy(alpha = 0.035f),
         animationSpec = if (motionAllowed) tween(220) else snap(),
@@ -564,7 +564,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var surahsLoading by remember { mutableStateOf(true) }
     var surahsLoadFailed by remember { mutableStateOf(false) }
@@ -716,7 +716,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             pendingMushafStartSurah = 0
             openingMushaf = false
             mushafMode = true
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
         } else {
             // Preserve the real verse reader as an explicit fallback if source page metadata is absent.
             selected = requestedSurah
@@ -1131,7 +1131,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     .putInt("last_surah", item.number)
                                     .putInt("last_ayah_number", 1)
                                     .apply()
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                             },
                             colors = CardDefaults.cardColors(containerColor = cardColor),
                             shape = RoundedCornerShape(18.dp),
@@ -1208,7 +1208,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             query = ""
                             onSurah(target)
                             prefs.edit().putInt("last_surah", target).putInt("last_ayah_number", 1).apply()
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                             scope.launch { listState.animateScrollToItem(0) }
                         }
                         horizontalDrag = 0f
@@ -2404,7 +2404,7 @@ private fun MushafPageViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val pageReveal = remember { Animatable(1f) }
     val pageTurnOffset = remember { Animatable(0f) }
     val pageTurnRotation = remember { Animatable(0f) }
@@ -2562,7 +2562,7 @@ private fun MushafPageViewer(
             TextButton(
                 onClick = {
                     toolbarVerse?.let { target ->
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                         onVerseClick(target.surah, target.ayah)
                     }
                 },
@@ -2592,7 +2592,7 @@ private fun MushafPageViewer(
             ) {
                 (selectedVerse ?: pageVerses.firstOrNull())?.let { target ->
                     onBookmarkVerse(target.surah, target.ayah)
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
                     Toast.makeText(
                         context,
                         when (language) {
@@ -2743,7 +2743,7 @@ private fun MushafPageViewer(
                                                 thresholdPx = mushafSwipeThresholdPx(size.width.toFloat())
                                             )
                                             if (nextPage != null) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                 onPageChange(nextPage)
                                             } else {
                                                 // A short gesture returns the paper to its resting position.
@@ -2781,17 +2781,17 @@ private fun MushafPageViewer(
                                                     val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
                                                     if (hit != null) {
                                                         selectedVerse = hit
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                         onVerseClick(hit.surah, hit.ayah)
                                                     } else {
                                                         val edgeAction = mushafEdgeTapAction(x / 1148f, page, scale, verseWasHit = false)
                                                         when (edgeAction) {
                                                             MushafEdgeTapAction.NEXT_PAGE -> {
-                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                                 onPageChange((page + 1).coerceAtMost(604))
                                                             }
                                                             MushafEdgeTapAction.PREVIOUS_PAGE -> {
-                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                                 onPageChange((page - 1).coerceAtLeast(1))
                                                             }
                                                             MushafEdgeTapAction.NONE -> Unit
@@ -3105,7 +3105,7 @@ internal fun tafsirSwipeTarget(
 @Composable
 fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, surah: Int, ayah: Int, onChangeVerse: (Int, Int) -> Unit) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     var selectedBook by rememberSaveable { mutableStateOf(if (language == AppLanguage.EN) "sahih" else if (language == AppLanguage.AR) "mukhtasar" else "roshn") }
     var text by remember { mutableStateOf("") }
@@ -3156,7 +3156,7 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                         currentVerse = surah to ayah
                     )
                     if (target != null) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                         onChangeVerse(target.first, target.second)
                     }
                     horizontalDrag = 0f
@@ -3316,7 +3316,7 @@ private fun cleanHadithDisplayText(value: String): String =
 @OptIn(ExperimentalMaterial3Api::class)
 fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
@@ -3835,7 +3835,7 @@ internal fun nextAzkarRepetition(currentCount: Int, targetCount: Int): Int =
 @OptIn(ExperimentalMaterial3Api::class)
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_azkar_favorites", Context.MODE_PRIVATE) }
@@ -4141,7 +4141,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 burstRevision += 1
                 count = nextCount
                 progressPrefs.edit().putInt(item.id.toString(), nextCount).apply()
-                haptic.performHapticFeedback(
+                haptic.performMashxallHaptic(
                     if (nextCount >= targetCount) HapticFeedbackType.LongPress
                     else HapticFeedbackType.TextHandleMove
                 )
@@ -4296,7 +4296,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 @Composable
 fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_name_favorites", Context.MODE_PRIVATE) }
     var names by remember { mutableStateOf<List<AllahName>>(emptyList()) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -4572,7 +4572,7 @@ internal fun tasbihProgressFraction(count: Int, target: Int): Float =
 @Composable
 fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var presets by remember { mutableStateOf(emptyList<TasbihPreset>()) }
     var selectedId by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_preset_id", 3)) }
@@ -4717,7 +4717,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     val zikrText = selected?.zikr ?: "سُبْحَانَ اللّٰهِ • اَلْحَمْدُلِلّٰهِ • اَللّٰهُ أَكْبَرُ"
                     if (clipboard != null) {
                         clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Tasbih", zikrText))
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
                         Toast.makeText(
                             context,
                             when (language) {
@@ -4740,7 +4740,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         .putInt("tasbih_total_$selectedId", totalCount)
                         .putInt("tasbih_count", count)
                         .apply()
-                    haptic.performHapticFeedback(
+                    haptic.performMashxallHaptic(
                         if (targetCount > 0 && count >= targetCount) HapticFeedbackType.LongPress
                         else HapticFeedbackType.TextHandleMove
                     )
@@ -4831,7 +4831,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     .putInt("tasbih_total_$selectedId", 0)
                     .putInt("tasbih_count", 0)
                     .apply()
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
             }
             PremiumActionButton(
                 label = if (language == AppLanguage.EN) "New round" else if (language == AppLanguage.AR) "دورة جديدة" else "خولێکی نوێ",
@@ -4842,7 +4842,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             ) {
                 count = 0
                 prefs.edit().putInt("tasbih_count_$selectedId", 0).putInt("tasbih_count", 0).apply()
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
             }
         }
     }
@@ -5051,7 +5051,7 @@ fun AudioScreen(
     autoPlayRequested: Boolean = false
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
@@ -7034,7 +7034,7 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
     var retryPdfLoad by remember { mutableIntStateOf(0) }
-    val pdfMotionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val pdfMotionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     var pdfDragPreview by remember(pageIndex) { mutableFloatStateOf(0f) }
     var pdfZoom by rememberSaveable(assetPath) { mutableFloatStateOf(1f) }
     val currentPdfZoom by rememberUpdatedState(pdfZoom)
@@ -7752,7 +7752,7 @@ private fun PrayerJourneyTimeline(
     nextPrayerKey: String?
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
         animationSpec = if (motionAllowed) tween(720, easing = FastOutSlowInEasing) else snap(),
@@ -7864,7 +7864,7 @@ private fun PrayerJourneyTimeline(
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
@@ -9091,7 +9091,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 @Composable
 fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var locationMode by rememberSaveable {
@@ -9296,7 +9296,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     )
 
     LaunchedEffect(aligned) {
-        if (aligned) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (aligned) haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
     }
 
     Column(
@@ -9693,7 +9693,7 @@ fun WordAnalysisScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val favoritesPrefs = remember { context.getSharedPreferences("mashxall_farmuda_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
     var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
