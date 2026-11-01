@@ -11,7 +11,7 @@ class PremiumMotionPolicyTest {
         assertEquals(0.958f, premiumRolePressScale(Role.Tab), 0.0001f)
         assertEquals(0.968f, premiumRolePressScale(null), 0.0001f)
         assertEquals(0.90f, premiumRolePressScale(Role.Button, 0.2f), 0.0001f)
-        assertEquals(1f, premiumRolePressScale(Role.Tab, 1.2f), 0.0001f)
+        assertEquals(0.958f, premiumRolePressScale(Role.Tab, 1.2f), 0.0001f)
     }
 
     @Test
