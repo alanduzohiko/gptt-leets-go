@@ -852,6 +852,14 @@ internal fun PremiumChoicePill(
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall choice pill response"
     )
+    val selectionDotScale by animateFloatAsState(
+        targetValue = if (enabled && selected) 1.18f else 0.62f,
+        animationSpec = if (motionAllowed) spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ) else snap(),
+        label = "Mashxall choice pill selection jewel"
+    )
     Row(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -875,8 +883,15 @@ internal fun PremiumChoicePill(
         Text(label, color = labelColor, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
         Spacer(Modifier.width(7.dp))
         Box(
-            Modifier.size(7.dp).clip(CircleShape)
+            Modifier.size(7.dp)
+                .graphicsLayer { scaleX = selectionDotScale; scaleY = selectionDotScale }
+                .clip(CircleShape)
                 .background(if (enabled && selected) accent else foreground.copy(alpha = if (enabled) 0.18f else 0.07f))
+                .border(
+                    width = if (enabled && selected) 0.7.dp else 0.dp,
+                    color = accent.copy(alpha = if (enabled && selected) 0.72f else 0f),
+                    shape = CircleShape
+                )
         )
     }
 }
@@ -1031,8 +1046,15 @@ internal fun PremiumSearchField(
                         animationSpec = tween(90)
                     ) else fadeOut(tween(0))
                 ) {
-                    IconButton(onClick = { onValueChange("") }) {
-                        Icon(Icons.Outlined.Close, contentDescription = clearContentDescription, tint = foreground.copy(alpha = 0.60f))
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = clearContentDescription,
+                        accent = accent,
+                        size = 34.dp,
+                        circular = true,
+                        hapticFeedback = true
+                    ) {
+                        onValueChange("")
                     }
                 }
             },
