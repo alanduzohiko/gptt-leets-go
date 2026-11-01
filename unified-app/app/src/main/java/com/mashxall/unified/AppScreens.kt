@@ -572,6 +572,176 @@ private fun QuranSurahWelcomeCard(
 }
 
 @Composable
+private fun QuranSurahIndexCard(
+    surah: Surah,
+    placeLabel: String,
+    index: Int,
+    isLastRead: Boolean,
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val surface by animateColorAsState(
+        targetValue = if (isLastRead) Gold.copy(alpha = 0.105f) else cardColor,
+        animationSpec = if (motionAllowed) tween(220) else snap(),
+        label = "Quran last-read surah surface"
+    )
+    val outline by animateColorAsState(
+        targetValue = if (isLastRead) Gold.copy(alpha = 0.64f) else Gold.copy(alpha = 0.17f),
+        animationSpec = if (motionAllowed) tween(220) else snap(),
+        label = "Quran surah card outline"
+    )
+    val lastReadLabel = when (language) {
+        AppLanguage.EN -> "LAST READ"
+        AppLanguage.AR -> "آخر قراءة"
+        AppLanguage.CKB -> "دوا خوێندنەوە"
+    }
+    val verseLabel = when (language) {
+        AppLanguage.EN -> "verses"
+        AppLanguage.AR -> "آية"
+        AppLanguage.CKB -> "ئایەت"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth()
+            .staggeredEntrance(itemKey = surah.number, index = index)
+            .premiumClickable(hapticFeedback = true, onClick = onClick)
+            .premiumAnimateContentSize(),
+        colors = CardDefaults.cardColors(containerColor = surface),
+        shape = RoundedCornerShape(21.dp),
+        border = BorderStroke(if (isLastRead) 1.15.dp else 0.7.dp, outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isLastRead) 2.dp else 0.5.dp)
+    ) {
+        Box(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier.align(Alignment.CenterEnd).padding(end = 22.dp).size(76.dp)
+                    .border(1.dp, Gold.copy(alpha = if (isLastRead) 0.10f else 0.045f), CircleShape)
+            )
+            Box(
+                Modifier.align(Alignment.CenterEnd).padding(end = 38.dp).size(45.dp)
+                    .border(1.dp, Gold.copy(alpha = 0.045f), CircleShape)
+            )
+            Row(
+                Modifier.fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                Gold.copy(alpha = if (isLastRead) 0.075f else 0.028f),
+                                surface,
+                                cardColor
+                            )
+                        )
+                    )
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(47.dp).clip(RoundedCornerShape(16.dp))
+                        .background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.25f), Gold.copy(alpha = 0.055f))))
+                        .border(1.dp, Gold.copy(alpha = if (isLastRead) 0.52f else 0.29f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        surah.number.toString().padStart(2, '0'),
+                        color = Gold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            surah.arabicName,
+                            color = foreground,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.End,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isLastRead) {
+                            Spacer(Modifier.width(5.dp))
+                            Row(
+                                Modifier.clip(CircleShape)
+                                    .background(Gold.copy(alpha = 0.13f))
+                                    .border(1.dp, Gold.copy(alpha = 0.22f), CircleShape)
+                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(10.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text(lastReadLabel, color = Gold, fontSize = 7.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        surah.englishName,
+                        color = foreground.copy(alpha = 0.68f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.clip(RoundedCornerShape(8.dp))
+                                .background(foreground.copy(alpha = 0.055f))
+                                .border(0.6.dp, foreground.copy(alpha = 0.07f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "${surah.ayahCount} $verseLabel",
+                                color = foreground.copy(alpha = 0.72f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+                        if (placeLabel.isNotBlank()) {
+                            Box(
+                                Modifier.clip(RoundedCornerShape(8.dp))
+                                    .background(Gold.copy(alpha = 0.075f))
+                                    .border(0.6.dp, Gold.copy(alpha = 0.13f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 7.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    placeLabel,
+                                    color = Gold.copy(alpha = 0.90f),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.width(7.dp))
+                Box(
+                    Modifier.size(30.dp).clip(CircleShape)
+                        .background(Gold.copy(alpha = if (isLastRead) 0.17f else 0.08f))
+                        .border(1.dp, Gold.copy(alpha = if (isLastRead) 0.30f else 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold, modifier = Modifier.size(17.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun QuranWelcomeMetaChip(label: String, modifier: Modifier = Modifier) {
     Row(
         modifier.clip(RoundedCornerShape(12.dp))
@@ -1312,16 +1482,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 ) {
                     itemsIndexed(filteredSurahs, key = { _, item -> item.number }) { index, item ->
                         val placeLabel = when {
-                            item.place.contains("meccan", ignoreCase = true) || item.place.contains("makki", ignoreCase = true) ->
+                            matchesSurahOriginFilter(item.place, "meccan") ->
                                 when (language) { AppLanguage.EN -> "Meccan"; AppLanguage.AR -> "مكية"; AppLanguage.CKB -> "مەککی" }
-                            item.place.contains("medinan", ignoreCase = true) || item.place.contains("madani", ignoreCase = true) ->
+                            matchesSurahOriginFilter(item.place, "medinan") ->
                                 when (language) { AppLanguage.EN -> "Medinan"; AppLanguage.AR -> "مدنية"; AppLanguage.CKB -> "مەدەنی" }
                             else -> item.place
                         }
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                                .staggeredEntrance(itemKey = item.number, index = index)
-                                .premiumClickable(hapticFeedback = true) {
+                        QuranSurahIndexCard(
+                            surah = item,
+                            placeLabel = placeLabel,
+                            index = index,
+                            isLastRead = item.number == initialSurah,
+                            language = language,
+                            foreground = foreground,
+                            cardColor = cardColor,
+                            onClick = {
                                 selected = item.number
                                 onSurah(item.number)
                                 query = ""
@@ -1335,34 +1510,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     .putInt("last_ayah_number", 1)
                                     .apply()
                                 haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                            },
-                            colors = CardDefaults.cardColors(containerColor = cardColor),
-                            shape = RoundedCornerShape(18.dp),
-                            border = BorderStroke(0.6.dp, Gold.copy(alpha = 0.16f))
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Brush.linearGradient(listOf(Gold.copy(alpha = 0.24f), Gold.copy(alpha = 0.06f)))).border(1.dp, Gold.copy(alpha = 0.30f), RoundedCornerShape(13.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(item.number.toString(), color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(item.arabicName, color = foreground, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-                                    Text(item.englishName, color = foreground.copy(alpha = 0.68f), fontSize = 11.sp)
-                                    Text(
-                                        listOf(
-                                            item.ayahCount.toString() + " " + when (language) { AppLanguage.EN -> "verses"; AppLanguage.AR -> "آية"; AppLanguage.CKB -> "ئایەت" },
-                                            placeLabel
-                                        ).filter { it.isNotBlank() }.joinToString(" • "),
-                                        color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
-                                    )
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Icon(Icons.Outlined.ChevronRight, null, tint = Gold)
                             }
-                        }
+                        )
                     }
                 }
             }
