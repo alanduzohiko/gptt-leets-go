@@ -288,13 +288,18 @@ private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: 
 }
 
 @Composable
-private fun SearchBox(value: String, onValue: (String) -> Unit, placeholder: String) {
+private fun SearchBox(language: AppLanguage, value: String, onValue: (String) -> Unit, placeholder: String) {
     PremiumSearchField(
         value = value,
         onValueChange = onValue,
         placeholder = placeholder,
         accent = MaterialTheme.colorScheme.primary,
-        foreground = MaterialTheme.colorScheme.onSurface
+        foreground = MaterialTheme.colorScheme.onSurface,
+        clearContentDescription = when (language) {
+            AppLanguage.EN -> "Clear search"
+            AppLanguage.AR -> "مسح البحث"
+            AppLanguage.CKB -> "پاککردنەوەی گەڕان"
+        }
     )
 }
 
@@ -879,7 +884,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             }
             }
             Spacer(Modifier.height(8.dp))
-            SearchBox(query, { query = it }, tr(language, "search"))
+            SearchBox(language, query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(7.dp))
             val currentTranslationLabel = when (language) {
                 AppLanguage.CKB -> currentTranslation.ckb
@@ -1029,7 +1034,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         onSettings = { readerSettingsSection = "overview"; showReaderSettings = true }
                     )
                     Spacer(Modifier.height(12.dp))
-                    SearchBox(query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
+                    SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
                 }
                 val filteredSurahs = surahs.filter { item ->
                     query.isBlank() || item.arabicName.contains(query.trim(), true) ||
@@ -2817,7 +2822,7 @@ fun BookmarksScreen(
             eyebrow = when (language) { AppLanguage.EN -> "YOUR PERSONAL COLLECTION"; AppLanguage.AR -> "مجموعتك الشخصية"; AppLanguage.CKB -> "کۆمەڵەی تایبەتی تۆ" }
         )
         Spacer(Modifier.height(10.dp))
-        SearchBox(query, { query = it }, if (language == AppLanguage.EN) "Search surah, verse or note…" else if (language == AppLanguage.AR) "ابحث في السورة أو الآية أو الملاحظة…" else "لە سوورەت، ئایەت یان تێبینی بگەڕێ…")
+        SearchBox(language, query, { query = it }, if (language == AppLanguage.EN) "Search surah, verse or note…" else if (language == AppLanguage.AR) "ابحث في السورة أو الآية أو الملاحظة…" else "لە سوورەت، ئایەت یان تێبینی بگەڕێ…")
         Spacer(Modifier.height(8.dp))
         if (visibleBookmarks.isEmpty()) {
             Text(
@@ -3218,7 +3223,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 ) { selectedMode = 1 }
             }
             Spacer(Modifier.height(8.dp))
-            SearchBox(query, { query = it }, tr(language, "search_hadith"))
+            SearchBox(language, query, { query = it }, tr(language, "search_hadith"))
             if (selectedMode == 0) LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 item(key = "saved-hadith-filter") {
                     PremiumChoicePill(
@@ -3730,7 +3735,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 eyebrow = when (language) { AppLanguage.EN -> "DAILY REMEMBRANCE"; AppLanguage.AR -> "الأذكار اليومية"; AppLanguage.CKB -> "زیکری ڕۆژانە" }
             )
             Spacer(Modifier.height(10.dp))
-            SearchBox(query, { query = it; if (it.isNotBlank()) selectedCategory = 0 }, tr(language, "search_azkar"))
+            SearchBox(language, query, { query = it; if (it.isNotBlank()) selectedCategory = 0 }, tr(language, "search_azkar"))
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(listOf(0, 1, 2, 3)) { index ->
@@ -4141,7 +4146,7 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 eyebrow = when (language) { AppLanguage.EN -> "THE BEAUTIFUL NAMES"; AppLanguage.AR -> "الأَسْمَاءُ الْحُسْنَى"; AppLanguage.CKB -> "ناوە جوانەکان" }
             )
             Spacer(Modifier.height(10.dp))
-            SearchBox(
+            SearchBox(language, 
                 query, { query = it },
                 when (language) {
                     AppLanguage.EN -> "Search Arabic, Kurdish, English, or references…"
@@ -5034,7 +5039,7 @@ fun AudioScreen(
             }
         }
         Spacer(Modifier.height(7.dp))
-        SearchBox(audioQuery, { audioQuery = it }, tr(language, "search"))
+        SearchBox(language, audioQuery, { audioQuery = it }, tr(language, "search"))
         AnimatedVisibility(
             visible = audioNotice.isNotBlank(),
             enter = fadeIn(tween(180)) + slideInVertically(
@@ -6546,7 +6551,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                 eyebrow = when (language) { AppLanguage.EN -> "READING COLLECTION"; AppLanguage.AR -> "مجموعات القراءة"; AppLanguage.CKB -> "کۆمەڵەی خوێندنەوە" }
             )
             Spacer(Modifier.height(10.dp))
-            SearchBox(query, { query = it }, tr(language, "search"))
+            SearchBox(language, query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 PremiumChoicePill(
@@ -7061,7 +7066,7 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 eyebrow = when (language) { AppLanguage.EN -> "ARABIC & KURDISH WORDS"; AppLanguage.AR -> "المفردات العربية والكردية"; AppLanguage.CKB -> "وشە عەرەبی و کوردییەکان" }
             )
             Spacer(Modifier.height(10.dp))
-            SearchBox(query, { query = it }, tr(language, "search_words"))
+            SearchBox(language, query, { query = it }, tr(language, "search_words"))
         }
         if (entries.isEmpty()) {
             LoadingOrEmpty(loading, language, foreground)
@@ -8552,7 +8557,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         title = { Text(tr(language, "select_city")) },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                SearchBox(
+                SearchBox(language, 
                     citySearch,
                     { citySearch = it },
                     when (language) {
@@ -8620,7 +8625,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                SearchBox(
+                SearchBox(language, 
                     adhanSoundQuery,
                     { adhanSoundQuery = it },
                     when (language) {
@@ -9408,7 +9413,7 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 eyebrow = when (language) { AppLanguage.EN -> "CURATED COLLECTION"; AppLanguage.AR -> "مختارات موثوقة"; AppLanguage.CKB -> "کۆکراوەی هەڵبژێردراو" }
             )
             Spacer(Modifier.height(10.dp))
-            SearchBox(query, { query = it }, tr(language, "search"))
+            SearchBox(language, query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 PremiumChoicePill(
