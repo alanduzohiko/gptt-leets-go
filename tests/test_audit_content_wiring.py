@@ -43,6 +43,36 @@ class AuditContentWiringTests(unittest.TestCase):
         self.assertFalse(report["runtime_prayer_source_contract"]["applicable"])
         self.assertFalse(report["quran_font_source_integrity_contract"]["applicable"])
 
+    def test_quran_verse_action_contract_accepts_long_press_parameters(self):
+        from tools.audit_content_wiring import text_verse_card_opens_action_panel
+
+        source = """
+            modifier = Modifier
+                .staggeredEntrance(itemKey = key, index = index)
+                .premiumClickable(
+                    onLongClickLabel = "Copy verse",
+                    onLongClick = { copyVerse() }
+                ) {
+                    selected = verse.surah
+                    onOpenVerse(verse.surah, verse.number)
+                    selectedAyahForSheet = verse.surah to verse.number
+                }
+        """
+        self.assertTrue(text_verse_card_opens_action_panel(source))
+
+    def test_quran_verse_action_contract_keeps_legacy_tap_syntax(self):
+        from tools.audit_content_wiring import text_verse_card_opens_action_panel
+
+        source = """
+            modifier = Modifier
+                .staggeredEntrance(itemKey = key, index = index)
+                .premiumClickable {
+                    selected = verse.surah
+                    selectedAyahForSheet = verse.surah to verse.number
+                }
+        """
+        self.assertTrue(text_verse_card_opens_action_panel(source))
+
     def test_missing_literal_is_reported(self):
         catalog = {"files": [], "generated_assets": [{"asset_path": "mushaf_svg_index.json"}]}
         source = self.source('val missing = "content/noor/base/assets/missing.db"')
