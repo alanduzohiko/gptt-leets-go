@@ -720,8 +720,14 @@ internal fun PremiumSearchField(
             trailingIcon = {
                 AnimatedVisibility(
                     visible = value.isNotEmpty(),
-                    enter = fadeIn(tween(120)) + scaleIn(initialScale = 0.65f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
-                    exit = fadeOut(tween(90)) + scaleOut(targetScale = 0.65f, animationSpec = tween(90))
+                    enter = if (motionAllowed) fadeIn(tween(120)) + scaleIn(
+                        initialScale = 0.65f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                    ) else fadeIn(tween(0)),
+                    exit = if (motionAllowed) fadeOut(tween(90)) + scaleOut(
+                        targetScale = 0.65f,
+                        animationSpec = tween(90)
+                    ) else fadeOut(tween(0))
                 ) {
                     IconButton(onClick = { onValueChange("") }) {
                         Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = foreground.copy(alpha = 0.60f))
