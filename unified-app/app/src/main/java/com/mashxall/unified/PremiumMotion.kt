@@ -63,6 +63,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.LaunchedEffect
@@ -264,6 +265,44 @@ internal fun Modifier.premiumClickable(
     }
 }
 
+
+/**
+ * Switch wrapper that adds a soft press acknowledgement while retaining
+ * Material's native thumb morph, track animation, semantics and touch target.
+ */
+@Composable
+internal fun PremiumSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (enabled && pressed) 1.075f else 1f,
+        animationSpec = if (motionAllowed) spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ) else snap(),
+        label = "Mashxall switch touch response"
+    )
+    val haptics = LocalHapticFeedback.current
+    Switch(
+        checked = checked,
+        onCheckedChange = { next ->
+            haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+            onCheckedChange(next)
+        },
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+        enabled = enabled,
+        interactionSource = interactionSource
+    )
+}
 
 /**
  * Dialog and inline text actions with the same tactile response as Mashxall's
