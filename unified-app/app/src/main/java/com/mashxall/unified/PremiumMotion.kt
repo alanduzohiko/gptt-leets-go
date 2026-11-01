@@ -651,25 +651,40 @@ internal fun PremiumIconMedallion(
 ) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
-    val pulseScale = if (pulse && motionAllowed) {
+    val pulseMotion = if (pulse && motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mashxall medallion pulse")
-        val value by transition.animateFloat(
+        val scale by transition.animateFloat(
             initialValue = 0.955f, targetValue = 1.045f,
             animationSpec = infiniteRepeatable(animation = tween(1800, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
             label = "Mashxall medallion scale"
         )
-        value
+        val orbit by transition.animateFloat(
+            initialValue = 0f, targetValue = 360f,
+            animationSpec = infiniteRepeatable(animation = tween(9800, easing = LinearEasing), repeatMode = RepeatMode.Restart),
+            label = "Mashxall medallion orbit"
+        )
+        scale to orbit
     } else {
-        1f
+        1f to 0f
     }
     Box(
-        Modifier.size(size).graphicsLayer { scaleX = pulseScale; scaleY = pulseScale }
+        Modifier.size(size).graphicsLayer { scaleX = pulseMotion.first; scaleY = pulseMotion.first }
             .clip(CircleShape)
             .background(Brush.radialGradient(listOf(tint.copy(alpha = 0.24f), tint.copy(alpha = 0.075f), tint.copy(alpha = 0.025f))))
             .border(1.dp, tint.copy(alpha = 0.42f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Box(Modifier.size(size * 0.78f).border(1.dp, tint.copy(alpha = 0.22f), CircleShape))
+        Box(Modifier.size(size).graphicsLayer { rotationZ = pulseMotion.second }) {
+            Box(
+                Modifier.align(Alignment.TopCenter).offset(y = 2.dp)
+                    .size(size * 0.085f).clip(CircleShape).background(tint.copy(alpha = 0.95f))
+            )
+            Box(
+                Modifier.align(Alignment.BottomCenter).offset(y = (-2).dp)
+                    .size(size * 0.055f).clip(CircleShape).background(tint.copy(alpha = 0.58f))
+            )
+        }
         Box(
             Modifier.size(size * 0.56f).clip(CircleShape).background(tint.copy(alpha = 0.07f)),
             contentAlignment = Alignment.Center

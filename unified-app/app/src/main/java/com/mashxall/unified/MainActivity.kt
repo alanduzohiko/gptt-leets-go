@@ -1137,6 +1137,19 @@ private fun HomePrayerJourneyStrip(
         animationSpec = if (motionAllowed) tween(620, easing = FastOutSlowInEasing) else snap(),
         label = "Home prayer journey progress"
     )
+    val cursorPulse = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Home prayer journey cursor")
+        val value by transition.animateFloat(
+            initialValue = 0.88f,
+            targetValue = 1.16f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1050, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Home prayer journey cursor pulse"
+        )
+        value
+    } else 1f
     val percent = (progress * 100f).roundToInt().coerceIn(0, 100)
     Column(Modifier.fillMaxWidth().padding(top = 11.dp, start = 3.dp, end = 3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1167,10 +1180,20 @@ private fun HomePrayerJourneyStrip(
             )
             markers.forEach { marker ->
                 val selected = marker.first == nextPrayerKey
+                val dotSize = if (selected) 10.dp else 7.dp
+                val centerX = (maxWidth * marker.third).coerceIn(dotSize / 2f, maxWidth - dotSize / 2f)
+                if (selected) {
+                    Box(
+                        Modifier.align(Alignment.CenterStart)
+                            .offset(x = centerX - 8.dp)
+                            .size(16.dp).clip(CircleShape)
+                            .background(Gold.copy(alpha = 0.15f))
+                    )
+                }
                 Box(
                     Modifier.align(Alignment.CenterStart)
-                        .offset(x = maxWidth * marker.third - (if (selected) 5.dp else 3.5.dp))
-                        .size(if (selected) 10.dp else 7.dp)
+                        .offset(x = centerX - dotSize / 2f)
+                        .size(dotSize)
                         .clip(CircleShape)
                         .background(
                             when {
@@ -1182,10 +1205,13 @@ private fun HomePrayerJourneyStrip(
                         .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
                 )
             }
+            val cursorSize = 10.dp
+            val cursorCenter = (maxWidth * animatedProgress).coerceIn(cursorSize / 2f, maxWidth - cursorSize / 2f)
             Box(
                 Modifier.align(Alignment.CenterStart)
-                    .offset(x = maxWidth * animatedProgress - 5.dp)
-                    .size(10.dp)
+                    .offset(x = cursorCenter - cursorSize / 2f)
+                    .size(cursorSize)
+                    .graphicsLayer { scaleX = cursorPulse; scaleY = cursorPulse }
                     .clip(CircleShape)
                     .background(Gold.copy(alpha = 0.20f))
                     .border(1.dp, Gold, CircleShape)
