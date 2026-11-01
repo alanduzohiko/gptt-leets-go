@@ -16,6 +16,13 @@ class Android11RuntimePermissionSmokeTests(unittest.TestCase):
         self.assertIn("WHILE USING THE APP", SMOKE)
         self.assertIn("ACCESS_FINE_LOCATION", SMOKE)
 
+    def test_legacy_books_library_routes_are_removed_from_reader_first_home(self):
+        app_source = (ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt").read_text(encoding="utf-8")
+        enum_body = app_source.split("enum class AppScreen", 1)[1].split("}", 1)[0]
+        home_modules = app_source.split("private val homeModules", 1)[1].split("private val textMap", 1)[0]
+        self.assertNotRegex(enum_body, r"\b(?:BOOKS|LIBRARY)\s*\(")
+        self.assertNotRegex(home_modules, r"HomeModule\(AppScreen\.(?:BOOKS|LIBRARY)\b")
+
 
 if __name__ == "__main__":
     unittest.main()

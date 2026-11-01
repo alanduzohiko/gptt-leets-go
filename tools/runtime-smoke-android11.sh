@@ -18,13 +18,6 @@ adb() {
 
 adb wait-for-device
 
-# The reader-first build must not expose the obsolete book-library navigation.
-if grep -Eq 'BOOKS\("books"\)|LIBRARY\("library"\)|"books" -> BooksScreen|"library" -> BooksScreen|AppScreen\.BOOKS|AppScreen\.LIBRARY' unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt; then
-  echo "FAIL: a legacy Books/Library route remains in MainActivity."
-  exit 1
-fi
-echo "PASS: obsolete Books/Library routes are absent."
-
 # On slow Android 11 CI emulators, sys.boot_completed may become 1 before
 # PackageManager's Binder service is registered. Confirm that package queries
 # actually work before using adb install, and collect useful diagnostics if it
