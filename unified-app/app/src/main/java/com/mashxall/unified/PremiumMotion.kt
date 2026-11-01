@@ -24,6 +24,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -103,12 +105,15 @@ internal fun premiumPressTargetScale(
     return if (enabled && pressed) safeScale else 1f
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 internal fun Modifier.premiumClickable(
     enabled: Boolean = true,
     onClickLabel: String? = null,
+    onLongClickLabel: String? = null,
     role: Role? = null,
     hapticFeedback: Boolean = true,
     pressedScale: Float = 0.968f,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ): Modifier = composed {
     val context = LocalContext.current
@@ -125,21 +130,41 @@ internal fun Modifier.premiumClickable(
     )
     val haptics = LocalHapticFeedback.current
 
-    this.graphicsLayer {
+    val touchTarget = this.graphicsLayer {
         scaleX = scale
         scaleY = scale
         translationY = if (motionAllowed && enabled && pressed) 0.8.dp.toPx() else 0f
         rotationZ = if (motionAllowed && enabled && pressed) 0.10f else 0f
         shadowElevation = if (motionAllowed && enabled && pressed) 2.5.dp.toPx() else 0f
-    }.clickable(
-        interactionSource = interactionSource,
-        indication = LocalIndication.current,
-        enabled = enabled,
-        onClickLabel = onClickLabel,
-        role = role
-    ) {
-        if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        onClick()
+    }
+    if (onLongClick != null) {
+        touchTarget.combinedClickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            enabled = enabled,
+            onClickLabel = onClickLabel,
+            onLongClickLabel = onLongClickLabel,
+            role = role,
+            onLongClick = {
+                if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onLongClick()
+            },
+            onClick = {
+                if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+        )
+    } else {
+        touchTarget.clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            enabled = enabled,
+            onClickLabel = onClickLabel,
+            role = role
+        ) {
+            if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        }
     }
 }
 
