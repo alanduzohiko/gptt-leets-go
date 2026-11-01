@@ -2313,7 +2313,11 @@ private fun HomeScreen(
                                     Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
                                         .background(Brush.verticalGradient(listOf(tileFill, tileFill.copy(alpha = (tileFill.alpha * 0.68f).coerceAtLeast(0.018f)))))
                                         .border(1.dp, tileOutline, RoundedCornerShape(16.dp))
-                                        .premiumClickable(hapticFeedback = false) { onOpen(AppScreen.PRAYER) }
+                                        .premiumClickable(
+                                            role = Role.Button,
+                                            hapticFeedback = false,
+                                            pressedScale = prayerTilePressScale(key)
+                                        ) { onOpen(AppScreen.PRAYER) }
                                         .padding(horizontal = 5.dp, vertical = 9.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
