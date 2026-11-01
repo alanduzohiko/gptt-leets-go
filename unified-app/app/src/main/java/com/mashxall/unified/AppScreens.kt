@@ -424,6 +424,7 @@ private fun ReaderModeSegment(
 private fun QuranSurahWelcomeCard(
     language: AppLanguage,
     surahCount: Int,
+    hasReadingHistory: Boolean,
     lastReadSurahName: String,
     lastReadAyah: Int,
     lastMushafPage: Int,
@@ -451,15 +452,23 @@ private fun QuranSurahWelcomeCard(
         AppLanguage.AR -> "$surahCount سورة"
         AppLanguage.CKB -> "$surahCount سوورەت"
     }
-    val pageLabel = when (language) {
-        AppLanguage.EN -> "Page $lastMushafPage / 604"
-        AppLanguage.AR -> "الصفحة $lastMushafPage / 604"
-        AppLanguage.CKB -> "پەڕەی $lastMushafPage / 604"
+    val pageLabel = when {
+        !hasReadingHistory -> when (language) {
+            AppLanguage.EN -> "Your journey starts here"
+            AppLanguage.AR -> "ابدأ رحلتك القرآنية"
+            AppLanguage.CKB -> "گەشتە قورئانییەکەت دەست پێ بکە"
+        }
+        language == AppLanguage.EN -> "Page $lastMushafPage / 604"
+        language == AppLanguage.AR -> "الصفحة $lastMushafPage / 604"
+        else -> "پەڕەی $lastMushafPage / 604"
     }
-    val resumeLabel = when (language) {
-        AppLanguage.EN -> "Continue reading"
-        AppLanguage.AR -> "متابعة القراءة"
-        AppLanguage.CKB -> "بەردەوام بە لە خوێندنەوە"
+    val resumeLabel = when {
+        !hasReadingHistory && language == AppLanguage.EN -> "Start reading"
+        !hasReadingHistory && language == AppLanguage.AR -> "ابدأ القراءة"
+        !hasReadingHistory -> "دەستپێکردنی خوێندنەوە"
+        language == AppLanguage.EN -> "Continue reading"
+        language == AppLanguage.AR -> "متابعة القراءة"
+        else -> "بەردەوام بە لە خوێندنەوە"
     }
     val mushafLabel = when (language) {
         AppLanguage.EN -> "Open Mushaf"
@@ -530,7 +539,7 @@ private fun QuranSurahWelcomeCard(
                 AppLanguage.AR -> "آية"
                 AppLanguage.CKB -> "ئایەت"
             }
-            val positionLabel = lastReadSurahName.takeIf { it.isNotBlank() }
+            val positionLabel = lastReadSurahName.takeIf { hasReadingHistory && it.isNotBlank() }
                 ?.let { "$it • $ayahWord $lastReadAyah" }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                 QuranWelcomeMetaChip(label = surahLabel, modifier = Modifier.weight(1f))
@@ -1399,6 +1408,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     QuranSurahWelcomeCard(
                         language = language,
                         surahCount = surahs.size,
+                        hasReadingHistory = prefs.contains("last_surah") ||
+                            prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page"),
                         lastReadSurahName = surahs.firstOrNull { it.number == initialSurah }?.let {
                             if (language == AppLanguage.EN) it.englishName else it.arabicName
                         }.orEmpty(),
@@ -1406,23 +1417,52 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         lastMushafPage = mushafPage,
                         onSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
                         onContinue = {
-                            selected = initialSurah.coerceIn(1, 114)
-                            query = ""
-                            showSurahList = false
-                            openingMushaf = false
-                            mushafMode = false
-                            onSurah(selected)
-                            onOpenVerse(selected, initialAyah.coerceAtLeast(1))
-                            prefs.edit().putString("quran_reader_mode", "verse").apply()
-                        },
-                        onOpenMushaf = {
-                            selected = initialSurah.coerceIn(1, 114)
+                            val resumeTarget = resolveQuranResumeTarget(
+                                savedSurah = prefs.getInt("last_surah", initialSurah),
+                                savedAyah = prefs.getInt("last_ayah_number", initialAyah),
+                                savedPage = prefs.getInt("last_mushaf_page", mushafPage),
+                                savedReaderMode = prefs.getString("quran_reader_mode", null),
+                                hasSavedPage = prefs.contains("last_mushaf_page")
+                            )
+                            selected = resumeTarget.surah
+                            mushafPage = resumeTarget.mushafPage
                             query = ""
                             selectedAyahForSheet = null
-                            mushafPage = prefs.getInt("last_mushaf_page", mushafPage).coerceIn(1, 604)
+                            showSurahList = false
+                            openingMushaf = false
+                            mushafMode = resumeTarget.openMushaf
+                            onSurah(selected)
+                            if (resumeTarget.openMushaf) {
+                                prefs.edit()
+                                    .putString("quran_reader_mode", "mushaf")
+                                    .putInt("last_mushaf_page", resumeTarget.mushafPage)
+                                    .putInt("last_surah", resumeTarget.surah)
+                                    .apply()
+                            } else {
+                                onOpenVerse(selected, resumeTarget.ayah)
+                                prefs.edit()
+                                    .putString("quran_reader_mode", "verse")
+                                    .putInt("last_surah", resumeTarget.surah)
+                                    .putInt("last_ayah_number", resumeTarget.ayah)
+                                    .apply()
+                            }
+                        },
+                        onOpenMushaf = {
+                            val resumeTarget = resolveQuranResumeTarget(
+                                savedSurah = prefs.getInt("last_surah", initialSurah),
+                                savedAyah = prefs.getInt("last_ayah_number", initialAyah),
+                                savedPage = prefs.getInt("last_mushaf_page", mushafPage),
+                                savedReaderMode = "mushaf",
+                                hasSavedPage = prefs.contains("last_mushaf_page")
+                            )
+                            selected = resumeTarget.surah
+                            query = ""
+                            selectedAyahForSheet = null
+                            mushafPage = resumeTarget.mushafPage
                             showSurahList = false
                             openingMushaf = false
                             mushafMode = true
+                            onSurah(selected)
                             prefs.edit().putString("quran_reader_mode", "mushaf")
                                 .putInt("last_mushaf_page", mushafPage)
                                 .putInt("last_surah", selected)
@@ -2664,6 +2704,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
 
 
 }
+
+internal data class QuranResumeTarget(
+    val surah: Int,
+    val ayah: Int,
+    val mushafPage: Int,
+    val openMushaf: Boolean
+)
+
+internal fun resolveQuranResumeTarget(
+    savedSurah: Int,
+    savedAyah: Int,
+    savedPage: Int,
+    savedReaderMode: String?,
+    hasSavedPage: Boolean
+): QuranResumeTarget = QuranResumeTarget(
+    surah = savedSurah.coerceIn(1, 114),
+    ayah = savedAyah.coerceAtLeast(1),
+    mushafPage = savedPage.coerceIn(1, 604),
+    openMushaf = shouldRestorePageMushaf(savedReaderMode, hasSavedPage)
+)
 
 internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boolean): Boolean =
     hasSavedPage && !savedReaderMode.equals("verse", ignoreCase = true)
