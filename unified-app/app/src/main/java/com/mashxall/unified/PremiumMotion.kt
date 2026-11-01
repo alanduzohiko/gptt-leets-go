@@ -314,11 +314,14 @@ internal fun PremiumMushafPageSkeleton(
 }
 
 
+internal fun shouldAnimateContentSize(motionAllowed: Boolean, enabled: Boolean = true): Boolean =
+    motionAllowed && enabled
+
 /** Animate expanding/collapsing content only when the system allows motion. */
 internal fun Modifier.premiumAnimateContentSize(enabled: Boolean = true): Modifier = composed {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
-    if (enabled && motionAllowed) {
+    if (shouldAnimateContentSize(motionAllowed, enabled)) {
         this.animateContentSize(
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
