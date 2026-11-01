@@ -131,6 +131,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -818,7 +821,8 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                 Column(
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(20.dp))
                         .background(selectedFill)
-                        .premiumClickable(hapticFeedback = false) {
+                        .semantics { this.selected = selected }
+                        .premiumClickable(hapticFeedback = false, role = Role.Tab) {
                             if (!selected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onSelect(key)
