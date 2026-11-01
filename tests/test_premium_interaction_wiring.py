@@ -94,11 +94,10 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         reader = APP_SCREENS.split("if (mushafMode) {", 1)[1].split(
             "if (showReaderSettings)", 1
         )[0]
-        self.assertIn("Quran page-based Mushaf entry", reader) if False else None
         self.assertIn("visible = true", reader)
         self.assertIn("slideInVertically(tween(210))", reader)
         self.assertIn("scaleIn(initialScale = 0.98f", reader)
-        self.assertIn("Opening Mushaf", reader)
+        self.assertIn("Opening the page-based Mushaf", reader)
 
 
     def test_selected_icon_jewels_follow_reduce_motion(self):
