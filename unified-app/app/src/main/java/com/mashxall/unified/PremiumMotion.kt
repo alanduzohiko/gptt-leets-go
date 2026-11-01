@@ -1474,6 +1474,21 @@ internal fun PremiumIconButton(
             tint = accent.copy(alpha = if (enabled) 1f else 0.30f),
             modifier = Modifier.size(size * 0.48f).graphicsLayer { rotationZ = iconRotation }
         )
+        AnimatedVisibility(
+            visible = enabled && selected,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+            enter = scaleIn(
+                initialScale = 0.25f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+            ) + fadeIn(tween(110)),
+            exit = scaleOut(targetScale = 0.35f, animationSpec = tween(100)) + fadeOut(tween(90))
+        ) {
+            Box(
+                Modifier.size(8.dp).clip(CircleShape)
+                    .background(accent)
+                    .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+            )
+        }
     }
 }
 
@@ -1528,5 +1543,22 @@ internal fun PremiumIconActionSurface(
             ),
         contentAlignment = Alignment.Center,
         content = content
-    )
+    ) {
+        content()
+        AnimatedVisibility(
+            visible = enabled && selected,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+            enter = scaleIn(
+                initialScale = 0.25f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+            ) + fadeIn(tween(110)),
+            exit = scaleOut(targetScale = 0.35f, animationSpec = tween(100)) + fadeOut(tween(90))
+        ) {
+            Box(
+                Modifier.size(8.dp).clip(CircleShape)
+                    .background(accent)
+                    .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+            )
+        }
+    }
 }
