@@ -1194,6 +1194,9 @@ internal fun PremiumIconActionSurface(
             .clip(RoundedCornerShape(size * 0.36f))
             .background(Brush.linearGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.55f))))
             .border(1.dp, outline, RoundedCornerShape(size * 0.36f))
+            .semantics(mergeDescendants = true) {
+                if (contentDescription != null) this.contentDescription = contentDescription
+            }
             .premiumClickable(
                 enabled = enabled,
                 onClickLabel = contentDescription,
