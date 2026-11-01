@@ -551,7 +551,8 @@ fun MashxallApp(startScreen: String? = null) {
                                     onOpen = { target -> navigateTo(target.key) },
                                     onResumeReading = {
                                         // First-time users see the surah list; returning users resume their saved reader mode.
-                                        resumeMushafRequested = prefs.contains("last_surah") || prefs.contains("last_mushaf_page")
+                                        resumeMushafRequested = prefs.contains("last_surah") ||
+                                            prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page")
                                         navigateTo(AppScreen.QURAN.key)
                                     },
                                     isActive = screen == AppScreen.HOME.key
@@ -1553,6 +1554,129 @@ private fun PremiumHomeHero(
     }
 }
 
+internal fun homeQuranResumeDetails(
+    language: AppLanguage,
+    hasReadingHistory: Boolean,
+    surah: Int,
+    ayah: Int,
+    readerMode: String,
+    mushafPage: Int
+): String {
+    if (!hasReadingHistory) return tr(language, "mushaf_offline")
+    val position = "${tr(language, "surah")} $surah • ${tr(language, "ayah")} $ayah"
+    return if (readerMode == "mushaf") {
+        "$position • ${tr(language, "page")} $mushafPage / 604 • ${tr(language, "mushaf_view")}"
+    } else {
+        "$position • ${tr(language, "verse_view")}"
+    }
+}
+
+@Composable
+private fun HomeReadingResumeCard(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    hasReadingHistory: Boolean,
+    lastSurah: Int,
+    lastAyah: Int,
+    savedReaderMode: String,
+    lastMushafPage: Int,
+    onResumeReading: () -> Unit
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val title = if (hasReadingHistory) tr(language, "continue_reading") else tr(language, "choose_surah")
+    val details = homeQuranResumeDetails(
+        language = language,
+        hasReadingHistory = hasReadingHistory,
+        surah = lastSurah,
+        ayah = lastAyah,
+        readerMode = savedReaderMode,
+        mushafPage = lastMushafPage
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth()
+            .staggeredEntrance(itemKey = "home-reading-resume", index = 0)
+            .premiumPress(onClick = onResumeReading)
+            .premiumAnimateContentSize(),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.30f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 24.dp, y = (-46).dp).size(126.dp)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.14f), Color.Transparent)))
+            )
+            Row(
+                Modifier.fillMaxWidth()
+                    .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.075f), cardColor, cardColor)))
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PremiumIconMedallion(
+                    icon = Icons.Outlined.MenuBook,
+                    tint = Gold,
+                    size = 47.dp
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        color = foreground,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    AnimatedContent(
+                        targetState = details,
+                        transitionSpec = {
+                            if (!motionAllowed) {
+                                fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            } else {
+                                (fadeIn(tween(170)) + slideInVertically(tween(170)) { it / 4 }) togetherWith
+                                    (fadeOut(tween(110)) + slideOutVertically(tween(110)) { -it / 5 })
+                            }
+                        },
+                        label = "Home Quran saved reading position"
+                    ) { position ->
+                        Text(
+                            position,
+                            color = foreground.copy(alpha = 0.63f),
+                            fontSize = 10.sp,
+                            lineHeight = 15.sp,
+                            maxLines = 2
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier.size(34.dp).clip(CircleShape)
+                        .background(Gold.copy(alpha = 0.12f))
+                        .border(1.dp, Gold.copy(alpha = 0.22f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = when (language) {
+                            AppLanguage.EN -> "Open Quran reading"
+                            AppLanguage.AR -> "فتح قراءة القرآن"
+                            AppLanguage.CKB -> "کردنەوەی خوێندنەوەی قورئان"
+                        },
+                        tint = Gold,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
@@ -1598,6 +1722,25 @@ private fun HomeScreen(
     var locationMessage by rememberSaveable { mutableStateOf("") }
     var locatingLocation by remember { mutableStateOf(false) }
     var retryLocationWhenResumed by remember { mutableStateOf(false) }
+    var hasSavedQuranReading by remember {
+        mutableStateOf(
+            prefs.contains("last_surah") || prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page")
+        )
+    }
+    var savedQuranSurah by remember { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
+    var savedQuranAyah by remember { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
+    var savedQuranPage by remember { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
+    var savedQuranMode by remember { mutableStateOf(prefs.getString("quran_reader_mode", "verse") ?: "verse") }
+
+    LaunchedEffect(isActive) {
+        if (!isActive) return@LaunchedEffect
+        hasSavedQuranReading = prefs.contains("last_surah") ||
+            prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page")
+        savedQuranSurah = prefs.getInt("last_surah", 1).coerceIn(1, 114)
+        savedQuranAyah = prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)
+        savedQuranPage = prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)
+        savedQuranMode = prefs.getString("quran_reader_mode", "verse") ?: "verse"
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -2160,33 +2303,17 @@ private fun HomeScreen(
             onOpenQibla = { onOpen(AppScreen.QIBLA) }
         )
         Spacer(Modifier.height(14.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth().premiumPress { onResumeReading() },
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.34f))
-        ) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Gold, modifier = Modifier.size(24.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when (language) { AppLanguage.EN -> "Continue reading"; AppLanguage.AR -> "متابعة القراءة"; AppLanguage.CKB -> "بەردەوام بە لە خوێندنەوە" },
-                        color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        when (language) { AppLanguage.EN -> "Return to your last saved Mushaf page"; AppLanguage.AR -> "العودة إلى آخر صفحة محفوظة من المصحف"; AppLanguage.CKB -> "گەڕانەوە بۆ دوا پەڕەی مصحەفی پاشەکەوتکراو" },
-                        color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
-                    )
-                }
-                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold)
-            }
-        }
+        HomeReadingResumeCard(
+            language = language,
+            foreground = foreground,
+            cardColor = cardColor,
+            hasReadingHistory = hasSavedQuranReading,
+            lastSurah = savedQuranSurah,
+            lastAyah = savedQuranAyah,
+            savedReaderMode = savedQuranMode,
+            lastMushafPage = savedQuranPage,
+            onResumeReading = onResumeReading
+        )
         Spacer(Modifier.height(16.dp))
         Spacer(Modifier.height(8.dp))
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp)) {
