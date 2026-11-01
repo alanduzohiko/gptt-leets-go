@@ -590,6 +590,7 @@ private fun QuranSurahIndexCard(
     placeLabel: String,
     index: Int,
     isLastRead: Boolean,
+    progressAyah: Int,
     language: AppLanguage,
     foreground: Color,
     cardColor: Color,
@@ -608,6 +609,13 @@ private fun QuranSurahIndexCard(
         targetValue = if (isLastRead) Gold.copy(alpha = 0.64f) else Gold.copy(alpha = 0.17f),
         animationSpec = if (motionAllowed) tween(220) else snap(),
         label = "Quran surah card outline"
+    )
+    val safeProgressAyah = progressAyah.coerceIn(0, surah.ayahCount.coerceAtLeast(0))
+    val progressFraction = quranSurahProgressFraction(safeProgressAyah, surah.ayahCount)
+    val animatedProgress by animateFloatAsState(
+        targetValue = progressFraction ?: 0f,
+        animationSpec = if (motionAllowed) tween(280) else snap(),
+        label = "Quran surah reading progress"
     )
     val lastReadLabel = when (language) {
         AppLanguage.EN -> "LAST READ"
@@ -737,6 +745,34 @@ private fun QuranSurahIndexCard(
                                     maxLines = 1
                                 )
                             }
+                        }
+                    }
+                    if (progressFraction != null) {
+                        Spacer(Modifier.height(7.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier.weight(1f).height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(foreground.copy(alpha = 0.09f))
+                            ) {
+                                Box(
+                                    Modifier.fillMaxWidth(animatedProgress)
+                                        .fillMaxHeight()
+                                        .clip(CircleShape)
+                                        .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), Gold)))
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "${safeProgressAyah.coerceAtMost(surah.ayahCount)} / ${surah.ayahCount}",
+                                color = foreground.copy(alpha = 0.58f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
@@ -1145,6 +1181,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     .putString("quran_reader_mode", "verse")
                     .putInt("last_surah", surahNumber)
                     .putInt("last_ayah_number", ayahNumber)
+                    .putInt("quran_progress_ayah_${surahNumber}", ayahNumber)
                     .apply()
                 onSurah(surahNumber)
                 onOpenVerse(surahNumber, ayahNumber)
@@ -1564,6 +1601,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             placeLabel = placeLabel,
                             index = index,
                             isLastRead = item.number == initialSurah,
+                            progressAyah = prefs.getInt("quran_progress_ayah_${item.number}", 0),
                             language = language,
                             foreground = foreground,
                             cardColor = cardColor,
@@ -1687,7 +1725,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         ) {
                             selected = verse.surah
                             onOpenVerse(verse.surah, verse.number)
-                            prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
+                            prefs.edit()
+                                .putInt("last_surah", verse.surah)
+                                .putInt("last_ayah_number", verse.number)
+                                .putInt("quran_progress_ayah_${verse.surah}", verse.number)
+                                .apply()
                             query = ""
                             selectedAyahForSheet = verse.surah to verse.number
                         },
@@ -2742,6 +2784,11 @@ internal fun quranVisibleResumePosition(
 ): Pair<Int, Int>? = verses.getOrNull(firstVisibleItemIndex)
     ?.takeIf { it.surah in 1..114 && it.number >= 1 }
     ?.let { it.surah to it.number }
+
+internal fun quranSurahProgressFraction(lastReadAyah: Int, totalAyahs: Int): Float? {
+    if (lastReadAyah <= 0 || totalAyahs <= 0) return null
+    return (lastReadAyah.toFloat() / totalAyahs.toFloat()).coerceIn(0f, 1f)
+}
 
 internal data class QuranResumeTarget(
     val surah: Int,
