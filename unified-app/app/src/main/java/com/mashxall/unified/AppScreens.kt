@@ -525,21 +525,19 @@ private fun QuranSurahWelcomeCard(
                 }
             }
             Spacer(Modifier.height(14.dp))
+            val ayahWord = when (language) {
+                AppLanguage.EN -> "Ayah"
+                AppLanguage.AR -> "آية"
+                AppLanguage.CKB -> "ئایەت"
+            }
+            val positionLabel = lastReadSurahName.takeIf { it.isNotBlank() }
+                ?.let { "$it • $ayahWord $lastReadAyah" }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                listOf(surahLabel, lastReadSurahName.takeIf { it.isNotBlank() }?.let { "$it • ${if (language == AppLanguage.EN) "Ayah" else if (language == AppLanguage.AR) "آية" else "ئایەت"} $lastReadAyah" }, pageLabel)
-                    .filterNotNull()
-                    .forEach { label ->
-                        Row(
-                            Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.075f))
-                                .border(1.dp, Color.White.copy(alpha = 0.11f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 7.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(label, color = Color.White.copy(alpha = 0.91f), fontSize = 8.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                        }
-                    }
+                QuranWelcomeMetaChip(label = surahLabel, modifier = Modifier.weight(1f))
+                if (positionLabel != null) {
+                    QuranWelcomeMetaChip(label = positionLabel, modifier = Modifier.weight(1f))
+                }
+                QuranWelcomeMetaChip(label = pageLabel, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(13.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -551,9 +549,9 @@ private fun QuranSurahWelcomeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Ink, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Color(0xFF071E1A), modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(resumeLabel, color = Ink, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text(resumeLabel, color = Color(0xFF071E1A), fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 }
                 Row(
                     Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
@@ -570,6 +568,26 @@ private fun QuranSurahWelcomeCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun QuranWelcomeMetaChip(label: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.075f))
+            .border(1.dp, Color.White.copy(alpha = 0.11f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 7.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.91f),
+            fontSize = 8.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
     }
 }
 
