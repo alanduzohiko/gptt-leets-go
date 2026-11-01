@@ -19,16 +19,16 @@ QURAN_FONT_OPTION = re.compile(
 def text_verse_card_opens_action_panel(app_screens_text: str) -> bool:
     """Accept the standard tap lambda with or without optional long-press arguments."""
     clickable = re.search(
-        r"modifier\\s*=\\s*Modifier(?:\\s*\\.\\s*staggeredEntrance\\s*\\([^)]*\\))?"
-        r"\\s*\\.\\s*(?:premiumClickable|clickable)\\b",
+        r"modifier\s*=\s*Modifier(?:\s*\.\s*staggeredEntrance\s*\([^)]*\))?"
+        r"\s*\.\s*(?:premiumClickable|clickable)\b",
         app_screens_text,
     )
     if clickable is None:
         return False
     card_source = app_screens_text[clickable.start():clickable.start() + 3500]
     return re.search(
-        r"selected\\s*=\\s*verse\\.surah[\\s\\S]{0,1000}?"
-        r"selectedAyahForSheet\\s*=\\s*verse\\.surah\\s+to\\s+verse\\.number",
+        r"selected\s*=\s*verse\.surah[\s\S]{0,1000}?"
+        r"selectedAyahForSheet\s*=\s*verse\.surah\s+to\s+verse\.number",
         card_source,
     ) is not None
 
