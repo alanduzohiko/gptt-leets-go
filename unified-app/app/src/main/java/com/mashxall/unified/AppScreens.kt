@@ -4848,6 +4848,7 @@ fun AudioScreen(
     autoPlayRequested: Boolean = false
 ) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     var audio by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
@@ -4946,6 +4947,89 @@ fun AudioScreen(
                     selectedTab = index
                     AudioController.stop()
                     playing = ""
+                }
+            }
+        }
+        val normalizedPlayingKey = playing.removePrefix("loading:")
+        val preparingAudio = playing.startsWith("loading:")
+        val currentAudioTitle = when {
+            normalizedPlayingKey.isBlank() -> ""
+            normalizedPlayingKey.startsWith("online-adhan-") -> {
+                val id = normalizedPlayingKey.removePrefix("online-adhan-")
+                onlineAdhan.firstOrNull { it.id == id }?.let { item ->
+                    if (language == AppLanguage.EN) item.titleEnglish else item.titleArabic.ifBlank { item.titleEnglish }
+                } ?: if (language == AppLanguage.EN) "Adhan recording" else if (language == AppLanguage.AR) "تسجيل أذان" else "تۆماری بانگ"
+            }
+            normalizedPlayingKey.startsWith("bundled-adhan:") -> {
+                val assetPath = normalizedPlayingKey.removePrefix("bundled-adhan:")
+                audio.firstOrNull { it.assetPath == assetPath }?.title
+                    ?: if (language == AppLanguage.EN) "Original bundled Adhan" else if (language == AppLanguage.AR) "أذان مضمّن أصلي" else "بانگی ڕەسەنی ناوخۆیی"
+            }
+            normalizedPlayingKey.contains("|") -> {
+                val parts = normalizedPlayingKey.split("|")
+                val reciter = parts.firstOrNull()?.toIntOrNull()?.let { id -> reciters.firstOrNull { it.id == id } }
+                val surahNumber = parts.getOrNull(1)?.toIntOrNull()
+                val surahName = surahNumber?.let { number -> surahs.firstOrNull { it.number == number } }?.let {
+                    if (language == AppLanguage.EN) it.englishName else it.arabicName
+                }
+                buildString {
+                    append(reciter?.let { if (language == AppLanguage.EN) it.nameEnglish else it.nameArabic }
+                        ?: if (language == AppLanguage.EN) "Quran recitation" else if (language == AppLanguage.AR) "تلاوة قرآنية" else "خوێندنەوەی قورئان")
+                    if (!surahName.isNullOrBlank()) append(" • ").append(surahName)
+                }
+            }
+            else -> audio.firstOrNull { it.assetPath == normalizedPlayingKey }?.title
+                ?: if (language == AppLanguage.EN) "Audio track" else if (language == AppLanguage.AR) "مقطع صوتي" else "تۆماری دەنگی"
+        }
+        AnimatedVisibility(
+            visible = playing.isNotBlank(),
+            enter = if (motionAllowed) fadeIn(tween(170)) + slideInVertically(tween(210)) { it / 4 } else fadeIn(tween(0)),
+            exit = if (motionAllowed) fadeOut(tween(120)) + slideOutVertically(tween(120)) { -it / 5 } else fadeOut(tween(0))
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth().premiumAnimateContentSize(),
+                colors = CardDefaults.cardColors(containerColor = Gold.copy(alpha = 0.085f)),
+                shape = RoundedCornerShape(17.dp),
+                border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (preparingAudio) {
+                        CircularProgressIndicator(modifier = Modifier.size(27.dp), color = Gold, strokeWidth = 2.dp)
+                    } else {
+                        PremiumAudioWaveform(
+                            active = true,
+                            accent = Gold,
+                            contentDescription = if (language == AppLanguage.EN) "Audio is playing" else if (language == AppLanguage.AR) "الصوت قيد التشغيل" else "دەنگ لەکارە"
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when {
+                                preparingAudio && language == AppLanguage.EN -> "Preparing playback"
+                                preparingAudio && language == AppLanguage.AR -> "جارٍ تجهيز التشغيل"
+                                preparingAudio -> "ئامادەکردنی لێدان"
+                                language == AppLanguage.EN -> "NOW PLAYING"
+                                language == AppLanguage.AR -> "قيد التشغيل الآن"
+                                else -> "ئێستا لەکارە"
+                            },
+                            color = Gold, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp
+                        )
+                        Text(currentAudioTitle, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = if (language == AppLanguage.EN) "Stop playback" else if (language == AppLanguage.AR) "إيقاف التشغيل" else "وەستاندنی لێدان",
+                        accent = Gold,
+                        size = 36.dp,
+                        circular = true
+                    ) {
+                        AudioController.stop()
+                        playing = ""
+                    }
                 }
             }
         }
