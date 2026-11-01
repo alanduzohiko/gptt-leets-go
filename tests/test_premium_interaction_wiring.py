@@ -79,6 +79,18 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("onClick = onContinue", welcome)
         self.assertIn("onClick = onOpenMushaf", welcome)
 
+    def test_quran_progress_values_animate_when_reading_state_changes(self):
+        progress = APP_SCREENS.split("private fun QuranReadingProgressCard(", 1)[1].split(
+            "@Composable\\nprivate fun QuranProgressStat(", 1
+        )[0]
+        stat = APP_SCREENS.split("private fun QuranProgressStat(", 1)[1].split(
+            "@Composable\\nprivate fun QuranSurahIndexCard(", 1
+        )[0]
+        self.assertIn('staggeredEntrance(itemKey = "quran-reading-progress"', progress)
+        self.assertIn("Quran progress percentage roll", progress)
+        self.assertIn("Quran reading statistic transition", stat)
+
+
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 

@@ -717,7 +717,9 @@ private fun QuranReadingProgressCard(
         AppLanguage.CKB -> "لە خوێندنەوەدایە"
     }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth()
+            .staggeredEntrance(itemKey = "quran-reading-progress", index = 1)
+            .premiumAnimateContentSize(),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.20f)),
@@ -742,7 +744,16 @@ private fun QuranReadingProgressCard(
                 Spacer(Modifier.width(9.dp))
                 Text(title, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                Text(percent.toString() + "%", color = Gold, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                AnimatedContent(
+                    targetState = percent,
+                    transitionSpec = {
+                        (fadeIn(tween(190)) + slideInVertically(tween(190)) { it / 2 }) togetherWith
+                            (fadeOut(tween(120)) + slideOutVertically(tween(120)) { -it / 3 })
+                    },
+                    label = "Quran progress percentage roll"
+                ) { visiblePercent ->
+                    Text(visiblePercent.toString() + "%", color = Gold, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                }
             }
             Spacer(Modifier.height(10.dp))
             Box(
@@ -792,7 +803,16 @@ private fun QuranProgressStat(
             .padding(horizontal = 7.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(value, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        AnimatedContent(
+            targetState = value,
+            transitionSpec = {
+                (fadeIn(tween(170)) + scaleIn(initialScale = 0.88f, animationSpec = tween(190))) togetherWith
+                    (fadeOut(tween(110)) + scaleOut(targetScale = 1.06f, animationSpec = tween(110)))
+            },
+            label = "Quran reading statistic transition"
+        ) { visibleValue ->
+            Text(visibleValue, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        }
         Spacer(Modifier.height(2.dp))
         Text(label, color = foreground.copy(alpha = 0.54f), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
