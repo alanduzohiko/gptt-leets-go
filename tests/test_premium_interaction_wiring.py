@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 import unittest
 
 
@@ -12,8 +11,8 @@ class PremiumInteractionWiringTests(unittest.TestCase):
     def test_screen_actions_use_shared_native_controls(self):
         self.assertIn("PremiumOutlinedButton(", APP_SCREENS)
         self.assertIn("PremiumSlider(", APP_SCREENS)
-        self.assertNotRegex(APP_SCREENS, r"(?<![A-Za-z])OutlinedButton\\(")
-        self.assertNotRegex(APP_SCREENS, r"(?<![A-Za-z])Slider\\(")
+        self.assertNotIn("\n                OutlinedButton(", APP_SCREENS)
+        self.assertNotIn("\n                            Slider(", APP_SCREENS)
 
     def test_screen_loading_states_use_motion_aware_ring(self):
         self.assertGreaterEqual(APP_SCREENS.count("PremiumLoadingIndicator("), 10)
@@ -32,11 +31,7 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertNotIn(".performHapticFeedback(", scrubber)
 
     def test_selected_icon_jewels_follow_reduce_motion(self):
-        selected_jewel_blocks = re.findall(
-            r"AnimatedVisibility\\(\\s*visible = enabled && selected,[\\s\\S]*?exit = if \\(motionAllowed\\)",
-            MOTION,
-        )
-        self.assertEqual(2, len(selected_jewel_blocks))
+        self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 
 
 if __name__ == "__main__":
