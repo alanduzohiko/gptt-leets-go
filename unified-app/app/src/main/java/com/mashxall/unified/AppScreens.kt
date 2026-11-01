@@ -232,14 +232,22 @@ internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: 
 
 @Composable
 private fun LoadingOrEmpty(loading: Boolean, language: AppLanguage, foreground: Color, message: String = tr(language, "no_data")) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val enter = if (motionAllowed) {
+        fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180))
+    } else {
+        fadeIn(tween(0))
+    }
+    val exit = fadeOut(tween(if (motionAllowed) 120 else 0))
     Box(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         AnimatedVisibility(
             visible = loading,
-            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.985f, animationSpec = tween(180)),
-            exit = fadeOut(tween(120))
+            enter = enter,
+            exit = exit
         ) {
             PremiumLoadingSkeleton(accent = Gold)
         }
@@ -318,15 +326,25 @@ private fun ReaderModeSegment(
     foreground: Color,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
         targetValue = if (selected) Gold.copy(alpha = 0.16f) else foreground.copy(alpha = 0.035f),
-        animationSpec = tween(220),
+        animationSpec = if (motionAllowed) tween(220) else snap(),
         label = "Quran reader mode fill"
     )
     val stroke by animateColorAsState(
         targetValue = if (selected) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.09f),
-        animationSpec = tween(220),
+        animationSpec = if (motionAllowed) tween(220) else snap(),
         label = "Quran reader mode outline"
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected) 1.08f else 1f,
+        animationSpec = if (motionAllowed) spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ) else snap(),
+        label = "Quran reader mode icon response"
     )
     Row(
         modifier.clip(RoundedCornerShape(15.dp)).background(fill)
@@ -336,12 +354,26 @@ private fun ReaderModeSegment(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Icon(icon, contentDescription = null, tint = if (selected) Gold else foreground.copy(alpha = 0.65f), modifier = Modifier.size(17.dp))
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (selected) Gold else foreground.copy(alpha = 0.65f),
+            modifier = Modifier.size(17.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+        )
         Spacer(Modifier.width(6.dp))
         Text(label, color = if (selected) foreground else foreground.copy(alpha = 0.70f), fontSize = 10.sp, maxLines = 1, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
-        if (selected) {
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
+        AnimatedVisibility(
+            visible = selected,
+            enter = if (motionAllowed) fadeIn(tween(120)) + scaleIn(initialScale = 0.55f, animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )) else fadeIn(tween(0)),
+            exit = fadeOut(tween(if (motionAllowed) 90 else 0))
+        ) {
+            Row {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
+            }
         }
     }
 }
