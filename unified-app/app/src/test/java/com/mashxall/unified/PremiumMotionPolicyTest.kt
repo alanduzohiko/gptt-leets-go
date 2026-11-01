@@ -44,4 +44,13 @@ class PremiumMotionPolicyTest {
         assertEquals(1, navigationSlideSign(isRtl = true, direction = -1))
     }
 
+    @Test
+    fun ambientBackdropOnlyRunsOnHomeWhenMotionIsAllowed() {
+        assertEquals(true, shouldAnimateAmbientBackdrop("home", motionAllowed = true))
+        assertEquals(false, shouldAnimateAmbientBackdrop("quran", motionAllowed = true))
+        assertEquals(false, shouldAnimateAmbientBackdrop("prayer", motionAllowed = true))
+        assertEquals(false, shouldAnimateAmbientBackdrop("home", motionAllowed = false))
+        assertEquals(false, shouldAnimateAmbientBackdrop("hadith", motionAllowed = false))
+    }
+
 }
