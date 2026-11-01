@@ -618,6 +618,7 @@ internal fun PremiumSectionHero(
     accent: Color,
     eyebrow: String = "MASHXALL • DAILY COMPANION",
     metric: String? = null,
+    pulseIcon: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -710,7 +711,7 @@ internal fun PremiumSectionHero(
                     icon = icon,
                     tint = accent,
                     size = 62.dp,
-                    pulse = true
+                    pulse = pulseIcon
                 )
             }
         }
