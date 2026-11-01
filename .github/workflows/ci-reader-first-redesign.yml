@@ -6,6 +6,8 @@ on:
       - "redesign/**"
     paths:
       - "unified-app/**"
+      - "IMPLEMENTATION_MATRIX_AR.md"
+      - "tools/runtime-smoke-android11.sh"
       - "docs/audio-library-sources.md"
       - "docs/tajweed-text-source.md"
       - "docs/redesign-spec-ar.md"
@@ -21,6 +23,8 @@ on:
     branches: ["main"]
     paths:
       - "unified-app/**"
+      - "IMPLEMENTATION_MATRIX_AR.md"
+      - "tools/runtime-smoke-android11.sh"
       - "docs/audio-library-sources.md"
       - "docs/tajweed-text-source.md"
       - "docs/redesign-spec-ar.md"
