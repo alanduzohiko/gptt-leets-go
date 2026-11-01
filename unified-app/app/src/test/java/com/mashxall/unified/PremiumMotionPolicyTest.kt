@@ -24,11 +24,21 @@ class PremiumMotionPolicyTest {
 
     @Test
     fun touchScaleChangesWithControlRoleWithoutExceedingSafeBounds() {
-        assertEquals(0.946f, premiumRolePressScale(Role.Button), 0.0001f)
-        assertEquals(0.958f, premiumRolePressScale(Role.Tab), 0.0001f)
-        assertEquals(0.968f, premiumRolePressScale(null), 0.0001f)
+        assertEquals(0.932f, premiumRolePressScale(Role.Button), 0.0001f)
+        assertEquals(0.952f, premiumRolePressScale(Role.Tab), 0.0001f)
+        assertEquals(0.962f, premiumRolePressScale(null), 0.0001f)
         assertEquals(0.90f, premiumRolePressScale(Role.Button, 0.2f), 0.0001f)
-        assertEquals(0.958f, premiumRolePressScale(Role.Tab, 1.2f), 0.0001f)
+        assertEquals(0.952f, premiumRolePressScale(Role.Tab, 1.2f), 0.0001f)
+    }
+
+    @Test
+    fun eachInteractiveRoleHasItsOwnTouchTiltAndGlow() {
+        assertEquals(-0.62f, premiumRolePressRotationDegrees(Role.Button), 0.0001f)
+        assertEquals(0.24f, premiumRolePressRotationDegrees(Role.Tab), 0.0001f)
+        assertEquals(0.38f, premiumRolePressRotationDegrees(null), 0.0001f)
+        assertEquals(0.30f, premiumRolePressGlowAlpha(Role.Button), 0.0001f)
+        assertEquals(0.18f, premiumRolePressGlowAlpha(Role.Tab), 0.0001f)
+        assertEquals(0.23f, premiumRolePressGlowAlpha(null), 0.0001f)
     }
 
     @Test
