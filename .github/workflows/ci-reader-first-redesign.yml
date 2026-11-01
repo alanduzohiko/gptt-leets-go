@@ -222,7 +222,7 @@ jobs:
       - name: Prepare Android 11 emulator image
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35; build-tools;35.0.0 emulator system-images;android-30;default;x86_64"
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0 emulator system-images;android-30;default;x86_64"
 
       - name: Install and exercise this reader-first APK on Android 11
         uses: reactivecircus/android-emulator-runner@v2
