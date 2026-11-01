@@ -368,7 +368,6 @@ private fun LoadingOrEmpty(
                         icon = Icons.Outlined.Refresh,
                         accent = Gold,
                         foreground = foreground,
-                        pressedScale = premiumActionButtonPressScale("farmuda_copy"),
                         pressedScale = premiumActionButtonPressScale("try_again"),
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onRetry
