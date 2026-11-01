@@ -92,12 +92,20 @@ if [[ "$install_success" -ne 1 ]]; then
   exit 1
 fi
 
-# The app now asks for location on first use. Grant runtime permission and
-# enable the emulator provider before automation, so the OS dialog does not
-# cover the screen being tested. This does not replace the user's real-phone
-# permission/GPS verification.
-adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION || true
-adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION || true
+# Location is requested during the first Home composition. Pre-grant it for
+# deterministic CI, but verify the package-manager state rather than silently
+# assuming that a best-effort pm grant worked.
+permission_log="dist/runtime-test/location-permissions.txt"
+: > "$permission_log"
+for permission in android.permission.ACCESS_FINE_LOCATION android.permission.ACCESS_COARSE_LOCATION; do
+  grant_output="$(adb shell pm grant com.mashxall.unified "$permission" 2>&1 || true)"
+  permission_state="$(adb shell pm check-permission "$permission" com.mashxall.unified 2>&1 | tr -d '\\r' || true)"
+  {
+    echo "$permission"
+    echo "grant: ${grant_output:-no output}"
+    echo "state: ${permission_state:-unknown}"
+  } | tee -a "$permission_log"
+done
 adb shell settings put secure location_mode 3 || true
 # Give the CI emulator a deterministic Kurdistan location before the app asks
 # for its first fix. Emulator geo fix arguments are longitude, latitude.
@@ -139,6 +147,50 @@ check_screen() {
       echo "WARN: UI hierarchy unavailable for ${route} (attempt ${attempt}/10); retrying."
       sleep 5
       continue
+    fi
+
+    if grep -Eqi 'permission_allow_foreground_only_button|WHILE USING THE APP|ACCESS_FINE_LOCATION' "$file"; then
+      echo "WARNING: Android location permission dialog covers route ${route}; granting foreground access."
+      local permission_coords
+      permission_coords="$(python3 - "$file" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+fallback = None
+for node in root.iter("node"):
+    resource = node.attrib.get("resource-id", "")
+    label = node.attrib.get("text", "").strip().upper()
+    if resource.endswith("permission_allow_foreground_only_button") or label == "WHILE USING THE APP":
+        bounds = node.attrib.get("bounds", "")
+        match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+    if resource.endswith("permission_allow_one_time_button") or label == "ONLY THIS TIME":
+        fallback = node.attrib.get("bounds", "")
+if fallback:
+    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", fallback)
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+PY
+)"
+      if [[ -n "$permission_coords" ]]; then
+        read -r permission_x permission_y <<< "$permission_coords"
+        adb shell input tap "$permission_x" "$permission_y"
+        sleep 4
+        for permission in android.permission.ACCESS_FINE_LOCATION android.permission.ACCESS_COARSE_LOCATION; do
+          adb shell pm grant com.mashxall.unified "$permission" >> "$permission_log" 2>&1 || true
+          permission_state="$(adb shell pm check-permission "$permission" com.mashxall.unified 2>&1 | tr -d '\\r' || true)"
+          echo "after-dialog $permission: ${permission_state:-unknown}" | tee -a "$permission_log"
+        done
+        continue
+      fi
     fi
 
     if grep -Eqi "isn't responding|is not responding" "$file"; then
