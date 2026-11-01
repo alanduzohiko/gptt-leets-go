@@ -21,9 +21,9 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertNotIn("CircularProgressIndicator(", MOTION)
 
     def test_haptics_have_one_preference_aware_gateway(self):
-        self.assertEqual(1, MOTION.count(".performHapticFeedback("))
+        self.assertEqual(1, MOTION.count("performHapticFeedback("))
         self.assertIn("shouldPerformMashxallHaptic(MashxallMotionPreferences.hapticsEnabled)", MOTION)
-        self.assertNotIn(".performHapticFeedback(", APP_SCREENS)
+        self.assertNotIn("performHapticFeedback(", APP_SCREENS)
 
     def test_mushaf_scrubber_uses_shared_slider_and_haptic_policy(self):
         scrubber = MOTION.split("internal fun PremiumPageScrubber(", 1)[1]
