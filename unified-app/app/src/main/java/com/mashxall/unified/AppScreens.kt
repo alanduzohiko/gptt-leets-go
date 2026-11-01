@@ -127,6 +127,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
@@ -4276,6 +4280,7 @@ internal fun tasbihProgressFraction(count: Int, target: Int): Float =
 @Composable
 fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var presets by remember { mutableStateOf(emptyList<TasbihPreset>()) }
     var selectedId by rememberSaveable { mutableIntStateOf(prefs.getInt("tasbih_preset_id", 3)) }
@@ -4286,15 +4291,22 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
     val haptic = LocalHapticFeedback.current
     val tapPulse = remember { Animatable(1f) }
-    LaunchedEffect(count) {
-        tapPulse.snapTo(0.95f)
-        tapPulse.animateTo(1f, animationSpec = tween(130))
+    LaunchedEffect(count, motionAllowed) {
+        if (motionAllowed) {
+            tapPulse.snapTo(0.95f)
+            tapPulse.animateTo(1f, animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            ))
+        } else {
+            tapPulse.snapTo(1f)
+        }
     }
     val selected = presets.firstOrNull { it.id == selectedId }
     val targetCount = selected?.targetCount?.takeIf { it > 0 } ?: 0
     val targetProgress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = tasbihProgressFraction(count, targetCount),
-        animationSpec = tween(220),
+        animationSpec = if (motionAllowed) tween(260, easing = FastOutSlowInEasing) else snap(),
         label = "tasbihTargetProgress"
     )
 
@@ -4354,18 +4366,18 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             )
             AnimatedVisibility(
                 visible = count >= target,
-                enter = fadeIn(tween(180)) + scaleIn(
+                enter = if (motionAllowed) fadeIn(tween(180)) + scaleIn(
                     initialScale = 0.72f,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-                ),
-                exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.92f, animationSpec = tween(120))
+                ) else fadeIn(tween(0)),
+                exit = if (motionAllowed) fadeOut(tween(120)) + scaleOut(targetScale = 0.92f, animationSpec = tween(120)) else fadeOut(tween(0))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    PremiumIconMedallion(icon = Icons.Outlined.CheckCircle, tint = Gold, size = 25.dp, pulse = true)
+                    PremiumIconMedallion(icon = Icons.Outlined.CheckCircle, tint = Gold, size = 25.dp, pulse = motionAllowed)
                     Spacer(Modifier.width(7.dp))
                     Text(
                         when (language) {
@@ -4383,10 +4395,47 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Text(selected?.meaningCkb.orEmpty(), color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
         }
         Spacer(Modifier.height(24.dp))
+        val counterLabel = when (language) {
+            AppLanguage.EN -> "Tasbih counter"
+            AppLanguage.AR -> "عداد التسبيح"
+            AppLanguage.CKB -> "ژمێرەری تەسبیح"
+        }
+        val counterValue = when (language) {
+            AppLanguage.EN -> "$count repetitions in this round; $totalCount total"
+            AppLanguage.AR -> "$count تكرارًا في هذه الجولة؛ $totalCount إجمالًا"
+            AppLanguage.CKB -> "$count جار لەم خولەدا؛ $totalCount بەگشتی"
+        }
         Box(
             Modifier.size(238.dp).clip(CircleShape).background(
                 androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF1E7259), DeepGreen, CardDark))
-            ).premiumClickable(hapticFeedback = false) {
+            ).semantics {
+                contentDescription = counterLabel
+                stateDescription = counterValue
+            }.premiumClickable(
+                hapticFeedback = false,
+                role = Role.Button,
+                onLongClickLabel = when (language) {
+                    AppLanguage.EN -> "Copy remembrance text"
+                    AppLanguage.AR -> "نسخ نص الذكر"
+                    AppLanguage.CKB -> "دەقی زیکر لەبەر بگرە"
+                },
+                onLongClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val zikrText = selected?.zikr ?: "سُبْحَانَ اللّٰهِ • اَلْحَمْدُلِلّٰهِ • اَللّٰهُ أَكْبَرُ"
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Tasbih", zikrText))
+                        Toast.makeText(
+                            context,
+                            when (language) {
+                                AppLanguage.EN -> "Remembrance copied"
+                                AppLanguage.AR -> "تم نسخ الذكر"
+                                AppLanguage.CKB -> "زیکرەکە لەبەرگیرا"
+                            },
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            ) {
                 val result = nextTasbihTap(count, totalCount, targetCount)
                 if (result.accepted) {
                     count = result.roundCount
