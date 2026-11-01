@@ -127,8 +127,8 @@ internal fun Modifier.premiumClickable(
     this.graphicsLayer {
         scaleX = scale
         scaleY = scale
-        translationY = if (motionAllowed && enabled && pressed) 1.7.dp.toPx() else 0f
-        rotationZ = if (motionAllowed && enabled && pressed) 0.28f else 0f
+        translationY = if (motionAllowed && enabled && pressed) 0.8.dp.toPx() else 0f
+        rotationZ = if (motionAllowed && enabled && pressed) 0.10f else 0f
         shadowElevation = if (motionAllowed && enabled && pressed) 2.5.dp.toPx() else 0f
     }.clickable(
         interactionSource = interactionSource,
