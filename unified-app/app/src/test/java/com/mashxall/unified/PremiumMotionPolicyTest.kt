@@ -23,6 +23,16 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
+    fun sliderHapticBucketsStayWithinRangeAndRespectDiscreteSteps() {
+        assertEquals(0, premiumSliderHapticBucket(0f, 0f, 10f, 4))
+        assertEquals(2, premiumSliderHapticBucket(5f, 0f, 10f, 4))
+        assertEquals(5, premiumSliderHapticBucket(10f, 0f, 10f, 4))
+        assertEquals(10, premiumSliderHapticBucket(5f, 0f, 10f, 0))
+        assertEquals(0, premiumSliderHapticBucket(Float.NaN, 0f, 10f, 4))
+        assertEquals(0, premiumSliderHapticBucket(5f, 10f, 0f, 4))
+    }
+
+    @Test
     fun touchScaleChangesWithControlRoleWithoutExceedingSafeBounds() {
         assertEquals(0.932f, premiumRolePressScale(Role.Button), 0.0001f)
         assertEquals(0.952f, premiumRolePressScale(Role.Tab), 0.0001f)
