@@ -1260,6 +1260,10 @@ private fun HomePrayerCountdown(
     cardColor: Color,
     onNextPrayerChange: (String?) -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -1299,7 +1303,7 @@ private fun HomePrayerCountdown(
                 .padding(horizontal = 13.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PremiumIconMedallion(icon = Icons.Outlined.Schedule, tint = Gold, size = 46.dp, pulse = true)
+            PremiumIconMedallion(icon = Icons.Outlined.Schedule, tint = Gold, size = 46.dp, pulse = motionAllowed)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -1313,7 +1317,8 @@ private fun HomePrayerCountdown(
                 AnimatedContent(
                     targetState = nowText,
                     transitionSpec = {
-                        (fadeIn(tween(140)) + scaleIn(initialScale = 0.92f, animationSpec = tween(180))) togetherWith
+                        if (!motionAllowed) fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        else (fadeIn(tween(140)) + scaleIn(initialScale = 0.92f, animationSpec = tween(180))) togetherWith
                             (fadeOut(tween(110)) + scaleOut(targetScale = 1.04f, animationSpec = tween(110)))
                     },
                     label = "Live prayer clock digit motion"
@@ -1336,7 +1341,8 @@ private fun HomePrayerCountdown(
                     AnimatedContent(
                         targetState = countdown,
                         transitionSpec = {
-                            (fadeIn(animationSpec = tween(150)) +
+                            if (!motionAllowed) fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            else (fadeIn(animationSpec = tween(150)) +
                                 scaleIn(initialScale = 0.86f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
                                 slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) { height -> height / 2 }) togetherWith
                                 (fadeOut(animationSpec = tween(110)) +
