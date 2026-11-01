@@ -3133,6 +3133,7 @@ private fun cleanHadithDisplayText(value: String): String =
 @OptIn(ExperimentalMaterial3Api::class)
 fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
@@ -3345,12 +3346,12 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 val hadithIsFavorite = favoriteHadithIds.contains(hadith.id)
                 val hadithFavoriteFill by animateColorAsState(
                     targetValue = if (hadithIsFavorite) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
-                    animationSpec = tween(220),
+                    animationSpec = if (motionAllowed) tween(220) else snap(),
                     label = "Hadith favorite background"
                 )
                 val hadithFavoriteOutline by animateColorAsState(
                     targetValue = if (hadithIsFavorite) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.12f),
-                    animationSpec = tween(220),
+                    animationSpec = if (motionAllowed) tween(220) else snap(),
                     label = "Hadith favorite outline"
                 )
                 val translatedText = when (language) {
@@ -3361,7 +3362,35 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 Card(
                     modifier = Modifier.fillMaxWidth()
                         .staggeredEntrance(itemKey = hadith.id, index = index)
-                        .premiumClickable { selectedHadithForDetails = hadith },
+                        .premiumClickable(
+                            onLongClickLabel = when (language) {
+                                AppLanguage.EN -> "Copy narration"
+                                AppLanguage.AR -> "نسخ الحديث"
+                                AppLanguage.CKB -> "فەرموودە لەبەرگرتنەوە"
+                            },
+                            onLongClick = {
+                                val copiedText = buildString {
+                                    append(cleanHadithDisplayText(hadith.arabic))
+                                    if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
+                                        append("\n\n").append(cleanHadithDisplayText(translatedText))
+                                    }
+                                    append("\n\n").append(collection).append(" • ").append(numberInBook)
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", copiedText))
+                                    Toast.makeText(
+                                        context,
+                                        when (language) {
+                                            AppLanguage.EN -> "Narration copied"
+                                            AppLanguage.AR -> "تم نسخ الحديث"
+                                            AppLanguage.CKB -> "فەرموودەکە لەبەرگیرا"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        ) { selectedHadithForDetails = hadith },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(19.dp),
                     border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
