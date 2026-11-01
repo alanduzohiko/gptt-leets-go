@@ -68,6 +68,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -1916,7 +1917,6 @@ internal fun PremiumIconActionSurface(
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center,
-        content = content
     ) {
         content()
         AnimatedVisibility(
