@@ -536,6 +536,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var selected by rememberSaveable { mutableIntStateOf(initialSurah) }
     var verses by remember { mutableStateOf<List<Ayah>>(emptyList()) }
@@ -1143,7 +1144,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val verseIsFocused = selectedAyahForSheet == (verse.surah to verse.number)
                 val verseBorder by animateColorAsState(
                     targetValue = if (verseIsFocused) Gold.copy(alpha = 0.72f) else Gold.copy(alpha = 0.18f),
-                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    animationSpec = if (motionAllowed) tween(260, easing = FastOutSlowInEasing) else snap(),
                     label = "Quran focused verse outline"
                 )
                 var noteExpanded by rememberSaveable(verse.surah, verse.number) { mutableStateOf(false) }
@@ -2576,7 +2577,12 @@ private fun MushafPageViewer(
         ) {
             Box(Modifier.fillMaxSize().padding(5.dp), contentAlignment = Alignment.Center) {
                 when {
-                    loading -> CircularProgressIndicator(color = Gold)
+                    loading -> PremiumMushafPageSkeleton(
+                        modifier = Modifier.fillMaxSize().padding(7.dp),
+                        accent = Gold,
+                        darkMode = darkMode,
+                        sepiaMode = sepiaMode
+                    )
                     bitmap != null -> Box(
                         modifier = Modifier
                             .fillMaxSize()
