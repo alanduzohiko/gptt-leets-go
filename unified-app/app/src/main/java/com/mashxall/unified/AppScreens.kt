@@ -1153,13 +1153,41 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Card(
                     modifier = Modifier
                         .staggeredEntrance(itemKey = "${verse.surah}:${verse.number}", index = index)
-                        .premiumClickable {
-                        selected = verse.surah
-                        onOpenVerse(verse.surah, verse.number)
-                        prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
-                        query = ""
-                        selectedAyahForSheet = verse.surah to verse.number
-                    },
+                        .premiumClickable(
+                            onLongClickLabel = when (language) {
+                                AppLanguage.EN -> "Copy verse"
+                                AppLanguage.AR -> "نسخ الآية"
+                                AppLanguage.CKB -> "لەبەرگرتنەوەی ئایەت"
+                            },
+                            onLongClick = {
+                                val copiedText = buildString {
+                                    append(verse.arabic)
+                                    if (verse.translation.isNotBlank()) append("\\n\\n").append(verse.translation)
+                                    append("\\n\\n").append(verse.surah).append(":").append(verse.number)
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Quran verse", copiedText))
+                                    Toast.makeText(
+                                        context,
+                                        when (language) {
+                                            AppLanguage.EN -> "Verse copied"
+                                            AppLanguage.AR -> "تم نسخ الآية"
+                                            AppLanguage.CKB -> "ئایەتەکە لەبەرگیرا"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            selected = verse.surah
+                            onOpenVerse(verse.surah, verse.number)
+                            prefs.edit().putInt("last_surah", verse.surah).putInt("last_ayah_number", verse.number).apply()
+                            query = ""
+                            selectedAyahForSheet = verse.surah to verse.number
+                        },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(20.dp),
                     border = BorderStroke(1.dp, verseBorder)
