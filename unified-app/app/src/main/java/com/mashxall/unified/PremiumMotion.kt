@@ -79,6 +79,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -95,6 +96,35 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.roundToInt
+
+/**
+ * User-controlled motion and touch preferences shared by every native screen.
+ * The values are loaded from the app's private preferences by MashxallApp and
+ * are observable Compose state so visible screens react immediately to changes.
+ */
+internal object MashxallMotionPreferences {
+    private val reduceMotionState = mutableStateOf(false)
+    var reduceMotion: Boolean
+        get() = reduceMotionState.value
+        set(value) { reduceMotionState.value = value }
+
+    private val hapticsEnabledState = mutableStateOf(true)
+    var hapticsEnabled: Boolean
+        get() = hapticsEnabledState.value
+        set(value) { hapticsEnabledState.value = value }
+}
+
+/** Decorative motion is allowed only when both Android and the user allow it. */
+internal fun shouldAllowMashxallMotion(
+    systemAnimationsEnabled: Boolean,
+    durationScale: Float,
+    reduceMotion: Boolean
+): Boolean = systemAnimationsEnabled && durationScale.isFinite() && durationScale > 0f && !reduceMotion
+
+/** Route every haptic through one preference-aware gate. Android still applies device-level settings. */
+internal fun HapticFeedback.performMashxallHaptic(type: HapticFeedbackType) {
+    if (MashxallMotionPreferences.hapticsEnabled) performHapticFeedback(type)
+}
 
 /**
  * Shared native touch response for tappable surfaces throughout Mashxall.
@@ -138,7 +168,7 @@ internal fun Modifier.premiumClickable(
     onClick: () -> Unit
 ): Modifier = composed {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val roleScale = premiumRolePressScale(role, pressedScale)
@@ -174,11 +204,11 @@ internal fun Modifier.premiumClickable(
             onLongClickLabel = onLongClickLabel,
             role = role,
             onLongClick = {
-                if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (hapticFeedback) haptics.performMashxallHaptic(HapticFeedbackType.LongPress)
                 onLongClick()
             },
             onClick = {
-                if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (hapticFeedback) haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                 onClick()
             }
         )
@@ -190,7 +220,7 @@ internal fun Modifier.premiumClickable(
             onClickLabel = onClickLabel,
             role = role
         ) {
-            if (hapticFeedback) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (hapticFeedback) haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
             onClick()
         }
     }
@@ -208,7 +238,7 @@ internal fun PremiumLoadingSkeleton(
     accent: Color
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val shimmerOffset = if (motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mashxall loading shimmer")
         val animatedOffset by transition.animateFloat(
@@ -285,7 +315,7 @@ internal fun PremiumMushafPageSkeleton(
     sepiaMode: Boolean
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val shimmerOffset = if (motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mushaf page loading shimmer")
         val value by transition.animateFloat(
@@ -373,7 +403,7 @@ internal fun shouldAnimateContentSize(motionAllowed: Boolean, enabled: Boolean =
 /** Animate expanding/collapsing content only when the system allows motion. */
 internal fun Modifier.premiumAnimateContentSize(enabled: Boolean = true): Modifier = composed {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     if (shouldAnimateContentSize(motionAllowed, enabled)) {
         this.animateContentSize(
             animationSpec = spring(
@@ -403,7 +433,7 @@ internal fun systemAllowsDecorativeMotion(context: Context): Boolean {
             1f
         )
     }.getOrDefault(1f)
-    return animatorEnabled && durationScale > 0f
+    return shouldAllowMashxallMotion(animatorEnabled, durationScale, MashxallMotionPreferences.reduceMotion)
 }
 
 internal fun shouldAnimateAmbientBackdrop(screenKey: String, motionAllowed: Boolean): Boolean =
@@ -421,7 +451,7 @@ internal fun Modifier.staggeredEntrance(
     enabled: Boolean = true
 ): Modifier {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val progress = remember(itemKey) {
         Animatable(if (motionAllowed && enabled) 0f else 1f)
     }
@@ -544,7 +574,7 @@ internal fun PremiumTapBurst(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val progress = remember { Animatable(1f) }
     LaunchedEffect(eventKey, motionAllowed) {
         if (motionAllowed && eventKey > 0) {
@@ -602,7 +632,7 @@ internal fun PremiumAmbientBackdrop(
     animated: Boolean = true
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val drift = if (motionAllowed && animated) {
         val transition = rememberInfiniteTransition(label = "Mashxall ambient drift")
         val x by transition.animateFloat(
@@ -650,7 +680,7 @@ internal fun PremiumIconMedallion(
     contentDescription: String? = null
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val pulseMotion = if (pulse && motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mashxall medallion pulse")
         val scale by transition.animateFloat(
@@ -708,7 +738,7 @@ internal fun PremiumChoicePill(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
         targetValue = when {
             !enabled -> foreground.copy(alpha = 0.025f)
@@ -776,7 +806,7 @@ internal fun PremiumAudioWaveform(
     contentDescription: String? = null
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     if (active && motionAllowed) {
         PremiumAnimatedWaveformBars(accent = accent, modifier = modifier, contentDescription = contentDescription)
     } else {
@@ -856,7 +886,7 @@ internal fun PremiumSearchField(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val outline by animateColorAsState(
@@ -954,7 +984,7 @@ internal fun PremiumSectionHero(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val heroOrbitRotation = if (motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mashxall section hero orbit")
         val value by transition.animateFloat(
@@ -1084,7 +1114,7 @@ internal fun PremiumCompassOrbit(
     size: Dp = 232.dp
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     if (motionAllowed) {
         PremiumAnimatedCompassOrbit(tint = tint, size = size)
     } else {
@@ -1185,7 +1215,7 @@ internal fun PremiumActionButton(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val fillAlpha by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.45f,
         animationSpec = if (motionAllowed) tween(180) else snap(),
@@ -1320,7 +1350,7 @@ internal fun PremiumIconButton(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val shape = if (circular) CircleShape else RoundedCornerShape(size * 0.36f)
     val fill by animateColorAsState(
         targetValue = when {
@@ -1384,7 +1414,7 @@ internal fun PremiumIconActionSurface(
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
         targetValue = when {
             !enabled -> accent.copy(alpha = 0.025f)
