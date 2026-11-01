@@ -345,17 +345,21 @@ private fun HomeModuleIcon(module: HomeModule, index: Int, size: androidx.compos
         ),
         label = "Feature-specific icon arrival lift"
     )
-    PremiumIconMedallion(
-        icon = module.icon,
-        tint = module.color,
-        size = size,
-        modifier = Modifier.graphicsLayer {
+    Box(
+        Modifier.size(size).graphicsLayer {
             rotationZ = rotation
             scaleX = scale
             scaleY = scale
             translationY = lift.dp.toPx()
-        }
-    )
+        },
+        contentAlignment = Alignment.Center
+    ) {
+        PremiumIconMedallion(
+            icon = module.icon,
+            tint = module.color,
+            size = size
+        )
+    }
 }
 
 private val homeModules: List<HomeModule> get() = listOf(
