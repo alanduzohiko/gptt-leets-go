@@ -1473,6 +1473,48 @@ if [[ "$home_ready" -ne 1 ]]; then
   exit 1
 fi
 
+# Assert actual Android view bounds, not just text presence: the prayer timetable
+# must come first, Quick Access must follow it, and the welcome/resume action
+# must remain after Quick Access.
+python3 - dist/runtime-test/window-home-stable.xml <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception as exc:
+    print(f"FAIL: cannot parse the stable Home hierarchy for layout order: {exc}")
+    raise SystemExit(1)
+
+patterns = {
+    "prayer": re.compile(r"بەیانی|الفجر|Fajr", re.I),
+    "quick_access": re.compile(r"دەستگەیشتنی خێرا|وصول سريع|Quick access", re.I),
+    "continue_reading": re.compile(r"بەردەوام بە لە خوێندنەوە|متابعة القراءة|Continue reading", re.I),
+}
+positions = {}
+for node in root.iter("node"):
+    label = " ".join((node.attrib.get("text", ""), node.attrib.get("content-desc", ""))).strip()
+    bounds = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if not bounds:
+        continue
+    top = int(bounds.group(2))
+    for key, pattern in patterns.items():
+        if pattern.search(label):
+            positions[key] = min(top, positions.get(key, top))
+
+missing = [key for key in patterns if key not in positions]
+if missing:
+    print("FAIL: Home layout order check could not find: " + ", ".join(missing))
+    print(positions)
+    raise SystemExit(1)
+if not (positions["prayer"] < positions["quick_access"] < positions["continue_reading"]):
+    print("FAIL: Home order must be prayer timetable -> Quick Access -> Continue reading.")
+    print(positions)
+    raise SystemExit(1)
+print("PASS: Android view bounds confirm prayer timetable -> Quick Access -> Continue reading.")
+PY
+
 adb shell input keyevent 4
 sleep 1
 adb shell uiautomator dump /sdcard/mashxall-home-back-guard.xml > dist/runtime-test/uiautomator-home-back-guard.txt 2>&1 || true
