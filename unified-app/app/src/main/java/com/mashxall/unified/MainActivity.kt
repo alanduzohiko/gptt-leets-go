@@ -186,6 +186,20 @@ internal fun homeBackExitMessage(language: AppLanguage): String = when (language
     AppLanguage.CKB -> "بۆ دەرچوون جارێکی تر دوگمەی گەڕانەوە دابگرە"
 }
 
+internal fun rootNavigationDirection(current: String, target: String): Int {
+    val rootOrder = listOf("home", "quran", "azkar", "more", "settings")
+    val currentIndex = rootOrder.indexOf(current)
+    val targetIndex = rootOrder.indexOf(target)
+    if (currentIndex < 0 || targetIndex < 0 || currentIndex == targetIndex) return 1
+    return if (targetIndex > currentIndex) 1 else -1
+}
+
+internal fun navigationSlideSign(isRtl: Boolean, direction: Int): Int {
+    val languageSign = if (isRtl) -1 else 1
+    val navigationSign = if (direction < 0) -1 else 1
+    return languageSign * navigationSign
+}
+
 enum class AppScreen(val key: String) {
     HOME("home"), QURAN("quran"), WORSHIP("worship"), PRAYER("prayer"), MORE("more"),
     TAFSIR("tafsir"), HADITH("hadith"), AZKAR("azkar"), NAMES("names"), TASBIH("tasbih"),
@@ -325,11 +339,13 @@ fun MashxallApp(startScreen: String? = null) {
         )
     }
     var navigationStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var navigationDirection by rememberSaveable { mutableIntStateOf(1) }
     LaunchedEffect(startScreen) {
         val requested = startScreen?.takeIf { candidate ->
             AppScreen.entries.any { it.key == candidate }
         }
         if (requested != null) {
+            navigationDirection = 1
             screen = requested
             navigationStack = emptyList()
         }
@@ -374,6 +390,7 @@ fun MashxallApp(startScreen: String? = null) {
 
     fun navigateTo(target: String) {
         if (target == screen) return
+        navigationDirection = 1
         navigationStack = if (target in rootScreens) {
             emptyList()
         } else {
@@ -383,6 +400,7 @@ fun MashxallApp(startScreen: String? = null) {
     }
 
     fun navigateBack() {
+        navigationDirection = -1
         if (navigationStack.isNotEmpty()) {
             screen = navigationStack.last()
             navigationStack = navigationStack.dropLast(1)
@@ -445,6 +463,7 @@ fun MashxallApp(startScreen: String? = null) {
                     contentWindowInsets = if (immersiveMushaf) WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) else WindowInsets.statusBars,
                     bottomBar = {
                         if (isRoot && !immersiveMushaf) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
+                            navigationDirection = rootNavigationDirection(screen, target)
                             navigationStack = emptyList()
                             screen = target
                             audioStartsAtReciters = false
@@ -467,7 +486,10 @@ fun MashxallApp(startScreen: String? = null) {
                                 if (!motionAllowed) {
                                     fadeIn(animationSpec = tween(0)) togetherWith fadeOut(animationSpec = tween(0))
                                 } else {
-                                    val enterFrom = if (layoutDirection == LayoutDirection.Ltr) 1 else -1
+                                    val enterFrom = navigationSlideSign(
+                                        isRtl = layoutDirection == LayoutDirection.Rtl,
+                                        direction = navigationDirection
+                                    )
                                     val exitTo = -enterFrom
                                     (fadeIn(animationSpec = tween(260, easing = FastOutSlowInEasing)) +
                                         scaleIn(
