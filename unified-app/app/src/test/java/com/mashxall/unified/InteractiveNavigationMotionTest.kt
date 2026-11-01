@@ -39,4 +39,14 @@ class InteractiveNavigationMotionTest {
         val depths = keys.map(::prayerTilePressScale)
         assertEquals(keys.size, depths.toSet().size)
     }
+
+    @Test
+    fun settingsShortcutsHaveTheirOwnPressDepth() {
+        val keys = listOf(
+            "quran_reader", "prayer_location", "reciters",
+            "adhan_library", "backup_restore", "data_sources"
+        )
+        val depths = keys.map(::settingsShortcutPressScale)
+        assertEquals(keys.size, depths.toSet().size)
+    }
 }

@@ -334,6 +334,17 @@ internal fun homeModulePressScale(key: String): Float = when (key) {
     else -> 0.968f
 }
 
+internal fun settingsShortcutPressScale(key: String): Float = when (key) {
+    "quran_reader" -> 0.943f
+    "prayer_location" -> 0.956f
+    "reciters" -> 0.949f
+    "adhan_library" -> 0.962f
+    "backup_restore" -> 0.951f
+    "data_sources" -> 0.968f
+    else -> 0.968f
+}
+
+
 internal fun prayerTilePressScale(key: String): Float = when (key) {
     "fajr" -> 0.943f
     "sunrise" -> 0.968f
@@ -2538,10 +2549,10 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
         systemAllowsDecorativeMotion(context)
     }
     val worshipModules = listOf(
-        Triple(AppScreen.AZKAR, Icons.Outlined.Spa, Color(0xFF74C7A7)),
-        Triple(AppScreen.FARMUDA, Icons.Outlined.VolunteerActivism, Color(0xFFE8B477)),
-        Triple(AppScreen.NAMES, Icons.Outlined.Favorite, Color(0xFFE59DB8)),
-        Triple(AppScreen.TASBIH, Icons.Outlined.Spa, Color(0xFF8BB9F0))
+        HomeModule(AppScreen.AZKAR, "azkar", "azkar_sub", Icons.Outlined.Spa, Color(0xFF74C7A7)),
+        HomeModule(AppScreen.FARMUDA, "farmuda", "farmuda_sub", Icons.Outlined.VolunteerActivism, Color(0xFFE8B477)),
+        HomeModule(AppScreen.NAMES, "names", "names_sub", Icons.Outlined.Favorite, Color(0xFFE59DB8)),
+        HomeModule(AppScreen.TASBIH, "tasbih", "tasbih_sub", Icons.Outlined.Spa, Color(0xFF8BB9F0))
     )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         PremiumSectionHero(
@@ -2557,49 +2568,50 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
             eyebrow = when (language) { AppLanguage.EN -> "REFLECTION & PRACTICE"; AppLanguage.AR -> "الذكر والعمل"; AppLanguage.CKB -> "زیکر و کردار" }
         )
         Spacer(Modifier.height(14.dp))
-        worshipModules.forEachIndexed { index, (target, icon, tint) ->
+        worshipModules.forEachIndexed { index, module ->
             AnimatedVisibility(
                 visible = true,
                 enter = if (motionAllowed) {
                     fadeIn(animationSpec = tween(380, delayMillis = index * 55)) +
                         slideInVertically(initialOffsetY = { it / 8 }, animationSpec = tween(380, delayMillis = index * 55)) +
-                        scaleIn(initialScale = 0.965f, animationSpec = tween(380, delayMillis = index * 55))
+                        scaleIn(initialScale = 0.965f, animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ))
                 } else {
                     fadeIn(animationSpec = tween(0))
                 }
             ) {
                 Card(
-                    Modifier.fillMaxWidth().padding(bottom = 10.dp).premiumClickable { onOpen(target) },
+                    Modifier.fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                        .staggeredEntrance(itemKey = "worship-${module.screen.key}", index = index)
+                        .premiumAnimateContentSize()
+                        .premiumPress(pressedScale = homeModulePressScale(module.screen.key)) {
+                            onOpen(module.screen)
+                        },
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(23.dp),
-                    border = BorderStroke(1.dp, tint.copy(alpha = 0.34f))
+                    border = BorderStroke(1.dp, module.color.copy(alpha = 0.34f))
                 ) {
                     Row(
                         Modifier.fillMaxWidth()
-                            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.13f), cardColor, cardColor)))
+                            .background(Brush.horizontalGradient(listOf(module.color.copy(alpha = 0.13f), cardColor, cardColor)))
                             .padding(15.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier.size(54.dp).clip(RoundedCornerShape(18.dp))
-                                .background(Brush.linearGradient(listOf(tint.copy(alpha = 0.28f), tint.copy(alpha = 0.055f))))
-                                .border(1.dp, tint.copy(alpha = 0.38f), RoundedCornerShape(18.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(Modifier.size(42.dp).border(1.dp, tint.copy(alpha = 0.22f), CircleShape))
-                            Icon(icon, null, tint = tint, modifier = Modifier.size(28.dp))
-                        }
+                        HomeModuleIcon(module = module, index = index, size = 54.dp)
                         Spacer(Modifier.width(13.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(tr(language, target.key), color = foreground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(tr(language, module.titleKey), color = foreground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             Spacer(Modifier.height(3.dp))
-                            Text(tr(language, target.key + "_sub"), color = foreground.copy(alpha = 0.60f), fontSize = 11.sp, lineHeight = 16.sp)
+                            Text(tr(language, module.subtitleKey), color = foreground.copy(alpha = 0.60f), fontSize = 11.sp, lineHeight = 16.sp)
                         }
                         Box(
-                            Modifier.size(31.dp).clip(CircleShape).background(tint.copy(alpha = 0.12f)),
+                            Modifier.size(31.dp).clip(CircleShape).background(module.color.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Outlined.ChevronRight, null, tint = tint, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Outlined.ChevronRight, null, tint = module.color, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -2865,25 +2877,45 @@ private fun SettingsScreen(
                 Icons.Outlined.Info to onDataInfo
             )
         )
-        actions.forEach { (title, subtitle, item) ->
+        val actionKeys = listOf(
+            "quran_reader", "prayer_location", "reciters",
+            "adhan_library", "backup_restore", "data_sources"
+        )
+        actions.forEachIndexed { index, (title, subtitle, item) ->
             val (icon, callback) = item
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).premiumClickable { callback() },
-                colors = CardDefaults.cardColors(containerColor = cardColor),
-                shape = RoundedCornerShape(19.dp),
-                border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
+            val actionKey = actionKeys[index]
+            AnimatedVisibility(
+                visible = true,
+                modifier = Modifier.fillMaxWidth(),
+                enter = fadeIn(animationSpec = tween(340, delayMillis = index * 48)) +
+                    slideInVertically(initialOffsetY = { it / 7 }, animationSpec = tween(360, delayMillis = index * 48)) +
+                    scaleIn(initialScale = 0.975f, animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ))
             ) {
-                Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                        Icon(icon, null, tint = Gold, modifier = Modifier.size(23.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(bottom = 9.dp)
+                        .staggeredEntrance(itemKey = "settings-shortcut-$actionKey", index = index)
+                        .premiumAnimateContentSize()
+                        .premiumPress(pressedScale = settingsShortcutPressScale(actionKey)) { callback() },
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    shape = RoundedCornerShape(19.dp),
+                    border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
+                ) {
+                    Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Gold.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(icon, null, tint = Gold, modifier = Modifier.size(23.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(3.dp))
+                            Text(subtitle, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp)
+                        }
+                        Text("›", color = Gold, fontSize = 25.sp)
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(title, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(3.dp))
-                        Text(subtitle, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp)
-                    }
-                    Text("›", color = Gold, fontSize = 25.sp)
                 }
             }
         }
