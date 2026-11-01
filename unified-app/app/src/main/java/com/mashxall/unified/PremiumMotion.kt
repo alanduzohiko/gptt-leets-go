@@ -93,11 +93,21 @@ import kotlin.math.roundToInt
  * haptics can be opted out when a screen already provides richer task-specific
  * feedback (for example, Quran navigation or Tasbih counting).
  */
+internal fun premiumPressTargetScale(
+    enabled: Boolean,
+    pressed: Boolean,
+    pressedScale: Float = 0.968f
+): Float {
+    val safeScale = if (pressedScale.isFinite()) pressedScale.coerceIn(0.90f, 1f) else 0.968f
+    return if (enabled && pressed) safeScale else 1f
+}
+
 internal fun Modifier.premiumClickable(
     enabled: Boolean = true,
     onClickLabel: String? = null,
     role: Role? = null,
     hapticFeedback: Boolean = true,
+    pressedScale: Float = 0.968f,
     onClick: () -> Unit
 ): Modifier = composed {
     val context = LocalContext.current
@@ -105,7 +115,7 @@ internal fun Modifier.premiumClickable(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (enabled && pressed) 0.942f else 1f,
+        targetValue = premiumPressTargetScale(enabled, pressed, pressedScale),
         animationSpec = if (motionAllowed) spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow
