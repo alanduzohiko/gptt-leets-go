@@ -1392,6 +1392,7 @@ private fun HomePrayerCountdown(
 @Composable
 private fun PremiumHomeHero(
     language: AppLanguage,
+    hasReadingHistory: Boolean,
     onResumeReading: () -> Unit,
     onOpenQibla: () -> Unit
 ) {
@@ -1445,11 +1446,7 @@ private fun PremiumHomeHero(
         AppLanguage.AR -> "رفيقك اليومي"
         AppLanguage.CKB -> "هاوڕێی ڕۆژانەت"
     }
-    val readLabel = when (language) {
-        AppLanguage.EN -> "Continue Quran"
-        AppLanguage.AR -> "تابع القرآن"
-        AppLanguage.CKB -> "بەردەوام بە"
-    }
+    val readLabel = homeQuranHeroActionLabel(language, hasReadingHistory)
     val qiblaLabel = when (language) {
         AppLanguage.EN -> "Qibla"
         AppLanguage.AR -> "القبلة"
@@ -1556,6 +1553,15 @@ private fun PremiumHomeHero(
             }
         }
     }
+}
+
+internal fun homeQuranHeroActionLabel(
+    language: AppLanguage,
+    hasReadingHistory: Boolean
+): String = when (language) {
+    AppLanguage.EN -> if (hasReadingHistory) "Continue Quran" else "Choose a surah"
+    AppLanguage.AR -> if (hasReadingHistory) "تابع القرآن" else "اختر سورة"
+    AppLanguage.CKB -> if (hasReadingHistory) "بەردەوام بە" else "سوورەتێک هەڵبژێرە"
 }
 
 internal fun homeQuranResumeDetails(
@@ -2310,6 +2316,7 @@ private fun HomeScreen(
         Spacer(Modifier.height(15.dp))
         PremiumHomeHero(
             language = language,
+            hasReadingHistory = hasSavedQuranReading,
             onResumeReading = onResumeReading,
             onOpenQibla = { onOpen(AppScreen.QIBLA) }
         )

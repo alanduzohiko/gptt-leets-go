@@ -6,6 +6,17 @@ import org.junit.Test
 
 class HomeQuranResumeDetailsTest {
     @Test
+    fun homeHeroActionLabelMatchesTheRealFirstUseAndResumeActions() {
+        assertEquals("Choose a surah", homeQuranHeroActionLabel(AppLanguage.EN, false))
+        assertEquals("اختر سورة", homeQuranHeroActionLabel(AppLanguage.AR, false))
+        assertEquals("سوورەتێک هەڵبژێرە", homeQuranHeroActionLabel(AppLanguage.CKB, false))
+
+        assertEquals("Continue Quran", homeQuranHeroActionLabel(AppLanguage.EN, true))
+        assertEquals("تابع القرآن", homeQuranHeroActionLabel(AppLanguage.AR, true))
+        assertEquals("بەردەوام بە", homeQuranHeroActionLabel(AppLanguage.CKB, true))
+    }
+
+    @Test
     fun newReaderIsInvitedToChooseASurah() {
         assertEquals(
             tr(AppLanguage.CKB, "mushaf_offline"),
