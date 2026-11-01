@@ -6918,6 +6918,7 @@ internal fun pdfZoomTarget(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String) {
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
