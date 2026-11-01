@@ -2438,7 +2438,7 @@ private fun SettingsScreen(
                             color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
                         )
                     }
-                    Switch(checked = reduceMotion, onCheckedChange = onReduceMotionChange)
+                    PremiumSwitch(checked = reduceMotion, onCheckedChange = onReduceMotionChange)
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(foreground.copy(alpha = 0.08f)))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2457,7 +2457,7 @@ private fun SettingsScreen(
                             color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
                         )
                     }
-                    Switch(checked = hapticsEnabled, onCheckedChange = onHapticsEnabledChange)
+                    PremiumSwitch(checked = hapticsEnabled, onCheckedChange = onHapticsEnabledChange)
                 }
             }
         }
