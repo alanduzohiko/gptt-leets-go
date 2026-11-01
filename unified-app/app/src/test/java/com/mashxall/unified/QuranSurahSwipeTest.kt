@@ -67,3 +67,38 @@ class TafsirSwipeNavigationTest {
     }
 }
 
+
+class PdfReaderZoomTest {
+    @Test
+    fun pinchZoomUsesTheGestureMultiplier() {
+        assertEquals(1.5f, pdfZoomTarget(1f, 1.5f), 0.0001f)
+        assertEquals(2.25f, pdfZoomTarget(1.5f, 1.5f), 0.0001f)
+    }
+
+    @Test
+    fun zoomNeverDropsBelowFitOrExceedsFourTimes() {
+        assertEquals(1f, pdfZoomTarget(1.5f, 0.5f), 0.0001f)
+        assertEquals(4f, pdfZoomTarget(3f, 2f), 0.0001f)
+    }
+
+    @Test
+    fun customZoomBoundsAreRespected() {
+        assertEquals(2f, pdfZoomTarget(1f, 1.2f, minScale = 2f, maxScale = 3f), 0.0001f)
+        assertEquals(3f, pdfZoomTarget(2f, 2f, minScale = 2f, maxScale = 3f), 0.0001f)
+    }
+
+    @Test
+    fun invalidGestureValuesFallBackSafely() {
+        assertEquals(1f, pdfZoomTarget(Float.NaN, 2f), 0.0001f)
+        assertEquals(1f, pdfZoomTarget(1f, Float.NaN), 0.0001f)
+        assertEquals(1f, pdfZoomTarget(Float.POSITIVE_INFINITY, 2f), 0.0001f)
+        assertEquals(1f, pdfZoomTarget(2f, -1f), 0.0001f)
+    }
+
+    @Test
+    fun zoomedPagePanStaysInsideItsViewport() {
+        assertEquals(200f, clampMushafPanOffset(100f, 300f, 1000f, 600f), 0.0001f)
+        assertEquals(-200f, clampMushafPanOffset(-100f, -300f, 1000f, 600f), 0.0001f)
+        assertEquals(0f, clampMushafPanOffset(0f, 100f, 500f, 600f), 0.0001f)
+    }
+}
