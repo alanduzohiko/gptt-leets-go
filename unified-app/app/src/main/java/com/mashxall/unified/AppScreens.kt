@@ -580,14 +580,19 @@ private fun SurahOriginFilterChip(
     foreground: Color,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val chipAnimation = if (motionAllowed) tween(190) else snap()
     val fill by animateColorAsState(
         targetValue = if (selected) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
-        animationSpec = tween(190),
+        animationSpec = chipAnimation,
         label = "Quran origin filter fill"
     )
     val outline by animateColorAsState(
         targetValue = if (selected) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.09f),
-        animationSpec = tween(190),
+        animationSpec = chipAnimation,
         label = "Quran origin filter outline"
     )
     Row(
