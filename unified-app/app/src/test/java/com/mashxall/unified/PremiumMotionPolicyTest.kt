@@ -60,4 +60,33 @@ class PremiumMotionPolicyTest {
         assertEquals(false, shouldAnimateContentSize(motionAllowed = true, enabled = false))
     }
 
+    @Test
+    fun islamicRosetteVerticesKeepEightfoldSymmetryAndAlternatingRadii() {
+        val outerTop = premiumOrnamentVertex(0, outerRadius = 50f, innerRadius = 24f)
+        val innerNext = premiumOrnamentVertex(1, outerRadius = 50f, innerRadius = 24f)
+        val oppositeOuter = premiumOrnamentVertex(8, outerRadius = 50f, innerRadius = 24f)
+
+        assertEquals(0f, outerTop.x, 0.0001f)
+        assertEquals(-50f, outerTop.y, 0.0001f)
+        assertEquals(24f, kotlin.math.hypot(innerNext.x, innerNext.y), 0.0001f)
+        assertEquals(-outerTop.x, oppositeOuter.x, 0.0001f)
+        assertEquals(-outerTop.y, oppositeOuter.y, 0.0001f)
+    }
+
+    @Test
+    fun islamicRosetteVertexInputIsWrappedAndClampedSafely() {
+        assertEquals(
+            premiumOrnamentVertex(0, 40f, 20f),
+            premiumOrnamentVertex(-16, 40f, 20f)
+        )
+        assertEquals(
+            premiumOrnamentVertex(1, 10f, 10f),
+            premiumOrnamentVertex(1, 10f, 50f)
+        )
+        assertEquals(
+            androidx.compose.ui.geometry.Offset.Zero,
+            premiumOrnamentVertex(0, Float.NaN, 20f)
+        )
+    }
+
 }

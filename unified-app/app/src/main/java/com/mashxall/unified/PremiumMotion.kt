@@ -24,6 +24,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.LocalIndication
@@ -71,6 +72,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -85,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.roundToInt
@@ -425,6 +429,86 @@ internal fun Modifier.staggeredEntrance(
 }
 
 
+
+/**
+ * Returns one of the 16 alternating outer/inner vertices of an eight-point
+ * Islamic rosette. Invalid radii collapse safely instead of creating NaN
+ * drawing coordinates.
+ */
+internal fun premiumOrnamentVertex(
+    index: Int,
+    outerRadius: Float,
+    innerRadius: Float
+): Offset {
+    val safeOuter = outerRadius.takeIf { it.isFinite() && it > 0f } ?: 0f
+    val safeInner = innerRadius.takeIf { it.isFinite() && it > 0f }
+        ?.coerceAtMost(safeOuter) ?: 0f
+    val wrappedIndex = ((index % 16) + 16) % 16
+    val angle = -PI / 2.0 + wrappedIndex * PI / 8.0
+    val radius = if (wrappedIndex % 2 == 0) safeOuter else safeInner
+    return Offset((cos(angle) * radius).toFloat(), (sin(angle) * radius).toFloat())
+}
+
+/**
+ * A quiet, native-drawn Mashxall rosette motif. It is deliberately static:
+ * geometric detail adds identity without running another animation loop or
+ * competing with Quran pages and other reading surfaces.
+ */
+@Composable
+internal fun PremiumIslamicOrnament(
+    modifier: Modifier = Modifier,
+    accent: Color,
+    dark: Boolean
+) {
+    Canvas(modifier = modifier) {
+        if (size.minDimension <= 0f) return@Canvas
+        val baseRadius = 54.dp.toPx()
+        val lineWidth = 0.8.dp.toPx()
+        val alpha = if (dark) 0.075f else 0.047f
+        val anchors = listOf(
+            Triple(0.105f, 0.205f, 1.0f),
+            Triple(0.895f, 0.785f, 0.82f)
+        )
+        anchors.forEach { (fractionX, fractionY, scale) ->
+            val center = Offset(size.width * fractionX, size.height * fractionY)
+            val outer = baseRadius * scale
+            val inner = outer * 0.47f
+            val rosette = Path()
+            repeat(16) { index ->
+                val point = premiumOrnamentVertex(index, outer, inner)
+                val x = center.x + point.x
+                val y = center.y + point.y
+                if (index == 0) rosette.moveTo(x, y) else rosette.lineTo(x, y)
+            }
+            rosette.close()
+            drawPath(
+                path = rosette,
+                color = accent.copy(alpha = alpha),
+                style = Stroke(width = lineWidth)
+            )
+
+            val innerRosette = Path()
+            repeat(16) { index ->
+                val point = premiumOrnamentVertex(index, outer * 0.48f, inner * 0.48f)
+                val x = center.x + point.x
+                val y = center.y + point.y
+                if (index == 0) innerRosette.moveTo(x, y) else innerRosette.lineTo(x, y)
+            }
+            innerRosette.close()
+            drawPath(
+                path = innerRosette,
+                color = accent.copy(alpha = alpha * 0.78f),
+                style = Stroke(width = lineWidth * 0.8f)
+            )
+            drawCircle(
+                color = accent.copy(alpha = alpha * 0.72f),
+                radius = lineWidth * 1.8f,
+                center = center
+            )
+        }
+    }
+}
+
 /** Slow ambient light fields add depth without competing with reading content. */
 @Composable
 internal fun PremiumAmbientBackdrop(
@@ -453,6 +537,7 @@ internal fun PremiumAmbientBackdrop(
     }
     val glowAlpha = if (dark) 0.13f else 0.07f
     Box(modifier = modifier) {
+        PremiumIslamicOrnament(Modifier.fillMaxSize(), accent = accent, dark = dark)
         Box(
             Modifier.align(Alignment.TopEnd).offset(x = drift.first.dp + 42.dp, y = drift.second.dp - 62.dp)
                 .size(250.dp).clip(CircleShape)
