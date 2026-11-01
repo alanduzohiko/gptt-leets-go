@@ -1546,6 +1546,97 @@ echo "PASS: home prayer-times card, continue-reading resume, and quick access ar
 check_screen worship 'پەرستش و زیکر|العبادات والأذكار|Worship'
 check_screen settings 'ڕێکخستن|الإعدادات|Settings'
 
+# Exercise all three language choices inside Settings and prove that each
+# selection updates the visible Settings hero and persists to preferences.
+select_settings_language() {
+  local label="$1"
+  local expected_title="$2"
+  local preference="$3"
+  local language_key="$4"
+  local before_file="dist/runtime-test/window-settings-language-${language_key}-before.xml"
+  local after_file="dist/runtime-test/window-settings-language-${language_key}-after.xml"
+  local remote_file="/sdcard/mashxall-settings-language-${language_key}.xml"
+  local coords=""
+  local attempt
+
+  for attempt in $(seq 1 8); do
+    rm -f "$before_file"
+    adb shell rm -f "$remote_file" >/dev/null 2>&1 || true
+    adb shell uiautomator dump "$remote_file" >"dist/runtime-test/uiautomator-settings-language-${language_key}-${attempt}.txt" 2>&1 || true
+    adb pull "$remote_file" "$before_file" >/dev/null 2>&1 || true
+    coords="$(python3 - "$before_file" "$label" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    raise SystemExit(0)
+
+label = sys.argv[2]
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() != label:
+        continue
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", node.attrib.get("bounds", ""))
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    # The Settings language row is below the app header; avoid tapping the
+    # compact language chips in the header when the same label appears twice.
+    if y1 >= 200 and y2 <= 1500 and x2 > x1 and y2 > y1:
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+raise SystemExit(0)
+PY
+)"
+    if [[ -n "$coords" ]]; then break; fi
+    sleep 2
+  done
+
+  if [[ -z "$coords" ]]; then
+    echo "FAIL: Settings does not expose the ${label} language choice in its visible language row."
+    cat "$before_file" 2>/dev/null || true
+    exit 1
+  fi
+
+  read -r choice_x choice_y <<< "$coords"
+  adb shell input tap "$choice_x" "$choice_y"
+  sleep 3
+
+  local screen_ok=0
+  for attempt in $(seq 1 8); do
+    rm -f "$after_file"
+    adb shell rm -f "$remote_file" >/dev/null 2>&1 || true
+    adb shell uiautomator dump "$remote_file" >"dist/runtime-test/uiautomator-settings-language-${language_key}-after-${attempt}.txt" 2>&1 || true
+    adb pull "$remote_file" "$after_file" >/dev/null 2>&1 || true
+    if grep -Fq "$expected_title" "$after_file"; then
+      screen_ok=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ "$screen_ok" -ne 1 ]]; then
+    echo "FAIL: selecting ${label} did not update the Settings title to ${expected_title}."
+    cat "$after_file" 2>/dev/null || true
+    exit 1
+  fi
+
+  local preferences_file="dist/runtime-test/preferences-language-${language_key}.xml"
+  adb shell run-as com.mashxall.unified cat shared_prefs/mashxall_preferences.xml >"$preferences_file" 2>/dev/null || true
+  if ! grep -Fq "<string name=\"language\">${preference}</string>" "$preferences_file"; then
+    echo "FAIL: selecting ${label} did not persist language=${preference}."
+    cat "$preferences_file"
+    exit 1
+  fi
+  echo "PASS: ${label} updates the Settings UI and persists language=${preference}."
+}
+
+select_settings_language "العربية" "الإعدادات" "ar" "arabic"
+select_settings_language "English" "Settings" "en" "english"
+select_settings_language "کوردی" "ڕێکخستن" "ckb" "sorani"
+echo "PASS: Sorani Kurdish, Arabic, and English can each be selected and saved."
+
 # Test the actual clock preference, and then restore the required 12-hour default.
 time24_coords=""
 for attempt in $(seq 1 12); do
