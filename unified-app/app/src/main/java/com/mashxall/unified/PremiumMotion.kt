@@ -219,6 +219,99 @@ internal fun PremiumLoadingSkeleton(
 }
 
 
+/**
+ * Page-shaped loading state for the graphic Mushaf. The layout echoes a real
+ * page without inventing readable Quran text while the SVG is being decoded.
+ */
+@Composable
+internal fun PremiumMushafPageSkeleton(
+    modifier: Modifier = Modifier,
+    accent: Color,
+    darkMode: Boolean,
+    sepiaMode: Boolean
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val shimmerOffset = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mushaf page loading shimmer")
+        val value by transition.animateFloat(
+            initialValue = -360f,
+            targetValue = 760f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1550, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Mushaf page shimmer position"
+        )
+        value
+    } else {
+        -360f
+    }
+    val paper = when {
+        darkMode -> Color(0xFF171E1B)
+        sepiaMode -> Color(0xFFF0E2C4)
+        else -> Color(0xFFFFFEF8)
+    }
+    val ink = if (darkMode) Color(0xFF91A79B) else Color(0xFF718477)
+    val shimmer = Brush.linearGradient(
+        colors = listOf(
+            ink.copy(alpha = 0.045f),
+            accent.copy(alpha = 0.20f),
+            ink.copy(alpha = 0.045f)
+        ),
+        start = Offset(shimmerOffset, 0f),
+        end = Offset(shimmerOffset + 240f, 90f)
+    )
+    Column(
+        modifier = modifier.fillMaxSize()
+            .clip(RoundedCornerShape(10.dp))
+            .background(paper)
+            .border(1.dp, accent.copy(alpha = 0.34f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 17.dp, vertical = 19.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(11.dp)
+    ) {
+        Spacer(Modifier.height(2.dp))
+        Box(
+            Modifier.fillMaxWidth(0.26f).height(7.dp)
+                .clip(RoundedCornerShape(5.dp)).background(shimmer)
+        )
+        Box(Modifier.size(34.dp).border(1.dp, accent.copy(alpha = 0.22f), CircleShape)) {
+            Box(
+                Modifier.align(Alignment.Center).size(20.dp)
+                    .border(1.dp, accent.copy(alpha = 0.18f), CircleShape)
+            )
+        }
+        repeat(3) { row ->
+            Box(
+                Modifier.fillMaxWidth(if (row == 1) 0.94f else 0.88f)
+                    .height(6.dp).clip(RoundedCornerShape(5.dp))
+                    .background(shimmer)
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        repeat(13) { index ->
+            Box(
+                Modifier.fillMaxWidth(
+                    when (index % 4) {
+                        0 -> 0.94f
+                        1 -> 0.86f
+                        2 -> 0.98f
+                        else -> 0.78f
+                    }
+                ).height(if (index % 5 == 0) 7.dp else 5.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmer)
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        Box(
+            Modifier.fillMaxWidth(0.20f).height(5.dp)
+                .clip(RoundedCornerShape(4.dp)).background(shimmer)
+        )
+    }
+}
+
 /** Keep list entry motion brief, capped, and disabled with Android's motion scale. */
 internal fun staggerDelayMillis(index: Int): Long =
     index.coerceIn(0, 8) * 40L
