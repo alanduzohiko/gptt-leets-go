@@ -4101,6 +4101,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 @Composable
 fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_name_favorites", Context.MODE_PRIVATE) }
     var names by remember { mutableStateOf<List<AllahName>>(emptyList()) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -4183,10 +4184,10 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 var expanded by rememberSaveable(name.number) { mutableStateOf(false) }
                 val expandArrowRotation by androidx.compose.animation.core.animateFloatAsState(
                     targetValue = if (expanded) 90f else 0f,
-                    animationSpec = androidx.compose.animation.core.spring(
+                    animationSpec = if (motionAllowed) androidx.compose.animation.core.spring(
                         dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
                         stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                    ),
+                    ) else snap(),
                     label = "Mashxall name card expand arrow"
                 )
                 val favorite = favoriteIds.contains(name.number.toString())
@@ -4202,7 +4203,33 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier.fillMaxWidth()
                         .staggeredEntrance(itemKey = name.number, index = itemIndex)
-                        .premiumClickable { expanded = !expanded }
+                        .premiumClickable(
+                            onLongClickLabel = when (language) {
+                                AppLanguage.EN -> "Copy divine name"
+                                AppLanguage.AR -> "نسخ الاسم"
+                                AppLanguage.CKB -> "ناوەکە لەبەرگرتنەوە"
+                            },
+                            onLongClick = {
+                                val copiedText = buildString {
+                                    append(name.arabic)
+                                    if (description.isNotBlank()) append("\n\n").append(description)
+                                    append("\n\n").append(name.number)
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Divine Name", copiedText))
+                                    Toast.makeText(
+                                        context,
+                                        when (language) {
+                                            AppLanguage.EN -> "Name copied"
+                                            AppLanguage.AR -> "تم نسخ الاسم"
+                                            AppLanguage.CKB -> "ناوەکە لەبەرگیرا"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        ) { expanded = !expanded }
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4230,8 +4257,8 @@ fun NamesScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 AnimatedContent(
                                     targetState = favorite,
                                     transitionSpec = {
-                                        (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
-                                            (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        (scaleIn(initialScale = 0.45f, animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap()) + fadeIn(tween(if (motionAllowed) 140 else 0))) togetherWith
+                                            (scaleOut(targetScale = 0.55f, animationSpec = if (motionAllowed) tween(100) else snap()) + fadeOut(tween(if (motionAllowed) 100 else 0)))
                                     },
                                     label = "Divine name favorite star pulse"
                                 ) { saved ->
