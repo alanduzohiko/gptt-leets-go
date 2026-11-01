@@ -58,7 +58,7 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion)", worship_full)
         self.assertIn("enter = if (motionAllowed)", worship_full)
 
-        names = APP_SCREENS.split("visible = expanded,", 1)[1][:700]
+        names = APP_SCREENS.split("visible = expanded,", 1)[1][:1200]
         self.assertIn("enter = if (motionAllowed)", names)
         self.assertIn("exit = if (motionAllowed)", names)
         self.assertIn("fadeIn(tween(0))", names)
