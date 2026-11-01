@@ -63,6 +63,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -332,6 +333,47 @@ internal fun PremiumTextButton(
     )
     val haptics = LocalHapticFeedback.current
     TextButton(
+        onClick = {
+            haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+        enabled = enabled,
+        contentPadding = contentPadding,
+        interactionSource = interactionSource,
+        content = content
+    )
+}
+
+/**
+ * Material outlined actions retain their native semantics and ripple while
+ * receiving the same brief spring response and preference-aware haptic as
+ * Mashxall's custom action surfaces.
+ */
+@Composable
+internal fun PremiumOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+    content: @Composable RowScope.() -> Unit
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (enabled && pressed) 0.945f else 1f,
+        animationSpec = if (motionAllowed) spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ) else snap(),
+        label = "Mashxall outlined action press"
+    )
+    val haptics = LocalHapticFeedback.current
+    OutlinedButton(
         onClick = {
             haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
             onClick()
@@ -1530,6 +1572,83 @@ internal fun PremiumActionButton(
 }
 
 
+/** Map a slider value to a bounded tactile tick, including continuous sliders. */
+internal fun premiumSliderHapticBucket(
+    value: Float,
+    rangeStart: Float,
+    rangeEnd: Float,
+    steps: Int
+): Int {
+    if (!value.isFinite() || !rangeStart.isFinite() || !rangeEnd.isFinite() || rangeEnd <= rangeStart) {
+        return 0
+    }
+    val segmentCount = if (steps > 0) steps + 1 else 20
+    val fraction = ((value - rangeStart) / (rangeEnd - rangeStart)).coerceIn(0f, 1f)
+    return (fraction * segmentCount).roundToInt().coerceIn(0, segmentCount)
+}
+
+/**
+ * Native Material slider with a restrained drag lift, accent-aware track, and
+ * tactile ticks. The user's value callback remains the source of truth.
+ */
+@Composable
+internal fun PremiumSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    accent: Color,
+    foreground: Color,
+    modifier: Modifier = Modifier,
+    steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val haptics = LocalHapticFeedback.current
+    var dragging by remember { mutableStateOf(false) }
+    var lastBucket by remember(valueRange, steps) {
+        mutableStateOf(premiumSliderHapticBucket(value, valueRange.start, valueRange.endInclusive, steps))
+    }
+    val dragScale by animateFloatAsState(
+        targetValue = if (dragging) 1.025f else 1f,
+        animationSpec = if (motionAllowed) spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ) else snap(),
+        label = "Mashxall slider drag response"
+    )
+    Slider(
+        value = value.coerceIn(valueRange),
+        onValueChange = { next ->
+            val bucket = premiumSliderHapticBucket(
+                next, valueRange.start, valueRange.endInclusive, steps
+            )
+            if (dragging && bucket != lastBucket) {
+                haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+            }
+            lastBucket = bucket
+            dragging = true
+            onValueChange(next.coerceIn(valueRange))
+        },
+        onValueChangeFinished = {
+            dragging = false
+            onValueChangeFinished?.invoke()
+        },
+        valueRange = valueRange,
+        steps = steps.coerceAtLeast(0),
+        colors = SliderDefaults.colors(
+            thumbColor = accent,
+            activeTrackColor = accent,
+            inactiveTrackColor = foreground.copy(alpha = 0.14f),
+            activeTickColor = accent,
+            inactiveTickColor = foreground.copy(alpha = 0.10f)
+        ),
+        modifier = modifier.graphicsLayer { scaleY = dragScale }
+    )
+}
+
 /**
  * Accessible page navigation for long-form readers. The preview value follows
  * the user's finger; a page is rendered only after the drag is released, so
@@ -1550,7 +1669,6 @@ internal fun PremiumPageScrubber(
     val previewPage = remember(safeCurrent, pageCount) {
         mutableStateOf(safeCurrent.toFloat())
     }
-    val haptic = LocalHapticFeedback.current
     val previewNumber = previewPage.value.roundToInt().coerceIn(1, pageCount)
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1569,24 +1687,16 @@ internal fun PremiumPageScrubber(
                 fontWeight = FontWeight.ExtraBold
             )
         }
-        Slider(
+        PremiumSlider(
             value = previewPage.value,
             onValueChange = { previewPage.value = it },
             onValueChangeFinished = {
                 val selected = previewPage.value.roundToInt().coerceIn(1, pageCount)
-                if (selected != safeCurrent) {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onPageSelected(selected)
-                }
+                if (selected != safeCurrent) onPageSelected(selected)
             },
             valueRange = 1f..pageCount.toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = accent,
-                activeTrackColor = accent,
-                inactiveTrackColor = foreground.copy(alpha = 0.14f),
-                activeTickColor = accent,
-                inactiveTickColor = foreground.copy(alpha = 0.10f)
-            ),
+            accent = accent,
+            foreground = foreground,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -1659,11 +1769,14 @@ internal fun PremiumIconButton(
         AnimatedVisibility(
             visible = enabled && selected,
             modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
-            enter = scaleIn(
+            enter = if (motionAllowed) scaleIn(
                 initialScale = 0.25f,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-            ) + fadeIn(tween(110)),
-            exit = scaleOut(targetScale = 0.35f, animationSpec = tween(100)) + fadeOut(tween(90))
+            ) + fadeIn(tween(110)) else fadeIn(tween(0)),
+            exit = if (motionAllowed) scaleOut(
+                targetScale = 0.35f,
+                animationSpec = tween(100)
+            ) + fadeOut(tween(90)) else fadeOut(tween(0))
         ) {
             Box(
                 Modifier.size(8.dp).clip(CircleShape)
@@ -1730,11 +1843,14 @@ internal fun PremiumIconActionSurface(
         AnimatedVisibility(
             visible = enabled && selected,
             modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
-            enter = scaleIn(
+            enter = if (motionAllowed) scaleIn(
                 initialScale = 0.25f,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-            ) + fadeIn(tween(110)),
-            exit = scaleOut(targetScale = 0.35f, animationSpec = tween(100)) + fadeOut(tween(90))
+            ) + fadeIn(tween(110)) else fadeIn(tween(0)),
+            exit = if (motionAllowed) scaleOut(
+                targetScale = 0.35f,
+                animationSpec = tween(100)
+            ) + fadeOut(tween(90)) else fadeOut(tween(0))
         ) {
             Box(
                 Modifier.size(8.dp).clip(CircleShape)
