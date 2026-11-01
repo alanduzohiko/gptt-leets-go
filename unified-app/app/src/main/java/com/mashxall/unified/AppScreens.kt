@@ -8358,8 +8358,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         AnimatedContent(
                             targetState = nextPrayerTarget.prayerKey,
                             transitionSpec = {
-                                (fadeIn(tween(180)) + scaleIn(initialScale = 0.9f, animationSpec = tween(200))) togetherWith
-                                    (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)))
+                                if (motionAllowed) {
+                                    (fadeIn(tween(180)) + scaleIn(initialScale = 0.9f, animationSpec = tween(200))) togetherWith
+                                        (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)))
+                                } else {
+                                    fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                }
                             },
                             label = "Next prayer name transition"
                         ) { prayerKey ->
@@ -8375,8 +8379,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         AnimatedContent(
                             targetState = formatPrayerCountdown(nextPrayerTarget.targetMillis - clockNowMillis),
                             transitionSpec = {
-                                (fadeIn(tween(140)) + scaleIn(initialScale = 0.88f, animationSpec = tween(180))) togetherWith
-                                    (fadeOut(tween(90)) + scaleOut(targetScale = 1.06f, animationSpec = tween(90)))
+                                if (motionAllowed) {
+                                    (fadeIn(tween(140)) + scaleIn(initialScale = 0.88f, animationSpec = tween(180))) togetherWith
+                                        (fadeOut(tween(90)) + scaleOut(targetScale = 1.06f, animationSpec = tween(90)))
+                                } else {
+                                    fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                }
                             },
                             label = "Prayer countdown rolling digits"
                         ) { countdown ->
