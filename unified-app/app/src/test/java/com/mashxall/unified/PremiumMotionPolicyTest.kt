@@ -17,6 +17,12 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
+    fun touchHapticsRespectTheAppPreference() {
+        assertEquals(true, shouldPerformMashxallHaptic(true))
+        assertEquals(false, shouldPerformMashxallHaptic(false))
+    }
+
+    @Test
     fun touchScaleChangesWithControlRoleWithoutExceedingSafeBounds() {
         assertEquals(0.946f, premiumRolePressScale(Role.Button), 0.0001f)
         assertEquals(0.958f, premiumRolePressScale(Role.Tab), 0.0001f)
