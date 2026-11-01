@@ -750,7 +750,7 @@ internal fun PremiumAmbientBackdrop(
             Modifier.align(Alignment.Center).offset(x = 82.dp, y = 42.dp)
                 .size(146.dp).graphicsLayer { alpha = shimmerAlpha }
                 .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(accent.copy(alpha = shimmerAlpha), Color.Transparent)))
+                .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.74f), Color.Transparent)))
         )
     }
 }
@@ -1105,6 +1105,21 @@ internal fun PremiumSectionHero(
         )
         scale to alpha
     } else 1f to 0.20f
+    val heroDivider = remember(title, motionAllowed) {
+        Animatable(if (motionAllowed) 0f else 1f)
+    }
+    LaunchedEffect(title, motionAllowed) {
+        if (motionAllowed) {
+            heroDivider.snapTo(0f)
+            delay(140L)
+            heroDivider.animateTo(
+                1f,
+                animationSpec = tween(680, easing = FastOutSlowInEasing)
+            )
+        } else {
+            heroDivider.snapTo(1f)
+        }
+    }
     AnimatedVisibility(
         visible = true,
         modifier = modifier.fillMaxWidth(),
@@ -1164,7 +1179,7 @@ internal fun PremiumSectionHero(
                         alpha = heroGlow.second
                     }
                     .clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(accent.copy(alpha = heroGlow.second), Color.Transparent)))
+                    .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.82f), Color.Transparent)))
             )
             Box(
                 Modifier.align(Alignment.BottomStart).offset(x = (-42).dp, y = 38.dp)
@@ -1193,6 +1208,21 @@ internal fun PremiumSectionHero(
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 2
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 5.dp, bottom = 2.dp)
+                    ) {
+                        Box(
+                            Modifier.fillMaxWidth(0.58f * heroDivider.value)
+                                .height(2.dp).clip(CircleShape)
+                                .background(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.12f))))
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Box(
+                            Modifier.size(4.dp * heroDivider.value).clip(CircleShape)
+                                .background(accent.copy(alpha = 0.82f))
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text(
                         subtitle,
