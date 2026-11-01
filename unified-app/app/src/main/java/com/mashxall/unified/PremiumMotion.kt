@@ -192,8 +192,8 @@ internal fun Modifier.premiumClickable(
     val scale by animateFloatAsState(
         targetValue = premiumPressTargetScale(enabled, pressed, roleScale),
         animationSpec = if (motionAllowed) spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            dampingRatio = if (role == Role.Button) Spring.DampingRatioMediumBouncy else Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
         ) else snap(),
         label = "Mashxall native press scale"
     )
@@ -687,6 +687,32 @@ internal fun PremiumAmbientBackdrop(
         0f to 0f
     }
     val glowAlpha = if (dark) 0.13f else 0.07f
+    val orbitRotation = if (motionAllowed && animated) {
+        val transition = rememberInfiniteTransition(label = "Mashxall ambient orbit")
+        val rotation by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(42000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Mashxall ambient orbit rotation"
+        )
+        rotation
+    } else 0f
+    val shimmerAlpha = if (motionAllowed && animated) {
+        val transition = rememberInfiniteTransition(label = "Mashxall ambient breathing glow")
+        val alpha by transition.animateFloat(
+            initialValue = 0.055f,
+            targetValue = 0.12f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(5200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall ambient breathing alpha"
+        )
+        alpha
+    } else if (dark) 0.07f else 0.035f
     Box(modifier = modifier) {
         PremiumIslamicOrnament(Modifier.fillMaxSize(), accent = accent, dark = dark)
         Box(
@@ -703,6 +729,28 @@ internal fun PremiumAmbientBackdrop(
             Modifier.align(Alignment.CenterEnd).offset(x = 54.dp + drift.first.dp, y = -104.dp + drift.second.dp)
                 .size(104.dp).clip(CircleShape)
                 .background(Brush.radialGradient(listOf(Color(0xFF6DA8C7).copy(alpha = if (dark) 0.055f else 0.035f), Color.Transparent)))
+        )
+        // A slow orbital jewel and a breathing light field give each destination
+        // its own living atmosphere without moving text or reading content.
+        Box(
+            Modifier.align(Alignment.BottomEnd).offset(x = 28.dp, y = 34.dp)
+                .size(118.dp).graphicsLayer { rotationZ = orbitRotation }
+        ) {
+            Box(Modifier.fillMaxSize().border(0.8.dp, accent.copy(alpha = 0.11f), CircleShape))
+            Box(
+                Modifier.align(Alignment.TopCenter).offset(y = (-2).dp)
+                    .size(6.dp).clip(CircleShape).background(accent.copy(alpha = 0.52f))
+            )
+            Box(
+                Modifier.align(Alignment.CenterEnd).offset(x = 2.dp)
+                    .size(4.dp).clip(CircleShape).background(Color(0xFF8FD4B1).copy(alpha = 0.52f))
+            )
+        }
+        Box(
+            Modifier.align(Alignment.Center).offset(x = 82.dp, y = 42.dp)
+                .size(146.dp).graphicsLayer { alpha = shimmerAlpha }
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(accent.copy(alpha = shimmerAlpha), Color.Transparent)))
         )
     }
 }
