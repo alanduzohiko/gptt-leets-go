@@ -3623,6 +3623,7 @@ internal fun nextAzkarRepetition(currentCount: Int, targetCount: Int): Int =
 @OptIn(ExperimentalMaterial3Api::class)
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     val progressPrefs = remember { context.getSharedPreferences("mashxall_azkar_progress", Context.MODE_PRIVATE) }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_azkar_favorites", Context.MODE_PRIVATE) }
@@ -3792,11 +3793,44 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     val completed = progressPrefs.getInt(item.id.toString(), 0)
                     val repetitionProgress by animateFloatAsState(
                         targetValue = (completed.toFloat() / count.toFloat()).coerceIn(0f, 1f),
-                        animationSpec = tween(420, easing = FastOutSlowInEasing),
+                        animationSpec = if (motionAllowed) tween(420, easing = FastOutSlowInEasing) else snap(),
                         label = "Azkar repetition progress"
                     )
                     Card(
-                        modifier = Modifier.fillMaxWidth().premiumClickable { selectedItem = item },
+                        modifier = Modifier.fillMaxWidth().premiumClickable(
+                            onLongClickLabel = when (language) {
+                                AppLanguage.EN -> "Copy remembrance"
+                                AppLanguage.AR -> "نسخ الذكر"
+                                AppLanguage.CKB -> "زیکر لەبەرگرتنەوە"
+                            },
+                            onLongClick = {
+                                val copiedText = buildString {
+                                    append(title)
+                                    append("\n\n")
+                                    append(cleanHadithDisplayText(item.arabic))
+                                    val translation = when (language) {
+                                        AppLanguage.EN -> item.english
+                                        AppLanguage.CKB -> item.ckb
+                                        AppLanguage.AR -> ""
+                                    }
+                                    if (translation.isNotBlank()) append("\n\n").append(translation)
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Adhkar", copiedText))
+                                    Toast.makeText(
+                                        context,
+                                        when (language) {
+                                            AppLanguage.EN -> "Remembrance copied"
+                                            AppLanguage.AR -> "تم نسخ الذكر"
+                                            AppLanguage.CKB -> "زیکرەکە لەبەرگیرا"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        ) { selectedItem = item },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(19.dp),
                         border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.18f))
@@ -3897,9 +3931,16 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             }
         }
         val countPulse = remember(item.id) { Animatable(1f) }
-        LaunchedEffect(count) {
-            countPulse.snapTo(0.94f)
-            countPulse.animateTo(1f, animationSpec = tween(160))
+        LaunchedEffect(count, motionAllowed) {
+            if (motionAllowed) {
+                countPulse.snapTo(0.94f)
+                countPulse.animateTo(1f, animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ))
+            } else {
+                countPulse.snapTo(1f)
+            }
         }
         val isFavorite = favoriteIds.contains(item.id.toString())
         ModalBottomSheet(
