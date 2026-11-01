@@ -30,6 +30,19 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("PremiumSlider(", scrubber)
         self.assertNotIn(".performHapticFeedback(", scrubber)
 
+    def test_animated_counter_audio_and_prayer_percentage_respect_reduce_motion(self):
+        for label in (
+            "Tasbih rolling counter",
+            "Reciter active audio waveform transition",
+            "Prayer day percentage",
+        ):
+            with self.subTest(label=label):
+                label_index = APP_SCREENS.index(f'label = "{label}"')
+                transition_start = APP_SCREENS.rfind("transitionSpec = {", 0, label_index)
+                transition = APP_SCREENS[transition_start:label_index]
+                self.assertIn("if (motionAllowed)", transition)
+                self.assertIn("fadeIn(tween(0)) togetherWith fadeOut(tween(0))", transition)
+
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 

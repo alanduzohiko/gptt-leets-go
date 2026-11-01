@@ -5871,11 +5871,15 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 AnimatedContent(
                     targetState = count,
                     transitionSpec = {
-                        (fadeIn(tween(110)) + scaleIn(
-                            initialScale = 0.72f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-                        )) togetherWith
-                            (fadeOut(tween(90)) + scaleOut(targetScale = 1.20f, animationSpec = tween(100)))
+                        if (motionAllowed) {
+                            (fadeIn(tween(110)) + scaleIn(
+                                initialScale = 0.72f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+                            )) togetherWith
+                                (fadeOut(tween(90)) + scaleOut(targetScale = 1.20f, animationSpec = tween(100)))
+                        } else {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        }
                     },
                     label = "Tasbih rolling counter"
                 ) { displayedCount ->
@@ -7046,8 +7050,12 @@ fun AudioScreen(
                                 AnimatedContent(
                                     targetState = playing == playKey,
                                     transitionSpec = {
-                                        (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                            (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        if (motionAllowed) {
+                                            (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                                (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        } else {
+                                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                        }
                                     },
                                     label = "Reciter active audio waveform transition"
                                 ) { active ->
@@ -9115,8 +9123,12 @@ private fun PrayerJourneyTimeline(
                 AnimatedContent(
                     targetState = percent,
                     transitionSpec = {
-                        (fadeIn(tween(120)) + scaleIn(initialScale = 0.88f, animationSpec = tween(160))) togetherWith
-                            (fadeOut(tween(90)) + scaleOut(targetScale = 1.06f, animationSpec = tween(90)))
+                        if (motionAllowed) {
+                            (fadeIn(tween(120)) + scaleIn(initialScale = 0.88f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(90)) + scaleOut(targetScale = 1.06f, animationSpec = tween(90)))
+                        } else {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        }
                     },
                     label = "Prayer day percentage"
                 ) { value ->
