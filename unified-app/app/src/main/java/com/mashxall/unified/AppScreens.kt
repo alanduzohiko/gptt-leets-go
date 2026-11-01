@@ -1169,7 +1169,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                CircularProgressIndicator(color = Gold)
+                PremiumLoadingIndicator(color = Gold)
                 Spacer(Modifier.height(14.dp))
                 Text(
                     when (language) {
@@ -1413,7 +1413,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             text = {
                                 when {
                                     loadingRelatedHadith -> Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(color = Gold)
+                                        PremiumLoadingIndicator(color = Gold)
                                     }
                                     relatedHadiths.isEmpty() -> Text(
                                         when (language) {
@@ -2068,7 +2068,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Spacer(Modifier.height(11.dp))
                 when {
                     sheetLoading -> Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Gold)
+                        PremiumLoadingIndicator(color = Gold)
                     }
                     sheetVerse == null -> Text(
                         when (language) {
@@ -2288,7 +2288,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             )
                             Spacer(Modifier.height(7.dp))
                             when {
-                                sheetWordLoading -> CircularProgressIndicator(color = Gold, modifier = Modifier.size(20.dp))
+                                sheetWordLoading -> PremiumLoadingIndicator(color = Gold, modifier = Modifier.size(20.dp))
                                 sheetWords.isEmpty() -> Text(tr(language, "not_found"), color = foreground.copy(alpha = 0.65f), fontSize = 12.sp)
                                 else -> sheetWords.forEach { word ->
                                     Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
@@ -5207,7 +5207,7 @@ fun AudioScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (preparingAudio) {
-                        CircularProgressIndicator(modifier = Modifier.size(27.dp), color = Gold, strokeWidth = 2.dp)
+                        PremiumLoadingIndicator(modifier = Modifier.size(27.dp), color = Gold, strokeWidth = 2.dp)
                     } else {
                         PremiumAudioWaveform(
                             active = true,
@@ -5427,7 +5427,7 @@ fun AudioScreen(
                                             accent = Gold,
                                             contentDescription = adhanAudioActionDescription(language, true)
                                         )
-                                        "loading:$playKey" -> CircularProgressIndicator(
+                                        "loading:$playKey" -> PremiumLoadingIndicator(
                                             color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(22.dp)
                                         )
                                         else -> Icon(
@@ -5536,7 +5536,7 @@ fun AudioScreen(
                                         accent = Gold,
                                         contentDescription = adhanAudioActionDescription(language, true)
                                     )
-                                    "loading:$playKey" -> CircularProgressIndicator(
+                                    "loading:$playKey" -> PremiumLoadingIndicator(
                                         color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(22.dp)
                                     )
                                     else -> Icon(
@@ -5577,7 +5577,7 @@ fun AudioScreen(
                                     selected = true,
                                     onClick = {}
                                 ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
+                                    PremiumLoadingIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
                                 }
                                 localSaved -> PremiumIconActionSurface(
                                     contentDescription = if (language == AppLanguage.EN) "Remove offline copy" else if (language == AppLanguage.AR) "حذف النسخة المحفوظة" else "لابردنی وەشانی پارێزراو",
@@ -5961,7 +5961,7 @@ fun AudioScreen(
                                 }
                             ) {
                                 when {
-                                    downloadProgress != null -> CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
+                                    downloadProgress != null -> PremiumLoadingIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
                                     localComplete -> Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF62C995), modifier = Modifier.size(23.dp))
                                     else -> Icon(Icons.Outlined.Download, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
                                 }
@@ -6856,7 +6856,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                                     modifier = Modifier.size(width = 78.dp, height = 108.dp).clip(RoundedCornerShape(10.dp)),
                                     loading = {
                                         Box(Modifier.fillMaxSize().background(DeepGreen.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(color = Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                            PremiumLoadingIndicator(color = Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                                         }
                                     },
                                     error = {
@@ -7297,7 +7297,7 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
             contentAlignment = Alignment.Center
         ) {
             when {
-                loading -> CircularProgressIndicator(color = Gold)
+                loading -> PremiumLoadingIndicator(color = Gold)
                 bitmap != null -> AnimatedContent(
                     targetState = bitmap,
                     transitionSpec = {
@@ -8489,7 +8489,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         if (locating) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(color = Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                PremiumLoadingIndicator(color = Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(if (language == AppLanguage.EN) "Finding your location…" else if (language == AppLanguage.AR) "جارٍ تحديد موقعك…" else "شوێنت دیاری دەکرێت…", color = foreground, fontSize = 12.sp)
             }
@@ -9428,7 +9428,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                 } else if (locating) {
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp, color = Gold)
+                        PremiumLoadingIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp, color = Gold)
                         Spacer(Modifier.width(7.dp))
                         Text(
                             when (language) { AppLanguage.EN -> "Refreshing location…"; AppLanguage.AR -> "يجري تحديث الموقع…"; AppLanguage.CKB -> "شوێن نوێ دەکرێتەوە…" },
