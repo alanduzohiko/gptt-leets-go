@@ -566,9 +566,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val haptic = LocalHapticFeedback.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
+    var surahsLoading by remember { mutableStateOf(true) }
+    var surahsLoadFailed by remember { mutableStateOf(false) }
+    var retrySurahs by remember { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableIntStateOf(initialSurah) }
     var verses by remember { mutableStateOf<List<Ayah>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var versesLoadFailed by remember { mutableStateOf(false) }
+    var retryVerses by remember { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var translationKey by rememberSaveable {
@@ -675,7 +680,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
-    LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
+    LaunchedEffect(retrySurahs) {
+        surahsLoading = true
+        surahsLoadFailed = false
+        try {
+            surahs = ContentRepository.loadSurahs(context)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            surahs = emptyList()
+            surahsLoadFailed = true
+        } finally {
+            surahsLoading = false
+        }
+    }
     LaunchedEffect(initialSurah) { selected = initialSurah }
     LaunchedEffect(pendingMushafStartSurah, language.key, translationKey) {
         val requestedSurah = pendingMushafStartSurah
@@ -738,23 +755,32 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             onResumeMushafHandled()
         }
     }
-    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList, openingMushaf) {
+    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList, openingMushaf, retryVerses) {
         if (mushafMode || showSurahList || openingMushaf) {
             loading = false
+            versesLoadFailed = false
             return@LaunchedEffect
         }
         loading = true
-        val loaded = if (query.isBlank()) {
-            ContentRepository.loadAyahs(context, selected, language.key, translationKey = translationKey)
-        } else {
-            ContentRepository.searchAyahs(context, query.trim(), language.key, translationKey)
+        versesLoadFailed = false
+        try {
+            val loaded = if (query.isBlank()) {
+                ContentRepository.loadAyahs(context, selected, language.key, translationKey = translationKey)
+            } else {
+                ContentRepository.searchAyahs(context, query.trim(), language.key, translationKey)
+            }
+            verses = loaded
+            if (query.isBlank()) {
+                (loaded.firstOrNull { it.number >= initialAyah } ?: loaded.firstOrNull())?.page
+                    ?.takeIf { it in 1..604 }?.let { mushafPage = it }
+            }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            verses = emptyList()
+            versesLoadFailed = true
+        } finally {
+            loading = false
         }
-        verses = loaded
-        if (query.isBlank()) {
-            (loaded.firstOrNull { it.number >= initialAyah } ?: loaded.firstOrNull())?.page
-                ?.takeIf { it in 1..604 }?.let { mushafPage = it }
-        }
-        loading = false
     }
     LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode, openingMushaf) {
         if (!showSurahList && !mushafMode && !openingMushaf && query.isBlank() && verses.isNotEmpty()) {
@@ -1062,7 +1088,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         item.number.toString() == query.trim()
                 }
                 if (surahs.isEmpty()) {
-                    LoadingOrEmpty(true, language, foreground)
+                    LoadingOrEmpty(
+                        loading = surahsLoading,
+                        language = language,
+                        foreground = foreground,
+                        message = when {
+                            surahsLoadFailed && language == AppLanguage.EN -> "Could not load the Quran index. Check the app data and try again."
+                            surahsLoadFailed && language == AppLanguage.AR -> "تعذّر تحميل فهرس القرآن. تحقّق من بيانات التطبيق ثم أعد المحاولة."
+                            surahsLoadFailed -> "نەتوانرا فهرستی قورئان باربکرێت؛ داتای ئەپ بپشکنە و دووبارە هەوڵ بدەوە."
+                            else -> tr(language, "no_data")
+                        },
+                        onRetry = if (surahsLoadFailed) ({ retrySurahs++ }) else null
+                    )
                 } else LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 13.dp, vertical = 5.dp),
@@ -1141,7 +1178,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 )
             }
         } else if (verses.isEmpty()) {
-            LoadingOrEmpty(loading, language, foreground)
+            LoadingOrEmpty(
+                loading = loading,
+                language = language,
+                foreground = foreground,
+                message = when {
+                    versesLoadFailed && language == AppLanguage.EN -> "Could not load these Quran verses. Check the data and try again."
+                    versesLoadFailed && language == AppLanguage.AR -> "تعذّر تحميل آيات القرآن. تحقّق من البيانات ثم أعد المحاولة."
+                    versesLoadFailed -> "نەتوانرا ئایەتەکانی قورئان باربکرێن؛ داتا بپشکنە و دووبارە هەوڵ بدەوە."
+                    query.isNotBlank() -> tr(language, "not_found")
+                    else -> tr(language, "no_data")
+                },
+                onRetry = if (versesLoadFailed) ({ retryVerses++ }) else null
+            )
         } else LazyColumn(
             state = listState,
             modifier = Modifier.pointerInput(selected, query, loading) {
@@ -2978,13 +3027,23 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
     var selectedBook by rememberSaveable { mutableStateOf(if (language == AppLanguage.EN) "sahih" else if (language == AppLanguage.AR) "mukhtasar" else "roshn") }
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var retryTafsir by remember { mutableIntStateOf(0) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var chooseSurah by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { surahs = ContentRepository.loadSurahs(context) }
-    LaunchedEffect(selectedBook, surah, ayah) {
+    LaunchedEffect(selectedBook, surah, ayah, retryTafsir) {
         loading = true
-        text = ContentRepository.loadTafsir(context, selectedBook, surah, ayah)
-        loading = false
+        loadFailed = false
+        try {
+            text = ContentRepository.loadTafsir(context, selectedBook, surah, ayah)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            text = ""
+            loadFailed = true
+        } finally {
+            loading = false
+        }
     }
     val currentSurah = surahs.firstOrNull { it.number == surah }
     val previousVerse: Pair<Int, Int> = when {
@@ -3102,6 +3161,17 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
         ) {
             when {
                 loading -> LoadingOrEmpty(true, language, foreground)
+                text.isBlank() && loadFailed -> LoadingOrEmpty(
+                    loading = false,
+                    language = language,
+                    foreground = foreground,
+                    message = when (language) {
+                        AppLanguage.EN -> "Could not load this explanation. Check the source data and try again."
+                        AppLanguage.AR -> "تعذّر تحميل هذا التفسير. تحقّق من بيانات المصدر ثم أعد المحاولة."
+                        AppLanguage.CKB -> "نەتوانرا ئەم تەفسیرە باربکرێت؛ داتای سەرچاوە بپشکنە و دووبارە هەوڵ بدەوە."
+                    },
+                    onRetry = { retryTafsir++ }
+                )
                 text.isBlank() -> Column(Modifier.padding(18.dp)) {
                     Text(tr(language, "no_data"), color = foreground, fontSize = 13.sp, lineHeight = 21.sp)
                     Spacer(Modifier.height(8.dp))
@@ -6831,6 +6901,22 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
     }
 }
 
+internal fun pdfZoomTarget(
+    currentScale: Float,
+    zoomChange: Float,
+    minScale: Float = 1f,
+    maxScale: Float = 4f
+): Float {
+    if (!currentScale.isFinite() || !zoomChange.isFinite() || !minScale.isFinite() || !maxScale.isFinite()) {
+        return minScale.takeIf { it.isFinite() }?.coerceAtLeast(0.1f) ?: 1f
+    }
+    val safeMin = minScale.coerceAtLeast(0.1f)
+    val safeMax = maxScale.coerceAtLeast(safeMin)
+    val safeCurrent = currentScale.coerceIn(safeMin, safeMax)
+    val safeChange = zoomChange.coerceAtLeast(0f)
+    return (safeCurrent * safeChange).coerceIn(safeMin, safeMax)
+}
+
 @Composable
 fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String) {
     val context = LocalContext.current
@@ -6847,8 +6933,33 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     var bitmap by remember(assetPath) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
+    var retryPdfLoad by remember { mutableIntStateOf(0) }
     val pdfMotionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     var pdfDragPreview by remember(pageIndex) { mutableFloatStateOf(0f) }
+    var pdfZoom by rememberSaveable(assetPath) { mutableFloatStateOf(1f) }
+    var pdfPanX by remember(assetPath) { mutableFloatStateOf(0f) }
+    var pdfPanY by remember(assetPath) { mutableFloatStateOf(0f) }
+    var pdfViewportSize by remember(assetPath) { mutableStateOf(IntSize.Zero) }
+    val pdfTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val nextScale = pdfZoomTarget(pdfZoom, zoomChange)
+        pdfZoom = nextScale
+        val currentBitmap = bitmap
+        if (nextScale > 1.01f && currentBitmap != null &&
+            pdfViewportSize.width > 0 && pdfViewportSize.height > 0
+        ) {
+            val fit = minOf(
+                pdfViewportSize.width / currentBitmap.width.toFloat(),
+                pdfViewportSize.height / currentBitmap.height.toFloat()
+            )
+            val scaledWidth = currentBitmap.width * fit * nextScale
+            val scaledHeight = currentBitmap.height * fit * nextScale
+            pdfPanX = clampMushafPanOffset(pdfPanX, panChange.x, scaledWidth, pdfViewportSize.width.toFloat())
+            pdfPanY = clampMushafPanOffset(pdfPanY, panChange.y, scaledHeight, pdfViewportSize.height.toFloat())
+        } else {
+            pdfPanX = 0f
+            pdfPanY = 0f
+        }
+    }
     val animatedPdfDragX by androidx.compose.animation.core.animateFloatAsState(
         targetValue = pdfDragPreview,
         animationSpec = if (pdfMotionAllowed) androidx.compose.animation.core.spring(
@@ -6875,7 +6986,14 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
         preferences.edit().putInt(pageProgressKey, pageIndex.coerceAtLeast(0)).apply()
     }
 
-    LaunchedEffect(assetPath, pageIndex) {
+    LaunchedEffect(pageIndex) {
+        pdfZoom = 1f
+        pdfPanX = 0f
+        pdfPanY = 0f
+        pdfDragPreview = 0f
+    }
+
+    LaunchedEffect(assetPath, pageIndex, retryPdfLoad) {
         if (assetPath.isBlank()) {
             loading = false
             loadFailed = true
@@ -6921,7 +7039,8 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                 bitmap = rendered.second
                 pageIndex = pageIndex.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
                 loadFailed = pageCount <= 0 || bitmap == null
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
                 bitmap = null
                 pageCount = 0
                 loadFailed = true
@@ -7009,8 +7128,10 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
             Modifier.fillMaxSize().weight(1f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFF1B2925))
-                .pointerInput(pageIndex, pageCount, loading, bitmap) {
-                    if (loading || bitmap == null || pageCount <= 1) return@pointerInput
+                .onSizeChanged { pdfViewportSize = it }
+                .transformable(pdfTransformState, canPan = { pdfZoom > 1.01f })
+                .pointerInput(pageIndex, pageCount, loading, bitmap, pdfZoom) {
+                    if (loading || bitmap == null || pageCount <= 1 || pdfZoom > 1.01f) return@pointerInput
                     var horizontalDrag = 0f
                     detectHorizontalDragGestures(
                         onDragStart = {
@@ -7054,20 +7175,35 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                     if (visibleBitmap != null) {
                         Image(
                             visibleBitmap.asImageBitmap(),
-                            contentDescription = assetPath.substringAfterLast('/'),
+                            contentDescription = when (language) {
+                                AppLanguage.EN -> "Book page " + (pageIndex + 1) + ". Pinch with two fingers to zoom."
+                                AppLanguage.AR -> "صفحة الكتاب " + (pageIndex + 1) + ". قرّب أو أبعد بإصبعين للتكبير."
+                                AppLanguage.CKB -> "پەڕەی کتێب " + (pageIndex + 1) + "؛ بە دوو پەنجە گەورە و بچووک بکەرەوە."
+                            },
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize().graphicsLayer {
-                                translationX = animatedPdfDragX
+                                translationX = animatedPdfDragX + pdfPanX
+                                translationY = pdfPanY
                                 rotationY = animatedPdfTurnY
                                 cameraDistance = 26.dp.toPx()
-                                scaleX = 1f - (kotlin.math.abs(animatedPdfTurnY) / 8f) * 0.015f
-                                scaleY = 1f - (kotlin.math.abs(animatedPdfTurnY) / 8f) * 0.015f
+                                scaleX = pdfZoom * (1f - (kotlin.math.abs(animatedPdfTurnY) / 8f) * 0.015f)
+                                scaleY = pdfZoom * (1f - (kotlin.math.abs(animatedPdfTurnY) / 8f) * 0.015f)
                                 shadowElevation = kotlin.math.abs(animatedPdfTurnY) * 0.35f
                             }
                         )
                     }
                 }
-                loadFailed -> Text(tr(language, "data_notice"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
+                loadFailed -> LoadingOrEmpty(
+                    loading = false,
+                    language = language,
+                    foreground = foreground,
+                    message = when (language) {
+                        AppLanguage.EN -> "This book page could not be opened. Try loading it again."
+                        AppLanguage.AR -> "تعذّر فتح صفحة الكتاب هذه. أعد المحاولة لتحميلها."
+                        AppLanguage.CKB -> "نەتوانرا ئەم پەڕەیەی کتێب بکرێتەوە؛ دووبارە هەوڵ بدەوە."
+                    },
+                    onRetry = { retryPdfLoad++ }
+                )
             }
         }
     }
