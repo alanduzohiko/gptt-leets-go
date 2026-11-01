@@ -2037,40 +2037,6 @@ private fun HomeScreen(
         }
 
         Spacer(Modifier.height(15.dp))
-        PremiumHomeHero(
-            language = language,
-            onResumeReading = onResumeReading,
-            onOpenQibla = { onOpen(AppScreen.QIBLA) }
-        )
-        Spacer(Modifier.height(14.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth().premiumPress { onResumeReading() },
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.34f))
-        ) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Gold, modifier = Modifier.size(24.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when (language) { AppLanguage.EN -> "Continue reading"; AppLanguage.AR -> "متابعة القراءة"; AppLanguage.CKB -> "بەردەوام بە لە خوێندنەوە" },
-                        color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        when (language) { AppLanguage.EN -> "Return to your last saved Mushaf page"; AppLanguage.AR -> "العودة إلى آخر صفحة محفوظة من المصحف"; AppLanguage.CKB -> "گەڕانەوە بۆ دوا پەڕەی مصحەفی پاشەکەوتکراو" },
-                        color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
-                    )
-                }
-                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold)
-            }
-        }
-        Spacer(Modifier.height(16.dp))
         Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(12.dp))
         homeModules.chunked(2).forEachIndexed { rowIndex, pair ->
@@ -2107,6 +2073,41 @@ private fun HomeScreen(
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+        Spacer(Modifier.height(15.dp))
+        PremiumHomeHero(
+            language = language,
+            onResumeReading = onResumeReading,
+            onOpenQibla = { onOpen(AppScreen.QIBLA) }
+        )
+        Spacer(Modifier.height(14.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth().premiumPress { onResumeReading() },
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.34f))
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Gold, modifier = Modifier.size(24.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (language) { AppLanguage.EN -> "Continue reading"; AppLanguage.AR -> "متابعة القراءة"; AppLanguage.CKB -> "بەردەوام بە لە خوێندنەوە" },
+                        color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        when (language) { AppLanguage.EN -> "Return to your last saved Mushaf page"; AppLanguage.AR -> "العودة إلى آخر صفحة محفوظة من المصحف"; AppLanguage.CKB -> "گەڕانەوە بۆ دوا پەڕەی مصحەفی پاشەکەوتکراو" },
+                        color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
         Spacer(Modifier.height(8.dp))
         Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(22.dp)) {
             Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
