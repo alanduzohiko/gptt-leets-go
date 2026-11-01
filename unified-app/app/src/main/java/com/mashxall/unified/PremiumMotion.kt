@@ -153,10 +153,24 @@ internal fun premiumPressTargetScale(
 internal fun premiumRolePressScale(role: Role?, baseScale: Float = 0.968f): Float {
     val safeBase = if (baseScale.isFinite()) baseScale.coerceIn(0.90f, 1f) else 0.968f
     return when (role) {
-        Role.Button -> minOf(safeBase, 0.946f)
-        Role.Tab -> minOf(safeBase, 0.958f)
-        else -> safeBase
+        Role.Button -> minOf(safeBase, 0.932f)
+        Role.Tab -> minOf(safeBase, 0.952f)
+        else -> minOf(safeBase, 0.962f)
     }
+}
+
+/** A tiny role-specific tilt makes button, tab and card presses feel distinct. */
+internal fun premiumRolePressRotationDegrees(role: Role?): Float = when (role) {
+    Role.Button -> -0.62f
+    Role.Tab -> 0.24f
+    else -> 0.38f
+}
+
+/** Role-specific edge glow remains restrained on tabs and stronger on primary actions. */
+internal fun premiumRolePressGlowAlpha(role: Role?): Float = when (role) {
+    Role.Button -> 0.30f
+    Role.Tab -> 0.18f
+    else -> 0.23f
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -191,12 +205,30 @@ internal fun Modifier.premiumClickable(
         label = "Mashxall touch edge glow"
     )
 
-    val touchTarget = this.graphicsLayer {
+    val touchTarget = this.drawWithContent {
+        drawContent()
+        if (motionAllowed && enabled && pressGlow > 0f) {
+            val glow = premiumRolePressGlowAlpha(role) * pressGlow
+            val corner = CornerRadius((size.minDimension * 0.20f).coerceAtLeast(8.dp.toPx()))
+            drawRoundRect(
+                color = pressAccent.copy(alpha = glow),
+                cornerRadius = corner,
+                style = Stroke(width = (1.1f + 1.5f * pressGlow).dp.toPx())
+            )
+            drawRoundRect(
+                color = Color.White.copy(alpha = glow * 0.12f),
+                cornerRadius = corner,
+                style = Stroke(width = 0.65.dp.toPx())
+            )
+        }
+    }.graphicsLayer {
         scaleX = scale
         scaleY = scale
-        translationY = if (motionAllowed && enabled && pressed) 0.8.dp.toPx() else 0f
-        rotationZ = if (motionAllowed && enabled && pressed) 0.10f else 0f
-        shadowElevation = if (motionAllowed && enabled && pressed) 2.5.dp.toPx() else 0f
+        translationY = if (motionAllowed && enabled && pressed) 1.15.dp.toPx() else 0f
+        rotationZ = if (motionAllowed && enabled && pressed) premiumRolePressRotationDegrees(role) else 0f
+        shadowElevation = if (motionAllowed && enabled && pressed) {
+            if (role == Role.Button) 7.dp.toPx() else 4.5.dp.toPx()
+        } else 0f
     }
     if (onLongClick != null) {
         touchTarget.combinedClickable(
@@ -478,9 +510,11 @@ internal fun Modifier.staggeredEntrance(
     return this.graphicsLayer {
         val fraction = progress.value.coerceIn(0f, 1f)
         alpha = fraction
-        translationY = (1f - fraction) * 24.dp.toPx()
-        scaleX = 0.94f + fraction * 0.06f
-        scaleY = 0.94f + fraction * 0.06f
+        translationY = (1f - fraction) * 30.dp.toPx()
+        translationX = (1f - fraction) * 4.dp.toPx()
+        rotationZ = (1f - fraction) * 0.9f
+        scaleX = 0.92f + fraction * 0.08f
+        scaleY = 0.92f + fraction * 0.08f
     }
 }
 
@@ -1001,6 +1035,28 @@ internal fun PremiumSectionHero(
         )
         value
     } else 0f
+    val heroGlow = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall section hero breathing light")
+        val scale by transition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.09f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall hero glow scale"
+        )
+        val alpha by transition.animateFloat(
+            initialValue = 0.15f,
+            targetValue = 0.27f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall hero glow alpha"
+        )
+        scale to alpha
+    } else 1f to 0.20f
     AnimatedVisibility(
         visible = true,
         modifier = modifier.fillMaxWidth(),
@@ -1037,12 +1093,30 @@ internal fun PremiumSectionHero(
             Box(
                 Modifier.align(Alignment.TopEnd).offset(x = 37.dp, y = (-63).dp)
                     .size(152.dp).graphicsLayer { rotationZ = heroOrbitRotation }
-                    .border(1.dp, accent.copy(alpha = 0.20f), CircleShape)
-            )
+            ) {
+                Box(Modifier.fillMaxSize().border(1.dp, accent.copy(alpha = 0.24f), CircleShape))
+                Box(
+                    Modifier.align(Alignment.TopCenter).offset(y = (-3).dp)
+                        .size(8.dp).clip(CircleShape)
+                        .background(accent.copy(alpha = 0.92f))
+                        .border(1.dp, Color(0xFF123D31), CircleShape)
+                )
+                Box(
+                    Modifier.align(Alignment.BottomCenter).offset(y = 3.dp)
+                        .size(5.dp).clip(CircleShape)
+                        .background(Color(0xFF8FD4B1).copy(alpha = 0.90f))
+                )
+            }
             Box(
                 Modifier.align(Alignment.TopEnd).offset(x = 44.dp, y = (-62).dp)
-                    .size(166.dp).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.23f), Color.Transparent)))
+                    .size(166.dp)
+                    .graphicsLayer {
+                        scaleX = heroGlow.first
+                        scaleY = heroGlow.first
+                        alpha = heroGlow.second
+                    }
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(accent.copy(alpha = heroGlow.second), Color.Transparent)))
             )
             Box(
                 Modifier.align(Alignment.BottomStart).offset(x = (-42).dp, y = 38.dp)
