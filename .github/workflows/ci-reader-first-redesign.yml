@@ -1,0 +1,189 @@
+name: Validate reader-first Mashxall redesign
+
+on:
+  push:
+    branches:
+      - "redesign/**"
+    paths:
+      - "unified-app/**"
+      - "docs/audio-library-sources.md"
+      - "docs/tajweed-text-source.md"
+      - "docs/redesign-spec-ar.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "tools/audit_audio_catalogs.py"
+      - "tools/audit_content_coverage.py"
+      - "tools/audit_content_wiring.py"
+      - "tools/audit_source_coverage.py"
+      - "tools/audit_prayer_data.py"
+      - "tools/extract_unified_content.py"
+      - ".github/workflows/ci-reader-first-redesign.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "unified-app/**"
+      - "docs/audio-library-sources.md"
+      - "docs/tajweed-text-source.md"
+      - "docs/redesign-spec-ar.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "tools/audit_audio_catalogs.py"
+      - "tools/audit_content_coverage.py"
+      - "tools/audit_content_wiring.py"
+      - "tools/audit_source_coverage.py"
+      - "tools/audit_prayer_data.py"
+      - "tools/extract_unified_content.py"
+      - ".github/workflows/ci-reader-first-redesign.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: reader-first-redesign-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  android-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout redesign source
+        uses: actions/checkout@v4
+
+      - name: Set up Python for source-data extraction
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download and verify the original source bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mashxall-input" dist/runtime-test
+          gh release download unified-source-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern "Mashxall-Unified-Source-Bundle.zip" \
+            --dir "$RUNNER_TEMP/mashxall-input"
+          SOURCE="$RUNNER_TEMP/mashxall-input/Mashxall-Unified-Source-Bundle.zip"
+          test -s "$SOURCE"
+          ACTUAL="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          EXPECTED="9430a52d73bfff7d897320e36173ce9d6f72f7c8d24b24dcc45b3dd4e70aba96"
+          echo "Original source bundle SHA-256: $ACTUAL"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "The original bundle fingerprint differs from the verified source. Stop."
+            exit 1
+          fi
+          echo "Verified original app source bundle."
+
+      - name: Extract original app data into the debug APK
+        env:
+          MASHXALL_PRINT_DB_SCHEMAS: "0"
+        run: |
+          set -euo pipefail
+          python tools/extract_unified_content.py \
+            --bundle "$RUNNER_TEMP/mashxall-input/Mashxall-Unified-Source-Bundle.zip" \
+            --out unified-app/app/src/main/assets \
+            --catalog unified-app/app/src/main/assets/content_catalog.json
+
+      - name: Install version-controlled online audio catalogs into app assets
+        run: |
+          set -euo pipefail
+          mkdir -p unified-app/app/src/main/assets
+          cp unified-app/catalogs/mp3quran_reciters.json unified-app/app/src/main/assets/
+          cp unified-app/catalogs/adhan_catalog.json unified-app/app/src/main/assets/
+          python tools/audit_audio_catalogs.py \
+            unified-app/app/src/main/assets/mp3quran_reciters.json \
+            unified-app/app/src/main/assets/adhan_catalog.json
+
+      - name: Audit all three original app libraries and required feature assets
+        run: |
+          set -euo pipefail
+          python tools/audit_source_coverage.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --assets-root unified-app/app/src/main/assets \
+            --out dist/runtime-test/source-coverage-audit.json
+
+      - name: Audit database schemas and core content coverage
+        run: |
+          set -euo pipefail
+          python tools/audit_content_coverage.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --out dist/runtime-test/content-coverage-audit.json
+
+      - name: Audit every Kotlin-to-asset reference
+        run: |
+          set -euo pipefail
+          python tools/audit_content_wiring.py \
+            --catalog unified-app/app/src/main/assets/content_catalog.json \
+            --source-root unified-app/app/src/main/java/com/mashxall/unified \
+            --out dist/runtime-test/content-wiring-audit.json
+
+      - name: Audit the original Salawati-only prayer timetable source
+        run: |
+          set -euo pipefail
+          python tools/audit_prayer_data.py \
+            --salawati unified-app/app/src/main/assets/content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db \
+            --out dist/runtime-test/prayer-data-audit.json
+
+      - name: Prepare Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Run unit tests, lint, and a debug APK build
+        run: gradle --no-daemon --project-dir unified-app testDebugUnitTest lintDebug assembleDebug
+
+      - name: Verify APK signature and archive integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="unified-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          SIGNING_CERT_SHA256="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          EXPECTED_SIGNING_CERT_SHA256="ebade279706bd1b74e7d821e8ff955058b8aa56b10955e49e79ffccbe60def06"
+          if [[ "$SIGNING_CERT_SHA256" != "$EXPECTED_SIGNING_CERT_SHA256" ]]; then
+            echo "Unexpected APK signer. Refusing to publish an APK signed with an ephemeral/different debug key."
+            echo "Expected stable preview certificate: $EXPECTED_SIGNING_CERT_SHA256"
+            echo "Actual certificate: $SIGNING_CERT_SHA256"
+            exit 1
+          fi
+          echo "Stable Mashxall preview signer verified: $SIGNING_CERT_SHA256"
+          unzip -t "$APK" | tail -n 2
+          sha256sum "$APK" | tee apk-sha256.txt
+          cp "$APK" Mashxall-Redesign-debug.apk
+
+      - name: Upload build-verified APK and source audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-reader-first-build-verified-${{ github.run_number }}
+          path: |
+            Mashxall-Redesign-debug.apk
+            apk-sha256.txt
+            unified-app/app/src/main/assets/content_catalog.json
+            dist/runtime-test/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish build-verified APK download
+        # Releases are manual-only until the full feature checklist is closed; routine commits just upload CI artifacts.
+        if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/redesign/reader-first-mashxall'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="mashxall-android-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" \
+            Mashxall-Redesign-debug.apk apk-sha256.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Mashxall build verified by tests ${GITHUB_RUN_NUMBER}" \
+            --notes "Native Android APK built from commit ${GITHUB_SHA}. Original-source/data audits, unit tests, lint, APK signature and archive checks passed. This workflow deliberately does not boot an emulator or claim runtime/device testing; physical-device validation remains pending." \
+            --prerelease
