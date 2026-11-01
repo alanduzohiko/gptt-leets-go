@@ -6,6 +6,17 @@ import org.junit.Test
 
 class PremiumMotionPolicyTest {
     @Test
+    fun decorativeMotionRequiresBothSystemAndAppPermission() {
+        assertEquals(true, shouldAllowMashxallMotion(true, 1f, false))
+        assertEquals(false, shouldAllowMashxallMotion(true, 1f, true))
+        assertEquals(false, shouldAllowMashxallMotion(false, 1f, false))
+        assertEquals(false, shouldAllowMashxallMotion(true, 0f, false))
+        assertEquals(false, shouldAllowMashxallMotion(true, -1f, false))
+        assertEquals(false, shouldAllowMashxallMotion(true, Float.NaN, false))
+        assertEquals(false, shouldAllowMashxallMotion(true, Float.POSITIVE_INFINITY, false))
+    }
+
+    @Test
     fun touchScaleChangesWithControlRoleWithoutExceedingSafeBounds() {
         assertEquals(0.946f, premiumRolePressScale(Role.Button), 0.0001f)
         assertEquals(0.958f, premiumRolePressScale(Role.Tab), 0.0001f)
