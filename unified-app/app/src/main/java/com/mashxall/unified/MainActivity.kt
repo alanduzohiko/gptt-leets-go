@@ -902,7 +902,12 @@ private fun MoreScreen(
             onValueChange = { query = it },
             placeholder = when (language) { AppLanguage.EN -> "Find a feature"; AppLanguage.AR -> "ابحث عن ميزة"; AppLanguage.CKB -> "بەدوای تایبەتمەندییەکدا بگەڕێ" },
             accent = Gold,
-            foreground = foreground
+            foreground = foreground,
+            clearContentDescription = when (language) {
+                AppLanguage.EN -> "Clear search"
+                AppLanguage.AR -> "مسح البحث"
+                AppLanguage.CKB -> "پاککردنەوەی گەڕان"
+            }
         )
         Spacer(Modifier.height(10.dp))
         if (visibleModules.isEmpty()) {
