@@ -1369,7 +1369,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         )
                         if (verse.hasHadith) {
                             Spacer(Modifier.height(5.dp))
-                            TextButton(
+                            PremiumTextButton(
                                 onClick = {
                                     showRelatedHadith = true
                                     if (relatedHadiths.isEmpty() && !loadingRelatedHadith) {
@@ -1565,7 +1565,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
+        confirmButton = { PremiumTextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
     )
     if (chooseTranslation) AlertDialog(
         onDismissRequest = { chooseTranslation = false },
@@ -1603,7 +1603,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { chooseTranslation = false }) { Text(tr(language, "back")) } }
+        confirmButton = { PremiumTextButton(onClick = { chooseTranslation = false }) { Text(tr(language, "back")) } }
     )
 
 
@@ -2559,7 +2559,7 @@ private fun MushafPageViewer(
                 }
             }
             val toolbarVerse = selectedVerse ?: pageVerses.firstOrNull()
-            TextButton(
+            PremiumTextButton(
                 onClick = {
                     toolbarVerse?.let { target ->
                         haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
@@ -3073,8 +3073,8 @@ fun BookmarksScreen(
             )
         },
         confirmButton = {
-            TextButton(onClick = {
-                val key = editorKey ?: return@TextButton
+            PremiumTextButton(onClick = {
+                val key = editorKey ?: return@PremiumTextButton
                 val text = editorText.trim()
                 val nextNotes = if (text.isBlank()) notes - key else notes + (key to text)
                 notes = nextNotes
@@ -3083,7 +3083,7 @@ fun BookmarksScreen(
                 editorKey = null
             }) { Text(if (language == AppLanguage.EN) "Save note" else if (language == AppLanguage.AR) "حفظ الملاحظة" else "تێبینی پاشەکەوت بکە") }
         },
-        dismissButton = { TextButton(onClick = { editorKey = null }) { Text(tr(language, "back")) } }
+        dismissButton = { PremiumTextButton(onClick = { editorKey = null }) { Text(tr(language, "back")) } }
     )
 }
 
@@ -3297,7 +3297,7 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
+        confirmButton = { PremiumTextButton(onClick = { chooseSurah = false }) { Text(tr(language, "back")) } }
     )
 
 }
@@ -6488,7 +6488,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                PremiumTextButton(onClick = {
                     when {
                         exportPassword.length < 8 -> exportError = when (language) {
                             AppLanguage.EN -> "Use at least 8 characters."
@@ -6527,7 +6527,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                PremiumTextButton(onClick = {
                     showExportPasswordDialog = false
                     exportPassword = ""
                     confirmExportPassword = ""
@@ -6575,7 +6575,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                PremiumTextButton(onClick = {
                     val encrypted = pendingImportBytes
                     if (encrypted == null) {
                         importError = if (language == AppLanguage.EN) "No backup file is selected." else if (language == AppLanguage.AR) "لم يتم اختيار ملف نسخة احتياطية." else "هیچ فایلی پاشەکەوت هەڵنەبژێردراوە."
@@ -6611,7 +6611,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                PremiumTextButton(onClick = {
                     showImportPasswordDialog = false
                     importPassword = ""
                     importError = ""
@@ -8926,7 +8926,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { chooseCity = false }) { Text(tr(language, "back")) } }
+        confirmButton = { PremiumTextButton(onClick = { chooseCity = false }) { Text(tr(language, "back")) } }
     )
     if (chooseAdhanSound) AlertDialog(
         onDismissRequest = {
@@ -9078,7 +9078,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            PremiumTextButton(onClick = {
                 AudioController.stop()
                 previewingAdhan = ""
                 chooseAdhanSound = false
