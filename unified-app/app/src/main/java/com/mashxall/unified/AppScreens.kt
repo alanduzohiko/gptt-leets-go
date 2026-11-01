@@ -747,7 +747,7 @@ private fun QuranProgressStat(
     ) {
         Text(value, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
         Spacer(Modifier.height(2.dp))
-        Text(label, color = foreground.copy(alpha = 0.54f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, color = foreground.copy(alpha = 0.54f), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -1833,14 +1833,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 .apply()
                         }
                     )
-                    Spacer(Modifier.height(10.dp))
-                    QuranReadingProgressCard(
-                        summary = readingProgressSummary,
-                        foreground = foreground,
-                        cardColor = cardColor,
-                        language = language
-                    )
-                    Spacer(Modifier.height(10.dp))
+                    if (surahs.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        QuranReadingProgressCard(
+                            summary = readingProgressSummary,
+                            foreground = foreground,
+                            cardColor = cardColor,
+                            language = language
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
                     Spacer(Modifier.height(8.dp))
                     Row(
