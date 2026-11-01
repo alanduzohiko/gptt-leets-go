@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -923,7 +922,7 @@ private fun MoreScreen(
                                 Card(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
                                         .staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
-                                        .animateContentSize()
+                                        .premiumAnimateContentSize()
                                         .premiumPress {
                                             onOpen(module.screen)
                                         },
@@ -1097,7 +1096,7 @@ private fun HomePrayerCountdown(
     LaunchedEffect(next?.key) { onNextPrayerChange(next?.key) }
 
     Card(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        modifier = Modifier.fillMaxWidth().premiumAnimateContentSize(),
         colors = CardDefaults.cardColors(containerColor = cardColor.copy(alpha = 0.92f)),
         shape = RoundedCornerShape(17.dp),
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
@@ -1906,7 +1905,7 @@ private fun HomeScreen(
                     ) {
                         Card(
                             modifier = Modifier.fillMaxWidth().staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
-                                .animateContentSize().premiumPress { onOpen(module.screen) },
+                                .premiumAnimateContentSize().premiumPress { onOpen(module.screen) },
                             shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = cardColor),
                             border = BorderStroke(0.8.dp, module.color.copy(alpha = 0.42f))
                         ) {
