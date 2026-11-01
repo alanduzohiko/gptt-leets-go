@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -309,6 +310,23 @@ internal fun PremiumMushafPageSkeleton(
             Modifier.fillMaxWidth(0.20f).height(5.dp)
                 .clip(RoundedCornerShape(4.dp)).background(shimmer)
         )
+    }
+}
+
+
+/** Animate expanding/collapsing content only when the system allows motion. */
+internal fun Modifier.premiumAnimateContentSize(enabled: Boolean = true): Modifier = composed {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    if (enabled && motionAllowed) {
+        this.animateContentSize(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        )
+    } else {
+        this
     }
 }
 
