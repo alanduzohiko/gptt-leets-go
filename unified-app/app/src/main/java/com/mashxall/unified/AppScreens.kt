@@ -11,7 +11,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -2987,7 +2986,7 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
         Card(
             Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)
                 .staggeredEntrance(itemKey = "tafsir:$selectedBook:$surah:$ayah", index = 0)
-                .animateContentSize(),
+                .premiumAnimateContentSize(),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = RoundedCornerShape(22.dp)
         ) {
@@ -6285,7 +6284,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                     Card(
                         Modifier.fillMaxWidth()
                             .staggeredEntrance(itemKey = "pdf:$path", index = pdfIndex)
-                            .animateContentSize()
+                            .premiumAnimateContentSize()
                             .premiumClickable { onOpenPdf(path) },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(15.dp)
@@ -6318,7 +6317,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                 Card(
                     modifier = Modifier.fillMaxWidth()
                         .staggeredEntrance(itemKey = "book:${item.id}", index = bookIndex)
-                        .animateContentSize(),
+                        .premiumAnimateContentSize(),
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(18.dp),
                     border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.17f))
@@ -6769,7 +6768,7 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     Card(
                         modifier = Modifier.fillMaxWidth()
                             .staggeredEntrance(itemKey = "${item.title}:${item.root}:$itemIndex", index = itemIndex)
-                            .animateContentSize(),
+                            .premiumAnimateContentSize(),
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -7161,7 +7160,7 @@ private fun PrayerJourneyTimeline(
         AppLanguage.CKB -> "لە بەیانەوە تا عیشا"
     }
     Card(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        modifier = Modifier.fillMaxWidth().premiumAnimateContentSize(),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(22.dp),
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
@@ -7916,7 +7915,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             label = "Upcoming prayer tile surface"
                         )
                         Card(
-                            Modifier.weight(1f).padding(bottom = 10.dp).animateContentSize(),
+                            Modifier.weight(1f).padding(bottom = 10.dp).premiumAnimateContentSize(),
                             colors = CardDefaults.cardColors(containerColor = cardColor),
                             shape = RoundedCornerShape(20.dp),
                             border = BorderStroke(1.dp, tileBorder)
@@ -8680,7 +8679,7 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
         Spacer(Modifier.height(12.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth().animateContentSize(),
+            modifier = Modifier.fillMaxWidth().premiumAnimateContentSize(),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = RoundedCornerShape(30.dp),
             border = BorderStroke(1.dp, (if (aligned) Color(0xFF62C995) else Gold).copy(alpha = 0.48f))
@@ -8920,7 +8919,7 @@ fun WordAnalysisScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth()
                         .staggeredEntrance(itemKey = word.position, index = wordIndex)
-                        .animateContentSize(),
+                        .premiumAnimateContentSize(),
                     colors = CardDefaults.cardColors(containerColor = cardColor),
                     shape = RoundedCornerShape(17.dp)
                 ) {
@@ -9117,7 +9116,7 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f)),
                     modifier = Modifier.fillMaxWidth()
                         .staggeredEntrance(itemKey = item.id, index = recordIndex)
-                        .animateContentSize()
+                        .premiumAnimateContentSize()
                         .premiumClickable { selectedRecord = item }
                 ) {
                     Column(Modifier.padding(15.dp)) {
