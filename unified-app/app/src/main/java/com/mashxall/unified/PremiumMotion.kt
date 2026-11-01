@@ -441,6 +441,7 @@ internal fun premiumOrnamentVertex(
     innerRadius: Float
 ): Offset {
     val safeOuter = outerRadius.takeIf { it.isFinite() && it > 0f } ?: 0f
+    if (safeOuter <= 0f) return Offset.Zero
     val safeInner = innerRadius.takeIf { it.isFinite() && it > 0f }
         ?.coerceAtMost(safeOuter) ?: 0f
     val wrappedIndex = ((index % 16) + 16) % 16
