@@ -35,3 +35,35 @@ class QuranSurahSwipeTest {
         assertNull(quranSurahSwipeTarget(12, Float.NaN))
     }
 }
+
+
+class TafsirSwipeNavigationTest {
+    private val previous = 2 to 286
+    private val current = 2 to 287
+    private val next = 2 to 288
+
+    @Test
+    fun physicalLeftSwipeAdvancesToNextAyah() {
+        assertEquals(next, tafsirSwipeTarget(-110f, previousVerse = previous, nextVerse = next, currentVerse = current))
+    }
+
+    @Test
+    fun physicalRightSwipeReturnsToPreviousAyah() {
+        assertEquals(previous, tafsirSwipeTarget(110f, previousVerse = previous, nextVerse = next, currentVerse = current))
+    }
+
+    @Test
+    fun shortGesturesAndInvalidThresholdsAreIgnored() {
+        assertNull(tafsirSwipeTarget(-24f, previousVerse = previous, nextVerse = next, currentVerse = current))
+        assertNull(tafsirSwipeTarget(24f, previousVerse = previous, nextVerse = next, currentVerse = current))
+        assertNull(tafsirSwipeTarget(-120f, thresholdPx = 0f, previousVerse = previous, nextVerse = next, currentVerse = current))
+        assertNull(tafsirSwipeTarget(Float.NaN, previousVerse = previous, nextVerse = next, currentVerse = current))
+    }
+
+    @Test
+    fun firstAndLastVerseBoundariesDoNotNavigatePastQuran() {
+        assertNull(tafsirSwipeTarget(120f, previousVerse = current, nextVerse = next, currentVerse = current))
+        assertNull(tafsirSwipeTarget(-120f, previousVerse = previous, nextVerse = current, currentVerse = current))
+    }
+}
+
