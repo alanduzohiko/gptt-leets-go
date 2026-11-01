@@ -54,6 +54,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -69,6 +70,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -110,6 +113,19 @@ internal fun premiumPressTargetScale(
     return if (enabled && pressed) safeScale else 1f
 }
 
+/**
+ * Native controls respond according to their role: tabs use a shorter, quieter
+ * motion, while primary buttons get a slightly stronger press acknowledgement.
+ */
+internal fun premiumRolePressScale(role: Role?, baseScale: Float = 0.968f): Float {
+    val safeBase = if (baseScale.isFinite()) baseScale.coerceIn(0.90f, 1f) else 0.968f
+    return when (role) {
+        Role.Button -> minOf(safeBase, 0.946f)
+        Role.Tab -> minOf(safeBase, 0.958f)
+        else -> safeBase
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 internal fun Modifier.premiumClickable(
     enabled: Boolean = true,
@@ -125,8 +141,9 @@ internal fun Modifier.premiumClickable(
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val roleScale = premiumRolePressScale(role, pressedScale)
     val scale by animateFloatAsState(
-        targetValue = premiumPressTargetScale(enabled, pressed, pressedScale),
+        targetValue = premiumPressTargetScale(enabled, pressed, roleScale),
         animationSpec = if (motionAllowed) spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow
@@ -134,6 +151,12 @@ internal fun Modifier.premiumClickable(
         label = "Mashxall native press scale"
     )
     val haptics = LocalHapticFeedback.current
+    val pressAccent = MaterialTheme.colorScheme.primary
+    val pressGlow by animateFloatAsState(
+        targetValue = if (motionAllowed && enabled && pressed) 1f else 0f,
+        animationSpec = if (motionAllowed) tween(120, easing = FastOutSlowInEasing) else snap(),
+        label = "Mashxall touch edge glow"
+    )
 
     val touchTarget = this.graphicsLayer {
         scaleX = scale
@@ -510,6 +533,66 @@ internal fun PremiumIslamicOrnament(
     }
 }
 
+/**
+ * One-shot radial feedback for a successful user action. It is event-driven,
+ * short-lived, and fully disabled when Android's animator scale is disabled.
+ */
+@Composable
+internal fun PremiumTapBurst(
+    eventKey: Int,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val progress = remember { Animatable(1f) }
+    LaunchedEffect(eventKey, motionAllowed) {
+        if (motionAllowed && eventKey > 0) {
+            progress.snapTo(0f)
+            progress.animateTo(
+                1f,
+                animationSpec = tween(480, easing = FastOutSlowInEasing)
+            )
+        } else {
+            progress.snapTo(1f)
+        }
+    }
+    Canvas(modifier = modifier) {
+        if (!motionAllowed || eventKey <= 0 || progress.value >= 1f || size.minDimension <= 0f) {
+            return@Canvas
+        }
+        val phase = progress.value.coerceIn(0f, 1f)
+        val remaining = 1f - phase
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val reach = size.minDimension * 0.45f
+        drawCircle(
+            color = accent.copy(alpha = 0.34f * remaining),
+            radius = reach * (0.22f + phase * 0.78f),
+            center = center,
+            style = Stroke(width = (2.6f * remaining + 0.7f).dp.toPx())
+        )
+        drawCircle(
+            color = accent.copy(alpha = 0.19f * remaining),
+            radius = reach * (0.06f + phase * 0.54f),
+            center = center,
+            style = Stroke(width = (1.7f * remaining + 0.5f).dp.toPx())
+        )
+        repeat(8) { index ->
+            val angle = -PI / 2.0 + index * PI / 4.0
+            val distance = reach * (0.24f + phase * 0.70f)
+            val particle = Offset(
+                center.x + (cos(angle) * distance).toFloat(),
+                center.y + (sin(angle) * distance).toFloat()
+            )
+            drawCircle(
+                color = accent.copy(alpha = 0.72f * remaining),
+                radius = (size.minDimension * 0.014f * remaining).coerceAtLeast(0.7.dp.toPx()),
+                center = particle
+            )
+        }
+    }
+}
+
 /** Slow ambient light fields add depth without competing with reading content. */
 @Composable
 internal fun PremiumAmbientBackdrop(
@@ -857,6 +940,19 @@ internal fun PremiumSectionHero(
 ) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val heroOrbitRotation = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall section hero orbit")
+        val value by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(26000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Mashxall section hero orbital rotation"
+        )
+        value
+    } else 0f
     AnimatedVisibility(
         visible = true,
         modifier = modifier.fillMaxWidth(),
@@ -885,6 +981,16 @@ internal fun PremiumSectionHero(
                 )
                 .border(1.dp, accent.copy(alpha = 0.34f), RoundedCornerShape(25.dp))
         ) {
+            PremiumIslamicOrnament(
+                modifier = Modifier.fillMaxSize(),
+                accent = accent,
+                dark = true
+            )
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 37.dp, y = (-63).dp)
+                    .size(152.dp).graphicsLayer { rotationZ = heroOrbitRotation }
+                    .border(1.dp, accent.copy(alpha = 0.20f), CircleShape)
+            )
             Box(
                 Modifier.align(Alignment.TopEnd).offset(x = 44.dp, y = (-62).dp)
                     .size(166.dp).clip(CircleShape)

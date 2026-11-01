@@ -4052,10 +4052,12 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         var count by remember(item.id) {
             mutableIntStateOf(progressPrefs.getInt(item.id.toString(), 0).coerceIn(0, item.count.coerceAtLeast(1)))
         }
+        var burstRevision by remember(item.id) { mutableIntStateOf(0) }
         val targetCount = item.count.coerceAtLeast(1)
         val incrementCount: () -> Unit = {
             val nextCount = nextAzkarRepetition(count, targetCount)
             if (nextCount != count) {
+                burstRevision += 1
                 count = nextCount
                 progressPrefs.edit().putInt(item.id.toString(), nextCount).apply()
                 haptic.performHapticFeedback(
@@ -4085,18 +4087,25 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             Column(Modifier.fillMaxWidth().heightIn(max = 690.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 10.dp)) {
                 Text(title, color = Gold, fontSize = 21.sp, fontWeight = FontWeight.Bold, lineHeight = 29.sp)
                 Spacer(Modifier.height(13.dp))
-                Text(
-                    cleanHadithDisplayText(item.arabic),
-                    color = foreground,
-                    fontSize = 25.sp,
-                    lineHeight = 44.sp,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .premiumClickable(enabled = count < targetCount, hapticFeedback = false, onClick = incrementCount)
-                        .padding(horizontal = 8.dp, vertical = 5.dp)
-                        .graphicsLayer { scaleX = countPulse.value; scaleY = countPulse.value }
-                )
+                Box(Modifier.fillMaxWidth()) {
+                    Text(
+                        cleanHadithDisplayText(item.arabic),
+                        color = foreground,
+                        fontSize = 25.sp,
+                        lineHeight = 44.sp,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .premiumClickable(enabled = count < targetCount, hapticFeedback = false, onClick = incrementCount)
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .graphicsLayer { scaleX = countPulse.value; scaleY = countPulse.value }
+                    )
+                    PremiumTapBurst(
+                        eventKey = burstRevision,
+                        accent = Gold,
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
                 Text(
                     when (language) {
                         AppLanguage.EN -> "Tap the Arabic text to count"
@@ -4493,6 +4502,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
     val haptic = LocalHapticFeedback.current
     val tapPulse = remember { Animatable(1f) }
+    var tapBurstRevision by remember { mutableIntStateOf(0) }
     LaunchedEffect(count, motionAllowed) {
         if (motionAllowed) {
             tapPulse.snapTo(0.95f)
@@ -4641,6 +4651,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             ) {
                 val result = nextTasbihTap(count, totalCount, targetCount)
                 if (result.accepted) {
+                    tapBurstRevision += 1
                     count = result.roundCount
                     totalCount = result.totalCount
                     prefs.edit()
@@ -4684,6 +4695,11 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     )
                 }
             }
+            PremiumTapBurst(
+                eventKey = tapBurstRevision,
+                accent = Gold,
+                modifier = Modifier.fillMaxSize()
+            )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 AnimatedContent(
                     targetState = count,

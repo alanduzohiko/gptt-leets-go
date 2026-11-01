@@ -51,6 +51,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -116,6 +117,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -1066,6 +1068,142 @@ internal fun nextSourcePrayerTarget(
     return nextDay.timeInMillis.takeIf { it > nowMillis }?.let { UpcomingPrayerTarget("fajr", it) }
 }
 
+/**
+ * Position an actual source timetable marker between today's Fajr and Isha.
+ * Invalid/reversed windows never create a misleading progress position.
+ */
+internal fun prayerTimelineMarkerFraction(
+    markerMillis: Long,
+    fajrMillis: Long,
+    ishaMillis: Long
+): Float {
+    if (ishaMillis <= fajrMillis) return 0f
+    return ((markerMillis - fajrMillis).toDouble() / (ishaMillis - fajrMillis).toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+}
+
+private fun sourcePrayerTimestamp(raw: String, referenceMillis: Long): Long? {
+    val (hour, minute) = parseSourcePrayerClock(raw) ?: return null
+    return Calendar.getInstance().apply {
+        timeInMillis = referenceMillis
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+/** Compact home-screen journey line built only from the validated Salawati row. */
+@Composable
+private fun HomePrayerJourneyStrip(
+    today: PrayerRow?,
+    nextPrayerKey: String?,
+    foreground: Color
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(today) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(60_000L)
+        }
+    }
+    val source = remember(today) { ContentRepository.salawatiOnlyPrayerTimes(today) }
+    val fajr = remember(source, nowMillis / 60_000L) { source?.let { sourcePrayerTimestamp(it.fajr, nowMillis) } }
+    val isha = remember(source, nowMillis / 60_000L) { source?.let { sourcePrayerTimestamp(it.isha, nowMillis) } }
+    if (source == null || fajr == null || isha == null || isha <= fajr) return
+
+    val rawMarkers = listOf(
+        Triple("fajr", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "fajr"), source.fajr),
+        Triple("dhuhr", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "dhuhr"), source.dhuhr),
+        Triple("asr", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "asr"), source.asr),
+        Triple("maghrib", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "maghrib"), source.maghrib),
+        Triple("isha", tr(AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb")), "isha"), source.isha)
+    )
+    val language = AppLanguage.from(context.getSharedPreferences("mashxall_preferences", 0).getString("language", "ckb"))
+    val markers = rawMarkers.mapNotNull { (key, label, raw) ->
+        sourcePrayerTimestamp(raw, nowMillis)?.let { markerTime ->
+            Triple(key, tr(language, key), prayerTimelineMarkerFraction(markerTime, fajr, isha))
+        }
+    }
+    if (markers.size != 5) return
+    val progress = prayerJourneyProgressFraction(nowMillis, fajr, isha)
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = if (motionAllowed) tween(620, easing = FastOutSlowInEasing) else snap(),
+        label = "Home prayer journey progress"
+    )
+    val percent = (progress * 100f).roundToInt().coerceIn(0, 100)
+    Column(Modifier.fillMaxWidth().padding(top = 11.dp, start = 3.dp, end = 3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when (language) {
+                    AppLanguage.EN -> "TODAY'S PRAYER JOURNEY"
+                    AppLanguage.AR -> "مسار صلوات اليوم"
+                    AppLanguage.CKB -> "ڕێڕەوی نوێژەکانی ئەمڕۆ"
+                },
+                color = foreground.copy(alpha = 0.55f),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.65.sp
+            )
+            Spacer(Modifier.weight(1f))
+            Text("$percent%", color = Gold, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Spacer(Modifier.height(8.dp))
+        BoxWithConstraints(Modifier.fillMaxWidth().height(20.dp)) {
+            Box(
+                Modifier.align(Alignment.CenterStart).fillMaxWidth().height(3.dp)
+                    .clip(CircleShape).background(foreground.copy(alpha = 0.11f))
+            )
+            Box(
+                Modifier.align(Alignment.CenterStart).fillMaxWidth(animatedProgress).height(3.dp)
+                    .clip(CircleShape)
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF69B994), Gold)))
+            )
+            markers.forEach { marker ->
+                val selected = marker.first == nextPrayerKey
+                Box(
+                    Modifier.align(Alignment.CenterStart)
+                        .offset(x = maxWidth * marker.third - (if (selected) 5.dp else 3.5.dp))
+                        .size(if (selected) 10.dp else 7.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when {
+                                selected -> Gold
+                                marker.third <= animatedProgress -> Color(0xFF76C8A2)
+                                else -> foreground.copy(alpha = 0.40f)
+                            }
+                        )
+                        .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                )
+            }
+            Box(
+                Modifier.align(Alignment.CenterStart)
+                    .offset(x = maxWidth * animatedProgress - 5.dp)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.20f))
+                    .border(1.dp, Gold, CircleShape)
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            markers.forEach { marker ->
+                val selected = marker.first == nextPrayerKey
+                Text(
+                    marker.second,
+                    color = if (selected) Gold else foreground.copy(alpha = 0.52f),
+                    fontSize = 8.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun HomePrayerCountdown(
     today: PrayerRow?,
@@ -1747,6 +1885,11 @@ private fun HomeScreen(
                     foreground = foreground,
                     cardColor = cardColor,
                     onNextPrayerChange = { upcomingPrayerKey = it }
+                )
+                HomePrayerJourneyStrip(
+                    today = prayerTimes,
+                    nextPrayerKey = upcomingPrayerKey,
+                    foreground = foreground
                 )
                 Spacer(Modifier.height(10.dp))
                 when {

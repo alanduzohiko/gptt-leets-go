@@ -1,9 +1,19 @@
 package com.mashxall.unified
 
+import androidx.compose.ui.semantics.Role
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class PremiumMotionPolicyTest {
+    @Test
+    fun touchScaleChangesWithControlRoleWithoutExceedingSafeBounds() {
+        assertEquals(0.946f, premiumRolePressScale(Role.Button), 0.0001f)
+        assertEquals(0.958f, premiumRolePressScale(Role.Tab), 0.0001f)
+        assertEquals(0.968f, premiumRolePressScale(null), 0.0001f)
+        assertEquals(0.90f, premiumRolePressScale(Role.Button, 0.2f), 0.0001f)
+        assertEquals(1f, premiumRolePressScale(Role.Tab, 1.2f), 0.0001f)
+    }
+
     @Test
     fun staggerDelayStartsImmediatelyAndCapsTheCascade() {
         assertEquals(0L, staggerDelayMillis(0))
