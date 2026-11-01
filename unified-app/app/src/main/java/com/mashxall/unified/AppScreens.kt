@@ -1120,7 +1120,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val progressBySurah = remember(surahAyahTotals, readingProgressRevision, initialSurah, initialAyah) {
         surahAyahTotals.mapValues { (number, _) ->
             val storedProgress = prefs.getInt("quran_progress_ayah_$number", 0)
-            val currentPosition = if (number == initialSurah) initialAyah else 0
+            val hasSavedReadingPosition = prefs.contains("last_surah") &&
+                prefs.getInt("last_surah", -1) == number
+            val currentPosition = if (number == initialSurah && hasSavedReadingPosition) initialAyah else 0
             maxOf(storedProgress, currentPosition)
         }
     }
