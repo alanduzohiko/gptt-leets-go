@@ -25,4 +25,18 @@ class InteractiveNavigationMotionTest {
         assertEquals(keys.size, rotations.toSet().size)
         assertNotEquals(homeModuleIconRestingRotation("quran"), homeModuleIconRestingRotation("tasbih"))
     }
+
+    @Test
+    fun featureTilesHaveDistinctPressDepths() {
+        val keys = listOf("quran", "bookmarks", "hadith", "azkar", "prayer", "names", "qibla", "lexicon", "farmuda", "tasbih")
+        val depths = keys.map(::homeModulePressScale)
+        assertEquals(keys.size, depths.toSet().size)
+    }
+
+    @Test
+    fun prayerTilesHavePrayerSpecificPressDepths() {
+        val keys = listOf("fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha")
+        val depths = keys.map(::prayerTilePressScale)
+        assertEquals(keys.size, depths.toSet().size)
+    }
 }

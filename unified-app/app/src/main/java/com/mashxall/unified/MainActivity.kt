@@ -162,8 +162,14 @@ private val Panel = Color(0xFF102B25)
  * Native press response for large navigation cards: slight spring scale, the
  * standard Material ripple, and a light haptic acknowledgement on activation.
  */
-private fun Modifier.premiumPress(onClick: () -> Unit): Modifier =
-    premiumClickable(onClick = onClick)
+private fun Modifier.premiumPress(
+    pressedScale: Float = 0.968f,
+    onClick: () -> Unit
+): Modifier = premiumClickable(
+    role = Role.Button,
+    pressedScale = pressedScale,
+    onClick = onClick
+)
 
 internal object MashxallAppearance {
     var accent by mutableStateOf(Color(0xFFC9A44C))
@@ -310,6 +316,32 @@ internal fun homeModuleIconRestingRotation(key: String): Float = when (key) {
     "audio" -> -10f
     "backup" -> 18f
     else -> 0f
+}
+
+internal fun homeModulePressScale(key: String): Float = when (key) {
+    "quran" -> 0.944f
+    "bookmarks" -> 0.958f
+    "hadith" -> 0.951f
+    "azkar" -> 0.942f
+    "prayer" -> 0.964f
+    "names" -> 0.949f
+    "qibla" -> 0.968f
+    "lexicon" -> 0.956f
+    "farmuda" -> 0.953f
+    "tasbih" -> 0.941f
+    "audio" -> 0.955f
+    "backup" -> 0.966f
+    else -> 0.968f
+}
+
+internal fun prayerTilePressScale(key: String): Float = when (key) {
+    "fajr" -> 0.943f
+    "sunrise" -> 0.968f
+    "dhuhr" -> 0.949f
+    "asr" -> 0.956f
+    "maghrib" -> 0.962f
+    "isha" -> 0.951f
+    else -> 0.968f
 }
 
 @Composable
@@ -1085,7 +1117,7 @@ private fun MoreScreen(
                                     modifier = Modifier.fillMaxWidth().height(121.dp)
                                         .staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
                                         .premiumAnimateContentSize()
-                                        .premiumPress {
+                                        .premiumPress(pressedScale = homeModulePressScale(module.screen.key)) {
                                             onOpen(module.screen)
                                         },
                                     colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -1640,7 +1672,7 @@ private fun PremiumHomeHero(
                     Row(
                         Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
                             .background(Brush.horizontalGradient(listOf(Gold, PaleGold)))
-                            .premiumClickable { onResumeReading() }
+                            .premiumClickable(role = Role.Button, pressedScale = 0.944f) { onResumeReading() }
                             .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -1655,7 +1687,7 @@ private fun PremiumHomeHero(
                         Modifier.clip(RoundedCornerShape(16.dp))
                             .background(Color.White.copy(alpha = 0.045f))
                             .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
-                            .premiumClickable { onOpenQibla() }
+                            .premiumClickable(role = Role.Button, pressedScale = 0.967f) { onOpenQibla() }
                             .padding(horizontal = 11.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -1724,7 +1756,7 @@ private fun HomeReadingResumeCard(
     Card(
         modifier = Modifier.fillMaxWidth()
             .staggeredEntrance(itemKey = "home-reading-resume", index = 0)
-            .premiumPress(onClick = onResumeReading)
+            .premiumPress(pressedScale = 0.952f, onClick = onResumeReading)
             .premiumAnimateContentSize(),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(22.dp),
@@ -2143,7 +2175,7 @@ private fun HomeScreen(
     ) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Card(
-            modifier = Modifier.fillMaxWidth().premiumClickable { onOpen(AppScreen.PRAYER) },
+            modifier = Modifier.fillMaxWidth().premiumClickable(role = Role.Button, pressedScale = 0.976f) { onOpen(AppScreen.PRAYER) },
             shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             border = BorderStroke(1.dp, Gold.copy(alpha = 0.38f)),
@@ -2354,7 +2386,7 @@ private fun HomeScreen(
                             AppLanguage.AR -> "إعدادات الصلاة"
                             AppLanguage.CKB -> "ڕێکخستنەکانی نوێژ"
                         }, color = foreground.copy(alpha = 0.63f), fontSize = 11.sp,
-                        modifier = Modifier.premiumClickable { onOpen(AppScreen.PRAYER) }
+                        modifier = Modifier.premiumClickable(role = Role.Button, pressedScale = prayerTilePressScale(key)) { onOpen(AppScreen.PRAYER) }
                     )
                 }
             }
@@ -2407,7 +2439,7 @@ private fun HomeScreen(
                     ) {
                         Card(
                             modifier = Modifier.fillMaxWidth().staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
-                                .premiumAnimateContentSize().premiumPress { onOpen(module.screen) },
+                                .premiumAnimateContentSize().premiumPress(pressedScale = homeModulePressScale(module.screen.key)) { onOpen(module.screen) },
                             shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = cardColor),
                             border = BorderStroke(0.8.dp, module.color.copy(alpha = 0.42f))
                         ) {

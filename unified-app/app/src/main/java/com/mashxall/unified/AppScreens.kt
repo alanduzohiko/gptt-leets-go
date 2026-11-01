@@ -393,6 +393,23 @@ private fun SearchBox(language: AppLanguage, value: String, onValue: (String) ->
     )
 }
 
+internal fun quranReaderActionPressScale(action: String): Float = when (action) {
+    "previous_surah" -> 0.956f
+    "next_surah" -> 0.962f
+    "tafsir" -> 0.951f
+    "play_verse" -> 0.966f
+    "bookmark_verse" -> 0.943f
+    "share_verse" -> 0.971f
+    "back" -> 0.958f
+    "verse_view" -> 0.947f
+    "play_surah" -> 0.965f
+    "page_bookmark" -> 0.941f
+    "reader_settings" -> 0.968f
+    "previous_page" -> 0.954f
+    "next_page" -> 0.961f
+    else -> 0.968f
+}
+
 @Composable
 private fun ReaderActionIcon(
     icon: ImageVector,
@@ -400,6 +417,7 @@ private fun ReaderActionIcon(
     enabled: Boolean = true,
     rotationDegrees: Float = 0f,
     hapticFeedback: Boolean = true,
+    pressedScale: Float = 0.968f,
     onClick: () -> Unit
 ) {
     PremiumIconButton(
@@ -411,6 +429,7 @@ private fun ReaderActionIcon(
         rotationDegrees = rotationDegrees,
         circular = true,
         hapticFeedback = hapticFeedback,
+        pressedScale = pressedScale,
         onClick = onClick
     )
 }
@@ -1619,7 +1638,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             AppLanguage.CKB -> "سوورەتی پێشوو"
                         },
                         enabled = selected > 1,
-                        rotationDegrees = 180f
+                        rotationDegrees = 180f,
+                        pressedScale = quranReaderActionPressScale("previous_surah")
                     ) {
                         quranAdjacentSurahTarget(selected, -1)?.let { target ->
                             selected = target
@@ -1674,7 +1694,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             AppLanguage.AR -> "السورة التالية"
                             AppLanguage.CKB -> "سوورەتی دواتر"
                         },
-                        enabled = selected < 114
+                        enabled = selected < 114,
+                        pressedScale = quranReaderActionPressScale("next_surah")
                     ) {
                         quranAdjacentSurahTarget(selected, 1)?.let { target ->
                             selected = target
@@ -2222,12 +2243,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 color = foreground.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1
                             )
                             Spacer(Modifier.weight(1f))
-                            ReaderActionIcon(Icons.Outlined.AutoStories, tr(language, "tafsir")) {
+                            ReaderActionIcon(Icons.Outlined.AutoStories, tr(language, "tafsir"), pressedScale = quranReaderActionPressScale("tafsir")) {
                                 onTafsir(verse.surah, verse.number)
                             }
                             ReaderActionIcon(
                                 Icons.Outlined.PlayCircle,
-                                if (language == AppLanguage.EN) "Play this verse" else if (language == AppLanguage.AR) "استمع إلى هذه الآية" else "گوێگرتن لەم ئایەتە"
+                                if (language == AppLanguage.EN) "Play this verse" else if (language == AppLanguage.AR) "استمع إلى هذه الآية" else "گوێگرتن لەم ئایەتە",
+                                pressedScale = quranReaderActionPressScale("play_verse")
                             ) {
                                 onPlayAudio(verse.surah, verse.number)
                             }
@@ -2240,7 +2262,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     if (verseBookmarked) "إزالة العلامة المرجعية" else "حفظ الآية"
                                 } else {
                                     if (verseBookmarked) "لابردنی نیشانە" else "ئایەت پاشەکەوت بکە"
-                                }
+                                },
+                                pressedScale = quranReaderActionPressScale("bookmark_verse")
                             ) {
                                 val saved = toggleBookmark(verse.surah, verse.number)
                                 val message = when (language) {
@@ -2252,7 +2275,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                             ReaderActionIcon(
                                 Icons.Outlined.Share,
-                                if (language == AppLanguage.EN) "Share verse" else if (language == AppLanguage.AR) "مشاركة الآية" else "ئایەت هاوبەش بکە"
+                                if (language == AppLanguage.EN) "Share verse" else if (language == AppLanguage.AR) "مشاركة الآية" else "ئایەت هاوبەش بکە",
+                                pressedScale = quranReaderActionPressScale("share_verse")
                             ) {
                                 val surahTitle = surahs.firstOrNull { it.number == verse.surah }?.arabicName.orEmpty()
                                 val translationName = when (language) {
@@ -3531,7 +3555,7 @@ private fun MushafPageViewer(
             Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 5.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderActionIcon(Icons.Outlined.ArrowBack, tr(language, "back"), onClick = onExitFullscreen)
+            ReaderActionIcon(Icons.Outlined.ArrowBack, tr(language, "back"), pressedScale = quranReaderActionPressScale("back"), onClick = onExitFullscreen)
             ReaderActionIcon(
                 Icons.Outlined.AutoStories,
                 when (language) {
@@ -3539,6 +3563,7 @@ private fun MushafPageViewer(
                     AppLanguage.AR -> "فتح قارئ نص الآيات والتجويد"
                     AppLanguage.CKB -> "کردنەوەی خوێندنەوەی دەقی ئایەت و تەجوید"
                 },
+                pressedScale = quranReaderActionPressScale("verse_view"),
                 onClick = onVerseView
             )
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
@@ -3582,7 +3607,8 @@ private fun MushafPageViewer(
             ReaderActionIcon(
                 Icons.Outlined.PlayCircle,
                 if (language == AppLanguage.EN) "Play surah" else if (language == AppLanguage.AR) "تشغيل السورة" else "خوێندنەوەی سوورەت",
-                enabled = !loading && pageVerses.isNotEmpty()
+                enabled = !loading && pageVerses.isNotEmpty(),
+                pressedScale = quranReaderActionPressScale("play_surah")
             ) {
                 pageVerses.firstOrNull()?.let { onPlaySurah(it.surah, 1) }
             }
@@ -3590,7 +3616,8 @@ private fun MushafPageViewer(
                 Icons.Outlined.BookmarkBorder,
                 if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت",
                 enabled = !loading && pageVerses.isNotEmpty(),
-                hapticFeedback = false
+                hapticFeedback = false,
+                pressedScale = quranReaderActionPressScale("page_bookmark")
             ) {
                 (selectedVerse ?: pageVerses.firstOrNull())?.let { target ->
                     onBookmarkVerse(target.surah, target.ayah)
@@ -3606,7 +3633,7 @@ private fun MushafPageViewer(
                     ).show()
                 }
             }
-            ReaderActionIcon(Icons.Outlined.Settings, tr(language, "settings"), onClick = onReaderSettings)
+            ReaderActionIcon(Icons.Outlined.Settings, tr(language, "settings"), pressedScale = quranReaderActionPressScale("reader_settings"), onClick = onReaderSettings)
         }
         Row(
             Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = 4.dp),
@@ -3617,6 +3644,7 @@ private fun MushafPageViewer(
                 Icons.Outlined.ChevronRight,
                 tr(language, "previous"),
                 enabled = page > 1 && !loading,
+                pressedScale = quranReaderActionPressScale("previous_page"),
                 onClick = { onPageChange(page - 1) }
             )
             OutlinedTextField(
@@ -3642,6 +3670,7 @@ private fun MushafPageViewer(
                 tr(language, "next"),
                 enabled = page < 604 && !loading,
                 rotationDegrees = 180f,
+                pressedScale = quranReaderActionPressScale("next_page"),
                 onClick = { onPageChange(page + 1) }
             )
         }

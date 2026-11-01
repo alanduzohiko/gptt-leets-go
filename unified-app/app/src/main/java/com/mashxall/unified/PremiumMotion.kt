@@ -1801,6 +1801,7 @@ internal fun PremiumIconButton(
     rotationDegrees: Float = 0f,
     circular: Boolean = false,
     hapticFeedback: Boolean = true,
+    pressedScale: Float = 0.968f,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1841,6 +1842,7 @@ internal fun PremiumIconButton(
                 onClickLabel = contentDescription,
                 role = Role.Button,
                 hapticFeedback = hapticFeedback,
+                pressedScale = pressedScale,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
