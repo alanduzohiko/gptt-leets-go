@@ -45,7 +45,7 @@ class HomePrayerPriorityTests(unittest.TestCase):
         self.assertIn("enter = if (homeMotionAllowed)", self.home)
         source = MAIN_ACTIVITY.read_text(encoding="utf-8")
         hero = source.split("private fun PremiumHomeHero(", 1)[1].split(
-            "\\n@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)\\n@Composable\\nprivate fun HomeScreen(", 1
+            "\n@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)\n@Composable\nprivate fun HomeScreen(", 1
         )[0]
         self.assertIn("enter = if (motionAllowed)", hero)
 
