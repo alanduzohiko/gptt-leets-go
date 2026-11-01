@@ -9339,11 +9339,6 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 AppLanguage.AR -> "إذن الموقع غير ممنوح حاليًا. اسمح به من إعدادات التطبيق في Android ثم أعد المحاولة."
                 AppLanguage.CKB -> "مۆڵەتی شوێن لەم کاتەدا نەدراوە؛ لە ڕێکخستنەکانی ئەپی Android مۆڵەت بدە و دووبارە هەوڵ بدەوە."
             }
-            "LOCATION_PERMISSION_DENIED" -> when (language) {
-                AppLanguage.EN -> "Location permission is not currently granted. Allow it in Android App settings, then retry."
-                AppLanguage.AR -> "إذن الموقع غير ممنوح حاليًا. اسمح به من إعدادات التطبيق في Android ثم أعد المحاولة."
-                AppLanguage.CKB -> "مۆڵەتی شوێن لەم کاتەدا نەدراوە؛ لە ڕێکخستنەکانی ئەپی Android مۆڵەت بدە و دووبارە هەوڵ بدەوە."
-            }
             "LOCATION_PERMISSION_OR_PROVIDER_UNAVAILABLE" -> when (language) {
                 AppLanguage.EN -> "Android could not start a location provider. Check Location permissions and turn on GPS/network location."
                 AppLanguage.AR -> "تعذّر تشغيل مزوّد الموقع في Android. تحقّق من الأذونات وفعّل GPS/موقع الشبكة."
