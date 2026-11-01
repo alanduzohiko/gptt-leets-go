@@ -3890,8 +3890,12 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                     AnimatedContent(
                                         targetState = isFavorite,
                                         transitionSpec = {
-                                            (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
-                                                (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                            if (motionAllowed) {
+                                                (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
+                                                    (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                            } else {
+                                                fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                            }
                                         },
                                         label = "Azkar favourite star pulse"
                                     ) { saved ->
@@ -5042,11 +5046,11 @@ fun AudioScreen(
         SearchBox(language, audioQuery, { audioQuery = it }, tr(language, "search"))
         AnimatedVisibility(
             visible = audioNotice.isNotBlank(),
-            enter = fadeIn(tween(180)) + slideInVertically(
+            enter = if (motionAllowed) fadeIn(tween(180)) + slideInVertically(
                 initialOffsetY = { height -> height / 4 },
                 animationSpec = tween(220)
-            ),
-            exit = fadeOut(tween(120))
+            ) else fadeIn(tween(0)),
+            exit = fadeOut(tween(if (motionAllowed) 120 else 0))
         ) {
             val noticeIsError = audioNotice.contains("failed", ignoreCase = true) ||
                 audioNotice.contains("فشل") || audioNotice.contains("سەرکەوتوو نەبوو")
@@ -5437,7 +5441,7 @@ fun AudioScreen(
                     val trackIsPlaying = playing == item.assetPath
                     val trackBorder by animateColorAsState(
                         targetValue = if (trackIsPlaying) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.09f),
-                        animationSpec = tween(230, easing = FastOutSlowInEasing),
+                        animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
                         label = "Local audio active track border"
                     )
                     Card(
@@ -5461,8 +5465,16 @@ fun AudioScreen(
                             AnimatedContent(
                                 targetState = trackIsPlaying,
                                 transitionSpec = {
-                                    (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                        (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                    if (motionAllowed) {
+                                        if (motionAllowed) {
+                                            (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                                (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        } else {
+                                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                        }
+                                    } else {
+                                        fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                    }
                                 },
                                 label = "Audio play pause medallion"
                             ) { active ->
