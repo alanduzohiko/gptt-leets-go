@@ -1852,11 +1852,25 @@ private fun HomeScreen(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth().premiumClickable { onOpen(AppScreen.PRAYER) },
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(containerColor = cardColor),
-            border = BorderStroke(1.dp, Gold.copy(alpha = 0.35f))
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.38f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
         ) {
-            Column(Modifier.padding(16.dp)) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                Gold.copy(alpha = 0.075f),
+                                cardColor,
+                                DeepGreen.copy(alpha = 0.025f),
+                                cardColor
+                            )
+                        )
+                    )
+                    .padding(16.dp)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Gold.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.Schedule, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
@@ -2055,7 +2069,34 @@ private fun HomeScreen(
         }
 
         Spacer(Modifier.height(15.dp))
-        Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(tr(language, "quick_access"), color = foreground, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+            Spacer(Modifier.weight(1f))
+            Row(
+                Modifier.clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.10f))
+                    .border(1.dp, Gold.copy(alpha = 0.20f), CircleShape)
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = Gold, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    homeModules.size.toString() + when (language) {
+                        AppLanguage.EN -> " tools"
+                        AppLanguage.AR -> " أدوات"
+                        AppLanguage.CKB -> " ئامراز"
+                    },
+                    color = foreground.copy(alpha = 0.70f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
         Spacer(Modifier.height(12.dp))
         homeModules.chunked(2).forEachIndexed { rowIndex, pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(11.dp), modifier = Modifier.fillMaxWidth()) {
@@ -2075,7 +2116,7 @@ private fun HomeScreen(
                             border = BorderStroke(0.8.dp, module.color.copy(alpha = 0.42f))
                         ) {
                             Column(
-                                Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.10f), cardColor, cardColor))).padding(14.dp).height(104.dp),
+                                Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(module.color.copy(alpha = 0.15f), cardColor, cardColor))).padding(14.dp).height(108.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 PremiumIconMedallion(icon = module.icon, tint = module.color, size = 44.dp)

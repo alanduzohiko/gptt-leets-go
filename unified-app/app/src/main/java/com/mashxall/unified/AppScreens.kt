@@ -186,6 +186,20 @@ private val MushafSepiaColorMatrix = ColorMatrix(
     )
 )
 
+/** Match Qur'an index items against their source Meccan/Medinan classification without guessing unknown labels. */
+internal fun matchesSurahOriginFilter(place: String, filter: String): Boolean {
+    val normalized = place.trim().lowercase(Locale.ROOT)
+    val meccan = normalized.contains("meccan") || normalized.contains("makki") ||
+        normalized.contains("mecca") || normalized.contains("makkah") || normalized.contains("makka")
+    val medinan = normalized.contains("medinan") || normalized.contains("madani") ||
+        normalized.contains("medina") || normalized.contains("madinah") || normalized.contains("madina")
+    return when (filter) {
+        "meccan" -> meccan
+        "medinan" -> medinan
+        else -> true
+    }
+}
+
 /** Keep the list aligned with usable playback coverage instead of saving hidden partial editions as the default. */
 internal fun filterRecitersForPlaybackMode(
     reciters: List<Reciter>,
@@ -410,7 +424,12 @@ private fun ReaderModeSegment(
 private fun QuranSurahWelcomeCard(
     language: AppLanguage,
     surahCount: Int,
-    onSettings: () -> Unit
+    lastReadSurahName: String,
+    lastReadAyah: Int,
+    lastMushafPage: Int,
+    onSettings: () -> Unit,
+    onContinue: () -> Unit,
+    onOpenMushaf: () -> Unit
 ) {
     val title = when (language) {
         AppLanguage.EN -> "The Noble Quran"
@@ -418,65 +437,173 @@ private fun QuranSurahWelcomeCard(
         AppLanguage.CKB -> "قورئانی پیرۆز"
     }
     val subtitle = when (language) {
-        AppLanguage.EN -> "Choose a surah, resume reading, or open the page Mushaf."
-        AppLanguage.AR -> "اختر سورة، أو تابع قراءتك، أو افتح المصحف المصوّر."
-        AppLanguage.CKB -> "سوورەتێک هەڵبژێرە، خوێندنەوە بەردەوام بکە یان مصحەفی پەڕەیی بکەرەوە."
-    }
-    val countLabel = surahCount.toString() + when (language) {
-        AppLanguage.EN -> " surahs available"
-        AppLanguage.AR -> " سورة متاحة"
-        AppLanguage.CKB -> " سوورەت بەردەستە"
+        AppLanguage.EN -> "A calmer space to read, listen, understand and reflect."
+        AppLanguage.AR -> "مساحة هادئة للقراءة والاستماع والفهم والتدبّر."
+        AppLanguage.CKB -> "شوێنێکی ئارام بۆ خوێندنەوە، گوێگرتن، تێگەیشتن و بیرکردنەوە."
     }
     val mantra = when (language) {
-        AppLanguage.EN -> "READ • RECITE • REFLECT"
-        AppLanguage.AR -> "اقرأ • رتّل • تدبّر"
-        AppLanguage.CKB -> "بخوێنەوە • تلاوەت بکە • بیر بکەوە"
+        AppLanguage.EN -> "READ  •  RECITE  •  REFLECT"
+        AppLanguage.AR -> "اقرأ  •  رتّل  •  تدبّر"
+        AppLanguage.CKB -> "بخوێنەوە  •  تلاوەت بکە  •  بیر بکەوە"
+    }
+    val surahLabel = when (language) {
+        AppLanguage.EN -> "$surahCount surahs"
+        AppLanguage.AR -> "$surahCount سورة"
+        AppLanguage.CKB -> "$surahCount سوورەت"
+    }
+    val pageLabel = when (language) {
+        AppLanguage.EN -> "Page $lastMushafPage / 604"
+        AppLanguage.AR -> "الصفحة $lastMushafPage / 604"
+        AppLanguage.CKB -> "پەڕەی $lastMushafPage / 604"
+    }
+    val resumeLabel = when (language) {
+        AppLanguage.EN -> "Continue reading"
+        AppLanguage.AR -> "متابعة القراءة"
+        AppLanguage.CKB -> "بەردەوام بە لە خوێندنەوە"
+    }
+    val mushafLabel = when (language) {
+        AppLanguage.EN -> "Open Mushaf"
+        AppLanguage.AR -> "فتح المصحف"
+        AppLanguage.CKB -> "کردنەوەی مصحەف"
+    }
+    val settingsLabel = when (language) {
+        AppLanguage.EN -> "Reader settings"
+        AppLanguage.AR -> "إعدادات القارئ"
+        AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوە"
     }
     Box(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp))
-            .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF1A5A45), CardDark)))
-            .border(1.dp, Gold.copy(alpha = 0.36f), RoundedCornerShape(25.dp))
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF185642), Color(0xFF102B25))))
+            .border(1.dp, Gold.copy(alpha = 0.42f), RoundedCornerShape(28.dp))
     ) {
         Box(
-            Modifier.align(Alignment.TopEnd).offset(x = 36.dp, y = (-48).dp).size(132.dp)
+            Modifier.align(Alignment.TopEnd).offset(x = 42.dp, y = (-56).dp).size(190.dp)
                 .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color(0xFF4EAB84).copy(alpha = 0.07f), Color.Transparent)))
+                .background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color(0xFF65B997).copy(alpha = 0.08f), Color.Transparent)))
         )
-        Row(
-            Modifier.fillMaxWidth().padding(15.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(mantra, color = PaleGold, fontSize = 8.sp, letterSpacing = 0.65.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Spacer(Modifier.height(9.dp))
-                Text(title, color = Color(0xFFFFF8E7), fontSize = 23.sp, lineHeight = 29.sp, fontWeight = FontWeight.ExtraBold)
-                Spacer(Modifier.height(4.dp))
-                Text(subtitle, color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp, lineHeight = 16.sp)
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.07f))
-                        .border(1.dp, Color.White.copy(alpha = 0.13f), CircleShape)
-                        .padding(horizontal = 9.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(countLabel, color = Color.White.copy(alpha = 0.91f), fontSize = 9.sp, maxLines = 1)
+        Box(
+            Modifier.align(Alignment.BottomStart).offset(x = (-48).dp, y = 54.dp).size(146.dp)
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF73C9A4).copy(alpha = 0.17f), Color.Transparent)))
+        )
+        Box(
+            Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 23.dp).size(93.dp)
+                .border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
+        )
+        Column(Modifier.fillMaxWidth().padding(17.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(
+                        Modifier.clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .border(1.dp, Color.White.copy(alpha = 0.13f), CircleShape)
+                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF8CE0B5)))
+                        Spacer(Modifier.width(7.dp))
+                        Text(mantra, color = PaleGold, fontSize = 8.sp, letterSpacing = 0.7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(title, color = Color(0xFFFFF8E7), fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(subtitle, color = Color.White.copy(alpha = 0.76f), fontSize = 10.sp, lineHeight = 16.sp)
+                }
+                Spacer(Modifier.width(7.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    PremiumIconMedallion(icon = Icons.Outlined.AutoStories, tint = Gold, size = 62.dp, pulse = true)
+                    Box(
+                        Modifier.size(32.dp).clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.075f))
+                            .border(1.dp, Color.White.copy(alpha = 0.17f), CircleShape)
+                            .premiumClickable { onSettings() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Outlined.Settings, contentDescription = settingsLabel, tint = PaleGold, modifier = Modifier.size(16.dp))
+                    }
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PremiumIconMedallion(icon = Icons.Outlined.AutoStories, tint = Gold, size = 66.dp, pulse = true)
-                Box(
-                    Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.075f))
-                        .border(1.dp, Color.White.copy(alpha = 0.17f), CircleShape)
-                        .premiumClickable { onSettings() },
-                    contentAlignment = Alignment.Center
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                listOf(surahLabel, lastReadSurahName.takeIf { it.isNotBlank() }?.let { "$it • ${if (language == AppLanguage.EN) "Ayah" else if (language == AppLanguage.AR) "آية" else "ئایەت"} $lastReadAyah" }, pageLabel)
+                    .filterNotNull()
+                    .forEach { label ->
+                        Row(
+                            Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.075f))
+                                .border(1.dp, Color.White.copy(alpha = 0.11f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 7.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(label, color = Color.White.copy(alpha = 0.91f), fontSize = 8.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                    }
+            }
+            Spacer(Modifier.height(13.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
+                        .background(Brush.horizontalGradient(listOf(Gold, PaleGold)))
+                        .premiumClickable(hapticFeedback = true, onClick = onContinue)
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(Icons.Outlined.Settings, contentDescription = if (language == AppLanguage.EN) "Reader settings" else if (language == AppLanguage.AR) "إعدادات القارئ" else "ڕێکخستنەکانی خوێندنەوە", tint = PaleGold, modifier = Modifier.size(17.dp))
+                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Ink, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(resumeLabel, color = Ink, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                }
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
+                        .background(Color.White.copy(alpha = 0.055f))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(15.dp))
+                        .premiumClickable(hapticFeedback = true, onClick = onOpenMushaf)
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = PaleGold, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(mushafLabel, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SurahOriginFilterChip(
+    label: String,
+    selected: Boolean,
+    foreground: Color,
+    onClick: () -> Unit
+) {
+    val fill by animateColorAsState(
+        targetValue = if (selected) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
+        animationSpec = tween(190),
+        label = "Quran origin filter fill"
+    )
+    val outline by animateColorAsState(
+        targetValue = if (selected) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.09f),
+        animationSpec = tween(190),
+        label = "Quran origin filter outline"
+    )
+    Row(
+        Modifier.clip(CircleShape)
+            .background(fill)
+            .border(1.dp, outline, CircleShape)
+            .premiumClickable(hapticFeedback = true, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        if (selected) {
+            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(label, color = if (selected) foreground else foreground.copy(alpha = 0.68f), fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -575,6 +702,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var versesLoadFailed by remember { mutableStateOf(false) }
     var retryVerses by remember { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
+    var surahOriginFilter by rememberSaveable { mutableStateOf("all") }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var translationKey by rememberSaveable {
         mutableStateOf(prefs.getString("quran_translation", null) ?: when (language) {
@@ -1077,15 +1205,66 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     QuranSurahWelcomeCard(
                         language = language,
                         surahCount = surahs.size,
-                        onSettings = { readerSettingsSection = "overview"; showReaderSettings = true }
+                        lastReadSurahName = surahs.firstOrNull { it.number == initialSurah }?.let {
+                            if (language == AppLanguage.EN) it.englishName else it.arabicName
+                        }.orEmpty(),
+                        lastReadAyah = initialAyah.coerceAtLeast(1),
+                        lastMushafPage = mushafPage,
+                        onSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
+                        onContinue = {
+                            selected = initialSurah.coerceIn(1, 114)
+                            query = ""
+                            showSurahList = false
+                            openingMushaf = false
+                            mushafMode = false
+                            onSurah(selected)
+                            onOpenVerse(selected, initialAyah.coerceAtLeast(1))
+                            prefs.edit().putString("quran_reader_mode", "verse").apply()
+                        },
+                        onOpenMushaf = {
+                            selected = initialSurah.coerceIn(1, 114)
+                            query = ""
+                            selectedAyahForSheet = null
+                            mushafPage = prefs.getInt("last_mushaf_page", mushafPage).coerceIn(1, 604)
+                            showSurahList = false
+                            openingMushaf = false
+                            mushafMode = true
+                            prefs.edit().putString("quran_reader_mode", "mushaf")
+                                .putInt("last_mushaf_page", mushafPage)
+                                .putInt("last_surah", selected)
+                                .apply()
+                        }
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(11.dp))
                     SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SurahOriginFilterChip(
+                            label = when (language) { AppLanguage.EN -> "All" ; AppLanguage.AR -> "الكل" ; AppLanguage.CKB -> "هەموو" },
+                            selected = surahOriginFilter == "all",
+                            foreground = foreground
+                        ) { surahOriginFilter = "all" }
+                        SurahOriginFilterChip(
+                            label = when (language) { AppLanguage.EN -> "Meccan" ; AppLanguage.AR -> "مكية" ; AppLanguage.CKB -> "مەککی" },
+                            selected = surahOriginFilter == "meccan",
+                            foreground = foreground
+                        ) { surahOriginFilter = "meccan" }
+                        SurahOriginFilterChip(
+                            label = when (language) { AppLanguage.EN -> "Medinan" ; AppLanguage.AR -> "مدنية" ; AppLanguage.CKB -> "مەدەنی" },
+                            selected = surahOriginFilter == "medinan",
+                            foreground = foreground
+                        ) { surahOriginFilter = "medinan" }
+                    }
                 }
                 val filteredSurahs = surahs.filter { item ->
-                    query.isBlank() || item.arabicName.contains(query.trim(), true) ||
-                        item.englishName.contains(query.trim(), true) ||
-                        item.number.toString() == query.trim()
+                    matchesSurahOriginFilter(item.place, surahOriginFilter) &&
+                        (query.isBlank() || item.arabicName.contains(query.trim(), true) ||
+                            item.englishName.contains(query.trim(), true) ||
+                            item.number.toString() == query.trim())
                 }
                 if (surahs.isEmpty()) {
                     LoadingOrEmpty(
