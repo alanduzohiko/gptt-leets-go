@@ -121,9 +121,12 @@ internal fun shouldAllowMashxallMotion(
     reduceMotion: Boolean
 ): Boolean = systemAnimationsEnabled && durationScale.isFinite() && durationScale > 0f && !reduceMotion
 
+/** Keep the pure preference decision independently testable. */
+internal fun shouldPerformMashxallHaptic(hapticsEnabled: Boolean): Boolean = hapticsEnabled
+
 /** Route every haptic through one preference-aware gate. Android still applies device-level settings. */
 internal fun HapticFeedback.performMashxallHaptic(type: HapticFeedbackType) {
-    if (MashxallMotionPreferences.hapticsEnabled) performHapticFeedback(type)
+    if (shouldPerformMashxallHaptic(MashxallMotionPreferences.hapticsEnabled)) performHapticFeedback(type)
 }
 
 /**
