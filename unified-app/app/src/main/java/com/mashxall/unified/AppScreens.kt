@@ -535,8 +535,30 @@ private fun QuranSurahWelcomeCard(
         AppLanguage.AR -> "إعدادات القارئ"
         AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوە"
     }
+
+    val ornamentTransition = rememberInfiniteTransition(label = "Quran welcome ornament")
+    val ornamentRotation by ornamentTransition.animateFloat(
+        initialValue = -9f,
+        targetValue = 9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "Quran welcome ring rotation"
+    )
+    val ornamentScale by ornamentTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "Quran welcome ring breathing"
+    )
     Box(
         Modifier.fillMaxWidth()
+            .staggeredEntrance(itemKey = "quran-reader-welcome", index = 0)
+            .premiumAnimateContentSize()
             .clip(RoundedCornerShape(28.dp))
             .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF185642), Color(0xFF102B25))))
             .border(1.dp, Gold.copy(alpha = 0.42f), RoundedCornerShape(28.dp))
@@ -553,6 +575,11 @@ private fun QuranSurahWelcomeCard(
         )
         Box(
             Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 23.dp).size(93.dp)
+                .graphicsLayer {
+                    rotationZ = ornamentRotation
+                    scaleX = ornamentScale
+                    scaleY = ornamentScale
+                }
                 .border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
         )
         Column(Modifier.fillMaxWidth().padding(17.dp)) {
@@ -570,9 +597,26 @@ private fun QuranSurahWelcomeCard(
                         Text(mantra, color = PaleGold, fontSize = 8.sp, letterSpacing = 0.7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                     Spacer(Modifier.height(10.dp))
-                    Text(title, color = Color(0xFFFFF8E7), fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold)
+                    AnimatedContent(
+                        targetState = title,
+                        transitionSpec = {
+                            (fadeIn(tween(210)) + slideInVertically(tween(210)) { it / 4 }) togetherWith
+                                (fadeOut(tween(130)) + slideOutVertically(tween(130)) { -it / 5 })
+                        },
+                        label = "Quran welcome language title transition"
+                    ) { visibleTitle ->
+                        Text(visibleTitle, color = Color(0xFFFFF8E7), fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.ExtraBold)
+                    }
                     Spacer(Modifier.height(4.dp))
-                    Text(subtitle, color = Color.White.copy(alpha = 0.76f), fontSize = 10.sp, lineHeight = 16.sp)
+                    AnimatedContent(
+                        targetState = subtitle,
+                        transitionSpec = {
+                            fadeIn(tween(190)) togetherWith fadeOut(tween(120))
+                        },
+                        label = "Quran welcome language subtitle transition"
+                    ) { visibleSubtitle ->
+                        Text(visibleSubtitle, color = Color.White.copy(alpha = 0.76f), fontSize = 10.sp, lineHeight = 16.sp)
+                    }
                 }
                 Spacer(Modifier.width(7.dp))
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -966,17 +1010,27 @@ private fun QuranWelcomeMetaChip(label: String, modifier: Modifier = Modifier) {
         modifier.clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.075f))
             .border(1.dp, Color.White.copy(alpha = 0.11f), RoundedCornerShape(12.dp))
+            .premiumAnimateContentSize()
             .padding(horizontal = 7.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            label,
-            color = Color.White.copy(alpha = 0.91f),
-            fontSize = 8.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1
-        )
+        AnimatedContent(
+            targetState = label,
+            transitionSpec = {
+                (fadeIn(tween(180)) + slideInVertically(tween(180)) { it / 3 }) togetherWith
+                    (fadeOut(tween(110)) + slideOutVertically(tween(110)) { -it / 3 })
+            },
+            label = "Quran welcome metadata transition"
+        ) { visibleLabel ->
+            Text(
+                visibleLabel,
+                color = Color.White.copy(alpha = 0.91f),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+        }
     }
 }
 

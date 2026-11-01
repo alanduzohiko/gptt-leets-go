@@ -62,7 +62,22 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("enter = if (motionAllowed)", names)
         self.assertIn("exit = if (motionAllowed)", names)
         self.assertIn("fadeIn(tween(0))", names)
-        self.assertIn("fadeOut(tween(0))", names)
+        self.assertTrue(
+            "fadeOut(tween(0))" in names or
+            "fadeOut(animationSpec = tween(0))" in names
+        )
+
+
+    def test_quran_welcome_uses_live_motion_and_real_reader_actions(self):
+        welcome = APP_SCREENS.split("private fun QuranSurahWelcomeCard(", 1)[1].split(
+            "@Composable\\nprivate fun QuranReadingProgressCard(", 1
+        )[0]
+        self.assertIn('staggeredEntrance(itemKey = "quran-reader-welcome"', welcome)
+        self.assertIn("rememberInfiniteTransition(label = \"Quran welcome ornament\")", welcome)
+        self.assertIn("Quran welcome ring rotation", welcome)
+        self.assertIn("Quran welcome ring breathing", welcome)
+        self.assertIn("onClick = onContinue", welcome)
+        self.assertIn("onClick = onOpenMushaf", welcome)
 
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
