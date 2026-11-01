@@ -4441,6 +4441,61 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", collection + "\n" + chapter + "\n\n" + cleanHadithDisplayText(hadith.arabic) + "\n\n" + cleanHadithDisplayText(hadith.sorani) + "\n\n" + cleanHadithDisplayText(hadith.english) + "\n" + numberInBook))
                         Toast.makeText(context, if (language == AppLanguage.EN) "Hadith copied" else if (language == AppLanguage.AR) "تم نسخ الحديث" else "فەرموودەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
                     }
+                    PremiumChoicePill(
+                        modifier = Modifier.weight(1f),
+                        label = if (language == AppLanguage.EN) "Share" else if (language == AppLanguage.AR) "مشاركة" else "هاوبەش",
+                        selected = false,
+                        accent = Gold,
+                        foreground = foreground,
+                        leadingIcon = Icons.Outlined.Share
+                    ) {
+                        val shareText = buildString {
+                            append(collection)
+                            if (chapter.isNotBlank()) append("\n").append(chapter)
+                            append("\n").append(numberInBook)
+                            append("\n\n").append(cleanHadithDisplayText(hadith.arabic))
+                            if (hadith.sorani.isNotBlank()) {
+                                append("\n\n").append(cleanHadithDisplayText(hadith.sorani))
+                            }
+                            if (hadith.english.isNotBlank()) {
+                                append("\n\n").append(cleanHadithDisplayText(hadith.english))
+                            }
+                            if (hadith.note.isNotBlank()) {
+                                append("\n\n").append(cleanHadithDisplayText(hadith.note))
+                            }
+                            if (hadith.footnote.isNotBlank()) {
+                                append("\n\n").append(cleanHadithDisplayText(hadith.footnote))
+                            }
+                            append("\n\nمەشخەڵ • Mashxall")
+                        }
+                        runCatching {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, collection + " • " + numberInBook)
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(
+                                Intent.createChooser(
+                                    shareIntent,
+                                    when (language) {
+                                        AppLanguage.EN -> "Share hadith"
+                                        AppLanguage.AR -> "مشاركة الحديث"
+                                        AppLanguage.CKB -> "هاوبەشکردنی فەرموودە"
+                                    }
+                                )
+                            )
+                        }.onFailure {
+                            Toast.makeText(
+                                context,
+                                when (language) {
+                                    AppLanguage.EN -> "No sharing app is available"
+                                    AppLanguage.AR -> "لا يوجد تطبيق متاح للمشاركة"
+                                    AppLanguage.CKB -> "هیچ ئەپێکی هاوبەشکردن بەردەست نییە"
+                                },
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
                 }
                 Spacer(Modifier.height(24.dp))
             }
