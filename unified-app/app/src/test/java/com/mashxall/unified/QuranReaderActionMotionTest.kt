@@ -15,4 +15,11 @@ class QuranReaderActionMotionTest {
         val scales = actions.map(::quranReaderActionPressScale)
         assertEquals(actions.size, scales.toSet().size)
     }
+
+    @Test
+    fun readerSettingsCategoriesHaveDistinctPressFeedback() {
+        val categories = listOf("appearance", "font", "translation", "tafsir", "reciters")
+        val scales = categories.map(::quranReaderSettingsCategoryPressScale)
+        assertEquals(categories.size, scales.toSet().size)
+    }
 }

@@ -411,6 +411,17 @@ internal fun quranReaderActionPressScale(action: String): Float = when (action) 
     else -> 0.968f
 }
 
+
+internal fun quranReaderSettingsCategoryPressScale(categoryKey: String): Float = when (categoryKey) {
+    "appearance" -> 0.944f
+    "font" -> 0.956f
+    "translation" -> 0.948f
+    "tafsir" -> 0.963f
+    "reciters" -> 0.951f
+    else -> 0.968f
+}
+
+
 @Composable
 private fun ReaderActionIcon(
     icon: ImageVector,
@@ -1119,6 +1130,8 @@ private fun SurahOriginFilterChip(
 
 @Composable
 private fun ReaderSettingsCategoryCard(
+    categoryKey: String,
+    index: Int,
     title: String,
     subtitle: String,
     icon: ImageVector,
@@ -1127,7 +1140,15 @@ private fun ReaderSettingsCategoryCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().premiumClickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth()
+            .staggeredEntrance(itemKey = "quran-reader-settings-$categoryKey", index = index)
+            .premiumAnimateContentSize()
+            .premiumClickable(
+                role = Role.Button,
+                hapticFeedback = true,
+                pressedScale = quranReaderSettingsCategoryPressScale(categoryKey),
+                onClick = onClick
+            ),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.20f))
@@ -1145,6 +1166,7 @@ private fun ReaderSettingsCategoryCard(
         }
     }
 }
+
 
 
 internal data class QuranTextFontOption(
@@ -2639,8 +2661,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Icons.Outlined.GraphicEq)
                         )
                         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 4.dp)) {
-                            items(categories, key = { it.first }) { category ->
-                                ReaderSettingsCategoryCard(category.second.first, category.second.second, category.third, foreground, cardColor) {
+                            itemsIndexed(categories, key = { _, category -> category.first }) { index, category ->
+                                ReaderSettingsCategoryCard(
+                                    categoryKey = category.first,
+                                    index = index,
+                                    title = category.second.first,
+                                    subtitle = category.second.second,
+                                    icon = category.third,
+                                    foreground = foreground,
+                                    cardColor = cardColor
+                                ) {
                                     readerSettingsSection = category.first
                                 }
                             }
