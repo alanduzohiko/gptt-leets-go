@@ -239,6 +239,9 @@ internal fun systemAllowsDecorativeMotion(context: Context): Boolean {
     return animatorEnabled && durationScale > 0f
 }
 
+internal fun shouldAnimateAmbientBackdrop(screenKey: String, motionAllowed: Boolean): Boolean =
+    motionAllowed && screenKey == "home"
+
 /**
  * Entrance motion for real content rows: fade, a restrained upward settle and
  * a small spring scale. Stable keys make the animation follow the item rather
@@ -287,11 +290,12 @@ internal fun Modifier.staggeredEntrance(
 internal fun PremiumAmbientBackdrop(
     modifier: Modifier = Modifier,
     accent: Color,
-    dark: Boolean
+    dark: Boolean,
+    animated: Boolean = true
 ) {
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
-    val drift = if (motionAllowed) {
+    val drift = if (motionAllowed && animated) {
         val transition = rememberInfiniteTransition(label = "Mashxall ambient drift")
         val x by transition.animateFloat(
             initialValue = -22f, targetValue = 24f,
