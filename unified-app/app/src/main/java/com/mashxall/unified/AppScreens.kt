@@ -1100,6 +1100,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         },
                         onRetry = if (surahsLoadFailed) ({ retrySurahs++ }) else null
                     )
+                } else if (filteredSurahs.isEmpty()) {
+                    LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
                 } else LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 13.dp, vertical = 5.dp),
