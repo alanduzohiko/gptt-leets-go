@@ -33,6 +33,14 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    sourceSets {
+        getByName("main") {
+            // ContentRepository opens these project-owned catalogues by their
+            // exact root asset names via AssetManager.
+            assets.srcDir("../catalogs")
+        }
+    }
+
     signingConfigs {
         create("mashxallPreview") {
             storeFile = mashxallPreviewKeystoreFile
