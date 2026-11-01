@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   push:
-    branches: ["main"]
+    branches: ["main", "redesign/**"]
     paths:
       - "unified-app/**"
       - "tools/extract_unified_content.py"
@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   build-unified-app:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/redesign/')))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -80,6 +80,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_audit_apk_assets.py'
 
       - name: Download JADX static analyzer
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_static_reverse_engineering) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[RE-FOCUSED]') || contains(github.event.head_commit.message, '[RE-ANALYSIS]')))
         shell: bash
         run: |
           set -euo pipefail
