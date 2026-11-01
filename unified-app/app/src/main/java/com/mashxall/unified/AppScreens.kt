@@ -5970,7 +5970,6 @@ fun AudioScreen(
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
     var audioPaused by rememberSaveable { mutableStateOf(false) }
-    var playbackReady by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusAdhan) 2 else if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
@@ -5985,7 +5984,6 @@ fun AudioScreen(
     }
     LaunchedEffect(playing) {
         audioPaused = false
-        playbackReady = AudioController.isPrepared()
     }
     LaunchedEffect(Unit) {
         ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
@@ -6023,7 +6021,6 @@ fun AudioScreen(
                 autoPlayKey = key
                 playing = key
                 AudioController.playSequence(context, sources) { state ->
-                    playbackReady = state
                     if (!state) {
                         playing = ""
                         audioPaused = false
@@ -6062,7 +6059,6 @@ fun AudioScreen(
                     selectedTab = index
                     AudioController.stop()
                     playing = ""
-                    playbackReady = false
                     audioPaused = false
                 }
             }
@@ -6160,7 +6156,10 @@ fun AudioScreen(
                         accent = Gold,
                         size = 36.dp,
                         circular = true,
-                        enabled = playbackReady && !preparingAudio
+                        enabled = audioPauseControlEnabled(
+                            isPreparing = preparingAudio,
+                            isPrepared = AudioController.isPrepared()
+                        )
                     ) {
                         AudioController.togglePause()?.let { audioPaused = it }
                     }
@@ -6173,7 +6172,6 @@ fun AudioScreen(
                     ) {
                         AudioController.stop()
                         playing = ""
-                        playbackReady = false
                         audioPaused = false
                     }
                 }
@@ -6352,7 +6350,6 @@ fun AudioScreen(
                                         } else {
                                             playing = "loading:$playKey"
                                             AudioController.play(context, item.assetPath) { state ->
-                                                playbackReady = state
                                                 audioPaused = false
                                                 playing = if (state) playKey else ""
                                             }
@@ -6463,7 +6460,6 @@ fun AudioScreen(
                                             listOf(source),
                                             failure = if (localSaved) AudioPlaybackFailure.LOCAL_ASSET else AudioPlaybackFailure.STREAM
                                         ) { state ->
-                                            playbackReady = state
                                             audioPaused = false
                                             playing = if (state) playKey else ""
                                         }
@@ -6602,7 +6598,6 @@ fun AudioScreen(
                                     trackIsLoading -> {
                                         AudioController.stop()
                                         playing = ""
-                                        playbackReady = false
                                         audioPaused = false
                                     }
                                     trackIsPlaying -> {
@@ -6610,10 +6605,8 @@ fun AudioScreen(
                                     }
                                     else -> {
                                         audioPaused = false
-                                        playbackReady = false
                                         playing = "loading:${item.assetPath}"
                                         AudioController.play(context, item.assetPath) { state ->
-                                            playbackReady = state
                                             audioPaused = false
                                             playing = if (state) item.assetPath else ""
                                         }
@@ -6860,7 +6853,6 @@ fun AudioScreen(
                                         playing = playKey
                                         autoPlayKey = playKey
                                         AudioController.playSequence(context, sources) { state ->
-                                            playbackReady = state
                                             audioPaused = false
                                             if (!state) playing = ""
                                         }
@@ -6999,10 +6991,15 @@ internal fun audioSequencePartialPlaybackMessage(language: AppLanguage, unavaila
     }
 }
 
+internal fun audioPauseControlEnabled(isPreparing: Boolean, isPrepared: Boolean): Boolean =
+    !isPreparing && isPrepared
+
 private object AudioController {
     private var player: MediaPlayer? = null
     private var playbackGeneration: Int = 0
-    private var playerPrepared: Boolean = false
+    // Compose observes this state from the now-playing control. It also flips
+    // false between consecutive files, so pause cannot target a completed player.
+    private var playerPrepared by mutableStateOf(false)
     private var playbackPaused: Boolean = false
     private var preparationJob: Job? = null
     private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
