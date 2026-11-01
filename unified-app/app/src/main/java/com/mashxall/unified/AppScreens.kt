@@ -156,7 +156,10 @@ import java.util.Calendar
 import java.util.Locale
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -5966,6 +5969,8 @@ fun AudioScreen(
     val preferredReciter = reciters.firstOrNull { it.id == preferredReciterId }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
+    var audioPaused by rememberSaveable { mutableStateOf(false) }
+    var playbackReady by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by rememberSaveable { mutableIntStateOf(if (focusAdhan) 2 else if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
@@ -5977,6 +5982,10 @@ fun AudioScreen(
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
         selectedTab = if (focusAdhan) 2 else if (focusReciters) 1 else 0
+    }
+    LaunchedEffect(playing) {
+        audioPaused = false
+        playbackReady = AudioController.isPrepared()
     }
     LaunchedEffect(Unit) {
         ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
@@ -6014,7 +6023,11 @@ fun AudioScreen(
                 autoPlayKey = key
                 playing = key
                 AudioController.playSequence(context, sources) { state ->
-                    if (!state) playing = ""
+                    playbackReady = state
+                    if (!state) {
+                        playing = ""
+                        audioPaused = false
+                    }
                 }
             }
         }
@@ -6049,6 +6062,8 @@ fun AudioScreen(
                     selectedTab = index
                     AudioController.stop()
                     playing = ""
+                    playbackReady = false
+                    audioPaused = false
                 }
             }
         }
@@ -6102,9 +6117,16 @@ fun AudioScreen(
                         PremiumLoadingIndicator(modifier = Modifier.size(27.dp), color = Gold, strokeWidth = 2.dp)
                     } else {
                         PremiumAudioWaveform(
-                            active = true,
+                            active = !audioPaused,
                             accent = Gold,
-                            contentDescription = if (language == AppLanguage.EN) "Audio is playing" else if (language == AppLanguage.AR) "الصوت قيد التشغيل" else "دەنگ لەکارە"
+                            contentDescription = when {
+                                audioPaused && language == AppLanguage.EN -> "Audio is paused"
+                                audioPaused && language == AppLanguage.AR -> "الصوت متوقف مؤقتًا"
+                                audioPaused -> "دەنگ وەستاوەتەوە"
+                                language == AppLanguage.EN -> "Audio is playing"
+                                language == AppLanguage.AR -> "الصوت قيد التشغيل"
+                                else -> "دەنگ لەکارە"
+                            }
                         )
                     }
                     Spacer(Modifier.width(10.dp))
@@ -6114,6 +6136,9 @@ fun AudioScreen(
                                 preparingAudio && language == AppLanguage.EN -> "Preparing playback"
                                 preparingAudio && language == AppLanguage.AR -> "جارٍ تجهيز التشغيل"
                                 preparingAudio -> "ئامادەکردنی لێدان"
+                                audioPaused && language == AppLanguage.EN -> "PAUSED"
+                                audioPaused && language == AppLanguage.AR -> "متوقف مؤقتًا"
+                                audioPaused -> "وەستاوەتەوە"
                                 language == AppLanguage.EN -> "NOW PLAYING"
                                 language == AppLanguage.AR -> "قيد التشغيل الآن"
                                 else -> "ئێستا لەکارە"
@@ -6121,6 +6146,23 @@ fun AudioScreen(
                             color = Gold, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp
                         )
                         Text(currentAudioTitle, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    PremiumIconButton(
+                        icon = if (audioPaused) Icons.Outlined.PlayCircle else Icons.Outlined.PauseCircle,
+                        contentDescription = when {
+                            audioPaused && language == AppLanguage.EN -> "Resume playback"
+                            audioPaused && language == AppLanguage.AR -> "استئناف التشغيل"
+                            audioPaused -> "بەردەوامبوون بە لێدان"
+                            language == AppLanguage.EN -> "Pause playback"
+                            language == AppLanguage.AR -> "إيقاف التشغيل مؤقتًا"
+                            else -> "ڕاگرتنی کاتیی لێدان"
+                        },
+                        accent = Gold,
+                        size = 36.dp,
+                        circular = true,
+                        enabled = playbackReady && !preparingAudio
+                    ) {
+                        AudioController.togglePause()?.let { audioPaused = it }
                     }
                     PremiumIconButton(
                         icon = Icons.Outlined.Close,
@@ -6131,6 +6173,8 @@ fun AudioScreen(
                     ) {
                         AudioController.stop()
                         playing = ""
+                        playbackReady = false
+                        audioPaused = false
                     }
                 }
             }
@@ -6308,6 +6352,8 @@ fun AudioScreen(
                                         } else {
                                             playing = "loading:$playKey"
                                             AudioController.play(context, item.assetPath) { state ->
+                                                playbackReady = state
+                                                audioPaused = false
                                                 playing = if (state) playKey else ""
                                             }
                                         }
@@ -6417,6 +6463,8 @@ fun AudioScreen(
                                             listOf(source),
                                             failure = if (localSaved) AudioPlaybackFailure.LOCAL_ASSET else AudioPlaybackFailure.STREAM
                                         ) { state ->
+                                            playbackReady = state
+                                            audioPaused = false
                                             playing = if (state) playKey else ""
                                         }
                                     }
@@ -6532,8 +6580,11 @@ fun AudioScreen(
             else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 itemsIndexed(visibleAudio, key = { _, it -> it.assetPath }) { itemIndex, item ->
                     val trackIsPlaying = playing == item.assetPath
+                    val trackIsLoading = playing == "loading:${item.assetPath}"
+                    val trackIsActive = trackIsPlaying || trackIsLoading
+                    val trackIsAudible = trackIsPlaying && !audioPaused
                     val trackBorder by animateColorAsState(
-                        targetValue = if (trackIsPlaying) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.09f),
+                        targetValue = if (trackIsActive) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.09f),
                         animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
                         label = "Local audio active track border"
                     )
@@ -6545,38 +6596,52 @@ fun AudioScreen(
                         border = BorderStroke(1.dp, trackBorder)
                     ) {
                         Row(Modifier.fillMaxWidth()
-                            .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = if (trackIsPlaying) 0.10f else 0.025f), cardColor)))
+                            .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = if (trackIsActive) 0.10f else 0.025f), cardColor)))
                             .premiumClickable {
-                            if (playing == item.assetPath) {
-                                AudioController.stop()
-                                playing = ""
+                                when {
+                                    trackIsLoading -> {
+                                        AudioController.stop()
+                                        playing = ""
+                                        playbackReady = false
+                                        audioPaused = false
+                                    }
+                                    trackIsPlaying -> {
+                                        AudioController.togglePause()?.let { audioPaused = it }
+                                    }
+                                    else -> {
+                                        audioPaused = false
+                                        playbackReady = false
+                                        playing = "loading:${item.assetPath}"
+                                        AudioController.play(context, item.assetPath) { state ->
+                                            playbackReady = state
+                                            audioPaused = false
+                                            playing = if (state) item.assetPath else ""
+                                        }
+                                    }
+                                }
+                            }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (trackIsLoading) {
+                                PremiumLoadingIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(34.dp))
                             } else {
-                                playing = item.assetPath
-                                AudioController.play(context, item.assetPath) { state -> if (!state) playing = "" }
-                            }
-                        }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AnimatedContent(
-                                targetState = trackIsPlaying,
-                                transitionSpec = {
-                                    if (motionAllowed) {
+                                AnimatedContent(
+                                    targetState = trackIsAudible,
+                                    transitionSpec = {
                                         if (motionAllowed) {
                                             (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
                                                 (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
                                         } else {
                                             fadeIn(tween(0)) togetherWith fadeOut(tween(0))
                                         }
-                                    } else {
-                                        fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                                    }
-                                },
-                                label = "Audio play pause medallion"
-                            ) { active ->
-                                PremiumIconMedallion(
-                                    icon = if (active) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-                                    tint = Gold,
-                                    size = 40.dp,
-                                    pulse = active
-                                )
+                                    },
+                                    label = "Audio play pause medallion"
+                                ) { active ->
+                                    PremiumIconMedallion(
+                                        icon = if (active) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
+                                        tint = Gold,
+                                        size = 40.dp,
+                                        pulse = active
+                                    )
+                                }
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
@@ -6584,8 +6649,8 @@ fun AudioScreen(
                                 Text(item.group, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp)
                             }
                             PremiumAudioWaveform(
-                                active = trackIsPlaying,
-                                accent = if (trackIsPlaying) Gold else foreground.copy(alpha = 0.52f)
+                                active = trackIsAudible,
+                                accent = if (trackIsActive) Gold else foreground.copy(alpha = 0.52f)
                             )
                         }
                     }
@@ -6794,7 +6859,11 @@ fun AudioScreen(
                                         prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
                                         playing = playKey
                                         autoPlayKey = playKey
-                                        AudioController.playSequence(context, sources) { state -> if (!state) playing = "" }
+                                        AudioController.playSequence(context, sources) { state ->
+                                            playbackReady = state
+                                            audioPaused = false
+                                            if (!state) playing = ""
+                                        }
                                     }
                                 }
                             ) {
@@ -6933,12 +7002,40 @@ internal fun audioSequencePartialPlaybackMessage(language: AppLanguage, unavaila
 private object AudioController {
     private var player: MediaPlayer? = null
     private var playbackGeneration: Int = 0
+    private var playerPrepared: Boolean = false
+    private var playbackPaused: Boolean = false
+    private var preparationJob: Job? = null
+    private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    fun isPrepared(): Boolean = playerPrepared && player != null
+
+    fun togglePause(): Boolean? {
+        val active = player ?: return null
+        if (!playerPrepared) return null
+        return try {
+            if (playbackPaused) {
+                active.start()
+                playbackPaused = false
+            } else {
+                active.pause()
+                playbackPaused = true
+            }
+            playbackPaused
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     fun stop() {
         playbackGeneration += 1
-        try { player?.stop() } catch (_: Exception) {}
-        try { player?.release() } catch (_: Exception) {}
+        preparationJob?.cancel()
+        preparationJob = null
+        playerPrepared = false
+        playbackPaused = false
+        val active = player
         player = null
+        try { active?.stop() } catch (_: Exception) {}
+        try { active?.release() } catch (_: Exception) {}
     }
 
     fun playSequence(
@@ -6996,6 +7093,9 @@ private object AudioController {
         playAt = fun(index: Int) {
             if (generation != playbackGeneration) return
             if (index >= sources.size) {
+                playerPrepared = false
+                playbackPaused = false
+                player = null
                 notifyPartialSequenceIfNeeded()
                 callback(false)
                 return
@@ -7006,6 +7106,8 @@ private object AudioController {
                 val next = MediaPlayer()
                 currentPlayer = next
                 player = next
+                playerPrepared = false
+                playbackPaused = false
                 if (source.startsWith("local:")) next.setDataSource(source.removePrefix("local:"))
                 else next.setDataSource(source)
                 next.setOnPreparedListener { prepared ->
@@ -7015,10 +7117,10 @@ private object AudioController {
                     }
                     try {
                         prepared.start()
-                        if (!hasStartedPlayback) {
-                            hasStartedPlayback = true
-                            callback(true)
-                        }
+                        playerPrepared = true
+                        playbackPaused = false
+                        if (!hasStartedPlayback) hasStartedPlayback = true
+                        callback(true)
                     } catch (_: Exception) {
                         runCatching { prepared.release() }
                         if (player === prepared) player = null
@@ -7032,12 +7134,16 @@ private object AudioController {
                     }
                     runCatching { completed.release() }
                     if (player === completed) player = null
+                    playerPrepared = false
+                    playbackPaused = false
                     playAt(index + 1)
                 }
                 next.setOnErrorListener { failed, _, _ ->
                     runCatching { failed.release() }
                     if (generation == playbackGeneration) {
                         if (player === failed) player = null
+                        playerPrepared = false
+                        playbackPaused = false
                         handleTrackFailure(index)
                     }
                     true
@@ -7047,6 +7153,8 @@ private object AudioController {
                 if (generation == playbackGeneration) {
                     runCatching { currentPlayer?.release() }
                     if (player === currentPlayer) player = null
+                    playerPrepared = false
+                    playbackPaused = false
                     handleTrackFailure(index)
                 }
             }
@@ -7056,39 +7164,164 @@ private object AudioController {
 
     fun play(context: Context, assetPath: String, callback: (Boolean) -> Unit) {
         stop()
-        try {
-            val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
-            val copy = File(context.cacheDir, "audio-" + hash + "." + assetPath.substringAfterLast('.', "mp3"))
-            context.assets.open(assetPath).use { input -> copy.outputStream().use { input.copyTo(it) } }
-            player = MediaPlayer().apply {
-                setDataSource(copy.absolutePath)
-                setOnPreparedListener { it.start(); callback(true) }
-                setOnCompletionListener { callback(false); stop() }
-                setOnErrorListener { _, _, _ -> callback(false); stop(); true }
-                prepareAsync()
+        val generation = playbackGeneration
+        preparationJob = preparationScope.launch {
+            try {
+                val copy = withContext(Dispatchers.IO) {
+                    val hash = MessageDigest.getInstance("SHA-256")
+                        .digest(assetPath.toByteArray())
+                        .take(8)
+                        .joinToString("") { "%02x".format(it) }
+                    val target = File(
+                        context.cacheDir,
+                        "audio-" + hash + "." + assetPath.substringAfterLast('.', "mp3")
+                    )
+                    val temporary = File(context.cacheDir, target.name + ".tmp")
+                    if (temporary.exists()) temporary.delete()
+                    context.assets.open(assetPath).use { input ->
+                        temporary.outputStream().buffered(256 * 1024).use { output ->
+                            input.copyTo(output, 256 * 1024)
+                        }
+                    }
+                    if (target.exists() && !target.delete()) {
+                        temporary.delete()
+                        throw IllegalStateException("Could not replace cached audio asset")
+                    }
+                    if (!temporary.renameTo(target)) {
+                        temporary.copyTo(target, overwrite = true)
+                        temporary.delete()
+                    }
+                    target
+                }
+                if (generation != playbackGeneration) return@launch
+                preparationJob = null
+                val next = MediaPlayer()
+                player = next
+                playerPrepared = false
+                playbackPaused = false
+                next.setDataSource(copy.absolutePath)
+                next.setOnPreparedListener { prepared ->
+                    if (generation != playbackGeneration) {
+                        runCatching { prepared.release() }
+                        return@setOnPreparedListener
+                    }
+                    try {
+                        prepared.start()
+                        playerPrepared = true
+                        playbackPaused = false
+                        callback(true)
+                    } catch (_: Exception) {
+                        playerPrepared = false
+                        runCatching { prepared.release() }
+                        if (player === prepared) player = null
+                        callback(false)
+                    }
+                }
+                next.setOnCompletionListener { completed ->
+                    if (generation != playbackGeneration) {
+                        runCatching { completed.release() }
+                        return@setOnCompletionListener
+                    }
+                    runCatching { completed.release() }
+                    if (player === completed) player = null
+                    playerPrepared = false
+                    playbackPaused = false
+                    callback(false)
+                    stop()
+                }
+                next.setOnErrorListener { failed, _, _ ->
+                    if (generation == playbackGeneration) {
+                        runCatching { failed.release() }
+                        if (player === failed) player = null
+                        playerPrepared = false
+                        playbackPaused = false
+                        callback(false)
+                        Toast.makeText(
+                            context,
+                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.LOCAL_ASSET),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        stop()
+                    }
+                    true
+                }
+                next.prepareAsync()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                if (generation == playbackGeneration) {
+                    preparationJob = null
+                    playerPrepared = false
+                    playbackPaused = false
+                    player?.release()
+                    player = null
+                    callback(false)
+                    Toast.makeText(
+                        context,
+                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.LOCAL_ASSET),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
-        } catch (_: Exception) {
-            callback(false)
-            Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.LOCAL_ASSET), Toast.LENGTH_SHORT).show()
         }
     }
 
     fun playRemote(context: Context, url: String, callback: (Boolean) -> Unit) {
         stop()
+        val generation = playbackGeneration
         try {
-            player = MediaPlayer().apply {
-                setDataSource(url)
-                setOnPreparedListener { it.start(); callback(true) }
-                setOnCompletionListener { callback(false); stop() }
-                setOnErrorListener { _, _, _ ->
+            val next = MediaPlayer()
+            player = next
+            playerPrepared = false
+            playbackPaused = false
+            next.setDataSource(url)
+            next.setOnPreparedListener { prepared ->
+                if (generation != playbackGeneration) {
+                    runCatching { prepared.release() }
+                    return@setOnPreparedListener
+                }
+                try {
+                    prepared.start()
+                    playerPrepared = true
+                    playbackPaused = false
+                    callback(true)
+                } catch (_: Exception) {
+                    playerPrepared = false
+                    runCatching { prepared.release() }
+                    if (player === prepared) player = null
+                    callback(false)
+                }
+            }
+            next.setOnCompletionListener { completed ->
+                if (generation != playbackGeneration) {
+                    runCatching { completed.release() }
+                    return@setOnCompletionListener
+                }
+                runCatching { completed.release() }
+                if (player === completed) player = null
+                playerPrepared = false
+                playbackPaused = false
+                callback(false)
+                stop()
+            }
+            next.setOnErrorListener { failed, _, _ ->
+                if (generation == playbackGeneration) {
+                    runCatching { failed.release() }
+                    if (player === failed) player = null
+                    playerPrepared = false
+                    playbackPaused = false
                     callback(false)
                     Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
                     stop()
-                    true
                 }
-                prepareAsync()
+                true
             }
+            next.prepareAsync()
         } catch (_: Exception) {
+            playerPrepared = false
+            playbackPaused = false
+            player?.release()
+            player = null
             callback(false)
             Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
         }
