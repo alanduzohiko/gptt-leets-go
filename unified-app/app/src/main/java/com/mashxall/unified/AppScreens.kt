@@ -1172,7 +1172,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 val copiedText = buildString {
                                     append(verse.arabic)
                                     if (verse.translation.isNotBlank()) append("\n\n").append(verse.translation)
-                                    append("\\n\\n").append(verse.surah).append(":").append(verse.number)
+                                    append("\n\n").append(verse.surah).append(":").append(verse.number)
                                 }
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 if (clipboard != null) {
