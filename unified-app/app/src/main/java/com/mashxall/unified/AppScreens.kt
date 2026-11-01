@@ -9481,7 +9481,33 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     modifier = Modifier.fillMaxWidth()
                         .staggeredEntrance(itemKey = item.id, index = recordIndex)
                         .premiumAnimateContentSize()
-                        .premiumClickable { selectedRecord = item }
+                        .premiumClickable(
+                            onLongClickLabel = when (language) {
+                                AppLanguage.EN -> "Copy supplication"
+                                AppLanguage.AR -> "نسخ الدعاء"
+                                AppLanguage.CKB -> "دوعاکە لەبەرگرتنەوە"
+                            },
+                            onLongClick = {
+                                val copiedText = buildString {
+                                    append(title)
+                                    if (preview.isNotBlank()) append("\n\n").append(cleanHadithDisplayText(preview))
+                                    append("\n\n").append("Mashxall • مەشخەڵ")
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Supplication", copiedText))
+                                    Toast.makeText(
+                                        context,
+                                        when (language) {
+                                            AppLanguage.EN -> "Text copied"
+                                            AppLanguage.AR -> "تم نسخ النص"
+                                            AppLanguage.CKB -> "دەقەکە لەبەرگیرا"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        ) { selectedRecord = item }
                 ) {
                     Column(Modifier.padding(15.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
