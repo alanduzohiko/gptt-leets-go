@@ -4733,6 +4733,171 @@ internal fun nextAzkarRepetition(currentCount: Int, targetCount: Int): Int =
     if (targetCount <= 0) currentCount.coerceAtLeast(0)
     else (currentCount.coerceAtLeast(0) + 1).coerceAtMost(targetCount)
 
+internal data class AzkarProgressSummary(
+    val totalRepetitions: Int,
+    val completedRepetitions: Int,
+    val totalEntries: Int,
+    val completedEntries: Int,
+    val inProgressEntries: Int
+) {
+    val fraction: Float
+        get() = if (totalRepetitions > 0) {
+            completedRepetitions.toFloat() / totalRepetitions.toFloat()
+        } else 0f
+}
+
+/** Summarize persisted counters without allowing corrupt values to exceed each source target. */
+internal fun summarizeAzkarProgress(
+    targetsByEntry: Map<Int, Int>,
+    progressByEntry: Map<Int, Int>
+): AzkarProgressSummary {
+    var totalRepetitions = 0
+    var completedRepetitions = 0
+    var totalEntries = 0
+    var completedEntries = 0
+    var inProgressEntries = 0
+    targetsByEntry.forEach { (entryId, rawTarget) ->
+        if (entryId <= 0 || rawTarget <= 0) return@forEach
+        val progress = (progressByEntry[entryId] ?: 0).coerceIn(0, rawTarget)
+        totalRepetitions += rawTarget
+        completedRepetitions += progress
+        totalEntries++
+        when {
+            progress >= rawTarget -> completedEntries++
+            progress > 0 -> inProgressEntries++
+        }
+    }
+    return AzkarProgressSummary(
+        totalRepetitions = totalRepetitions,
+        completedRepetitions = completedRepetitions,
+        totalEntries = totalEntries,
+        completedEntries = completedEntries,
+        inProgressEntries = inProgressEntries
+    )
+}
+
+@Composable
+private fun AzkarProgressCard(
+    summary: AzkarProgressSummary,
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    motionAllowed: Boolean
+) {
+    val progress by animateFloatAsState(
+        targetValue = summary.fraction.coerceIn(0f, 1f),
+        animationSpec = if (motionAllowed) tween(420, easing = FastOutSlowInEasing) else snap(),
+        label = "Azkar overall repetition progress"
+    )
+    val percent = (summary.fraction.coerceIn(0f, 1f) * 100f).roundToInt()
+    val title = when (language) {
+        AppLanguage.EN -> "Your remembrance progress"
+        AppLanguage.AR -> "تقدّمك في الأذكار"
+        AppLanguage.CKB -> "پێشکەوتنت لە زیکرەکان"
+    }
+    val repetitionLabel = when (language) {
+        AppLanguage.EN -> "REPETITIONS"
+        AppLanguage.AR -> "التكرارات"
+        AppLanguage.CKB -> "دووبارەکردنەوە"
+    }
+    val completedLabel = when (language) {
+        AppLanguage.EN -> "ENTRIES COMPLETED"
+        AppLanguage.AR -> "أذكار مكتملة"
+        AppLanguage.CKB -> "زیکری تەواوکراو"
+    }
+    val activeLabel = when (language) {
+        AppLanguage.EN -> "IN PROGRESS"
+        AppLanguage.AR -> "قيد التكرار"
+        AppLanguage.CKB -> "لە دووبارەکردنەوەدایە"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Color(0xFF7AC6A7).copy(alpha = 0.25f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF7AC6A7).copy(alpha = 0.09f), cardColor, Gold.copy(alpha = 0.025f))
+                    )
+                )
+                .padding(horizontal = 13.dp, vertical = 12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(31.dp).clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF7AC6A7).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Spa, contentDescription = null, tint = Color(0xFF7AC6A7), modifier = Modifier.size(17.dp))
+                }
+                Spacer(Modifier.width(9.dp))
+                Text(title, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                Text(percent.toString() + "%", color = Color(0xFF7AC6A7), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+                    .background(foreground.copy(alpha = 0.08f))
+            ) {
+                Box(
+                    Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF7AC6A7).copy(alpha = 0.72f), Color(0xFFB2E2C8))
+                            )
+                        )
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                AzkarProgressStat(
+                    value = summary.completedRepetitions.toString() + "/" + summary.totalRepetitions,
+                    label = repetitionLabel,
+                    modifier = Modifier.weight(1f),
+                    foreground = foreground
+                )
+                AzkarProgressStat(
+                    value = summary.completedEntries.toString() + "/" + summary.totalEntries,
+                    label = completedLabel,
+                    modifier = Modifier.weight(1f),
+                    foreground = foreground
+                )
+                AzkarProgressStat(
+                    value = summary.inProgressEntries.toString(),
+                    label = activeLabel,
+                    modifier = Modifier.weight(1f),
+                    foreground = foreground
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AzkarProgressStat(
+    value: String,
+    label: String,
+    modifier: Modifier,
+    foreground: Color
+) {
+    Column(
+        modifier.clip(RoundedCornerShape(11.dp))
+            .background(foreground.copy(alpha = 0.035f))
+            .border(1.dp, foreground.copy(alpha = 0.055f), RoundedCornerShape(11.dp))
+            .padding(horizontal = 7.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(value, color = foreground, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = foreground.copy(alpha = 0.54f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
@@ -4748,6 +4913,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var selectedCategory by rememberSaveable { mutableIntStateOf(0) }
     var selectedItem by remember { mutableStateOf<AzkarItem?>(null) }
+    var progressRevision by remember { mutableIntStateOf(0) }
     var favoriteIds by remember {
         mutableStateOf(favoritePrefs.getStringSet("favorite_ids", emptySet()).orEmpty().toSet())
     }
@@ -4778,6 +4944,11 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
     val visibleItems = tabItems.filter { selectedCategory == 0 || it.categoryId == selectedCategory }
     val showCategoryLanding = selectedCategory == 0 && query.isBlank() && selectedTab == 0
+    val azkarTargets = remember(allItems) { allItems.associate { it.id to it.count.coerceAtLeast(1) } }
+    val azkarProgress = remember(azkarTargets, progressRevision) {
+        val saved = azkarTargets.keys.associateWith { id -> progressPrefs.getInt(id.toString(), 0) }
+        summarizeAzkarProgress(azkarTargets, saved)
+    }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             if (selectedCategory != 0) {
@@ -4843,6 +5014,17 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
+                if (azkarProgress.totalEntries > 0) {
+                    item(key = "azkar-overall-progress") {
+                        AzkarProgressCard(
+                            summary = azkarProgress,
+                            language = language,
+                            foreground = foreground,
+                            cardColor = cardColor,
+                            motionAllowed = motionAllowed
+                        )
+                    }
+                }
                 itemsIndexed(categories, key = { _, item -> item.id }) { index, category ->
                     val label = when (language) {
                         AppLanguage.CKB -> category.ckb.ifBlank { category.arabic }
@@ -5043,6 +5225,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 burstRevision += 1
                 count = nextCount
                 progressPrefs.edit().putInt(item.id.toString(), nextCount).apply()
+                progressRevision++
                 haptic.performMashxallHaptic(
                     if (nextCount >= targetCount) HapticFeedbackType.LongPress
                     else HapticFeedbackType.TextHandleMove
@@ -5142,6 +5325,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             ) {
                                 count = 0
                                 progressPrefs.edit().putInt(item.id.toString(), 0).apply()
+                                progressRevision++
                             }
                             PremiumActionButton(
                                 modifier = Modifier.weight(1f),
