@@ -15,6 +15,24 @@ QURAN_FONT_OPTION = re.compile(
 
 
 
+
+def text_verse_card_opens_action_panel(app_screens_text: str) -> bool:
+    """Accept the standard tap lambda with or without optional long-press arguments."""
+    clickable = re.search(
+        r"modifier\\s*=\\s*Modifier(?:\\s*\\.\\s*staggeredEntrance\\s*\\([^)]*\\))?"
+        r"\\s*\\.\\s*(?:premiumClickable|clickable)\\b",
+        app_screens_text,
+    )
+    if clickable is None:
+        return False
+    card_source = app_screens_text[clickable.start():clickable.start() + 3500]
+    return re.search(
+        r"selected\\s*=\\s*verse\\.surah[\\s\\S]{0,1000}?"
+        r"selectedAyahForSheet\\s*=\\s*verse\\.surah\\s+to\\s+verse\\.number",
+        card_source,
+    ) is not None
+
+
 def audit(catalog: dict, sources: list[Path]) -> dict:
     available = {
         item.get("asset_path")
@@ -113,11 +131,7 @@ def audit(catalog: dict, sources: list[Path]) -> dict:
     app_screens_text = source_text.get("AppScreens.kt", "")
     quran_reader_contract = {
         "text_verse_card_opens_action_panel": (
-            re.search(
-                r"modifier\s*=\s*Modifier(?:\s*\.\s*staggeredEntrance\s*\([^)]*\))?\s*\.\s*(?:premiumClickable|clickable)\s*\{\s*selected\s*=\s*verse\.surah",
-                app_screens_text,
-            ) is not None
-            and "selectedAyahForSheet = verse.surah to verse.number" in app_screens_text
+            text_verse_card_opens_action_panel(app_screens_text)
             and "modifier = if (query.isNotBlank()) Modifier.clickable" not in app_screens_text
         ),
         "chosen_quran_font_is_applied_in_verse_panel": (
