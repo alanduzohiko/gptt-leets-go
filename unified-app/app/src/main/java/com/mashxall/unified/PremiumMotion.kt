@@ -449,7 +449,7 @@ internal fun PremiumAudioWaveform(
     val context = LocalContext.current
     val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     if (active && motionAllowed) {
-        PremiumAnimatedWaveformBars(accent = accent, modifier = modifier)
+        PremiumAnimatedWaveformBars(accent = accent, modifier = modifier, contentDescription = contentDescription)
     } else {
         Row(
             modifier = modifier.width(34.dp).height(24.dp).semantics(mergeDescendants = true) {
@@ -470,7 +470,8 @@ internal fun PremiumAudioWaveform(
 @Composable
 private fun PremiumAnimatedWaveformBars(
     accent: Color,
-    modifier: Modifier
+    modifier: Modifier,
+    contentDescription: String?
 ) {
     val transition = rememberInfiniteTransition(label = "Mashxall active audio waveform")
     val h1 by transition.animateFloat(
@@ -823,14 +824,16 @@ internal fun PremiumActionButton(
     loading: Boolean = false,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val fillAlpha by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.45f,
-        animationSpec = tween(180),
+        animationSpec = if (motionAllowed) tween(180) else snap(),
         label = "Mashxall action button enabled state"
     )
     val outline by animateColorAsState(
         targetValue = accent.copy(alpha = if (enabled) 0.48f else 0.18f),
-        animationSpec = tween(180),
+        animationSpec = if (motionAllowed) tween(180) else snap(),
         label = "Mashxall action button outline"
     )
     Row(
@@ -956,6 +959,8 @@ internal fun PremiumIconButton(
     hapticFeedback: Boolean = true,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val shape = if (circular) CircleShape else RoundedCornerShape(size * 0.36f)
     val fill by animateColorAsState(
         targetValue = when {
@@ -963,22 +968,22 @@ internal fun PremiumIconButton(
             selected -> accent.copy(alpha = 0.18f)
             else -> accent.copy(alpha = 0.075f)
         },
-        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(190, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall icon button fill"
     )
     val outline by animateColorAsState(
         targetValue = accent.copy(alpha = if (enabled && selected) 0.50f else if (enabled) 0.19f else 0.08f),
-        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(190, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall icon button outline"
     )
     val iconScale by animateFloatAsState(
         targetValue = if (enabled && selected) 1.12f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall icon button scale"
     )
     val iconRotation by animateFloatAsState(
         targetValue = rotationDegrees + if (selected) -8f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall icon button rotation"
     )
     Box(
@@ -1018,23 +1023,25 @@ internal fun PremiumIconActionSurface(
     onClick: () -> Unit,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val fill by animateColorAsState(
         targetValue = when {
             !enabled -> accent.copy(alpha = 0.025f)
             selected -> accent.copy(alpha = 0.18f)
             else -> accent.copy(alpha = 0.075f)
         },
-        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(190, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall icon action surface fill"
     )
     val outline by animateColorAsState(
         targetValue = accent.copy(alpha = if (enabled && selected) 0.50f else if (enabled) 0.19f else 0.08f),
-        animationSpec = tween(190, easing = FastOutSlowInEasing),
+        animationSpec = if (motionAllowed) tween(190, easing = FastOutSlowInEasing) else snap(),
         label = "Mashxall icon action surface outline"
     )
     val scale by animateFloatAsState(
         targetValue = if (enabled && selected) 1.055f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall icon action surface scale"
     )
     Box(
