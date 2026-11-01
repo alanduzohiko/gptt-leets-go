@@ -18,3 +18,29 @@ class PremiumMotionPolicyTest {
         assertEquals(0L, staggerDelayMillis(-1))
     }
 }
+
+    @Test
+    fun pressFeedbackIsSubtleAndNeverScalesDisabledControls() {
+        assertEquals(0.968f, premiumPressTargetScale(enabled = true, pressed = true), 0.0001f)
+        assertEquals(1f, premiumPressTargetScale(enabled = true, pressed = false), 0.0001f)
+        assertEquals(1f, premiumPressTargetScale(enabled = false, pressed = true), 0.0001f)
+        assertEquals(0.90f, premiumPressTargetScale(enabled = true, pressed = true, pressedScale = 0.2f), 0.0001f)
+        assertEquals(1f, premiumPressTargetScale(enabled = true, pressed = true, pressedScale = 1.2f), 0.0001f)
+        assertEquals(0.968f, premiumPressTargetScale(enabled = true, pressed = true, pressedScale = Float.NaN), 0.0001f)
+    }
+
+    @Test
+    fun rootNavigationDirectionFollowsTabOrder() {
+        assertEquals(1, rootNavigationDirection("home", "quran"))
+        assertEquals(-1, rootNavigationDirection("settings", "more"))
+        assertEquals(1, rootNavigationDirection("quran", "quran"))
+        assertEquals(1, rootNavigationDirection("prayer", "home"))
+    }
+
+    @Test
+    fun slideDirectionRespectsRtlAndBackNavigation() {
+        assertEquals(1, navigationSlideSign(isRtl = false, direction = 1))
+        assertEquals(-1, navigationSlideSign(isRtl = false, direction = -1))
+        assertEquals(-1, navigationSlideSign(isRtl = true, direction = 1))
+        assertEquals(1, navigationSlideSign(isRtl = true, direction = -1))
+    }
