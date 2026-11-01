@@ -7547,6 +7547,7 @@ private fun PrayerJourneyTimeline(
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
     var times by remember { mutableStateOf<PrayerRow?>(null) }
@@ -8212,12 +8213,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         val isUpcoming = nextPrayerTarget?.prayerKey == key
                         val tileBorder by animateColorAsState(
                             targetValue = if (isUpcoming) Gold.copy(alpha = 0.74f) else foreground.copy(alpha = 0.08f),
-                            animationSpec = tween(250, easing = FastOutSlowInEasing),
+                            animationSpec = if (motionAllowed) tween(250, easing = FastOutSlowInEasing) else snap(),
                             label = "Upcoming prayer tile outline"
                         )
                         val tileFill by animateColorAsState(
                             targetValue = if (isUpcoming) Gold.copy(alpha = 0.13f) else Color.Transparent,
-                            animationSpec = tween(250, easing = FastOutSlowInEasing),
+                            animationSpec = if (motionAllowed) tween(250, easing = FastOutSlowInEasing) else snap(),
                             label = "Upcoming prayer tile surface"
                         )
                         Card(
@@ -8258,8 +8259,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                     AnimatedContent(
                                         targetState = time,
                                         transitionSpec = {
-                                            (fadeIn(tween(150)) + scaleIn(initialScale = 0.94f, animationSpec = tween(180))) togetherWith
-                                                (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)))
+                                            if (motionAllowed) {
+                                                (fadeIn(tween(150)) + scaleIn(initialScale = 0.94f, animationSpec = tween(180))) togetherWith
+                                                    (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)))
+                                            } else {
+                                                fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                            }
                                         },
                                         label = "Prayer tile time update"
                                     ) { displayedTime ->
