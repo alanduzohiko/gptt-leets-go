@@ -1,11 +1,13 @@
-name: Runtime smoke test for unified Mashxall
+name: Optional Android 11 device-smoke harness
 
 on:
-  workflow_run:
-    workflows:
-      - Build the new unified Mashxall Android app
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      run_android_11_emulator:
+        description: "Run the optional cloud Android 11 emulator smoke test (normally test on your own device)"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -13,32 +15,34 @@ permissions:
 
 jobs:
   android-11-runtime-smoke:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ inputs.run_android_11_emulator == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check out the current runtime test harness
+      - name: Check out the runtime test harness
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Download the APK from that exact successful build
+      - name: Download the APK from a selected successful build
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ID: ${{ inputs.build_run_id }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "${RUN_ID:-}" ]]; then
+            echo "Enter a successful build run ID when dispatching this optional workflow."
+            exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/mashxall-build-artifact" dist/runtime-test
           gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/mashxall-build-artifact"
           APK="$(find "$RUNNER_TEMP/mashxall-build-artifact" -type f -name 'Mashxall-Unified-debug.apk' -print -quit)"
           if [[ -z "$APK" || ! -s "$APK" ]]; then
-            echo "No non-empty unified Mashxall APK was found in the successful build artifact."
-            find "$RUNNER_TEMP/mashxall-build-artifact" -maxdepth 4 -type f -print || true
+            echo "No non-empty unified Mashxall APK was found in the selected successful build artifact."
             exit 1
           fi
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
-          echo "Downloaded APK size: $(stat -c '%s' "$APK") bytes"
           sha256sum "$APK" | tee dist/runtime-test/apk-sha256.txt
 
       - name: Prepare Android 11 emulator image
@@ -56,11 +60,12 @@ jobs:
           emulator-boot-timeout: 900
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
           script: bash tools/runtime-smoke-android11.sh
+
       - name: Upload emulator runtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mashxall-android11-runtime-smoke-${{ github.event.workflow_run.run_number }}
+          name: mashxall-android11-runtime-smoke-manual
           path: dist/runtime-test/
           if-no-files-found: warn
           retention-days: 14
