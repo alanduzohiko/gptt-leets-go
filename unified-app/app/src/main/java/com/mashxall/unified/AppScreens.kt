@@ -368,6 +368,8 @@ private fun LoadingOrEmpty(
                         icon = Icons.Outlined.Refresh,
                         accent = Gold,
                         foreground = foreground,
+                        pressedScale = premiumActionButtonPressScale("farmuda_copy"),
+                        pressedScale = premiumActionButtonPressScale("try_again"),
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onRetry
                     )
@@ -3122,6 +3124,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             icon = Icons.Outlined.GraphicEq,
                             accent = Gold,
                             foreground = foreground,
+                            pressedScale = premiumActionButtonPressScale("browse_reciters"),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             AudioController.stop()
@@ -3138,6 +3141,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             icon = Icons.Outlined.Share,
                             accent = Gold,
                             foreground = foreground,
+                            pressedScale = premiumActionButtonPressScale("share_tafsir"),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val shareText = buildList {
@@ -3934,6 +3938,7 @@ private fun MushafPageViewer(
                             icon = Icons.Outlined.Refresh,
                             accent = Gold,
                             foreground = foreground,
+                            pressedScale = premiumActionButtonPressScale("retry_mushaf"),
                             modifier = Modifier.fillMaxWidth(),
                             onClick = { retryPageLoad++ }
                         )
@@ -4069,6 +4074,7 @@ fun BookmarksScreen(
                                 icon = Icons.Outlined.MenuBook,
                                 accent = Gold,
                                 foreground = foreground,
+                                pressedScale = premiumActionButtonPressScale("open_bookmark"),
                                 modifier = Modifier.fillMaxWidth()
                             ) { onOpen(saved.first, saved.second) }
                         }
@@ -4667,6 +4673,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         icon = Icons.Outlined.AutoStories,
                         accent = Gold,
                         foreground = foreground,
+                        pressedScale = premiumActionButtonPressScale("load_more_hadith"),
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !loadingMore,
                         loading = loadingMore
@@ -5524,6 +5531,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 icon = Icons.Outlined.CheckCircle,
                                 accent = Gold,
                                 foreground = foreground,
+                                pressedScale = premiumActionButtonPressScale("azkar_count"),
                                 enabled = count < targetCount
                             ) { incrementCount() }
                         }
@@ -6104,6 +6112,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 icon = Icons.Outlined.Refresh,
                 accent = Color(0xFFE58A82),
                 foreground = foreground,
+                pressedScale = premiumActionButtonPressScale("tasbih_reset"),
                 modifier = Modifier.weight(1f)
             ) {
                 count = 0
@@ -6120,6 +6129,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 icon = Icons.Outlined.Repeat,
                 accent = Gold,
                 foreground = foreground,
+                pressedScale = premiumActionButtonPressScale("tasbih_new_round"),
                 modifier = Modifier.weight(1f)
             ) {
                 count = 0
@@ -7933,6 +7943,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
             icon = Icons.Outlined.CheckCircle,
             accent = Color(0xFF8FC6A8),
             foreground = foreground,
+            pressedScale = premiumActionButtonPressScale("backup_save"),
             modifier = Modifier.fillMaxWidth()
         ) {
             exportPassword = ""
@@ -7946,6 +7957,7 @@ fun BackupRestoreScreen(language: AppLanguage, foreground: Color, cardColor: Col
             icon = Icons.Outlined.Download,
             accent = Gold,
             foreground = foreground,
+            pressedScale = premiumActionButtonPressScale("backup_restore"),
             modifier = Modifier.fillMaxWidth()
         ) { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "text/json", "*/*")) }
         Spacer(Modifier.height(12.dp))
@@ -8461,6 +8473,7 @@ fun BooksScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOp
                             icon = if (localPdfPath != null) Icons.Outlined.MenuBook else Icons.Outlined.ChevronRight,
                             accent = Color(0xFF9EB9E9),
                             foreground = foreground,
+                            pressedScale = premiumActionButtonPressScale("pdf_download"),
                             modifier = Modifier.fillMaxWidth(),
                             enabled = item.id !in downloadingIds,
                             loading = item.id in downloadingIds
@@ -10418,6 +10431,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     icon = Icons.Outlined.GraphicEq,
                     accent = Gold,
                     foreground = foreground,
+                    pressedScale = premiumActionButtonPressScale("browse_adhan"),
                     modifier = Modifier.fillMaxWidth(),
                     onClick = onBrowseAdhanLibrary
                 )
@@ -10442,6 +10456,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         icon = Icons.Outlined.VolumeUp,
                         accent = Gold,
                         foreground = foreground,
+                        pressedScale = premiumActionButtonPressScale("choose_adhan_sound"),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         adhanSoundQuery = ""
@@ -10462,6 +10477,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 icon = Icons.Outlined.Schedule,
                                 accent = Gold,
                                 foreground = foreground,
+                                pressedScale = premiumActionButtonPressScale("exact_alarms"),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 try {
@@ -10623,6 +10639,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             icon = Icons.Outlined.GraphicEq,
                             accent = Gold,
                             foreground = foreground,
+                            pressedScale = premiumActionButtonPressScale("browse_online_adhan"),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             AudioController.stop()
@@ -11171,6 +11188,7 @@ fun WordAnalysisScreen(
                     icon = Icons.Outlined.Search,
                     accent = Color(0xFFBCA8F2),
                     foreground = foreground,
+                    pressedScale = premiumActionButtonPressScale("word_study"),
                     modifier = Modifier.weight(0.92f),
                     enabled = !loading
                 ) {

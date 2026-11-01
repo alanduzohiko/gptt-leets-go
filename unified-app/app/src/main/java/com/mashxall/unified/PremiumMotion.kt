@@ -1584,6 +1584,29 @@ private fun PremiumCompassOrbitFrame(tint: Color, size: Dp, rotation: Float) {
 }
 
 
+/** Action-specific press depths used by prominent calls across Quran, prayer, backup and worship screens. */
+internal fun premiumActionButtonPressScale(action: String): Float = when (action) {
+    "try_again" -> 0.952f
+    "browse_reciters" -> 0.963f
+    "share_tafsir" -> 0.969f
+    "retry_mushaf" -> 0.949f
+    "open_bookmark" -> 0.942f
+    "load_more_hadith" -> 0.958f
+    "azkar_count" -> 0.935f
+    "tasbih_reset" -> 0.938f
+    "tasbih_new_round" -> 0.945f
+    "backup_save" -> 0.951f
+    "backup_restore" -> 0.962f
+    "pdf_download" -> 0.966f
+    "browse_adhan" -> 0.971f
+    "choose_adhan_sound" -> 0.956f
+    "exact_alarms" -> 0.964f
+    "browse_online_adhan" -> 0.968f
+    "word_study" -> 0.948f
+    "farmuda_copy" -> 0.975f
+    else -> 0.956f
+}
+
 /** Prominent native action surface shared by high-value screen actions. */
 @Composable
 internal fun PremiumActionButton(
@@ -1594,6 +1617,7 @@ internal fun PremiumActionButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
+    pressedScale: Float = 0.956f,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1616,7 +1640,12 @@ internal fun PremiumActionButton(
                 )
             )
             .border(1.dp, outline, RoundedCornerShape(17.dp))
-            .premiumClickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .premiumClickable(
+                enabled = enabled,
+                role = Role.Button,
+                pressedScale = pressedScale,
+                onClick = onClick
+            )
             .padding(horizontal = 13.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
