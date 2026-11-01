@@ -9174,6 +9174,42 @@ private fun PrayerJourneyTimeline(
     }
 }
 
+internal enum class PrayerTimetableStatus {
+    UPDATING,
+    SCHEDULE_READY,
+    UNAVAILABLE
+}
+
+internal fun resolvePrayerTimetableStatus(
+    loading: Boolean,
+    hasSchedule: Boolean
+): PrayerTimetableStatus = when {
+    loading -> PrayerTimetableStatus.UPDATING
+    hasSchedule -> PrayerTimetableStatus.SCHEDULE_READY
+    else -> PrayerTimetableStatus.UNAVAILABLE
+}
+
+internal fun prayerTimetableStatusLabel(
+    status: PrayerTimetableStatus,
+    language: AppLanguage
+): String = when (status) {
+    PrayerTimetableStatus.UPDATING -> when (language) {
+        AppLanguage.EN -> "UPDATING"
+        AppLanguage.AR -> "جارٍ التحديث"
+        AppLanguage.CKB -> "نوێ دەکرێتەوە"
+    }
+    PrayerTimetableStatus.SCHEDULE_READY -> when (language) {
+        AppLanguage.EN -> "SOURCE SCHEDULE READY"
+        AppLanguage.AR -> "جدول المصدر جاهز"
+        AppLanguage.CKB -> "خشتەی سەرچاوە ئامادەیە"
+    }
+    PrayerTimetableStatus.UNAVAILABLE -> when (language) {
+        AppLanguage.EN -> "NOT AVAILABLE"
+        AppLanguage.AR -> "غير متاح"
+        AppLanguage.CKB -> "بەردەست نییە"
+    }
+}
+
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
@@ -9697,10 +9733,49 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         color = foreground.copy(alpha = 0.55f), fontSize = 10.sp
                     )
                 }
-                Text(
-                    when (language) { AppLanguage.EN -> "LIVE"; AppLanguage.AR -> "مباشر"; AppLanguage.CKB -> "زیندوو" },
-                    color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                val timetableStatus = resolvePrayerTimetableStatus(
+                    loading = loading,
+                    hasSchedule = times != null
                 )
+                val timetableStatusColor = when (timetableStatus) {
+                    PrayerTimetableStatus.UPDATING -> Gold
+                    PrayerTimetableStatus.SCHEDULE_READY -> Color(0xFF7AC6A7)
+                    PrayerTimetableStatus.UNAVAILABLE -> Color(0xFFD98A82)
+                }
+                AnimatedContent(
+                    targetState = timetableStatus,
+                    transitionSpec = {
+                        if (!motionAllowed) {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        } else {
+                            (fadeIn(tween(170)) + slideInVertically(tween(170)) { it / 4 }) togetherWith
+                                (fadeOut(tween(110)) + slideOutVertically(tween(110)) { -it / 5 })
+                        }
+                    },
+                    label = "Prayer source schedule status"
+                ) { status ->
+                    val statusLabel = prayerTimetableStatusLabel(status, language)
+                    Row(
+                        Modifier.clip(CircleShape)
+                            .background(timetableStatusColor.copy(alpha = 0.12f))
+                            .border(1.dp, timetableStatusColor.copy(alpha = 0.25f), CircleShape)
+                            .semantics { contentDescription = statusLabel }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            Modifier.size(6.dp).clip(CircleShape).background(timetableStatusColor)
+                        )
+                        Text(
+                            statusLabel,
+                            color = timetableStatusColor,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.height(10.dp))
