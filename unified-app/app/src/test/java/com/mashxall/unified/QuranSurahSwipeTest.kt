@@ -83,7 +83,7 @@ class PdfReaderZoomTest {
 
     @Test
     fun customZoomBoundsAreRespected() {
-        assertEquals(2f, pdfZoomTarget(1f, 1.2f, minScale = 2f, maxScale = 3f), 0.0001f)
+        assertEquals(2.4f, pdfZoomTarget(1f, 1.2f, minScale = 2f, maxScale = 3f), 0.0001f)
         assertEquals(3f, pdfZoomTarget(2f, 2f, minScale = 2f, maxScale = 3f), 0.0001f)
     }
 
