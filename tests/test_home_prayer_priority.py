@@ -39,6 +39,20 @@ class HomePrayerPriorityTests(unittest.TestCase):
         self.assertIn('prefs.getInt("last_ayah_number", 1)', source)
         self.assertIn('prefs.getInt("last_mushaf_page", 1)', source)
 
+    def test_home_animations_respect_reduce_motion(self):
+        self.assertIn("homeMotionAllowed = remember(context, MashxallMotionPreferences.reduceMotion)", self.home)
+        self.assertIn("if (homeMotionAllowed) tween(260", self.home)
+        self.assertIn("enter = if (homeMotionAllowed)", self.home)
+        source = MAIN_ACTIVITY.read_text(encoding="utf-8")
+        hero = source.split("private fun PremiumHomeHero(", 1)[1].split(
+            "\\n@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)\\n@Composable\\nprivate fun HomeScreen(", 1
+        )[0]
+        self.assertIn("enter = if (motionAllowed)", hero)
+
+    def test_home_loading_uses_accessible_motion_aware_ring(self):
+        self.assertIn("PremiumLoadingIndicator(modifier = Modifier.size(23.dp)", self.home)
+        self.assertIn("PremiumLoadingIndicator(color = Gold", self.home)
+
 
 if __name__ == "__main__":
     unittest.main()

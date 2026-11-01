@@ -1458,8 +1458,12 @@ private fun PremiumHomeHero(
 
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(animationSpec = tween(420, easing = FastOutSlowInEasing)) +
-            slideInVertically(animationSpec = tween(420, easing = FastOutSlowInEasing)) { height -> height / 9 }
+        enter = if (motionAllowed) {
+            fadeIn(animationSpec = tween(420, easing = FastOutSlowInEasing)) +
+                slideInVertically(animationSpec = tween(420, easing = FastOutSlowInEasing)) { height -> height / 9 }
+        } else {
+            fadeIn(animationSpec = tween(0))
+        }
     ) {
         Box(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(29.dp))
@@ -1690,6 +1694,9 @@ private fun HomeScreen(
     isActive: Boolean = true
 ) {
     val context = LocalContext.current
+    val homeMotionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var tomorrowPrayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
@@ -2119,7 +2126,7 @@ private fun HomeScreen(
                 Spacer(Modifier.height(10.dp))
                 when {
                     loadingTimes || locatingLocation -> Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
-                        androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(21.dp), color = Gold, strokeWidth = 2.dp)
+                        PremiumLoadingIndicator(modifier = Modifier.size(23.dp), color = Gold, strokeWidth = 2.dp)
                     }
                     prayerEntries.isEmpty() -> Text(
                         when {
@@ -2141,12 +2148,12 @@ private fun HomeScreen(
                                 val activePrayer = key == upcomingPrayerKey
                                 val tileFill by animateColorAsState(
                                     targetValue = if (activePrayer) Gold.copy(alpha = 0.18f) else foreground.copy(alpha = 0.035f),
-                                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                                    animationSpec = if (homeMotionAllowed) tween(260, easing = FastOutSlowInEasing) else snap(),
                                     label = "Mashxall upcoming prayer tile"
                                 )
                                 val tileOutline by animateColorAsState(
                                     targetValue = if (activePrayer) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.08f),
-                                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                                    animationSpec = if (homeMotionAllowed) tween(260, easing = FastOutSlowInEasing) else snap(),
                                     label = "Mashxall prayer tile outline"
                                 )
                                 Column(
@@ -2205,7 +2212,7 @@ private fun HomeScreen(
                             .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         if (locatingLocation) {
-                            CircularProgressIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
+                            PremiumLoadingIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(15.dp))
                             Spacer(Modifier.width(6.dp))
                         } else {
                             Icon(Icons.Outlined.GpsFixed, contentDescription = null, tint = Gold, modifier = Modifier.size(15.dp))
@@ -2269,9 +2276,13 @@ private fun HomeScreen(
                     AnimatedVisibility(
                         visible = true,
                         modifier = Modifier.weight(1f).padding(bottom = 10.dp),
-                        enter = fadeIn(animationSpec = tween(durationMillis = 520, delayMillis = delayMillis)) +
-                            scaleIn(initialScale = 0.88f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
-                            slideInVertically(initialOffsetY = { height -> height / 5 }, animationSpec = tween(durationMillis = 520, delayMillis = delayMillis))
+                        enter = if (homeMotionAllowed) {
+                            fadeIn(animationSpec = tween(durationMillis = 520, delayMillis = delayMillis)) +
+                                scaleIn(initialScale = 0.88f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) +
+                                slideInVertically(initialOffsetY = { height -> height / 5 }, animationSpec = tween(durationMillis = 520, delayMillis = delayMillis))
+                        } else {
+                            fadeIn(animationSpec = tween(0))
+                        }
                     ) {
                         Card(
                             modifier = Modifier.fillMaxWidth().staggeredEntrance(itemKey = module.screen.key, index = rowIndex * 2 + columnIndex)
