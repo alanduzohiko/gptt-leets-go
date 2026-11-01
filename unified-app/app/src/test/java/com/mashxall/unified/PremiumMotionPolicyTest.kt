@@ -17,7 +17,6 @@ class PremiumMotionPolicyTest {
     fun negativePositionsNeverAddAnUnexpectedDelay() {
         assertEquals(0L, staggerDelayMillis(-1))
     }
-}
 
     @Test
     fun pressFeedbackIsSubtleAndNeverScalesDisabledControls() {
@@ -44,3 +43,5 @@ class PremiumMotionPolicyTest {
         assertEquals(-1, navigationSlideSign(isRtl = true, direction = 1))
         assertEquals(1, navigationSlideSign(isRtl = true, direction = -1))
     }
+
+}
