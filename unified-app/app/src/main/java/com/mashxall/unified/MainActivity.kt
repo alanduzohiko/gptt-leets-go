@@ -539,7 +539,10 @@ fun MashxallApp(startScreen: String? = null) {
                                     Modifier.fillMaxSize(),
                                     accent = Gold,
                                     dark = dark,
-                                    animated = visibleScreen == AppScreen.HOME.key
+                                    // Keep the Quran and tafsir reading surfaces visually calm;
+                                    // the rest of Mashxall gets a slow, motion-aware ambient drift.
+                                    animated = visibleScreen != AppScreen.QURAN.key &&
+                                        visibleScreen != AppScreen.TAFSIR.key
                                 )
                                 when (visibleScreen) {
                                 "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
