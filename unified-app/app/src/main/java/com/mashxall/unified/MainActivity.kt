@@ -334,7 +334,7 @@ fun MashxallApp(startScreen: String? = null) {
         MashxallMotionPreferences.reduceMotion = reduceMotion
         MashxallMotionPreferences.hapticsEnabled = hapticsEnabled
     }
-    val motionAllowed = remember(context, reduceMotion) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, reduceMotion) { systemAllowsDecorativeMotion(context) && !reduceMotion }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
