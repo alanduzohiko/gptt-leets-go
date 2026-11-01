@@ -3867,7 +3867,6 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                         ) { selectedItem = item },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -4535,6 +4534,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     val zikrText = selected?.zikr ?: "سُبْحَانَ اللّٰهِ • اَلْحَمْدُلِلّٰهِ • اَللّٰهُ أَكْبَرُ"
                     if (clipboard != null) {
                         clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Tasbih", zikrText))
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         Toast.makeText(
                             context,
                             when (language) {
