@@ -17,6 +17,14 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
+    fun swipeThresholdScalesWithViewportAndKeepsASafeMinimum() {
+        assertEquals(72f, mushafSwipeThresholdPx(320f), 0.001f)
+        assertEquals(160f, mushafSwipeThresholdPx(1000f), 0.001f)
+        assertEquals(72f, mushafSwipeThresholdPx(Float.NaN), 0.001f)
+        assertEquals(72f, mushafSwipeThresholdPx(0f), 0.001f)
+    }
+
+    @Test
     fun pageBoundariesAndInvalidInputsAreSafe() {
         assertEquals(null, mushafSwipeTarget(page = 1, horizontalDragPx = 160f))
         assertEquals(null, mushafSwipeTarget(page = 604, horizontalDragPx = -160f))

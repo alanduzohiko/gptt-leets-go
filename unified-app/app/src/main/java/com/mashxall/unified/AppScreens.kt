@@ -2379,6 +2379,12 @@ internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: 
     }
 }
 
+/** Adapt the page-turn threshold to the actual viewport instead of using a tiny fixed pixel distance. */
+internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
+    if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
+    return maxOf(72f, viewportWidthPx * 0.16f)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
@@ -2451,6 +2457,7 @@ private fun MushafPageViewer(
     var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
     var loading by remember(page) { mutableStateOf(true) }
     var failed by remember(page) { mutableStateOf(false) }
+    var retryPageLoad by remember(page) { mutableIntStateOf(0) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
@@ -2471,30 +2478,43 @@ private fun MushafPageViewer(
         }
     }
     LaunchedEffect(page) { pageInput = page.toString() }
-    LaunchedEffect(page) {
+    LaunchedEffect(page, retryPageLoad) {
         loading = true
         failed = false
         bitmap = null
-        pageVerses = ContentRepository.loadMushafPageVerses(context, page)
-        val source = ContentRepository.loadMushafPageSvg(context, page)
-        if (source == null) {
-            failed = true
-        } else {
-            bitmap = withContext(Dispatchers.Default) {
-                try {
-                    val svg = SVG.getFromString(source)
-                    Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
-                        image.eraseColor(AndroidColor.WHITE)
-                        svg.renderToCanvas(Canvas(image))
+        pageVerses = emptyList()
+        try {
+            pageVerses = ContentRepository.loadMushafPageVerses(context, page)
+            val source = ContentRepository.loadMushafPageSvg(context, page)
+            bitmap = if (source == null) {
+                null
+            } else {
+                withContext(Dispatchers.Default) {
+                    try {
+                        val svg = SVG.getFromString(source)
+                        Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
+                            image.eraseColor(AndroidColor.WHITE)
+                            svg.renderToCanvas(Canvas(image))
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        android.util.Log.e("MashxallMushaf", "Could not render SVG page $page", error)
+                        null
                     }
-                } catch (error: Exception) {
-                    android.util.Log.e("MashxallMushaf", "Could not render SVG page $page", error)
-                    null
                 }
             }
             failed = bitmap == null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.e("MashxallMushaf", "Could not load Mushaf page $page", error)
+            pageVerses = emptyList()
+            bitmap = null
+            failed = true
+        } finally {
+            loading = false
         }
-        loading = false
     }
     LaunchedEffect(page, selectedVerse) {
         val selected = selectedVerse
@@ -2717,7 +2737,11 @@ private fun MushafPageViewer(
                                     },
                                     onDragEnd = {
                                         if (scale <= 1.01f) {
-                                            val nextPage = mushafSwipeTarget(page, dragTotal)
+                                            val nextPage = mushafSwipeTarget(
+                                                page = page,
+                                                horizontalDragPx = dragTotal,
+                                                thresholdPx = mushafSwipeThresholdPx(size.width.toFloat())
+                                            )
                                             if (nextPage != null) {
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                 onPageChange(nextPage)
@@ -2804,6 +2828,41 @@ private fun MushafPageViewer(
                                 scaleY = 0.97f + pageReveal.value * 0.03f
                             }
                         )
+                        val swipeEdgeFraction = if (viewportSize.width > 0) {
+                            (animatedSwipePreviewX / viewportSize.width.toFloat()).coerceIn(-0.34f, 0.34f)
+                        } else 0f
+                        val swipeEdgeStrength = when {
+                            swipeEdgeFraction < -0.015f -> (-swipeEdgeFraction / 0.34f).coerceIn(0f, 1f)
+                            swipeEdgeFraction > 0.015f -> (swipeEdgeFraction / 0.34f).coerceIn(0f, 1f)
+                            else -> 0f
+                        }
+                        if (motionAllowed && swipeEdgeFraction < -0.015f) {
+                            Box(
+                                Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(25.dp)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = swipeEdgeStrength * 0.13f),
+                                                Color.White.copy(alpha = swipeEdgeStrength * 0.20f)
+                                            )
+                                        )
+                                    )
+                            )
+                        } else if (motionAllowed && swipeEdgeFraction > 0.015f) {
+                            Box(
+                                Modifier.align(Alignment.CenterStart).fillMaxHeight().width(25.dp)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(
+                                                Color.White.copy(alpha = swipeEdgeStrength * 0.20f),
+                                                Color.Black.copy(alpha = swipeEdgeStrength * 0.13f),
+                                                Color.Transparent
+                                            )
+                                        )
+                                    )
+                            )
+                        }
                         if (verseRects.isNotEmpty()) {
                             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                                 val fit = minOf(size.width / 1148f, size.height / 1641f)
@@ -2825,7 +2884,29 @@ private fun MushafPageViewer(
                             }
                         }
                     }
-                    failed -> Text(tr(language, "mushaf_unavailable"), color = foreground, textAlign = TextAlign.Center, modifier = Modifier.padding(18.dp))
+                    failed -> Column(
+                        modifier = Modifier.fillMaxWidth().padding(22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            tr(language, "mushaf_unavailable"),
+                            color = foreground,
+                            textAlign = TextAlign.Center
+                        )
+                        PremiumActionButton(
+                            label = when (language) {
+                                AppLanguage.EN -> "Retry page"
+                                AppLanguage.AR -> "إعادة تحميل الصفحة"
+                                AppLanguage.CKB -> "پەڕەکە دووبارە باربکەرەوە"
+                            },
+                            icon = Icons.Outlined.Refresh,
+                            accent = Gold,
+                            foreground = foreground,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { retryPageLoad++ }
+                        )
+                    }
                 }
             }
         }
