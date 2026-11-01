@@ -42,7 +42,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -60,6 +62,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.LaunchedEffect
@@ -261,6 +264,46 @@ internal fun Modifier.premiumClickable(
     }
 }
 
+
+/**
+ * Dialog and inline text actions with the same tactile response as Mashxall's
+ * larger controls: spring press, native Material ripple and preference-aware haptic.
+ */
+@Composable
+internal fun PremiumTextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+    content: @Composable RowScope.() -> Unit
+) {
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (enabled && pressed) 0.94f else 1f,
+        animationSpec = if (motionAllowed) spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ) else snap(),
+        label = "Mashxall text button touch spring"
+    )
+    val haptics = LocalHapticFeedback.current
+    TextButton(
+        onClick = {
+            haptics.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+        enabled = enabled,
+        contentPadding = contentPadding,
+        interactionSource = interactionSource,
+        content = content
+    )
+}
 
 /**
  * A lightweight shimmer placeholder shown only while source data is loading.
