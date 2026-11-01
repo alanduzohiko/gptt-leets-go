@@ -112,6 +112,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -326,8 +327,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    var reduceMotion by rememberSaveable { mutableStateOf(prefs.getBoolean("reduce_motion", false)) }
+    var hapticsEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
+    SideEffect {
+        MashxallMotionPreferences.reduceMotion = reduceMotion
+        MashxallMotionPreferences.hapticsEnabled = hapticsEnabled
+    }
+    val motionAllowed = remember(context, reduceMotion) { systemAllowsDecorativeMotion(context) }
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
@@ -639,7 +646,7 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette, use24Hour,
+                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette, use24Hour, reduceMotion, hapticsEnabled,
                                     onAccent = {
                                         accentPalette = it
                                         MashxallAppearance.accent = MashxallAppearance.colorFor(it)
@@ -664,6 +671,14 @@ fun MashxallApp(startScreen: String? = null) {
                                 }, onPrayer = { navigateTo("prayer") }, onQuran = {
                                     quranSettingsRequested = true
                                     navigateTo("quran")
+                                }, onReduceMotionChange = { enabled ->
+                                    reduceMotion = enabled
+                                    prefs.edit().putBoolean("reduce_motion", enabled).apply()
+                                    MashxallMotionPreferences.reduceMotion = enabled
+                                }, onHapticsEnabledChange = { enabled ->
+                                    hapticsEnabled = enabled
+                                    prefs.edit().putBoolean("haptics_enabled", enabled).apply()
+                                    MashxallMotionPreferences.hapticsEnabled = enabled
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor, selectedCity, use24Hour, onOpen = { target -> navigateTo(target.key) })
@@ -684,7 +699,7 @@ private fun AppHeader(
     onSettings: () -> Unit, showBack: Boolean
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val logoScale by animateFloatAsState(
         targetValue = if (isDark) 1.045f else 1f,
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow) else tween(0),
@@ -773,7 +788,7 @@ private fun AppHeader(
 @Composable
 private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor: Color, foreground: Color, onSelect: (String) -> Unit) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     val items = listOf(
         Triple("home", tr(language, "home"), Icons.Outlined.Home),
@@ -828,7 +843,7 @@ private fun BottomNavigationBar(screen: String, language: AppLanguage, cardColor
                         .semantics { this.selected = selected }
                         .premiumClickable(hapticFeedback = false, role = Role.Tab) {
                             if (!selected) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                 onSelect(key)
                             }
                         }
@@ -1105,7 +1120,7 @@ private fun HomePrayerJourneyStrip(
     foreground: Color
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(today) {
         while (true) {
@@ -1356,7 +1371,7 @@ private fun PremiumHomeHero(
     onOpenQibla: () -> Unit
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val moonMotion = if (motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mashxall welcome moon")
         val scale by transition.animateFloat(
@@ -2232,6 +2247,8 @@ private fun SettingsScreen(
     dark: Boolean,
     accentPalette: String,
     use24Hour: Boolean,
+    reduceMotion: Boolean,
+    hapticsEnabled: Boolean,
     onAccent: (String) -> Unit,
     onDark: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
@@ -2241,7 +2258,9 @@ private fun SettingsScreen(
     onAudio: () -> Unit,
     onAdhan: () -> Unit,
     onPrayer: () -> Unit,
-    onQuran: () -> Unit
+    onQuran: () -> Unit,
+    onReduceMotionChange: (Boolean) -> Unit,
+    onHapticsEnabledChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
@@ -2384,6 +2403,58 @@ private fun SettingsScreen(
                         accent = Gold,
                         foreground = foreground
                     ) { onTimeFormatChange(true) }
+                }
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) { AppLanguage.EN -> "MOTION & TOUCH"; AppLanguage.AR -> "الحركة واللمس"; AppLanguage.CKB -> "جووڵە و دەست‌لێدان" },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(9.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.17f))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) { AppLanguage.EN -> "Reduce motion"; AppLanguage.AR -> "تقليل الحركة"; AppLanguage.CKB -> "کەمکردنەوەی جووڵە" },
+                            color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Turns off decorative drifting, pulses and non-essential screen motion."
+                                AppLanguage.AR -> "يوقف الزخارف المتحركة والنبضات وانتقالات الواجهة غير الضرورية."
+                                AppLanguage.CKB -> "جووڵەی جوانکاری و لەرزین و گواستنەوەی ناپێویست ڕادەگرێت."
+                            },
+                            color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                        )
+                    }
+                    Switch(checked = reduceMotion, onCheckedChange = onReduceMotionChange)
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(foreground.copy(alpha = 0.08f)))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) { AppLanguage.EN -> "Touch haptics"; AppLanguage.AR -> "الاهتزاز اللمسي"; AppLanguage.CKB -> "هەستی لە دەست‌لێدان" },
+                            color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Enable gentle feedback for buttons, selections and supported actions."
+                                AppLanguage.AR -> "فعّل الاستجابة اللمسية الخفيفة للأزرار والاختيارات والعمليات المدعومة."
+                                AppLanguage.CKB -> "وەڵامی هەستپێکراوی سووک بۆ دوگمە و هەڵبژاردنەکان چالاک بکە."
+                            },
+                            color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
+                        )
+                    }
+                    Switch(checked = hapticsEnabled, onCheckedChange = onHapticsEnabledChange)
                 }
             }
         }
