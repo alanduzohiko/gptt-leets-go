@@ -103,6 +103,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.ceil
 import kotlin.math.sin
 import kotlin.math.roundToInt
 
@@ -1662,9 +1663,13 @@ internal fun premiumSliderHapticBucket(
     if (!value.isFinite() || !rangeStart.isFinite() || !rangeEnd.isFinite() || rangeEnd <= rangeStart) {
         return 0
     }
-    val segmentCount = if (steps > 0) steps + 1 else 20
+    // Compose Slider.steps are intermediate stops. Cap the tick count and
+    // resolve exact half-way values toward the lower bucket to avoid an
+    // extra haptic tick at a tie.
+    val segmentCount = if (steps > 0) steps.coerceAtMost(99) + 1 else 20
     val fraction = ((value - rangeStart) / (rangeEnd - rangeStart)).coerceIn(0f, 1f)
-    return (fraction * segmentCount).roundToInt().coerceIn(0, segmentCount)
+    val position = fraction * segmentCount
+    return ceil(position - 0.5f).toInt().coerceIn(0, segmentCount)
 }
 
 /**

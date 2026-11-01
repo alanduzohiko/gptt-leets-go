@@ -26,7 +26,10 @@ class PremiumMotionPolicyTest {
     fun sliderHapticBucketsStayWithinRangeAndRespectDiscreteSteps() {
         assertEquals(0, premiumSliderHapticBucket(0f, 0f, 10f, 4))
         assertEquals(2, premiumSliderHapticBucket(5f, 0f, 10f, 4))
+        assertEquals(3, premiumSliderHapticBucket(5.01f, 0f, 10f, 4))
         assertEquals(5, premiumSliderHapticBucket(10f, 0f, 10f, 4))
+        assertEquals(0, premiumSliderHapticBucket(-2f, 0f, 10f, 4))
+        assertEquals(5, premiumSliderHapticBucket(12f, 0f, 10f, 4))
         assertEquals(10, premiumSliderHapticBucket(5f, 0f, 10f, 0))
         assertEquals(0, premiumSliderHapticBucket(Float.NaN, 0f, 10f, 4))
         assertEquals(0, premiumSliderHapticBucket(5f, 10f, 0f, 4))
