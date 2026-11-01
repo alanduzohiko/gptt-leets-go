@@ -99,7 +99,7 @@ permission_log="dist/runtime-test/location-permissions.txt"
 : > "$permission_log"
 for permission in android.permission.ACCESS_FINE_LOCATION android.permission.ACCESS_COARSE_LOCATION; do
   grant_output="$(adb shell pm grant com.mashxall.unified "$permission" 2>&1 || true)"
-  permission_state="$(adb shell pm check-permission "$permission" com.mashxall.unified 2>&1 | tr -d '\\r' || true)"
+  permission_state="$(adb shell pm check-permission "$permission" com.mashxall.unified 2>&1 | tr -d '\r' || true)"
   {
     echo "$permission"
     echo "grant: ${grant_output:-no output}"
@@ -166,7 +166,7 @@ for node in root.iter("node"):
     label = node.attrib.get("text", "").strip().upper()
     if resource.endswith("permission_allow_foreground_only_button") or label == "WHILE USING THE APP":
         bounds = node.attrib.get("bounds", "")
-        match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", bounds)
+        match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
         if match:
             x1, y1, x2, y2 = map(int, match.groups())
             print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -174,7 +174,7 @@ for node in root.iter("node"):
     if resource.endswith("permission_allow_one_time_button") or label == "ONLY THIS TIME":
         fallback = node.attrib.get("bounds", "")
 if fallback:
-    match = re.fullmatch(r"\\[(-?\\d+),(-?\\d+)\\]\\[(-?\\d+),(-?\\d+)\\]", fallback)
+    match = re.fullmatch(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", fallback)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         print(f"{(x1+x2)//2} {(y1+y2)//2}")
@@ -186,7 +186,7 @@ PY
         sleep 4
         for permission in android.permission.ACCESS_FINE_LOCATION android.permission.ACCESS_COARSE_LOCATION; do
           adb shell pm grant com.mashxall.unified "$permission" >> "$permission_log" 2>&1 || true
-          permission_state="$(adb shell pm check-permission "$permission" com.mashxall.unified 2>&1 | tr -d '\\r' || true)"
+          permission_state="$(adb shell pm check-permission "$permission" com.mashxall.unified 2>&1 | tr -d '\r' || true)"
           echo "after-dialog $permission: ${permission_state:-unknown}" | tee -a "$permission_log"
         done
         continue
