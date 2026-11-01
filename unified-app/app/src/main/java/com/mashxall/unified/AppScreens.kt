@@ -2953,6 +2953,7 @@ internal fun tafsirSwipeTarget(
 @Composable
 fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, surah: Int, ayah: Int, onChangeVerse: (Int, Int) -> Unit) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     var selectedBook by rememberSaveable { mutableStateOf(if (language == AppLanguage.EN) "sahih" else if (language == AppLanguage.AR) "mukhtasar" else "roshn") }
     var text by remember { mutableStateOf("") }
@@ -3041,8 +3042,12 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                         .premiumClickable { chooseSurah = true },
                     transitionSpec = {
-                        (fadeIn(tween(150)) + slideInVertically(tween(190, easing = FastOutSlowInEasing)) { it / 5 }) togetherWith
-                            (fadeOut(tween(110)) + slideOutVertically(tween(110)) { -it / 6 })
+                        if (motionAllowed) {
+                            (fadeIn(tween(150)) + slideInVertically(tween(190, easing = FastOutSlowInEasing)) { it / 5 }) togetherWith
+                                (fadeOut(tween(110)) + slideOutVertically(tween(110)) { -it / 6 })
+                        } else {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        }
                     },
                     label = "Tafsir verse navigation"
                 ) { target ->
@@ -6842,7 +6847,7 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
     )
     val readingProgress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (pageCount > 0) ((pageIndex + 1).toFloat() / pageCount.toFloat()).coerceIn(0f, 1f) else 0f,
-        animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing),
+        animationSpec = if (pdfMotionAllowed) androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing) else androidx.compose.animation.core.snap(),
         label = "PDF reading progress"
     )
 
@@ -6953,8 +6958,12 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
             AnimatedContent(
                 targetState = if (pageCount > 0) pageIndex + 1 else 0,
                 transitionSpec = {
-                    (fadeIn(tween(120)) + slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(150))) togetherWith
-                        (fadeOut(tween(90)) + slideOutVertically(targetOffsetY = { -it / 3 }, animationSpec = tween(90)))
+                    if (pdfMotionAllowed) {
+                        (fadeIn(tween(120)) + slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(150))) togetherWith
+                            (fadeOut(tween(90)) + slideOutVertically(targetOffsetY = { -it / 3 }, animationSpec = tween(90)))
+                    } else {
+                        fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                    }
                 },
                 label = "PDF page number rollover"
             ) { visiblePage ->
@@ -7013,8 +7022,12 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
                 bitmap != null -> AnimatedContent(
                     targetState = bitmap,
                     transitionSpec = {
-                        (fadeIn(tween(160)) + scaleIn(initialScale = 0.975f, animationSpec = tween(210))) togetherWith
-                            (fadeOut(tween(110)) + scaleOut(targetScale = 1.015f, animationSpec = tween(110)))
+                        if (pdfMotionAllowed) {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.975f, animationSpec = tween(210))) togetherWith
+                                (fadeOut(tween(110)) + scaleOut(targetScale = 1.015f, animationSpec = tween(110)))
+                        } else {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        }
                     },
                     label = "PDF reader page transition"
                 ) { visibleBitmap ->
@@ -9393,6 +9406,7 @@ fun WordAnalysisScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val favoritesPrefs = remember { context.getSharedPreferences("mashxall_farmuda_favorites", Context.MODE_PRIVATE) }
     var query by rememberSaveable { mutableStateOf("") }
     var records by remember { mutableStateOf<List<FarmudaItem>>(emptyList()) }
@@ -9495,8 +9509,12 @@ fun FarmudaScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 AnimatedContent(
                                     targetState = isFavorite,
                                     transitionSpec = {
-                                        (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
-                                            (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        if (motionAllowed) {
+                                            (scaleIn(initialScale = 0.45f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(140))) togetherWith
+                                                (scaleOut(targetScale = 0.55f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                        } else {
+                                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                        }
                                     },
                                     label = "Farmuda favourite star pulse"
                                 ) { saved ->
