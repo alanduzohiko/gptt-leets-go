@@ -1328,6 +1328,96 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
             }
             }
+            if (query.isBlank() && currentSurah != null) {
+                val displayedAyah = initialAyah.coerceIn(1, currentSurah.ayahCount.coerceAtLeast(1))
+                val progress = quranSurahProgressFraction(displayedAyah, currentSurah.ayahCount) ?: 0f
+                val animatedProgress by animateFloatAsState(
+                    targetValue = progress,
+                    animationSpec = if (motionAllowed) tween(260) else snap(),
+                    label = "Quran live surah reading progress"
+                )
+                Spacer(Modifier.height(7.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ReaderActionIcon(
+                        icon = Icons.Outlined.ChevronRight,
+                        description = when (language) {
+                            AppLanguage.EN -> "Previous surah"
+                            AppLanguage.AR -> "السورة السابقة"
+                            AppLanguage.CKB -> "سوورەتی پێشوو"
+                        },
+                        enabled = selected > 1,
+                        rotationDegrees = 180f
+                    ) {
+                        quranAdjacentSurahTarget(selected, -1)?.let { target ->
+                            selected = target
+                            onSurah(target)
+                            onOpenVerse(target, 1)
+                            selectedAyahForSheet = null
+                            prefs.edit().putInt("last_ayah_number", 1).apply()
+                            scope.launch { listState.scrollToItem(0) }
+                        }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "SURAH PROGRESS"
+                                    AppLanguage.AR -> "تقدّم السورة"
+                                    AppLanguage.CKB -> "پێشکەوتنی سوورەت"
+                                },
+                                color = foreground.copy(alpha = 0.58f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.45.sp
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                "$displayedAyah / ${currentSurah.ayahCount}",
+                                color = Gold,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.height(5.dp))
+                        Box(
+                            Modifier.fillMaxWidth().height(5.dp)
+                                .clip(CircleShape)
+                                .background(foreground.copy(alpha = 0.09f))
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth(animatedProgress).fillMaxHeight()
+                                    .clip(CircleShape)
+                                    .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), Gold)))
+                            )
+                        }
+                    }
+                    ReaderActionIcon(
+                        icon = Icons.Outlined.ChevronRight,
+                        description = when (language) {
+                            AppLanguage.EN -> "Next surah"
+                            AppLanguage.AR -> "السورة التالية"
+                            AppLanguage.CKB -> "سوورەتی دواتر"
+                        },
+                        enabled = selected < 114
+                    ) {
+                        quranAdjacentSurahTarget(selected, 1)?.let { target ->
+                            selected = target
+                            onSurah(target)
+                            onOpenVerse(target, 1)
+                            selectedAyahForSheet = null
+                            prefs.edit().putInt("last_ayah_number", 1).apply()
+                            scope.launch { listState.scrollToItem(0) }
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
             SearchBox(language, query, { query = it }, tr(language, "search"))
             Spacer(Modifier.height(7.dp))
@@ -2802,6 +2892,11 @@ internal fun quranVisibleResumePosition(
 ): Pair<Int, Int>? = verses.getOrNull(firstVisibleItemIndex)
     ?.takeIf { it.surah in 1..114 && it.number >= 1 }
     ?.let { it.surah to it.number }
+
+internal fun quranAdjacentSurahTarget(currentSurah: Int, direction: Int): Int? {
+    if (currentSurah !in 1..114 || direction !in -1..1 || direction == 0) return null
+    return (currentSurah + direction).takeIf { it in 1..114 }
+}
 
 internal fun quranSurahProgressFraction(lastReadAyah: Int, totalAyahs: Int): Float? {
     if (lastReadAyah <= 0 || totalAyahs <= 0) return null
