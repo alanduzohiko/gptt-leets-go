@@ -2926,9 +2926,25 @@ fun BookmarksScreen(
     )
 }
 
+internal fun tafsirSwipeTarget(
+    horizontalDragPx: Float,
+    thresholdPx: Float = 72f,
+    previousVerse: Pair<Int, Int>,
+    nextVerse: Pair<Int, Int>,
+    currentVerse: Pair<Int, Int>
+): Pair<Int, Int>? {
+    if (!horizontalDragPx.isFinite() || !thresholdPx.isFinite() || thresholdPx <= 0f) return null
+    return when {
+        horizontalDragPx < -thresholdPx && nextVerse != currentVerse -> nextVerse
+        horizontalDragPx > thresholdPx && previousVerse != currentVerse -> previousVerse
+        else -> null
+    }
+}
+
 @Composable
 fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, surah: Int, ayah: Int, onChangeVerse: (Int, Int) -> Unit) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     var selectedBook by rememberSaveable { mutableStateOf(if (language == AppLanguage.EN) "sahih" else if (language == AppLanguage.AR) "mukhtasar" else "roshn") }
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -2954,7 +2970,29 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
         currentSurah != null && surah < 114 -> (surah + 1) to 1
         else -> surah to ayah
     }
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier.fillMaxSize().pointerInput(surah, ayah, previousVerse, nextVerse) {
+            var horizontalDrag = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { horizontalDrag = 0f },
+                onHorizontalDrag = { _, delta -> horizontalDrag += delta },
+                onDragEnd = {
+                    val target = tafsirSwipeTarget(
+                        horizontalDragPx = horizontalDrag,
+                        previousVerse = previousVerse,
+                        nextVerse = nextVerse,
+                        currentVerse = surah to ayah
+                    )
+                    if (target != null) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onChangeVerse(target.first, target.second)
+                    }
+                    horizontalDrag = 0f
+                },
+                onDragCancel = { horizontalDrag = 0f }
+            )
+        }
+    ) {
         Column(Modifier.padding(16.dp)) {
             PremiumSectionHero(
                 title = tr(language, "tafsir"),
@@ -2989,18 +3027,28 @@ fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, sur
                     size = 38.dp,
                     enabled = surah > 1 || ayah > 1
                 ) { onChangeVerse(previousVerse.first, previousVerse.second) }
-                Column(
-                    modifier = Modifier.weight(1f).premiumClickable { chooseSurah = true }.padding(horizontal = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        currentSurah?.arabicName ?: (tr(language, "surah") + " " + surah),
-                        color = Gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1
-                    )
-                    Text(
-                        tr(language, "ayah") + " " + ayah,
-                        color = foreground, fontSize = 11.sp, textAlign = TextAlign.Center
-                    )
+                AnimatedContent(
+                    targetState = surah to ayah,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                        .premiumClickable { chooseSurah = true },
+                    transitionSpec = {
+                        (fadeIn(tween(150)) + slideInVertically(tween(190, easing = FastOutSlowInEasing)) { it / 5 }) togetherWith
+                            (fadeOut(tween(110)) + slideOutVertically(tween(110)) { -it / 6 })
+                    },
+                    label = "Tafsir verse navigation"
+                ) { target ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            surahs.firstOrNull { it.number == target.first }?.arabicName
+                                ?: (tr(language, "surah") + " " + target.first),
+                            color = Gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center, maxLines = 1
+                        )
+                        Text(
+                            tr(language, "ayah") + " " + target.second,
+                            color = foreground, fontSize = 11.sp, textAlign = TextAlign.Center
+                        )
+                    }
                 }
                 PremiumIconButton(
                     icon = Icons.Outlined.ChevronRight,
