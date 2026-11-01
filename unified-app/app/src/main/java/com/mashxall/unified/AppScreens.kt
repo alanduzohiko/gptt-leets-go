@@ -418,6 +418,7 @@ private fun ReaderActionIcon(
     rotationDegrees: Float = 0f,
     hapticFeedback: Boolean = true,
     pressedScale: Float = 0.968f,
+    selected: Boolean = false,
     onClick: () -> Unit
 ) {
     PremiumIconButton(
@@ -430,6 +431,7 @@ private fun ReaderActionIcon(
         circular = true,
         hapticFeedback = hapticFeedback,
         pressedScale = pressedScale,
+        selected = selected,
         onClick = onClick
     )
 }
@@ -1853,24 +1855,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 onReaderSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
                 onPlaySurah = { surahNumber, ayahNumber -> onPlayAudio(surahNumber, ayahNumber) },
                 onBookmarkVerse = { surahNumber, ayahNumber ->
-                    val saved = toggleBookmark(surahNumber, ayahNumber)
-                    Toast.makeText(
-                        context,
-                        if (saved) {
-                            when (language) {
-                                AppLanguage.EN -> "Verse added to bookmarks"
-                                AppLanguage.AR -> "أُضيفت الآية إلى العلامات المرجعية"
-                                AppLanguage.CKB -> "ئایەتەکە زیاد کرا بۆ نیشانکراوەکان"
-                            }
-                        } else {
-                            when (language) {
-                                AppLanguage.EN -> "Verse removed from bookmarks"
-                                AppLanguage.AR -> "أُزيلت الآية من العلامات المرجعية"
-                                AppLanguage.CKB -> "ئایەتەکە لە نیشانکراوەکان لابرا"
-                            }
-                        },
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    toggleBookmark(surahNumber, ayahNumber)
                 },
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
@@ -3419,13 +3404,17 @@ private fun MushafPageViewer(
     onExitFullscreen: () -> Unit,
     onReaderSettings: () -> Unit,
     onPlaySurah: (Int, Int) -> Unit,
-    onBookmarkVerse: (Int, Int) -> Unit,
+    onBookmarkVerse: (Int, Int) -> Boolean,
     onVerseClick: (Int, Int) -> Unit,
     onReadingPosition: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val bookmarkPrefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
+    var bookmarkedVerses by remember {
+        mutableStateOf(bookmarkPrefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet())
+    }
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val pageReveal = remember { Animatable(1f) }
     val pageTurnOffset = remember { Animatable(0f) }
@@ -3612,22 +3601,33 @@ private fun MushafPageViewer(
             ) {
                 pageVerses.firstOrNull()?.let { onPlaySurah(it.surah, 1) }
             }
+            val toolbarVerseBookmarked = toolbarVerse?.let {
+                bookmarkedVerses.contains(quranBookmarkKey(it.surah, it.ayah))
+            } == true
             ReaderActionIcon(
-                Icons.Outlined.BookmarkBorder,
-                if (language == AppLanguage.EN) "Bookmark verse" else if (language == AppLanguage.AR) "حفظ علامة للآية" else "نیشانەکردنی ئایەت",
-                enabled = !loading && pageVerses.isNotEmpty(),
+                if (toolbarVerseBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                if (language == AppLanguage.EN) {
+                    if (toolbarVerseBookmarked) "Remove bookmark" else "Bookmark verse"
+                } else if (language == AppLanguage.AR) {
+                    if (toolbarVerseBookmarked) "إزالة علامة الآية" else "حفظ علامة للآية"
+                } else {
+                    if (toolbarVerseBookmarked) "نیشانەکە لاببە" else "نیشانەکردنی ئایەت"
+                },
+                enabled = !loading && toolbarVerse != null,
                 hapticFeedback = false,
-                pressedScale = quranReaderActionPressScale("page_bookmark")
+                pressedScale = quranReaderActionPressScale("page_bookmark"),
+                selected = toolbarVerseBookmarked
             ) {
-                (selectedVerse ?: pageVerses.firstOrNull())?.let { target ->
-                    onBookmarkVerse(target.surah, target.ayah)
+                toolbarVerse?.let { target ->
+                    val saved = onBookmarkVerse(target.surah, target.ayah)
+                    bookmarkedVerses = bookmarkPrefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet()
                     haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
                     Toast.makeText(
                         context,
                         when (language) {
-                            AppLanguage.EN -> "Bookmark saved for " + target.surah + ":" + target.ayah
-                            AppLanguage.AR -> "حُفظت علامة للآية " + target.surah + ":" + target.ayah
-                            AppLanguage.CKB -> "ئایەت نیشانە کرا " + target.surah + ":" + target.ayah
+                            AppLanguage.EN -> if (saved) "Verse added to bookmarks" else "Verse removed from bookmarks"
+                            AppLanguage.AR -> if (saved) "أُضيفت الآية إلى العلامات المرجعية" else "أُزيلت الآية من العلامات المرجعية"
+                            AppLanguage.CKB -> if (saved) "ئایەتەکە زیاد کرا بۆ نیشانکراوەکان" else "ئایەتەکە لە نیشانکراوەکان لابرا"
                         },
                         Toast.LENGTH_SHORT
                     ).show()
