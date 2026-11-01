@@ -1787,6 +1787,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
         }
         if (mushafMode) {
+            AnimatedVisibility(
+                visible = true,
+                modifier = Modifier.fillMaxSize(),
+                enter = if (motionAllowed) {
+                    fadeIn(tween(190)) +
+                        scaleIn(initialScale = 0.985f, animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )) +
+                        slideInVertically(tween(210)) { it / 18 }
+                } else fadeIn(tween(0))
+            ) {
             MushafPageViewer(
                 language = language,
                 foreground = foreground,
@@ -1840,7 +1852,20 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     readingProgressRevision++
                 }
             )
+            }
         } else if (showSurahList) {
+            AnimatedVisibility(
+                visible = true,
+                modifier = Modifier.fillMaxSize(),
+                enter = if (motionAllowed) {
+                    fadeIn(tween(210)) +
+                        scaleIn(initialScale = 0.98f, animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )) +
+                        slideInVertically(tween(230)) { it / 24 }
+                } else fadeIn(tween(0))
+            ) {
             Column(Modifier.fillMaxSize()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     QuranSurahWelcomeCard(
@@ -2029,7 +2054,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     }
                 }
             }
+            }
         } else if (openingMushaf) {
+            AnimatedVisibility(
+                visible = true,
+                modifier = Modifier.fillMaxSize(),
+                enter = if (motionAllowed) fadeIn(tween(150)) + scaleIn(initialScale = 0.96f, animationSpec = tween(170))
+                    else fadeIn(tween(0))
+            ) {
             Column(
                 Modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2044,6 +2076,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         AppLanguage.CKB -> "مصحەفی پەڕەبەندی کراو دەکرێتەوە…"
                     }, color = foreground, fontSize = 13.sp, textAlign = TextAlign.Center
                 )
+            }
             }
         } else if (verses.isEmpty()) {
             LoadingOrEmpty(

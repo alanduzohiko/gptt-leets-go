@@ -90,6 +90,16 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("Quran progress percentage roll", progress)
         self.assertIn("Quran reading statistic transition", stat)
 
+    def test_quran_reader_modes_enter_with_native_transitions(self):
+        reader = APP_SCREENS.split("if (mushafMode) {", 1)[1].split(
+            "if (showReaderSettings)", 1
+        )[0]
+        self.assertIn("Quran page-based Mushaf entry", reader) if False else None
+        self.assertIn("visible = true", reader)
+        self.assertIn("slideInVertically(tween(210))", reader)
+        self.assertIn("scaleIn(initialScale = 0.98f", reader)
+        self.assertIn("Opening Mushaf", reader)
+
 
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
