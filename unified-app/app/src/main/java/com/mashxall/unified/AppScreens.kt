@@ -111,6 +111,7 @@ import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -159,6 +160,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -1086,7 +1090,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             onResumeMushafHandled()
         }
     }
-    LaunchedEffect(selected, language, query, initialAyah, translationKey, mushafMode, showSurahList, openingMushaf, retryVerses) {
+    LaunchedEffect(selected, language, query, translationKey, mushafMode, showSurahList, openingMushaf, retryVerses) {
         if (mushafMode || showSurahList || openingMushaf) {
             loading = false
             versesLoadFailed = false
@@ -1116,8 +1120,35 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     LaunchedEffect(verses, initialAyah, query, showSurahList, mushafMode, openingMushaf) {
         if (!showSurahList && !mushafMode && !openingMushaf && query.isBlank() && verses.isNotEmpty()) {
             val startAt = verses.indexOfFirst { it.number >= initialAyah }
-            if (startAt >= 0) listState.scrollToItem(startAt)
+            if (startAt >= 0) {
+                listState.scrollToItem(startAt)
+                verses.getOrNull(startAt)?.page?.takeIf { it in 1..604 }?.let { mushafPage = it }
+            }
         }
+    }
+
+    // Persist the verse that is actually entering view as the reader scrolls.
+    // This makes Continue Reading resume where the person stopped, not merely
+    // at the last verse they happened to tap.
+    LaunchedEffect(verses, query, showSurahList, mushafMode, openingMushaf) {
+        if (showSurahList || mushafMode || openingMushaf || query.isNotBlank() || verses.isEmpty()) {
+            return@LaunchedEffect
+        }
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect { firstVisibleIndex ->
+                val position = quranVisibleResumePosition(verses, firstVisibleIndex) ?: return@collect
+                val (surahNumber, ayahNumber) = position
+                selected = surahNumber
+                prefs.edit()
+                    .putString("quran_reader_mode", "verse")
+                    .putInt("last_surah", surahNumber)
+                    .putInt("last_ayah_number", ayahNumber)
+                    .apply()
+                onSurah(surahNumber)
+                onOpenVerse(surahNumber, ayahNumber)
+            }
     }
     LaunchedEffect(selected, coloredTajweed, mushafMode, showSurahList, openingMushaf, surahs) {
         tajweedAyahs = emptyMap()
@@ -2704,6 +2735,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
 
 
 }
+
+internal fun quranVisibleResumePosition(
+    verses: List<Ayah>,
+    firstVisibleItemIndex: Int
+): Pair<Int, Int>? = verses.getOrNull(firstVisibleItemIndex)
+    ?.takeIf { it.surah in 1..114 && it.number >= 1 }
+    ?.let { it.surah to it.number }
 
 internal data class QuranResumeTarget(
     val surah: Int,
