@@ -8677,6 +8677,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 @Composable
 fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String) {
     val context = LocalContext.current
+    val motionAllowed = remember(context) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var locationMode by rememberSaveable {
@@ -8872,7 +8873,11 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val aligned = sensorAvailable && bearing != null && kotlin.math.abs(relativeHeading) <= 5f
     val animatedHeading by androidx.compose.animation.core.animateFloatAsState(
         targetValue = relativeHeading,
-        animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
+        animationSpec = if (motionAllowed) {
+            androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow)
+        } else {
+            snap()
+        },
         label = "qiblaHeading"
     )
 
@@ -8913,7 +8918,16 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
                 Box(
                     Modifier.size(264.dp).clip(CircleShape)
                         .background(Brush.radialGradient(listOf(Color(0xFF1A5946), DeepGreen, Color(0xFF071E1A))))
-                        .border(2.dp, (if (aligned) Color(0xFF62C995) else Gold).copy(alpha = 0.9f), CircleShape),
+                        .border(2.dp, (if (aligned) Color(0xFF62C995) else Gold).copy(alpha = 0.9f), CircleShape)
+                        .semantics {
+                            contentDescription = if (language == AppLanguage.EN) "Qibla compass" else if (language == AppLanguage.AR) "بوصلة القبلة" else "کۆمپاوسی قیبلە"
+                            stateDescription = when {
+                                bearing == null -> if (language == AppLanguage.EN) "Waiting for location" else if (language == AppLanguage.AR) "بانتظار الموقع" else "چاوەڕێی شوێن"
+                                aligned -> if (language == AppLanguage.EN) "Aligned with Qibla" else if (language == AppLanguage.AR) "الاتجاه مطابق للقبلة" else "لەگەڵ قیبلە یەکگرتووە"
+                                sensorAvailable -> if (language == AppLanguage.EN) "Rotate phone to align with Qibla" else if (language == AppLanguage.AR) "أدر الهاتف لمحاذاة القبلة" else "مۆبایل بسووڕێنە بۆ یەکگرتن لەگەڵ قیبلە"
+                                else -> if (language == AppLanguage.EN) "Compass sensor unavailable" else if (language == AppLanguage.AR) "مستشعر البوصلة غير متاح" else "سێنسەری کۆمپاوس بەردەست نییە"
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     PremiumCompassOrbit(
