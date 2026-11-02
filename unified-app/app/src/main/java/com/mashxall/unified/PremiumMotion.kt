@@ -176,6 +176,13 @@ internal fun premiumRolePressRotationDegrees(role: Role?): Float = when (role) {
     else -> 0.38f
 }
 
+/** Each control gets a slightly different press tilt from its own tactile depth. */
+internal fun premiumControlPressRotationDegrees(role: Role?, pressedScale: Float = 0.968f): Float {
+    val safeScale = if (pressedScale.isFinite()) pressedScale.coerceIn(0.90f, 1f) else 0.968f
+    val depthDelta = (0.968f - safeScale).coerceIn(-0.032f, 0.068f)
+    return (premiumRolePressRotationDegrees(role) + depthDelta * 2.2f).coerceIn(-0.9f, 0.55f)
+}
+
 /** Role-specific edge glow remains restrained on tabs and stronger on primary actions. */
 internal fun premiumRolePressGlowAlpha(role: Role?): Float = when (role) {
     Role.Button -> 0.30f
@@ -254,7 +261,7 @@ internal fun Modifier.premiumClickable(
         scaleX = scale
         scaleY = scale
         translationY = if (motionAllowed && enabled && pressed) 1.15.dp.toPx() else 0f
-        rotationZ = if (motionAllowed && enabled && pressed) premiumRolePressRotationDegrees(role) else 0f
+        rotationZ = if (motionAllowed && enabled && pressed) premiumControlPressRotationDegrees(role, pressedScale) else 0f
         shadowElevation = if (motionAllowed && enabled && pressed) {
             if (role == Role.Button) 7.dp.toPx() else 4.5.dp.toPx()
         } else 0f
