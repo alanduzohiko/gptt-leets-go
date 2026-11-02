@@ -703,7 +703,32 @@ internal fun shouldAnimateAmbientBackdrop(
 
 internal fun ambientBackdropIntensityForScreen(screenKey: String, intensity: Float): Float {
     val safe = normalizeAmbientBackdropIntensity(intensity)
-    return if (screenKey == "quran" || screenKey == "tafsir") safe * 0.34f else safe
+    val readerFactor = when (screenKey) {
+        "quran" -> 0.72f
+        "tafsir" -> 0.66f
+        else -> 1f
+    }
+    return safe * readerFactor
+}
+
+/**
+ * The edge ornament is drawn above screen content, so it remains visible when
+ * opaque cards cover the ambient background. The immersive Mushaf receives
+ * only a tiny static edge treatment to keep the page text completely clear.
+ */
+internal fun premiumScreenOrnamentIntensity(
+    screenKey: String,
+    intensity: Float,
+    immersiveMushaf: Boolean = false
+): Float {
+    val safe = normalizeAmbientBackdropIntensity(intensity)
+    val factor = when {
+        immersiveMushaf -> 0.16f
+        screenKey == "quran" -> 0.72f
+        screenKey == "tafsir" -> 0.66f
+        else -> 0.78f
+    }
+    return (safe * factor).coerceIn(0.02f, 0.82f)
 }
 
 internal fun ambientMotionDurationMillis(baseMillis: Int, speed: Float): Int =
@@ -972,9 +997,9 @@ internal fun PremiumAmbientBackdrop(
             shimmerAlpha = (if (dark) 0.065f else 0.032f) * safeIntensity
         )
     }
-    val glowAlpha = (if (dark) 0.125f else 0.065f) * safeIntensity
-    val secondaryAlpha = (if (dark) 0.105f else 0.05f) * safeIntensity
-    val coolAlpha = (if (dark) 0.055f else 0.028f) * safeIntensity
+    val glowAlpha = (if (dark) 0.205f else 0.105f) * safeIntensity
+    val secondaryAlpha = (if (dark) 0.165f else 0.082f) * safeIntensity
+    val coolAlpha = (if (dark) 0.092f else 0.045f) * safeIntensity
 
     Box(modifier = modifier) {
         PremiumIslamicOrnament(
@@ -1006,7 +1031,7 @@ internal fun PremiumAmbientBackdrop(
                 Modifier.align(Alignment.BottomEnd).offset(x = 28.dp, y = 34.dp)
                     .size(118.dp).graphicsLayer { rotationZ = motion.orbitRotation }
             ) {
-                Box(Modifier.fillMaxSize().border(0.8.dp, accent.copy(alpha = 0.12f * safeIntensity), CircleShape))
+                Box(Modifier.fillMaxSize().border(0.95.dp, accent.copy(alpha = 0.22f * safeIntensity), CircleShape))
                 Box(
                     Modifier.align(Alignment.TopCenter).offset(y = (-2).dp)
                         .size(6.dp).clip(CircleShape).background(accent.copy(alpha = 0.54f * safeIntensity))
@@ -1023,6 +1048,154 @@ internal fun PremiumAmbientBackdrop(
                     .size(146.dp).graphicsLayer { alpha = motion.shimmerAlpha }
                     .clip(CircleShape)
                     .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.78f), Color.Transparent)))
+            )
+        }
+    }
+}
+
+/**
+ * Visible screen-edge arabesques. Unlike the ambient glow, this layer is drawn
+ * over the page margins so cards cannot hide all of the app's decoration.
+ * Motion stays near the edges and never crosses the reading column.
+ */
+@Composable
+internal fun PremiumScreenOrnamentOverlay(
+    modifier: Modifier = Modifier,
+    accent: Color,
+    intensity: Float,
+    screenKey: String,
+    animated: Boolean,
+    immersiveMushaf: Boolean = false
+) {
+    val context = LocalContext.current
+    val motionAllowed = animated && remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val safeIntensity = if (intensity.isFinite()) intensity.coerceIn(0f, 1f) else 0.2f
+    val transition = rememberInfiniteTransition(label = "Mashxall screen edge ornaments")
+    val drift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (motionAllowed) 1f else 0f,
+        animationSpec = if (motionAllowed) infiniteRepeatable(
+            animation = tween(7_600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ) else snap(),
+        label = "Mashxall edge ornament drift"
+    )
+    val orbit by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (motionAllowed) 360f else 0f,
+        animationSpec = if (motionAllowed) infiniteRepeatable(
+            animation = tween(38_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ) else snap(),
+        label = "Mashxall edge ornament orbit"
+    )
+    val shimmer by transition.animateFloat(
+        initialValue = 0.38f,
+        targetValue = if (motionAllowed) 1f else 0.66f,
+        animationSpec = if (motionAllowed) infiniteRepeatable(
+            animation = tween(2_500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ) else snap(),
+        label = "Mashxall edge ornament shimmer"
+    )
+    val alphaBase = if (immersiveMushaf) {
+        0.045f + safeIntensity * 0.12f
+    } else {
+        0.14f + safeIntensity * 0.38f
+    }
+    val phaseSeed = (screenKey.hashCode() and 0xFF).toFloat() / 255f
+
+    Canvas(modifier = modifier) {
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        val sideInset = if (immersiveMushaf) 5.5.dp.toPx() else 8.dp.toPx()
+        val radius = if (immersiveMushaf) 7.5.dp.toPx() else 16.dp.toPx()
+        val thinStroke = if (immersiveMushaf) 0.55.dp.toPx() else 0.9.dp.toPx()
+        val driftRadians = drift * (2.0 * PI)
+        val seedRadians = phaseSeed * (2.0 * PI)
+        val verticalDrift = (sin(driftRadians + seedRadians) * if (immersiveMushaf) 1.8 else 8.0).toFloat() * density
+
+        repeat(2) { side ->
+            val edgeX = if (side == 0) sideInset else size.width - sideInset
+            val sidePhase = if (side == 0) 0f else 137f
+            drawLine(
+                color = accent.copy(alpha = alphaBase * 0.25f),
+                start = Offset(edgeX, size.height * 0.12f),
+                end = Offset(edgeX, size.height * 0.88f),
+                strokeWidth = thinStroke,
+                cap = StrokeCap.Round
+            )
+
+            repeat(3) { index ->
+                val wave = sin(driftRadians + seedRadians + index * 1.45 + side * PI).toFloat()
+                val centerY = size.height * (0.19f + index * 0.305f) +
+                    verticalDrift + wave * (if (immersiveMushaf) 1.5.dp.toPx() else 6.dp.toPx())
+                val center = Offset(edgeX, centerY)
+                val ringSize = Size(radius * 2f, radius * 2f)
+                val ringTopLeft = Offset(center.x - radius, center.y - radius)
+                val sweep = if (immersiveMushaf) 92f else 142f
+                drawArc(
+                    color = accent.copy(alpha = alphaBase * (0.48f + shimmer * 0.18f)),
+                    startAngle = orbit + sidePhase + index * 61f,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = ringTopLeft,
+                    size = ringSize,
+                    style = Stroke(width = thinStroke)
+                )
+                drawArc(
+                    color = accent.copy(alpha = alphaBase * 0.24f),
+                    startAngle = orbit + sidePhase + index * 61f + 180f,
+                    sweepAngle = sweep * 0.58f,
+                    useCenter = false,
+                    topLeft = ringTopLeft,
+                    size = ringSize,
+                    style = Stroke(width = thinStroke * 0.72f)
+                )
+                val jewelAngle = Math.toRadians((orbit + sidePhase + index * 61f + sweep).toDouble())
+                drawCircle(
+                    color = accent.copy(alpha = alphaBase * (0.72f + shimmer * 0.20f)),
+                    radius = if (immersiveMushaf) 1.0.dp.toPx() else 1.8.dp.toPx(),
+                    center = Offset(
+                        center.x + cos(jewelAngle).toFloat() * radius,
+                        center.y + sin(jewelAngle).toFloat() * radius
+                    )
+                )
+                drawCircle(
+                    color = accent.copy(alpha = alphaBase * 0.42f),
+                    radius = if (immersiveMushaf) 0.65.dp.toPx() else 1.1.dp.toPx(),
+                    center = Offset(center.x, center.y)
+                )
+            }
+
+            // A small eight-point rosette is anchored to the outer margin.
+            val rosetteCenter = Offset(
+                edgeX,
+                size.height * 0.51f - verticalDrift * (if (side == 0) 1f else -1f)
+            )
+            val outerRadius = if (immersiveMushaf) 4.8.dp.toPx() else 8.5.dp.toPx()
+            val rosettePath = Path()
+            for (vertex in 0 until 16) {
+                val point = premiumOrnamentVertex(
+                    vertex,
+                    outerRadius,
+                    outerRadius * 0.48f
+                )
+                val x = rosetteCenter.x + point.x
+                val y = rosetteCenter.y + point.y
+                if (vertex == 0) rosettePath.moveTo(x, y) else rosettePath.lineTo(x, y)
+            }
+            rosettePath.close()
+            drawPath(
+                path = rosettePath,
+                color = accent.copy(alpha = alphaBase * 0.55f),
+                style = Stroke(width = thinStroke)
+            )
+            drawCircle(
+                color = accent.copy(alpha = alphaBase * 0.76f),
+                radius = if (immersiveMushaf) 0.9.dp.toPx() else 1.5.dp.toPx(),
+                center = rosetteCenter
             )
         }
     }
