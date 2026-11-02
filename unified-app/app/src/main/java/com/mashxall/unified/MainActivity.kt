@@ -466,6 +466,15 @@ fun MashxallApp(startScreen: String? = null) {
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var use24Hour by rememberSaveable { mutableStateOf(prefs.getBoolean("time_format_24h", false)) }
     var accentPalette by rememberSaveable { mutableStateOf(prefs.getString("accent_palette", "gold") ?: "gold") }
+    var backgroundStyle by rememberSaveable {
+        mutableStateOf(normalizeAmbientBackdropStyle(prefs.getString("background_style", "ambient")))
+    }
+    var backgroundIntensity by rememberSaveable {
+        mutableStateOf(normalizeAmbientBackdropIntensity(prefs.getFloat("background_intensity", 0.82f)))
+    }
+    var backgroundSpeed by rememberSaveable {
+        mutableStateOf(normalizeAmbientBackdropSpeed(prefs.getFloat("background_speed", 0.72f)))
+    }
     val animatedAccent by animateColorAsState(
         targetValue = MashxallAppearance.colorFor(accentPalette),
         animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
@@ -634,7 +643,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     val exitTo = -enterFrom
                                     (fadeIn(animationSpec = tween(260, easing = FastOutSlowInEasing)) +
                                         scaleIn(
-                                            initialScale = 0.88f,
+                                            initialScale = 0.94f,
                                             animationSpec = spring(
                                                 dampingRatio = Spring.DampingRatioMediumBouncy,
                                                 stiffness = Spring.StiffnessMediumLow
@@ -663,15 +672,17 @@ fun MashxallApp(startScreen: String? = null) {
                             label = "Mashxall native screen transition"
                         ) { visibleScreen ->
                             Box(Modifier.fillMaxSize()) {
-                                PremiumAmbientBackdrop(
-                                    Modifier.fillMaxSize(),
-                                    accent = Gold,
-                                    dark = dark,
-                                    // Keep the Quran and tafsir reading surfaces visually calm;
-                                    // the rest of Mashxall gets a slow, motion-aware ambient drift.
-                                    animated = visibleScreen != AppScreen.QURAN.key &&
-                                        visibleScreen != AppScreen.TAFSIR.key
-                                )
+                                if (!immersiveMushaf && shouldShowAmbientBackdrop(backgroundStyle)) {
+                                    PremiumAmbientBackdrop(
+                                        Modifier.fillMaxSize(),
+                                        accent = Gold,
+                                        dark = dark,
+                                        animated = shouldAnimateAmbientBackdrop(visibleScreen, motionAllowed, backgroundStyle),
+                                        style = backgroundStyle,
+                                        intensity = ambientBackdropIntensityForScreen(visibleScreen, backgroundIntensity),
+                                        speed = backgroundSpeed
+                                    )
+                                }
                                 when (visibleScreen) {
                                 "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
@@ -802,7 +813,25 @@ fun MashxallApp(startScreen: String? = null) {
                                 "word_by_word" -> WordAnalysisScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onLoad = { s, a -> selectedSurah = s; selectedAyah = a })
                                 "farmuda" -> FarmudaScreen(language, foreground, cardColor)
                                 "qibla" -> QiblaScreen(language, foreground, cardColor, selectedCity)
-                                "settings" -> SettingsScreen(language, foreground, cardColor, dark, accentPalette, use24Hour, reduceMotion, hapticsEnabled,
+                                "settings" -> SettingsScreen(
+                                    language, foreground, cardColor, dark, accentPalette, use24Hour, reduceMotion, hapticsEnabled,
+                                    backgroundStyle, backgroundIntensity, backgroundSpeed,
+                                    onBackgroundStyle = { value ->
+                                        backgroundStyle = normalizeAmbientBackdropStyle(value)
+                                        prefs.edit().putString("background_style", backgroundStyle).apply()
+                                    },
+                                    onBackgroundIntensityChange = { value ->
+                                        backgroundIntensity = normalizeAmbientBackdropIntensity(value)
+                                    },
+                                    onBackgroundIntensityCommit = {
+                                        prefs.edit().putFloat("background_intensity", backgroundIntensity).apply()
+                                    },
+                                    onBackgroundSpeedChange = { value ->
+                                        backgroundSpeed = normalizeAmbientBackdropSpeed(value)
+                                    },
+                                    onBackgroundSpeedCommit = {
+                                        prefs.edit().putFloat("background_speed", backgroundSpeed).apply()
+                                    },
                                     onAccent = {
                                         accentPalette = it
                                         MashxallAppearance.accent = MashxallAppearance.colorFor(it)
@@ -2630,6 +2659,14 @@ private fun SettingsScreen(
     use24Hour: Boolean,
     reduceMotion: Boolean,
     hapticsEnabled: Boolean,
+    backgroundStyle: String,
+    backgroundIntensity: Float,
+    backgroundSpeed: Float,
+    onBackgroundStyle: (String) -> Unit,
+    onBackgroundIntensityChange: (Float) -> Unit,
+    onBackgroundIntensityCommit: () -> Unit,
+    onBackgroundSpeedChange: (Float) -> Unit,
+    onBackgroundSpeedCommit: () -> Unit,
     onAccent: (String) -> Unit,
     onDark: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
@@ -2744,6 +2781,120 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "LIVE BACKGROUND"
+                AppLanguage.AR -> "الخلفية الحية"
+                AppLanguage.CKB -> "پاشبنەمای زیندوو"
+            },
+            color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Choose the atmosphere used across the whole app. Quran and tafsir keep a softer layer so the text stays easy to read."
+                AppLanguage.AR -> "اختر الخلفية التي ترافق جميع أقسام التطبيق. تبقى خلف القرآن والتفسير أخف حتى تظل القراءة واضحة."
+                AppLanguage.CKB -> "پاشبنەمای گونجاو بۆ هەموو بەشەکان هەڵبژێرە؛ لە قورئان و تەفسیر هێمنتر دەبێت بۆ ڕوونی خوێندنەوە."
+            },
+            color = foreground.copy(alpha = 0.58f), fontSize = 11.sp, lineHeight = 17.sp
+        )
+        Spacer(Modifier.height(9.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(19.dp),
+            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    items(listOf("ambient", "orbit", "ornament", "off")) { style ->
+                        val label = when (language) {
+                            AppLanguage.EN -> when (style) {
+                                "ambient" -> "Living aura"
+                                "orbit" -> "Golden orbit"
+                                "ornament" -> "Quiet ornament"
+                                else -> "Off"
+                            }
+                            AppLanguage.AR -> when (style) {
+                                "ambient" -> "هالة متحركة"
+                                "orbit" -> "مدارات ذهبية"
+                                "ornament" -> "زخرفة هادئة"
+                                else -> "إيقاف"
+                            }
+                            AppLanguage.CKB -> when (style) {
+                                "ambient" -> "هەڵەی جووڵاو"
+                                "orbit" -> "بازنەی زێڕین"
+                                "ornament" -> "ڕازاندنەوەی هێمن"
+                                else -> "ناچالاک"
+                            }
+                        }
+                        PremiumChoicePill(
+                            label = label,
+                            selected = backgroundStyle == style,
+                            accent = Gold,
+                            foreground = foreground,
+                            leadingIcon = when (style) {
+                                "ambient" -> Icons.Outlined.Spa
+                                "orbit" -> Icons.Outlined.Explore
+                                "ornament" -> Icons.Outlined.Tune
+                                else -> Icons.Outlined.Info
+                            }
+                        ) { onBackgroundStyle(style) }
+                    }
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(foreground.copy(alpha = 0.08f)))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Background strength"
+                            AppLanguage.AR -> "قوة الخلفية"
+                            AppLanguage.CKB -> "هێزی پاشبنەما"
+                        },
+                        color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text("\${(backgroundIntensity * 100f).roundToInt()}%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                PremiumSlider(
+                    value = backgroundIntensity,
+                    onValueChange = onBackgroundIntensityChange,
+                    onValueChangeFinished = onBackgroundIntensityCommit,
+                    valueRange = 0.20f..1f,
+                    accent = Gold,
+                    foreground = foreground
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Motion speed"
+                            AppLanguage.AR -> "سرعة الحركة"
+                            AppLanguage.CKB -> "خێرایی جووڵە"
+                        },
+                        color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text("\${(backgroundSpeed * 100f).roundToInt()}%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                PremiumSlider(
+                    value = backgroundSpeed,
+                    onValueChange = onBackgroundSpeedChange,
+                    onValueChangeFinished = onBackgroundSpeedCommit,
+                    valueRange = 0.45f..1.45f,
+                    accent = Gold,
+                    foreground = foreground
+                )
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Reduce Motion or Android's animation setting always takes priority."
+                        AppLanguage.AR -> "يظل خيار تقليل الحركة وإعداد Android مقدّماً على هذه التأثيرات."
+                        AppLanguage.CKB -> "ڕێکخستنی کەمکردنەوەی جووڵە و ئەندرۆید هەمیشە پێش ئەم کاریگەرییانەیە."
+                    },
+                    color = foreground.copy(alpha = 0.52f), fontSize = 10.sp, lineHeight = 15.sp
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+
         Text(
             when (language) { AppLanguage.EN -> "TIME FORMAT"; AppLanguage.AR -> "تنسيق الوقت"; AppLanguage.CKB -> "فۆرماتی کات" },
             color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp

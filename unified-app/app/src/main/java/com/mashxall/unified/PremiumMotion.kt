@@ -676,8 +676,37 @@ internal fun systemAllowsDecorativeMotion(context: Context): Boolean {
     return shouldAllowMashxallMotion(animatorEnabled, durationScale, MashxallMotionPreferences.reduceMotion)
 }
 
-internal fun shouldAnimateAmbientBackdrop(screenKey: String, motionAllowed: Boolean): Boolean =
-    motionAllowed && screenKey == "home"
+internal fun normalizeAmbientBackdropStyle(value: String?): String = when (value) {
+    "ambient", "orbit", "ornament", "off" -> value
+    else -> "ambient"
+}
+
+internal fun normalizeAmbientBackdropIntensity(value: Float): Float =
+    if (value.isFinite()) value.coerceIn(0.20f, 1f) else 0.82f
+
+internal fun normalizeAmbientBackdropSpeed(value: Float): Float =
+    if (value.isFinite()) value.coerceIn(0.45f, 1.45f) else 0.72f
+
+internal fun shouldShowAmbientBackdrop(style: String): Boolean =
+    normalizeAmbientBackdropStyle(style) != "off"
+
+internal fun shouldAnimateAmbientBackdrop(
+    screenKey: String,
+    motionAllowed: Boolean,
+    style: String = "ambient"
+): Boolean = motionAllowed &&
+    normalizeAmbientBackdropStyle(style) in setOf("ambient", "orbit") &&
+    screenKey != "immersive_mushaf"
+
+internal fun ambientBackdropIntensityForScreen(screenKey: String, intensity: Float): Float {
+    val safe = normalizeAmbientBackdropIntensity(intensity)
+    return if (screenKey == "quran" || screenKey == "tafsir") safe * 0.34f else safe
+}
+
+internal fun ambientMotionDurationMillis(baseMillis: Int, speed: Float): Int =
+    (baseMillis.coerceAtLeast(1_000) / normalizeAmbientBackdropSpeed(speed))
+        .roundToInt()
+        .coerceIn(1_000, 120_000)
 
 /**
  * Entrance motion for real content rows: fade, a restrained upward settle and
@@ -866,97 +895,133 @@ internal fun PremiumTapBurst(
 }
 
 /** Slow ambient light fields add depth without competing with reading content. */
+private data class AmbientBackdropMotion(
+    val driftX: Float = 0f,
+    val driftY: Float = 0f,
+    val orbitRotation: Float = 0f,
+    val shimmerAlpha: Float = 0.04f
+)
+
+/**
+ * Shared atmospheric background used by every destination. One transition
+ * drives all ambient values to keep the animation inexpensive on mid-range
+ * Android devices. Reader screens pass a lower intensity to protect legibility.
+ */
 @Composable
 internal fun PremiumAmbientBackdrop(
     modifier: Modifier = Modifier,
     accent: Color,
     dark: Boolean,
-    animated: Boolean = true
+    animated: Boolean = true,
+    style: String = "ambient",
+    intensity: Float = 0.82f,
+    speed: Float = 0.72f
 ) {
     val context = LocalContext.current
-    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
-    val drift = if (motionAllowed && animated) {
-        val transition = rememberInfiniteTransition(label = "Mashxall ambient drift")
-        val x by transition.animateFloat(
-            initialValue = -22f, targetValue = 24f,
-            animationSpec = infiniteRepeatable(animation = tween(8200, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val safeStyle = normalizeAmbientBackdropStyle(style)
+    val safeIntensity = normalizeAmbientBackdropIntensity(intensity)
+    val safeSpeed = normalizeAmbientBackdropSpeed(speed)
+    val runMotion = animated && motionAllowed && safeStyle in setOf("ambient", "orbit")
+    val motion = if (runMotion) {
+        val transition = rememberInfiniteTransition(label = "Mashxall shared ambient atmosphere")
+        val driftX by transition.animateFloat(
+            initialValue = if (safeStyle == "ambient") -18f else 0f,
+            targetValue = if (safeStyle == "ambient") 20f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(ambientMotionDurationMillis(9_200, safeSpeed), easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
             label = "Mashxall ambient horizontal drift"
         )
-        val y by transition.animateFloat(
-            initialValue = 16f, targetValue = -18f,
-            animationSpec = infiniteRepeatable(animation = tween(10400, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        val driftY by transition.animateFloat(
+            initialValue = if (safeStyle == "ambient") 13f else 0f,
+            targetValue = if (safeStyle == "ambient") -15f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(ambientMotionDurationMillis(11_400, safeSpeed), easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
             label = "Mashxall ambient vertical drift"
         )
-        x to y
-    } else {
-        0f to 0f
-    }
-    val glowAlpha = if (dark) 0.13f else 0.07f
-    val orbitRotation = if (motionAllowed && animated) {
-        val transition = rememberInfiniteTransition(label = "Mashxall ambient orbit")
-        val rotation by transition.animateFloat(
+        val orbit by transition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
             animationSpec = infiniteRepeatable(
-                animation = tween(42000, easing = LinearEasing),
+                animation = tween(ambientMotionDurationMillis(48_000, safeSpeed), easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
-            label = "Mashxall ambient orbit rotation"
+            label = "Mashxall ambient orbital rotation"
         )
-        rotation
-    } else 0f
-    val shimmerAlpha = if (motionAllowed && animated) {
-        val transition = rememberInfiniteTransition(label = "Mashxall ambient breathing glow")
-        val alpha by transition.animateFloat(
-            initialValue = 0.055f,
-            targetValue = 0.12f,
+        val shimmer by transition.animateFloat(
+            initialValue = 0.045f * safeIntensity,
+            targetValue = 0.105f * safeIntensity,
             animationSpec = infiniteRepeatable(
-                animation = tween(5200, easing = FastOutSlowInEasing),
+                animation = tween(ambientMotionDurationMillis(6_400, safeSpeed), easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
-            label = "Mashxall ambient breathing alpha"
+            label = "Mashxall ambient breathing light"
         )
-        alpha
-    } else if (dark) 0.07f else 0.035f
+        AmbientBackdropMotion(driftX, driftY, orbit, shimmer)
+    } else {
+        AmbientBackdropMotion(
+            shimmerAlpha = (if (dark) 0.065f else 0.032f) * safeIntensity
+        )
+    }
+    val glowAlpha = (if (dark) 0.125f else 0.065f) * safeIntensity
+    val secondaryAlpha = (if (dark) 0.105f else 0.05f) * safeIntensity
+    val coolAlpha = (if (dark) 0.055f else 0.028f) * safeIntensity
+
     Box(modifier = modifier) {
-        PremiumIslamicOrnament(Modifier.fillMaxSize(), accent = accent, dark = dark)
+        PremiumIslamicOrnament(
+            Modifier.fillMaxSize(),
+            accent = accent.copy(alpha = safeIntensity),
+            dark = dark
+        )
         Box(
-            Modifier.align(Alignment.TopEnd).offset(x = drift.first.dp + 42.dp, y = drift.second.dp - 62.dp)
+            Modifier.align(Alignment.TopEnd)
+                .offset(x = motion.driftX.dp + 42.dp, y = motion.driftY.dp - 62.dp)
                 .size(250.dp).clip(CircleShape)
                 .background(Brush.radialGradient(listOf(accent.copy(alpha = glowAlpha), Color.Transparent)))
         )
         Box(
-            Modifier.align(Alignment.BottomStart).offset(x = -82.dp - drift.first.dp, y = 72.dp - drift.second.dp)
+            Modifier.align(Alignment.BottomStart)
+                .offset(x = -82.dp - motion.driftX.dp, y = 72.dp - motion.driftY.dp)
                 .size(220.dp).clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFF3DA987).copy(alpha = if (dark) 0.12f else 0.055f), Color.Transparent)))
+                .background(Brush.radialGradient(listOf(Color(0xFF3DA987).copy(alpha = secondaryAlpha), Color.Transparent)))
         )
         Box(
-            Modifier.align(Alignment.CenterEnd).offset(x = 54.dp + drift.first.dp, y = -104.dp + drift.second.dp)
+            Modifier.align(Alignment.CenterEnd)
+                .offset(x = 54.dp + motion.driftX.dp, y = -104.dp + motion.driftY.dp)
                 .size(104.dp).clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFF6DA8C7).copy(alpha = if (dark) 0.055f else 0.035f), Color.Transparent)))
+                .background(Brush.radialGradient(listOf(Color(0xFF6DA8C7).copy(alpha = coolAlpha), Color.Transparent)))
         )
-        // A slow orbital jewel and a breathing light field give each destination
-        // its own living atmosphere without moving text or reading content.
-        Box(
-            Modifier.align(Alignment.BottomEnd).offset(x = 28.dp, y = 34.dp)
-                .size(118.dp).graphicsLayer { rotationZ = orbitRotation }
-        ) {
-            Box(Modifier.fillMaxSize().border(0.8.dp, accent.copy(alpha = 0.11f), CircleShape))
+        if (safeStyle != "ornament") {
+            // The orbital accent is deliberately behind content, never over text.
             Box(
-                Modifier.align(Alignment.TopCenter).offset(y = (-2).dp)
-                    .size(6.dp).clip(CircleShape).background(accent.copy(alpha = 0.52f))
-            )
+                Modifier.align(Alignment.BottomEnd).offset(x = 28.dp, y = 34.dp)
+                    .size(118.dp).graphicsLayer { rotationZ = motion.orbitRotation }
+            ) {
+                Box(Modifier.fillMaxSize().border(0.8.dp, accent.copy(alpha = 0.12f * safeIntensity), CircleShape))
+                Box(
+                    Modifier.align(Alignment.TopCenter).offset(y = (-2).dp)
+                        .size(6.dp).clip(CircleShape).background(accent.copy(alpha = 0.54f * safeIntensity))
+                )
+                Box(
+                    Modifier.align(Alignment.CenterEnd).offset(x = 2.dp)
+                        .size(4.dp).clip(CircleShape).background(Color(0xFF8FD4B1).copy(alpha = 0.54f * safeIntensity))
+                )
+            }
+        }
+        if (safeStyle == "ambient") {
             Box(
-                Modifier.align(Alignment.CenterEnd).offset(x = 2.dp)
-                    .size(4.dp).clip(CircleShape).background(Color(0xFF8FD4B1).copy(alpha = 0.52f))
+                Modifier.align(Alignment.Center).offset(x = 82.dp, y = 42.dp)
+                    .size(146.dp).graphicsLayer { alpha = motion.shimmerAlpha }
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.78f), Color.Transparent)))
             )
         }
-        Box(
-            Modifier.align(Alignment.Center).offset(x = 82.dp, y = 42.dp)
-                .size(146.dp).graphicsLayer { alpha = shimmerAlpha }
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.74f), Color.Transparent)))
-        )
     }
 }
 

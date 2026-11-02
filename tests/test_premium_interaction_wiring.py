@@ -118,6 +118,25 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         )
         self.assertNotIn("QuranReadingProgressCard(", reader.split("SearchBox(language, query", 1)[0])
 
+    def test_shared_live_background_has_persistent_style_strength_and_speed_controls(self):
+        main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
+        main = main_path.read_text(encoding="utf-8")
+        self.assertIn("if (!immersiveMushaf && shouldShowAmbientBackdrop(backgroundStyle))", main)
+        self.assertIn("shouldAnimateAmbientBackdrop(visibleScreen, motionAllowed, backgroundStyle)", main)
+        self.assertIn("ambientBackdropIntensityForScreen(visibleScreen, backgroundIntensity)", main)
+        self.assertIn('items(listOf("ambient", "orbit", "ornament", "off"))', main)
+        self.assertIn("onBackgroundIntensityCommit", main)
+        self.assertIn("onBackgroundSpeedCommit", main)
+        self.assertIn('putString("background_style", backgroundStyle)', main)
+        self.assertIn('putFloat("background_intensity", backgroundIntensity)', main)
+        self.assertIn('putFloat("background_speed", backgroundSpeed)', main)
+
+    def test_background_motion_is_single_transition_and_respects_reduce_motion(self):
+        self.assertIn('rememberInfiniteTransition(label = "Mashxall shared ambient atmosphere")', MOTION)
+        self.assertIn("val runMotion = animated && motionAllowed", MOTION)
+        self.assertIn("normalizeAmbientBackdropSpeed(speed)", MOTION)
+        self.assertIn("ambientMotionDurationMillis", MOTION)
+
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 

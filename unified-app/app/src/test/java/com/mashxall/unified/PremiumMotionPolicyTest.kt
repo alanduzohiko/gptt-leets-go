@@ -95,12 +95,34 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
-    fun ambientBackdropOnlyRunsOnHomeWhenMotionIsAllowed() {
-        assertEquals(true, shouldAnimateAmbientBackdrop("home", motionAllowed = true))
-        assertEquals(false, shouldAnimateAmbientBackdrop("quran", motionAllowed = true))
-        assertEquals(false, shouldAnimateAmbientBackdrop("prayer", motionAllowed = true))
-        assertEquals(false, shouldAnimateAmbientBackdrop("home", motionAllowed = false))
-        assertEquals(false, shouldAnimateAmbientBackdrop("hadith", motionAllowed = false))
+    fun sharedAmbientBackdropAnimatesAcrossEveryNormalDestination() {
+        listOf("home", "quran", "tafsir", "prayer", "qibla", "audio", "hadith", "settings").forEach { screen ->
+            assertEquals(screen, true, shouldAnimateAmbientBackdrop(screen, motionAllowed = true, style = "ambient"))
+        }
+        assertEquals(false, shouldAnimateAmbientBackdrop("immersive_mushaf", motionAllowed = true))
+        assertEquals(false, shouldAnimateAmbientBackdrop("quran", motionAllowed = false))
+        assertEquals(false, shouldAnimateAmbientBackdrop("home", motionAllowed = true, style = "ornament"))
+        assertEquals(false, shouldAnimateAmbientBackdrop("home", motionAllowed = true, style = "off"))
+        assertEquals(true, shouldShowAmbientBackdrop("ornament"))
+        assertEquals(false, shouldShowAmbientBackdrop("off"))
+    }
+
+    @Test
+    fun ambientBackgroundSettingsAreClampedAndReaderSurfacesStayQuiet() {
+        assertEquals("ambient", normalizeAmbientBackdropStyle(null))
+        assertEquals("orbit", normalizeAmbientBackdropStyle("orbit"))
+        assertEquals("ambient", normalizeAmbientBackdropStyle("unknown"))
+        assertEquals(0.82f, normalizeAmbientBackdropIntensity(Float.NaN), 0.0001f)
+        assertEquals(0.20f, normalizeAmbientBackdropIntensity(0f), 0.0001f)
+        assertEquals(1f, normalizeAmbientBackdropIntensity(2f), 0.0001f)
+        assertEquals(0.72f, normalizeAmbientBackdropSpeed(Float.NaN), 0.0001f)
+        assertEquals(0.45f, normalizeAmbientBackdropSpeed(0.1f), 0.0001f)
+        assertEquals(1.45f, normalizeAmbientBackdropSpeed(2f), 0.0001f)
+        assertEquals(0.34f, ambientBackdropIntensityForScreen("quran", 1f), 0.0001f)
+        assertEquals(0.34f, ambientBackdropIntensityForScreen("tafsir", 1f), 0.0001f)
+        assertEquals(0.82f, ambientBackdropIntensityForScreen("prayer", 0.82f), 0.0001f)
+        assertEquals(20_000, ambientMotionDurationMillis(10_000, 0.5f))
+        assertEquals(10_000, ambientMotionDurationMillis(10_000, 1f))
     }
 
     @Test
