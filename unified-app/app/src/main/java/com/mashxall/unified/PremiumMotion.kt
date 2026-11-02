@@ -1092,34 +1092,39 @@ internal fun PremiumScreenOrnamentOverlay(
     }
     val motionAllowed = animated && systemMotionAllowed
     val safeIntensity = if (intensity.isFinite()) intensity.coerceIn(0f, 1f) else 0.2f
-    val transition = rememberInfiniteTransition(label = "Mashxall screen edge ornaments")
-    val drift by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (motionAllowed) 1f else 0f,
-        animationSpec = if (motionAllowed) infiniteRepeatable(
-            animation = tween(7_600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ) else snap(),
-        label = "Mashxall edge ornament drift"
-    )
-    val orbit by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (motionAllowed) 360f else 0f,
-        animationSpec = if (motionAllowed) infiniteRepeatable(
-            animation = tween(38_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ) else snap(),
-        label = "Mashxall edge ornament orbit"
-    )
-    val shimmer by transition.animateFloat(
-        initialValue = 0.38f,
-        targetValue = if (motionAllowed) 1f else 0.66f,
-        animationSpec = if (motionAllowed) infiniteRepeatable(
-            animation = tween(2_500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ) else snap(),
-        label = "Mashxall edge ornament shimmer"
-    )
+    val (drift, orbit, shimmer) = if (motionAllowed) {
+        val transition = rememberInfiniteTransition(label = "Mashxall screen edge ornaments")
+        val driftValue by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(7_600, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall edge ornament drift"
+        )
+        val orbitValue by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(38_000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Mashxall edge ornament orbit"
+        )
+        val shimmerValue by transition.animateFloat(
+            initialValue = 0.38f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2_500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Mashxall edge ornament shimmer"
+        )
+        Triple(driftValue, orbitValue, shimmerValue)
+    } else {
+        Triple(0f, 0f, 0.66f)
+    }
     val alphaBase = if (immersiveMushaf) {
         0.045f + safeIntensity * 0.12f
     } else {
