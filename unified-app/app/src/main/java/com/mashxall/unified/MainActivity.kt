@@ -456,6 +456,9 @@ class MainActivity : ComponentActivity() {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    val motionAllowed = remember(context, reduceMotion) {
+        systemAllowsDecorativeMotion(context) && !reduceMotion
+    }
     var reduceMotion by rememberSaveable { mutableStateOf(prefs.getBoolean("reduce_motion", false)) }
     var hapticsEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
     SideEffect {
@@ -3038,12 +3041,16 @@ private fun SettingsScreen(
             AnimatedVisibility(
                 visible = true,
                 modifier = Modifier.fillMaxWidth(),
-                enter = fadeIn(animationSpec = tween(340, delayMillis = index * 48)) +
-                    slideInVertically(initialOffsetY = { it / 7 }, animationSpec = tween(360, delayMillis = index * 48)) +
-                    scaleIn(initialScale = 0.975f, animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ))
+                enter = if (motionAllowed) {
+                    fadeIn(animationSpec = tween(340, delayMillis = index * 48)) +
+                        slideInVertically(initialOffsetY = { it / 7 }, animationSpec = tween(360, delayMillis = index * 48)) +
+                        scaleIn(initialScale = 0.975f, animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ))
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
             ) {
                 Card(
                     modifier = Modifier.fillMaxWidth()

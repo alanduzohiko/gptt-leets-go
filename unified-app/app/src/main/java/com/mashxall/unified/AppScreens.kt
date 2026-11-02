@@ -570,25 +570,36 @@ private fun QuranSurahWelcomeCard(
         AppLanguage.CKB -> "ڕێکخستنەکانی خوێندنەوە"
     }
 
-    val ornamentTransition = rememberInfiniteTransition(label = "Quran welcome ornament")
-    val ornamentRotation by ornamentTransition.animateFloat(
-        initialValue = -9f,
-        targetValue = 9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Quran welcome ring rotation"
-    )
-    val ornamentScale by ornamentTransition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Quran welcome ring breathing"
-    )
+    val context = LocalContext.current
+    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val ornamentMotion = if (motionAllowed) {
+        val ornamentTransition = rememberInfiniteTransition(label = "Quran welcome ornament")
+        val rotation by ornamentTransition.animateFloat(
+            initialValue = -9f,
+            targetValue = 9f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(4200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Quran welcome ring rotation"
+        )
+        val scale by ornamentTransition.animateFloat(
+            initialValue = 0.94f,
+            targetValue = 1.04f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Quran welcome ring breathing"
+        )
+        rotation to scale
+    } else {
+        0f to 1f
+    }
+    val ornamentRotation = ornamentMotion.first
+    val ornamentScale = ornamentMotion.second
     Box(
         Modifier.fillMaxWidth()
             .staggeredEntrance(itemKey = "quran-reader-welcome", index = 0)

@@ -677,7 +677,7 @@ internal fun systemAllowsDecorativeMotion(context: Context): Boolean {
 }
 
 internal fun normalizeAmbientBackdropStyle(value: String?): String = when (value) {
-    "ambient", "orbit", "ornament", "off" -> value
+    "ambient", "orbit", "ornament", "off" -> value ?: "ambient"
     else -> "ambient"
 }
 
@@ -694,9 +694,12 @@ internal fun shouldAnimateAmbientBackdrop(
     screenKey: String,
     motionAllowed: Boolean,
     style: String = "ambient"
-): Boolean = motionAllowed &&
-    normalizeAmbientBackdropStyle(style) in setOf("ambient", "orbit") &&
-    screenKey != "immersive_mushaf"
+): Boolean {
+    val safeStyle = normalizeAmbientBackdropStyle(style)
+    return motionAllowed &&
+        (safeStyle == "ambient" || safeStyle == "orbit") &&
+        screenKey != "immersive_mushaf"
+}
 
 internal fun ambientBackdropIntensityForScreen(screenKey: String, intensity: Float): Float {
     val safe = normalizeAmbientBackdropIntensity(intensity)
@@ -924,7 +927,7 @@ internal fun PremiumAmbientBackdrop(
     val safeStyle = normalizeAmbientBackdropStyle(style)
     val safeIntensity = normalizeAmbientBackdropIntensity(intensity)
     val safeSpeed = normalizeAmbientBackdropSpeed(speed)
-    val runMotion = animated && motionAllowed && safeStyle in setOf("ambient", "orbit")
+    val runMotion = animated && motionAllowed && (safeStyle == "ambient" || safeStyle == "orbit")
     val motion = if (runMotion) {
         val transition = rememberInfiniteTransition(label = "Mashxall shared ambient atmosphere")
         val driftX by transition.animateFloat(
@@ -1122,6 +1125,16 @@ internal fun PremiumChoicePill(
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mashxall choice pill response"
     )
+    val leadingIconScale by animateFloatAsState(
+        targetValue = premiumChoiceIconScale(enabled && selected),
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
+        label = "Mashxall choice pill icon spring"
+    )
+    val leadingIconRotation by animateFloatAsState(
+        targetValue = if (enabled) premiumChoiceIconRotationDegrees(selected) else 0f,
+        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
+        label = "Mashxall choice pill icon turn"
+    )
     val selectionDotScale by animateFloatAsState(
         targetValue = if (enabled && selected) 1.18f else 0.62f,
         animationSpec = if (motionAllowed) spring(
@@ -1146,7 +1159,11 @@ internal fun PremiumChoicePill(
                 leadingIcon,
                 contentDescription = null,
                 tint = if (enabled && selected) accent else foreground.copy(alpha = if (enabled) 0.68f else 0.30f),
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(14.dp).graphicsLayer {
+                    scaleX = leadingIconScale
+                    scaleY = leadingIconScale
+                    rotationZ = leadingIconRotation
+                }
             )
             Spacer(Modifier.width(6.dp))
         }
@@ -1750,6 +1767,10 @@ internal fun PremiumActionButton(
 
 
 /** Map a slider value to a bounded tactile tick, including continuous sliders. */
+internal fun premiumChoiceIconScale(selected: Boolean): Float = if (selected) 1.10f else 1f
+
+internal fun premiumChoiceIconRotationDegrees(selected: Boolean): Float = if (selected) -8f else 0f
+
 internal fun premiumSliderHapticBucket(
     value: Float,
     rangeStart: Float,

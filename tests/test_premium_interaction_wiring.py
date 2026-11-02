@@ -137,6 +137,23 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("normalizeAmbientBackdropSpeed(speed)", MOTION)
         self.assertIn("ambientMotionDurationMillis", MOTION)
 
+    def test_choice_icon_response_and_quran_ornament_respect_motion_policy(self):
+        self.assertIn('label = "Mashxall choice pill icon spring"', MOTION)
+        self.assertIn('label = "Mashxall choice pill icon turn"', MOTION)
+        quran = APP_SCREENS.split("fun QuranSurahWelcomeCard(", 1)[1].split(
+            "@Composable\\nprivate fun QuranReadingProgressCard(", 1
+        )[0]
+        self.assertIn("val ornamentMotion = if (motionAllowed)", quran)
+        self.assertIn("else {\n        0f to 1f\n    }", quran)
+
+    def test_settings_entrance_animation_respects_reduce_motion(self):
+        main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
+        main = main_path.read_text(encoding="utf-8")
+        settings = main.split("private fun SettingsScreen(", 1)[1]
+        self.assertIn("val motionAllowed = remember(context, reduceMotion)", settings)
+        self.assertIn("enter = if (motionAllowed)", settings)
+        self.assertIn("fadeIn(animationSpec = tween(0))", settings)
+
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 

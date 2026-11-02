@@ -55,6 +55,14 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
+    fun choicePillIconsHaveAQuietSelectedSpring() {
+        assertEquals(1.10f, premiumChoiceIconScale(true), 0.0001f)
+        assertEquals(1f, premiumChoiceIconScale(false), 0.0001f)
+        assertEquals(-8f, premiumChoiceIconRotationDegrees(true), 0.0001f)
+        assertEquals(0f, premiumChoiceIconRotationDegrees(false), 0.0001f)
+    }
+
+    @Test
     fun staggerDelayStartsImmediatelyAndCapsTheCascade() {
         assertEquals(0L, staggerDelayMillis(0))
         assertEquals(40L, staggerDelayMillis(1))
