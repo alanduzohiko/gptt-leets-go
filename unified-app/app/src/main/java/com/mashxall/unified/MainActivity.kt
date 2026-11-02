@@ -456,9 +456,6 @@ class MainActivity : ComponentActivity() {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    val motionAllowed = remember(context, reduceMotion) {
-        systemAllowsDecorativeMotion(context) && !reduceMotion
-    }
     var reduceMotion by rememberSaveable { mutableStateOf(prefs.getBoolean("reduce_motion", false)) }
     var hapticsEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
     SideEffect {
@@ -2685,6 +2682,9 @@ private fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    val motionAllowed = remember(context, reduceMotion) {
+        systemAllowsDecorativeMotion(context) && !reduceMotion
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         PremiumSectionHero(
             title = tr(language, "settings"),
@@ -2825,7 +2825,7 @@ private fun SettingsScreen(
                                 else -> "إيقاف"
                             }
                             AppLanguage.CKB -> when (style) {
-                                "ambient" -> "هەڵەی جووڵاو"
+                                "ambient" -> "ڕووناکیی جووڵاو"
                                 "orbit" -> "بازنەی زێڕین"
                                 "ornament" -> "ڕازاندنەوەی هێمن"
                                 else -> "ناچالاک"
