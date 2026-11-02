@@ -1568,7 +1568,7 @@ internal fun PremiumSectionHero(
     accent: Color,
     eyebrow: String = "MASHXALL • DAILY COMPANION",
     metric: String? = null,
-    pulseIcon: Boolean = false,
+    pulseIcon: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1598,8 +1598,8 @@ internal fun PremiumSectionHero(
             label = "Mashxall hero glow scale"
         )
         val alpha by transition.animateFloat(
-            initialValue = 0.15f,
-            targetValue = 0.27f,
+            initialValue = 0.18f,
+            targetValue = 0.32f,
             animationSpec = infiniteRepeatable(
                 animation = tween(3200, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
