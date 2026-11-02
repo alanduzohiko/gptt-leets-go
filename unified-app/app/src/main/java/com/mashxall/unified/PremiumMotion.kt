@@ -1135,19 +1135,44 @@ internal fun PremiumScreenOrnamentOverlay(
     val alphaBase = if (immersiveMushaf) {
         0.045f + safeIntensity * 0.12f
     } else {
-        0.14f + safeIntensity * 0.38f
+        0.23f + safeIntensity * 0.55f
     }
     val phaseSeed = (screenKey.hashCode() and 0xFF).toFloat() / 255f
 
     Canvas(modifier = modifier) {
         if (size.width <= 0f || size.height <= 0f) return@Canvas
-        val sideInset = if (immersiveMushaf) 5.5.dp.toPx() else 8.dp.toPx()
-        val radius = if (immersiveMushaf) 7.5.dp.toPx() else 16.dp.toPx()
-        val thinStroke = if (immersiveMushaf) 0.55.dp.toPx() else 0.9.dp.toPx()
+        val sideInset = if (immersiveMushaf) 5.5.dp.toPx() else 9.dp.toPx()
+        val radius = if (immersiveMushaf) 7.5.dp.toPx() else 21.dp.toPx()
+        val thinStroke = if (immersiveMushaf) 0.55.dp.toPx() else 1.15.dp.toPx()
         val driftRadians = drift * (2.0 * PI)
         val seedRadians = phaseSeed * (2.0 * PI)
         val driftDistance = if (immersiveMushaf) 1.8 else 8.0
         val verticalDrift = (sin(driftRadians + seedRadians) * driftDistance).toFloat() * density
+        val topEdgeY = if (immersiveMushaf) 2.5.dp.toPx() else 5.dp.toPx()
+        val bottomEdgeY = size.height - topEdgeY
+        val ribbonTravel = if (motionAllowed) drift else phaseSeed
+        val ribbonX = size.width * (0.12f + 0.76f * ribbonTravel.coerceIn(0f, 1f))
+        val ribbonRadius = if (immersiveMushaf) 0.8.dp.toPx() else 2.25.dp.toPx()
+
+        listOf(topEdgeY, bottomEdgeY).forEachIndexed { index, edgeY ->
+            drawLine(
+                color = accent.copy(alpha = alphaBase * 0.27f),
+                start = Offset(if (index == 0) 18.dp.toPx() else 26.dp.toPx(), edgeY),
+                end = Offset(size.width - if (index == 0) 26.dp.toPx() else 18.dp.toPx(), edgeY),
+                strokeWidth = if (immersiveMushaf) 0.45.dp.toPx() else 0.8.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = accent.copy(alpha = alphaBase * (0.52f + shimmer * 0.32f)),
+                radius = ribbonRadius,
+                center = Offset(ribbonX, edgeY)
+            )
+            drawCircle(
+                color = accent.copy(alpha = alphaBase * 0.18f),
+                radius = ribbonRadius * (if (immersiveMushaf) 1.8f else 2.7f),
+                center = Offset(ribbonX, edgeY)
+            )
+        }
 
         repeat(2) { side ->
             val edgeX = if (side == 0) sideInset else size.width - sideInset
@@ -1207,7 +1232,7 @@ internal fun PremiumScreenOrnamentOverlay(
                 edgeX,
                 size.height * 0.51f - verticalDrift * (if (side == 0) 1f else -1f)
             )
-            val outerRadius = if (immersiveMushaf) 4.8.dp.toPx() else 8.5.dp.toPx()
+            val outerRadius = if (immersiveMushaf) 4.8.dp.toPx() else 12.dp.toPx()
             val rosettePath = Path()
             for (vertex in 0 until 16) {
                 val point = premiumOrnamentVertex(
