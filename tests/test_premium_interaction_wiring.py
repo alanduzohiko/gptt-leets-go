@@ -131,6 +131,20 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn('putFloat("background_intensity", backgroundIntensity)', main)
         self.assertIn('putFloat("background_speed", backgroundSpeed)', main)
 
+    def test_visible_screen_ornaments_cover_every_destination_and_keep_mushaf_subtle(self):
+        main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
+        main = main_path.read_text(encoding="utf-8")
+
+        self.assertIn('itemKey = "destination-$visibleScreen"', main)
+        self.assertIn("PremiumScreenOrnamentOverlay(", main)
+        self.assertIn("premiumScreenOrnamentIntensity(", main)
+        self.assertIn("if (shouldShowAmbientBackdrop(backgroundStyle))", main)
+        self.assertIn("immersiveMushaf = immersiveMushaf", main)
+        self.assertIn("internal fun PremiumScreenOrnamentOverlay(", MOTION)
+        self.assertIn('label = "Mashxall edge ornament orbit"', MOTION)
+        self.assertIn("drawArc(", MOTION)
+        self.assertIn("premiumOrnamentVertex(", MOTION)
+
     def test_background_motion_is_single_transition_and_respects_reduce_motion(self):
         self.assertIn('rememberInfiniteTransition(label = "Mashxall shared ambient atmosphere")', MOTION)
         self.assertIn("val runMotion = animated && motionAllowed", MOTION)
