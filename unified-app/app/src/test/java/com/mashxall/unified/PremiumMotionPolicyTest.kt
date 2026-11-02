@@ -116,7 +116,7 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
-    fun ambientBackgroundSettingsAreClampedAndReaderSurfacesStayQuiet() {
+    fun ambientBackgroundSettingsStayVisibleAcrossReadersAndProtectTheMushaf() {
         assertEquals("ambient", normalizeAmbientBackdropStyle(null))
         assertEquals("orbit", normalizeAmbientBackdropStyle("orbit"))
         assertEquals("ambient", normalizeAmbientBackdropStyle("unknown"))
@@ -126,9 +126,14 @@ class PremiumMotionPolicyTest {
         assertEquals(0.72f, normalizeAmbientBackdropSpeed(Float.NaN), 0.0001f)
         assertEquals(0.45f, normalizeAmbientBackdropSpeed(0.1f), 0.0001f)
         assertEquals(1.45f, normalizeAmbientBackdropSpeed(2f), 0.0001f)
-        assertEquals(0.34f, ambientBackdropIntensityForScreen("quran", 1f), 0.0001f)
-        assertEquals(0.34f, ambientBackdropIntensityForScreen("tafsir", 1f), 0.0001f)
+        assertEquals(0.72f, ambientBackdropIntensityForScreen("quran", 1f), 0.0001f)
+        assertEquals(0.66f, ambientBackdropIntensityForScreen("tafsir", 1f), 0.0001f)
         assertEquals(0.82f, ambientBackdropIntensityForScreen("prayer", 0.82f), 0.0001f)
+        assertEquals(0.72f, premiumScreenOrnamentIntensity("quran", 1f), 0.0001f)
+        assertEquals(0.66f, premiumScreenOrnamentIntensity("tafsir", 1f), 0.0001f)
+        assertEquals(0.78f, premiumScreenOrnamentIntensity("prayer", 1f), 0.0001f)
+        assertEquals(0.16f, premiumScreenOrnamentIntensity("quran", 1f, immersiveMushaf = true), 0.0001f)
+        assertEquals(0.02f, premiumScreenOrnamentIntensity("prayer", 0f), 0.0001f)
         assertEquals(20_000, ambientMotionDurationMillis(10_000, 0.5f))
         assertEquals(10_000, ambientMotionDurationMillis(10_000, 1f))
     }
