@@ -221,14 +221,33 @@ internal fun Modifier.premiumClickable(
             val glow = premiumRolePressGlowAlpha(role) * pressGlow
             val corner = CornerRadius((size.minDimension * 0.20f).coerceAtLeast(8.dp.toPx()))
             drawRoundRect(
+                color = pressAccent.copy(alpha = glow * 0.045f),
+                cornerRadius = corner
+            )
+            drawRoundRect(
                 color = pressAccent.copy(alpha = glow),
                 cornerRadius = corner,
                 style = Stroke(width = (1.1f + 1.5f * pressGlow).dp.toPx())
             )
             drawRoundRect(
-                color = Color.White.copy(alpha = glow * 0.12f),
+                color = Color.White.copy(alpha = glow * 0.16f),
                 cornerRadius = corner,
                 style = Stroke(width = 0.65.dp.toPx())
+            )
+            // A short moving glint makes the press acknowledgement visible,
+            // while its start and edge glow differ by control role.
+            val glintX = size.width * (0.14f + 0.72f * pressGlow)
+            drawLine(
+                color = Color.White.copy(alpha = glow * 0.22f),
+                start = Offset((glintX - 4.dp.toPx()).coerceAtLeast(4.dp.toPx()), 1.5.dp.toPx()),
+                end = Offset((glintX + 4.dp.toPx()).coerceAtMost(size.width - 4.dp.toPx()), 1.5.dp.toPx()),
+                strokeWidth = 1.1.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = pressAccent.copy(alpha = glow * 0.62f),
+                radius = 1.45.dp.toPx(),
+                center = Offset(glintX, 2.dp.toPx())
             )
         }
     }.graphicsLayer {
@@ -1068,9 +1087,10 @@ internal fun PremiumScreenOrnamentOverlay(
     immersiveMushaf: Boolean = false
 ) {
     val context = LocalContext.current
-    val motionAllowed = animated && remember(context, MashxallMotionPreferences.reduceMotion) {
+    val systemMotionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
         systemAllowsDecorativeMotion(context)
     }
+    val motionAllowed = animated && systemMotionAllowed
     val safeIntensity = if (intensity.isFinite()) intensity.coerceIn(0f, 1f) else 0.2f
     val transition = rememberInfiniteTransition(label = "Mashxall screen edge ornaments")
     val drift by transition.animateFloat(
@@ -1114,7 +1134,8 @@ internal fun PremiumScreenOrnamentOverlay(
         val thinStroke = if (immersiveMushaf) 0.55.dp.toPx() else 0.9.dp.toPx()
         val driftRadians = drift * (2.0 * PI)
         val seedRadians = phaseSeed * (2.0 * PI)
-        val verticalDrift = (sin(driftRadians + seedRadians) * if (immersiveMushaf) 1.8 else 8.0).toFloat() * density
+        val driftDistance = if (immersiveMushaf) 1.8 else 8.0
+        val verticalDrift = (sin(driftRadians + seedRadians) * driftDistance).toFloat() * density
 
         repeat(2) { side ->
             val edgeX = if (side == 0) sideInset else size.width - sideInset
