@@ -100,6 +100,24 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("Opening the page-based Mushaf", reader)
 
 
+    def test_shared_section_hero_decorative_layer_does_not_expand_to_full_screen(self):
+        hero = MOTION.split("internal fun PremiumSectionHero(", 1)[1].split(
+            "/**\n * A restrained orbit around the Qibla compass.", 1
+        )[0]
+        self.assertIn("modifier = Modifier.matchParentSize()", hero)
+        self.assertNotIn("modifier = Modifier.fillMaxSize()", hero)
+        self.assertIn("Modifier.fillMaxWidth()", hero)
+
+    def test_quran_index_places_surah_rows_before_library_progress_summary(self):
+        reader = APP_SCREENS.split("} else if (showSurahList) {", 1)[1].split(
+            "} else if (openingMushaf)", 1
+        )[0]
+        self.assertLess(
+            reader.index("itemsIndexed(filteredSurahs"),
+            reader.index('item(key = "quran-reading-progress-footer")')
+        )
+        self.assertNotIn("QuranReadingProgressCard(", reader.split("SearchBox(language, query", 1)[0])
+
     def test_selected_icon_jewels_follow_reduce_motion(self):
         self.assertEqual(2, MOTION.count("enter = if (motionAllowed) scaleIn("))
 

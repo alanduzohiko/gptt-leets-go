@@ -1992,16 +1992,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 .apply()
                         }
                     )
-                    if (surahs.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        QuranReadingProgressCard(
-                            summary = readingProgressSummary,
-                            foreground = foreground,
-                            cardColor = cardColor,
-                            language = language
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
                     SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
                     Spacer(Modifier.height(8.dp))
                     Row(
@@ -2108,6 +2098,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                             }
                         )
+                    }
+                    if (surahs.isNotEmpty()) {
+                        item(key = "quran-reading-progress-footer") {
+                            Spacer(Modifier.height(12.dp))
+                            QuranReadingProgressCard(
+                                summary = readingProgressSummary,
+                                foreground = foreground,
+                                cardColor = cardColor,
+                                language = language
+                            )
+                            Spacer(Modifier.height(12.dp))
+                        }
                     }
                 }
             }

@@ -1376,7 +1376,9 @@ internal fun PremiumSectionHero(
                 .border(1.dp, accent.copy(alpha = 0.34f), RoundedCornerShape(25.dp))
         ) {
             PremiumIslamicOrnament(
-                modifier = Modifier.fillMaxSize(),
+                // Match the measured hero bounds without making this decorative
+                // background participate in Box sizing or consume the whole screen.
+                modifier = Modifier.matchParentSize(),
                 accent = accent,
                 dark = true
             )
