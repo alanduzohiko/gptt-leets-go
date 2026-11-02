@@ -1154,11 +1154,14 @@ internal fun PremiumScreenOrnamentOverlay(
         val ribbonX = size.width * (0.12f + 0.76f * ribbonTravel.coerceIn(0f, 1f))
         val ribbonRadius = if (immersiveMushaf) 0.8.dp.toPx() else 2.25.dp.toPx()
 
-        listOf(topEdgeY, bottomEdgeY).forEachIndexed { index, edgeY ->
+        repeat(2) { edgeIndex ->
+            val edgeY = if (edgeIndex == 0) topEdgeY else bottomEdgeY
+            val leftInset = if (edgeIndex == 0) 18.dp.toPx() else 26.dp.toPx()
+            val rightInset = if (edgeIndex == 0) 26.dp.toPx() else 18.dp.toPx()
             drawLine(
                 color = accent.copy(alpha = alphaBase * 0.27f),
-                start = Offset(if (index == 0) 18.dp.toPx() else 26.dp.toPx(), edgeY),
-                end = Offset(size.width - if (index == 0) 26.dp.toPx() else 18.dp.toPx(), edgeY),
+                start = Offset(leftInset, edgeY),
+                end = Offset(size.width - rightInset, edgeY),
                 strokeWidth = if (immersiveMushaf) 0.45.dp.toPx() else 0.8.dp.toPx(),
                 cap = StrokeCap.Round
             )
