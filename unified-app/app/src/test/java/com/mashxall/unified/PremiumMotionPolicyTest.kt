@@ -45,6 +45,18 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
+    fun individualControlDepthProducesDistinctPressTilt() {
+        val firmButton = premiumControlPressRotationDegrees(Role.Button, 0.94f)
+        val softButton = premiumControlPressRotationDegrees(Role.Button, 0.97f)
+        val tab = premiumControlPressRotationDegrees(Role.Tab, 0.94f)
+
+        assertEquals(false, firmButton == softButton)
+        assertEquals(false, firmButton == tab)
+        assertEquals(-0.6816f, firmButton, 0.0001f)
+        assertEquals(-0.6156f, softButton, 0.0001f)
+    }
+
+    @Test
     fun eachInteractiveRoleHasItsOwnTouchTiltAndGlow() {
         assertEquals(-0.62f, premiumRolePressRotationDegrees(Role.Button), 0.0001f)
         assertEquals(0.24f, premiumRolePressRotationDegrees(Role.Tab), 0.0001f)
@@ -133,7 +145,7 @@ class PremiumMotionPolicyTest {
         assertEquals(0.66f, premiumScreenOrnamentIntensity("tafsir", 1f), 0.0001f)
         assertEquals(0.78f, premiumScreenOrnamentIntensity("prayer", 1f), 0.0001f)
         assertEquals(0.16f, premiumScreenOrnamentIntensity("quran", 1f, immersiveMushaf = true), 0.0001f)
-        assertEquals(0.02f, premiumScreenOrnamentIntensity("prayer", 0f), 0.0001f)
+        assertEquals(0.156f, premiumScreenOrnamentIntensity("prayer", 0f), 0.0001f)
         assertEquals(20_000, ambientMotionDurationMillis(10_000, 0.5f))
         assertEquals(10_000, ambientMotionDurationMillis(10_000, 1f))
     }
