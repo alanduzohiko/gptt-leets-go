@@ -52,8 +52,8 @@ class PremiumMotionPolicyTest {
 
         assertEquals(false, firmButton == softButton)
         assertEquals(false, firmButton == tab)
-        assertEquals(-0.6816f, firmButton, 0.0001f)
-        assertEquals(-0.6156f, softButton, 0.0001f)
+        assertEquals(-0.5584f, firmButton, 0.0001f)
+        assertEquals(-0.6244f, softButton, 0.0001f)
     }
 
     @Test
