@@ -683,7 +683,13 @@ fun MashxallApp(startScreen: String? = null) {
                                         speed = backgroundSpeed
                                     )
                                 }
-                                when (visibleScreen) {
+                                Box(
+                                    Modifier.fillMaxSize().staggeredEntrance(
+                                        itemKey = "destination-$visibleScreen",
+                                        index = 0
+                                    )
+                                ) {
+                                    when (visibleScreen) {
                                 "more" -> MoreScreen(language, foreground, cardColor) { target -> navigateTo(target.key) }
                                 "home" -> HomeScreen(
                                     language, foreground, cardColor, selectedCity, use24Hour,
@@ -867,6 +873,25 @@ fun MashxallApp(startScreen: String? = null) {
                                 })
                                 "backup" -> BackupRestoreScreen(language, foreground, cardColor)
                                 else -> HomeScreen(language, foreground, cardColor, selectedCity, use24Hour, onOpen = { target -> navigateTo(target.key) })
+                                    }
+                                }
+                                if (shouldShowAmbientBackdrop(backgroundStyle)) {
+                                    PremiumScreenOrnamentOverlay(
+                                        modifier = Modifier.fillMaxSize(),
+                                        accent = if (dark) Gold else DeepGreen,
+                                        intensity = premiumScreenOrnamentIntensity(
+                                            visibleScreen,
+                                            backgroundIntensity,
+                                            immersiveMushaf = immersiveMushaf
+                                        ),
+                                        screenKey = visibleScreen,
+                                        animated = shouldAnimateAmbientBackdrop(
+                                            if (immersiveMushaf) "immersive_mushaf" else visibleScreen,
+                                            motionAllowed,
+                                            backgroundStyle
+                                        ),
+                                        immersiveMushaf = immersiveMushaf
+                                    )
                                 }
                             }
                         }
