@@ -131,6 +131,12 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn('putFloat("background_intensity", backgroundIntensity)', main)
         self.assertIn('putFloat("background_speed", backgroundSpeed)', main)
 
+    def test_section_heroes_pulse_and_button_press_motion_is_control_specific(self):
+        self.assertIn("pulseIcon: Boolean = true", MOTION)
+        self.assertIn("internal fun premiumControlPressRotationDegrees(", MOTION)
+        self.assertIn("premiumControlPressRotationDegrees(role, pressedScale)", MOTION)
+        self.assertIn("label = \"Mashxall section hero breathing light\"", MOTION)
+
     def test_visible_screen_ornaments_cover_every_destination_and_keep_mushaf_subtle(self):
         main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
         main = main_path.read_text(encoding="utf-8")
