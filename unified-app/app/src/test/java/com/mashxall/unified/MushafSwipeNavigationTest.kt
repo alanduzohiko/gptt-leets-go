@@ -5,15 +5,17 @@ import org.junit.Test
 
 class MushafSwipeNavigationTest {
     @Test
-    fun leftSwipeAdvancesAndRightSwipeReturnsInReadingOrder() {
-        assertEquals(3, mushafSwipeTarget(page = 2, horizontalDragPx = -120f))
-        assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = 120f))
+    fun rightSwipeAdvancesAndLeftSwipeReturnsInReadingOrder() {
+        // From Al-Fatiha, the reader moves a finger to the right to reveal page 2.
+        assertEquals(3, mushafSwipeTarget(page = 2, horizontalDragPx = 120f))
+        assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = -120f))
+        assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 120f))
     }
 
     @Test
     fun shortGesturesDoNotTurnThePage() {
-        assertEquals(null, mushafSwipeTarget(page = 24, horizontalDragPx = -72f))
-        assertEquals(null, mushafSwipeTarget(page = 24, horizontalDragPx = 35f))
+        assertEquals(null, mushafSwipeTarget(page = 24, horizontalDragPx = 72f))
+        assertEquals(null, mushafSwipeTarget(page = 24, horizontalDragPx = -35f))
     }
 
     @Test
@@ -26,9 +28,19 @@ class MushafSwipeNavigationTest {
 
     @Test
     fun pageBoundariesAndInvalidInputsAreSafe() {
-        assertEquals(null, mushafSwipeTarget(page = 1, horizontalDragPx = 160f))
-        assertEquals(null, mushafSwipeTarget(page = 604, horizontalDragPx = -160f))
-        assertEquals(null, mushafSwipeTarget(page = 0, horizontalDragPx = -160f))
+        assertEquals(null, mushafSwipeTarget(page = 1, horizontalDragPx = -160f))
+        assertEquals(null, mushafSwipeTarget(page = 604, horizontalDragPx = 160f))
+        assertEquals(null, mushafSwipeTarget(page = 0, horizontalDragPx = 160f))
         assertEquals(null, mushafSwipeTarget(page = 20, horizontalDragPx = Float.NaN))
+    }
+
+    @Test
+    fun curlFollowsTheFingerAndUsesTheCorrectHingeForBothDirections() {
+        assertEquals(52f, mushafSwipeRotationDegrees(340f, 1000f), 0.001f)
+        assertEquals(-52f, mushafSwipeRotationDegrees(-340f, 1000f), 0.001f)
+        assertEquals(0f, mushafSwipeRotationDegrees(200f, 0f), 0.001f)
+        assertEquals(0.06f, mushafSwipePivotFraction(120f), 0.001f)
+        assertEquals(0.94f, mushafSwipePivotFraction(-120f), 0.001f)
+        assertEquals(0.5f, mushafSwipePivotFraction(0f), 0.001f)
     }
 }
