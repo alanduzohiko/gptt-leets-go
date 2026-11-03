@@ -58,20 +58,21 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun forwardCurlMovesAcrossThePageAndCreatesADiagonalCrease() {
-        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, 1f, 0f), 0.001f)
-        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, 1f, 1f), 0.001f)
-        assertEquals(0f, mushafCurlBoundaryX(1000f, 0.5f, 1f, 1f), 0.001f)
-        assertTrue(mushafCurlSeamX(1000f, 0.1f, 1f, 0.5f) <
-            mushafCurlSeamX(1000f, 0.9f, 1f, 0.5f))
+    fun forwardCurlMovesLeftToRightAndCreatesADiagonalCrease() {
+        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, -1f, 0f), 0.001f)
+        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, -1f, 1f), 0.001f)
+        assertEquals(1000f, mushafCurlBoundaryX(1000f, 0.5f, -1f, 1f), 0.001f)
+        assertTrue(mushafCurlSeamX(1000f, 0.1f, -1f, 0.5f) <
+            mushafCurlSeamX(1000f, 0.9f, -1f, 0.5f))
     }
 
     @Test
-    fun backwardCurlMovesInTheOppositeDirection() {
-        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, -1f, 0f), 0.001f)
-        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, -1f, 1f), 0.001f)
-        assertTrue(mushafCurlSeamX(1000f, 0.1f, -1f, 0.5f) >
-            mushafCurlSeamX(1000f, 0.9f, -1f, 0.5f))
+    fun backwardCurlMovesRightToLeftInTheOppositeDirection() {
+        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, 1f, 0f), 0.001f)
+        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, 1f, 1f), 0.001f)
+        assertEquals(0f, mushafCurlBoundaryX(1000f, 0.5f, 1f, 1f), 0.001f)
+        assertTrue(mushafCurlSeamX(1000f, 0.1f, 1f, 0.5f) >
+            mushafCurlSeamX(1000f, 0.9f, 1f, 0.5f))
     }
 
     @Test
