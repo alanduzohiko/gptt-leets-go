@@ -35,12 +35,23 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun curlFollowsTheFingerAndUsesTheCorrectHingeForBothDirections() {
-        assertEquals(52f, mushafSwipeRotationDegrees(340f, 1000f), 0.001f)
-        assertEquals(-52f, mushafSwipeRotationDegrees(-340f, 1000f), 0.001f)
-        assertEquals(0f, mushafSwipeRotationDegrees(200f, 0f), 0.001f)
-        assertEquals(0.94f, mushafSwipePivotFraction(120f), 0.001f)
-        assertEquals(0.06f, mushafSwipePivotFraction(-120f), 0.001f)
-        assertEquals(0.5f, mushafSwipePivotFraction(0f), 0.001f)
+    fun oneSheetCurlUsesTheCorrectHingeAndDirection() {
+        assertEquals(0f, mushafPageCurlRotationDegrees(1f, 0f), 0.001f)
+        assertEquals(84f, mushafPageCurlRotationDegrees(1f, 0.5f), 0.001f)
+        assertEquals(168f, mushafPageCurlRotationDegrees(1f, 1f), 0.001f)
+        assertEquals(-84f, mushafPageCurlRotationDegrees(-1f, 0.5f), 0.001f)
+        assertEquals(0f, mushafPageCurlRotationDegrees(1f, Float.NaN), 0.001f)
+        assertEquals(0f, mushafPageCurlRotationDegrees(0f, 0.8f), 0.001f)
+        assertEquals(0.94f, mushafPageCurlPivotFraction(1f), 0.001f)
+        assertEquals(0.06f, mushafPageCurlPivotFraction(-1f), 0.001f)
+        assertEquals(0.5f, mushafPageCurlPivotFraction(0f), 0.001f)
+    }
+
+    @Test
+    fun sheetFrontFadesBeforeQuranTextCanAppearMirrored() {
+        assertEquals(1f, mushafPageCurlFrontFaceAlpha(1f, 0.45f), 0.001f)
+        assertEquals(0.75f, mushafPageCurlFrontFaceAlpha(1f, 0.5f), 0.001f)
+        assertEquals(0f, mushafPageCurlFrontFaceAlpha(1f, 0.54f), 0.001f)
+        assertEquals(0.75f, mushafPageCurlFrontFaceAlpha(-1f, 0.5f), 0.001f)
     }
 }
