@@ -39,8 +39,8 @@ class MushafSwipeNavigationTest {
         assertEquals(52f, mushafSwipeRotationDegrees(340f, 1000f), 0.001f)
         assertEquals(-52f, mushafSwipeRotationDegrees(-340f, 1000f), 0.001f)
         assertEquals(0f, mushafSwipeRotationDegrees(200f, 0f), 0.001f)
-        assertEquals(0.06f, mushafSwipePivotFraction(120f), 0.001f)
-        assertEquals(0.94f, mushafSwipePivotFraction(-120f), 0.001f)
+        assertEquals(0.94f, mushafSwipePivotFraction(120f), 0.001f)
+        assertEquals(0.06f, mushafSwipePivotFraction(-120f), 0.001f)
         assertEquals(0.5f, mushafSwipePivotFraction(0f), 0.001f)
     }
 }
