@@ -3969,7 +3969,26 @@ private fun MushafPageViewer(
                                 }
                             }
                         )
-                        if (bitmap != null && turningPageBitmap != null && motionAllowed) {
+                        if (verseRects.isNotEmpty()) {
+                            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                                val fit = minOf(size.width / 1148f, size.height / 1641f)
+                                val left = (size.width - 1148f * fit) / 2f
+                                val top = (size.height - 1641f * fit) / 2f
+                                verseRects.forEach { rect ->
+                                    val rectLeft = left + rect.minX * fit
+                                    val rectTop = top + rect.minY * fit
+                                    val rectWidth = (rect.maxX - rect.minX) * fit
+                                    val rectHeight = (rect.maxY - rect.minY) * fit
+                                    if (rectWidth > 0f && rectHeight > 0f) {
+                                        drawRect(
+                                            color = Color(0x66F4C542),
+                                            topLeft = androidx.compose.ui.geometry.Offset(rectLeft, rectTop),
+                                            size = androidx.compose.ui.geometry.Size(rectWidth, rectHeight)
+                                        )
+                                    }
+                                }
+                            }
+                        }                        if (bitmap != null && turningPageBitmap != null && motionAllowed) {
                             Image(
                                 bitmap = turningPageBitmap!!.asImageBitmap(),
                                 contentDescription = null,
@@ -4045,26 +4064,7 @@ private fun MushafPageViewer(
                                     }
                             )
                         }
-                        if (verseRects.isNotEmpty()) {
-                            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                                val fit = minOf(size.width / 1148f, size.height / 1641f)
-                                val left = (size.width - 1148f * fit) / 2f
-                                val top = (size.height - 1641f * fit) / 2f
-                                verseRects.forEach { rect ->
-                                    val rectLeft = left + rect.minX * fit
-                                    val rectTop = top + rect.minY * fit
-                                    val rectWidth = (rect.maxX - rect.minX) * fit
-                                    val rectHeight = (rect.maxY - rect.minY) * fit
-                                    if (rectWidth > 0f && rectHeight > 0f) {
-                                        drawRect(
-                                            color = Color(0x66F4C542),
-                                            topLeft = androidx.compose.ui.geometry.Offset(rectLeft, rectTop),
-                                            size = androidx.compose.ui.geometry.Size(rectWidth, rectHeight)
-                                        )
-                                    }
-                                }
-                            }
-                        }
+
                     }
                     failed -> Column(
                         modifier = Modifier.fillMaxWidth().padding(22.dp),
