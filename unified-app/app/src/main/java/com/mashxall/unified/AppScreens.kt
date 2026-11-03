@@ -3398,8 +3398,8 @@ internal fun mushafEdgeTapAction(xFraction: Float, page: Int, scale: Float, vers
         return MushafEdgeTapAction.NONE
     }
     return when {
-        xFraction <= 0.065f && page < 604 -> MushafEdgeTapAction.NEXT_PAGE
-        xFraction >= 0.935f && page > 1 -> MushafEdgeTapAction.PREVIOUS_PAGE
+        xFraction >= 0.935f && page < 604 -> MushafEdgeTapAction.NEXT_PAGE
+        xFraction <= 0.065f && page > 1 -> MushafEdgeTapAction.PREVIOUS_PAGE
         else -> MushafEdgeTapAction.NONE
     }
 }
@@ -3443,8 +3443,8 @@ internal fun mushafSwipeRotationDegrees(horizontalDragPx: Float, viewportWidthPx
 
 internal fun mushafSwipePivotFraction(horizontalDragPx: Float): Float = when {
     !horizontalDragPx.isFinite() || horizontalDragPx == 0f -> 0.5f
-    horizontalDragPx > 0f -> 0.06f
-    else -> 0.94f
+    horizontalDragPx > 0f -> 0.94f
+    else -> 0.06f
 }
 
 /** Adapt the page-turn threshold to the actual viewport instead of using a tiny fixed pixel distance. */
@@ -4003,7 +4003,7 @@ private fun MushafPageViewer(
                                         val progress = pageCurlProgress.value.coerceIn(0f, 1f)
                                         rotationY = pageTurnDirection * progress * 168f
                                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                                            if (pageTurnDirection > 0f) 0.06f else 0.94f,
+                                            if (pageTurnDirection > 0f) 0.94f else 0.06f,
                                             0.5f
                                         )
                                         cameraDistance = 42.dp.toPx()
