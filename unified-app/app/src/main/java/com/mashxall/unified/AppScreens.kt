@@ -3478,10 +3478,9 @@ private fun MushafPageViewer(
         mutableStateOf(bookmarkPrefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet())
     }
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
-    val pageReveal = remember { Animatable(1f) }
-    val pageTurnOffset = remember { Animatable(0f) }
-    val pageTurnRotation = remember { Animatable(0f) }
-    var pageTurnPivot by remember { mutableFloatStateOf(0.5f) }
+    val pageCurlProgress = remember { Animatable(1f) }
+    var pageTurnDirection by remember { mutableFloatStateOf(1f) }
+    var lastLoadedPage by remember { mutableIntStateOf(page) }
     var swipePreviewX by remember(page) { mutableFloatStateOf(0f) }
     val animatedSwipePreviewX by animateFloatAsState(
         targetValue = swipePreviewX,
@@ -3494,38 +3493,8 @@ private fun MushafPageViewer(
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mushaf finger-follow page curl"
     )
-    var lastAnimatedPage by remember { mutableIntStateOf(page) }
-    var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(page, bitmap) {
-        if (bitmap != null) {
-            val previousPage = lastAnimatedPage
-            lastAnimatedPage = page
-            val entryDirection = when {
-                page > previousPage -> 1f
-                page < previousPage -> -1f
-                else -> 0f
-            }
-            if (!motionAllowed || entryDirection == 0f) {
-                pageTurnOffset.snapTo(0f)
-                pageTurnRotation.snapTo(0f)
-                pageReveal.snapTo(1f)
-            } else {
-                pageTurnPivot = if (entryDirection > 0f) 0.08f else 0.92f
-                pageTurnOffset.snapTo(entryDirection * 28f)
-                pageTurnRotation.snapTo(entryDirection * 68f)
-                pageReveal.snapTo(0.94f)
-                val slideAnimation = launch {
-                    pageTurnOffset.animateTo(0f, animationSpec = tween(390, easing = FastOutSlowInEasing))
-                }
-                val rotationAnimation = launch {
-                    pageTurnRotation.animateTo(0f, animationSpec = tween(430, easing = FastOutSlowInEasing))
-                }
-                pageReveal.animateTo(1f, animationSpec = tween(390, easing = FastOutSlowInEasing))
-                slideAnimation.join()
-                rotationAnimation.join()
-            }
-        }
-    }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
     var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
@@ -3552,6 +3521,12 @@ private fun MushafPageViewer(
     }
     LaunchedEffect(page) { pageInput = page.toString() }
     LaunchedEffect(page, retryPageLoad) {
+        val previousPageBitmap = bitmap ?: turningPageBitmap
+        if (previousPageBitmap != null && lastLoadedPage != page) {
+            turningPageBitmap = previousPageBitmap
+            pageTurnDirection = if (page > lastLoadedPage) 1f else -1f
+            pageCurlProgress.snapTo(0f)
+        }
         loading = true
         failed = false
         bitmap = null
@@ -3582,17 +3557,34 @@ private fun MushafPageViewer(
                 }
             }
             failed = bitmap == null
+            if (bitmap != null) {
+                lastLoadedPage = page
+                if (turningPageBitmap != null && motionAllowed) {
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(520, easing = FastOutSlowInEasing))
+                } else {
+                    pageCurlProgress.snapTo(1f)
+                }
+                turningPageBitmap = null
+            } else {
+                lastLoadedPage = page
+                turningPageBitmap = null
+                pageCurlProgress.snapTo(1f)
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             android.util.Log.e("MashxallMushaf", "Could not load Mushaf page $page", error)
             pageVerses = emptyList()
             bitmap = null
+            turningPageBitmap = null
+            lastLoadedPage = page
+            pageCurlProgress.snapTo(1f)
             failed = true
         } finally {
             loading = false
         }
     }
+    val visiblePageBitmap = bitmap ?: turningPageBitmap
     LaunchedEffect(page, selectedVerse) {
         val selected = selectedVerse
         verseRects = if (selected == null) emptyList() else {
@@ -3797,13 +3789,7 @@ private fun MushafPageViewer(
         ) {
             Box(Modifier.fillMaxSize().padding(5.dp), contentAlignment = Alignment.Center) {
                 when {
-                    loading -> PremiumMushafPageSkeleton(
-                        modifier = Modifier.fillMaxSize().padding(7.dp),
-                        accent = Gold,
-                        darkMode = darkMode,
-                        sepiaMode = sepiaMode
-                    )
-                    bitmap != null -> Box(
+                    visiblePageBitmap != null -> Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .onSizeChanged { viewportSize = it }
@@ -3899,7 +3885,7 @@ private fun MushafPageViewer(
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
-                            bitmap!!.asImageBitmap(),
+                            visiblePageBitmap!!.asImageBitmap(),
                             contentDescription = tr(language, "mushaf_view") + " " + page,
                             contentScale = ContentScale.Fit,
                             colorFilter = when {
@@ -3908,40 +3894,26 @@ private fun MushafPageViewer(
                                 else -> null
                             },
                             modifier = Modifier.fillMaxSize().graphicsLayer {
-                                alpha = pageReveal.value
-                                translationX = pageTurnOffset.value + animatedSwipePreviewX
-                                rotationY = pageTurnRotation.value + animatedSwipeRotationY
-                                transformOrigin = if (kotlin.math.abs(animatedSwipePreviewX) > 1f) {
-                                    androidx.compose.ui.graphics.TransformOrigin(
-                                        mushafSwipePivotFraction(animatedSwipePreviewX),
-                                        0.5f
-                                    )
-                                } else {
-                                    androidx.compose.ui.graphics.TransformOrigin(pageTurnPivot, 0.5f)
-                                }
+                                translationX = animatedSwipePreviewX
+                                rotationY = animatedSwipeRotationY
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                                    mushafSwipePivotFraction(animatedSwipePreviewX),
+                                    0.5f
+                                )
                                 cameraDistance = 42.dp.toPx()
-                                shadowElevation = (
-                                    pageTurnRotation.value * pageTurnRotation.value +
-                                        animatedSwipeRotationY * animatedSwipeRotationY
-                                    ) * 0.035f
-                                scaleX = 0.97f + pageReveal.value * 0.03f
-                                scaleY = 0.97f + pageReveal.value * 0.03f
+                                shadowElevation = animatedSwipeRotationY * animatedSwipeRotationY * 0.035f
                             }.drawWithContent {
                                 drawContent()
                                 val dragProgress = mushafSwipeProgress(
                                     animatedSwipePreviewX,
                                     size.width
                                 )
-                                val entryProgress = (pageTurnRotation.value / 68f).coerceIn(-1f, 1f)
                                 val direction = when {
-                                    kotlin.math.abs(dragProgress) > 0.01f -> if (dragProgress > 0f) 1f else -1f
-                                    kotlin.math.abs(entryProgress) > 0.01f -> if (entryProgress > 0f) 1f else -1f
+                                    dragProgress > 0.01f -> 1f
+                                    dragProgress < -0.01f -> -1f
                                     else -> 0f
                                 }
-                                val foldStrength = maxOf(
-                                    kotlin.math.abs(dragProgress),
-                                    kotlin.math.abs(entryProgress)
-                                ).coerceIn(0f, 1f)
+                                val foldStrength = kotlin.math.abs(dragProgress).coerceIn(0f, 1f)
                                 if (motionAllowed && direction != 0f && foldStrength > 0.01f && size.width > 0f) {
                                     val foldWidth = (size.width * (0.035f + foldStrength * 0.105f))
                                         .coerceAtMost(size.width * 0.18f)
@@ -3995,6 +3967,82 @@ private fun MushafPageViewer(
                                 }
                             }
                         )
+                        if (bitmap != null && turningPageBitmap != null && motionAllowed) {
+                            Image(
+                                bitmap = turningPageBitmap!!.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                colorFilter = when {
+                                    darkMode -> ColorFilter.colorMatrix(MushafNightColorMatrix)
+                                    sepiaMode -> ColorFilter.colorMatrix(MushafSepiaColorMatrix)
+                                    else -> null
+                                },
+                                modifier = Modifier.fillMaxSize()
+                                    .graphicsLayer {
+                                        val progress = pageCurlProgress.value.coerceIn(0f, 1f)
+                                        rotationY = pageTurnDirection * progress * 168f
+                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                                            if (pageTurnDirection > 0f) 0.06f else 0.94f,
+                                            0.5f
+                                        )
+                                        cameraDistance = 42.dp.toPx()
+                                        translationX = pageTurnDirection * progress * 10.dp.toPx()
+                                        shadowElevation = kotlin.math.sin(progress * 3.14159f) * 28f
+                                        alpha = 1f - ((progress - 0.82f) / 0.18f).coerceIn(0f, 1f)
+                                    }
+                                    .drawWithContent {
+                                        drawContent()
+                                        val progress = pageCurlProgress.value.coerceIn(0f, 1f)
+                                        val strength = maxOf(0.18f, kotlin.math.sin(progress * 3.14159f))
+                                        val foldWidth = (size.width * (0.04f + strength * 0.10f))
+                                            .coerceAtMost(size.width * 0.18f)
+                                        val foldX = if (pageTurnDirection > 0f) {
+                                            size.width - foldWidth
+                                        } else {
+                                            0f
+                                        }
+                                        val foldBrush = if (pageTurnDirection > 0f) {
+                                            Brush.horizontalGradient(
+                                                listOf(
+                                                    Color.Transparent,
+                                                    Color.Black.copy(alpha = 0.16f * strength),
+                                                    Color.White.copy(alpha = 0.44f * strength),
+                                                    Color.Black.copy(alpha = 0.22f * strength)
+                                                ),
+                                                startX = foldX,
+                                                endX = size.width
+                                            )
+                                        } else {
+                                            Brush.horizontalGradient(
+                                                listOf(
+                                                    Color.Black.copy(alpha = 0.22f * strength),
+                                                    Color.White.copy(alpha = 0.44f * strength),
+                                                    Color.Black.copy(alpha = 0.16f * strength),
+                                                    Color.Transparent
+                                                ),
+                                                startX = 0f,
+                                                endX = foldWidth
+                                            )
+                                        }
+                                        drawRect(
+                                            brush = foldBrush,
+                                            topLeft = androidx.compose.ui.geometry.Offset(foldX, 0f),
+                                            size = androidx.compose.ui.geometry.Size(foldWidth, size.height)
+                                        )
+                                        val highlightX = if (pageTurnDirection > 0f) {
+                                            foldX + foldWidth * 0.26f
+                                        } else {
+                                            foldWidth * 0.74f
+                                        }
+                                        drawLine(
+                                            color = Color.White.copy(alpha = 0.44f * strength),
+                                            start = androidx.compose.ui.geometry.Offset(highlightX, 0f),
+                                            end = androidx.compose.ui.geometry.Offset(highlightX, size.height),
+                                            strokeWidth = 1.5.dp.toPx()
+                                        )
+                                    }
+                            )
+                        }
                         if (verseRects.isNotEmpty()) {
                             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                                 val fit = minOf(size.width / 1148f, size.height / 1641f)
