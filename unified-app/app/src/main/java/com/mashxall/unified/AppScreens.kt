@@ -3850,8 +3850,9 @@ private fun MushafPageViewer(
                                                 curlUnderBitmap = null
                                                 curlUnderlayBitmap = null
                                             },
-                                            onHorizontalDrag = { change, amount ->
-                                                change.consume()
+                                            onHorizontalDrag = { _, amount ->
+                                                // Do not consume this pointer stream here: Compose's
+                                                // transformable detector still needs two-finger pinch input.
                                                 dragTotal += amount
                                                 if (scale <= 1.01f && dragTotal != 0f) {
                                                     val forward = dragTotal > 0f
