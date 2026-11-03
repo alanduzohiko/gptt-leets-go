@@ -68,16 +68,16 @@ class MushafSwipeNavigationTest {
     @Test
     fun curlBandGrowsInTheMiddleAndCollapsesAtTheEnds() {
         assertEquals(0f, mushafCurlBandWidth(1000f, 0f), 0.001f)
-        assertEquals(220f, mushafCurlBandWidth(1000f, 0.5f), 0.001f)
+        assertEquals(280f, mushafCurlBandWidth(1000f, 0.5f), 0.001f)
         assertEquals(0f, mushafCurlBandWidth(1000f, 1f), 0.001f)
     }
 
     @Test
     fun printedPageWarpsOnlyInsideTheMovingCurlBand() {
         assertEquals(250f, mushafCurlWarpX(250f, 300f, 100f, 1f), 0.001f)
-        assertEquals(338f, mushafCurlWarpX(350f, 300f, 100f, 1f), 0.01f)
+        assertEquals(326f, mushafCurlWarpX(350f, 300f, 100f, 1f), 0.01f)
         assertEquals(400f, mushafCurlWarpX(400f, 300f, 100f, 1f), 0.001f)
-        assertEquals(362f, mushafCurlWarpX(350f, 400f, 100f, -1f), 0.01f)
+        assertEquals(374f, mushafCurlWarpX(350f, 400f, 100f, -1f), 0.01f)
     }
 
 }
