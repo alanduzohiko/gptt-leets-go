@@ -3800,7 +3800,8 @@ private fun MushafPageViewer(
                                 translationY = offsetY
                             }
                             .transformable(transformState, canPan = { scale > 1.01f })
-                            .pointerInput(page, scale) {
+                            .pointerInput(page, scale, loading, bitmap) {
+                                if (loading || bitmap == null) return@pointerInput
                                 var dragTotal = 0f
                                 detectHorizontalDragGestures(
                                     onDragStart = {
@@ -3837,7 +3838,8 @@ private fun MushafPageViewer(
                                     }
                                 )
                             }
-                            .pointerInput(page, scale, bitmap) {
+                            .pointerInput(page, scale, bitmap, loading) {
+                                if (loading || bitmap == null) return@pointerInput
                                 detectTapGestures(
                                     onDoubleTap = {
                                         if (scale > 1.01f) {
