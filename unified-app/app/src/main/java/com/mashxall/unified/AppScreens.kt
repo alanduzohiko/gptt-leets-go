@@ -3821,9 +3821,7 @@ private fun MushafPageViewer(
                             .then(
                                 if (scale <= 1.01f) {
                                     Modifier.pointerInput(
-                                        page, scale, loading, bitmap,
-                                        nextCurlBackBitmap, nextCurlUnderBitmap,
-                                        previousCurlBackBitmap, previousCurlUnderBitmap
+                                        page, scale, loading, bitmap
                                     ) {
                                         if (loading || bitmap == null) return@pointerInput
                                         var dragTotal = 0f
