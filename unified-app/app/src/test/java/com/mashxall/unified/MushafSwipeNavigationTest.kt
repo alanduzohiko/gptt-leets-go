@@ -38,6 +38,15 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
+    fun dragProgressTracksFingerDistanceInEitherDirection() {
+        assertEquals(0f, mushafCurlDragProgress(0f, 700f), 0.001f)
+        assertEquals(0.5f, mushafCurlDragProgress(350f, 700f), 0.001f)
+        assertEquals(0.5f, mushafCurlDragProgress(-350f, 700f), 0.001f)
+        assertEquals(0.985f, mushafCurlDragProgress(900f, 700f), 0.001f)
+        assertEquals(0f, mushafCurlDragProgress(Float.NaN, 700f), 0.001f)
+    }
+
+    @Test
     fun rightSwipeAdvanceUsesRightwardPeelAndLeftSwipeBackUsesLeftwardPeel() {
         // Pointer delta: positive means the finger physically travelled right.
         assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 140f))

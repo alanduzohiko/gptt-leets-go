@@ -3476,6 +3476,18 @@ private fun MushafPageViewer(
     val pageCurlProgress = remember { Animatable(1f) }
     var pageTurnDirection by remember { mutableFloatStateOf(1f) }
     var lastLoadedPage by remember { mutableIntStateOf(page) }
+    // Finger-led turns keep their two printed faces and the page beneath them.
+    var curlPreviewVisible by remember { mutableStateOf(false) }
+    var fingerDragActive by remember { mutableStateOf(false) }
+    var fingerCurlProgress by remember { mutableFloatStateOf(0f) }
+    var fingerCurlDirection by remember { mutableFloatStateOf(-1f) }
+    var curlBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var curlUnderBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var curlUnderlayBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var nextCurlBackBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    var nextCurlUnderBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    var previousCurlBackBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
+    var previousCurlUnderBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -3504,6 +3516,39 @@ private fun MushafPageViewer(
         }
     }
     LaunchedEffect(page) { pageInput = page.toString() }
+    LaunchedEffect(page, motionAllowed) {
+        nextCurlBackBitmap = null
+        nextCurlUnderBitmap = null
+        previousCurlBackBitmap = null
+        previousCurlUnderBitmap = null
+        if (!motionAllowed) return@LaunchedEffect
+
+        suspend fun renderPreview(targetPage: Int): Bitmap? {
+            if (targetPage !in 1..604) return null
+            val source = ContentRepository.loadMushafPageSvg(context, targetPage) ?: return null
+            return withContext(Dispatchers.Default) {
+                try {
+                    val svg = SVG.getFromString(source)
+                    Bitmap.createBitmap(720, 1030, Bitmap.Config.ARGB_8888).also { image ->
+                        image.eraseColor(AndroidColor.WHITE)
+                        svg.renderToCanvas(Canvas(image))
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    android.util.Log.w("MashxallMushaf", "Could not prepare curl preview page $targetPage", error)
+                    null
+                }
+            }
+        }
+
+        // Prepare both sides and the page beneath in advance so slow drags
+        // follow the fingertip without waiting for SVG decompression.
+        nextCurlBackBitmap = renderPreview(page + 1)
+        nextCurlUnderBitmap = renderPreview(page + 2)
+        previousCurlBackBitmap = renderPreview(page - 1)
+        previousCurlUnderBitmap = renderPreview(page - 2)
+    }
     LaunchedEffect(page, retryPageLoad) {
         val previousPageBitmap = bitmap ?: turningPageBitmap
         if (previousPageBitmap != null && lastLoadedPage != page) {
@@ -3569,6 +3614,7 @@ private fun MushafPageViewer(
         }
     }
     val visiblePageBitmap = bitmap ?: turningPageBitmap
+    val displayedPageBitmap = if (curlPreviewVisible) curlUnderlayBitmap ?: visiblePageBitmap else visiblePageBitmap
     LaunchedEffect(page, selectedVerse) {
         val selected = selectedVerse
         verseRects = if (selected == null) emptyList() else {
@@ -3762,7 +3808,7 @@ private fun MushafPageViewer(
         ) {
             Box(Modifier.fillMaxSize().padding(5.dp), contentAlignment = Alignment.Center) {
                 when {
-                    visiblePageBitmap != null -> Box(
+                    displayedPageBitmap != null -> Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .onSizeChanged { viewportSize = it }
@@ -3774,31 +3820,123 @@ private fun MushafPageViewer(
                             }
                             .then(
                                 if (scale <= 1.01f) {
-                                Modifier.pointerInput(page, loading, bitmap) {
-                                if (loading || bitmap == null) return@pointerInput
-                                var dragTotal = 0f
-                                detectHorizontalDragGestures(
-                                    onDragStart = { dragTotal = 0f },
-                                    onHorizontalDrag = { _, amount ->
-                                        if (scale <= 1.01f) dragTotal += amount
-                                    },
-                                    onDragEnd = {
-                                        if (scale <= 1.01f) {
-                                            val nextPage = mushafSwipeTarget(
-                                                page = page,
-                                                horizontalDragPx = dragTotal,
-                                                thresholdPx = mushafSwipeThresholdPx(size.width.toFloat())
+                                    Modifier.pointerInput(
+                                        page, scale, loading, bitmap,
+                                        nextCurlBackBitmap, nextCurlUnderBitmap,
+                                        previousCurlBackBitmap, previousCurlUnderBitmap
+                                    ) {
+                                        if (loading || bitmap == null) return@pointerInput
+                                        var dragTotal = 0f
+
+                                        suspend fun returnCurlToRest(startProgress: Float) {
+                                            pageCurlProgress.snapTo(startProgress.coerceIn(0f, 1f))
+                                            fingerDragActive = false
+                                            pageCurlProgress.animateTo(
+                                                0f,
+                                                animationSpec = tween(260, easing = FastOutSlowInEasing)
                                             )
-                                            if (nextPage != null) {
-                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                                                onPageChange(nextPage)
-                                            }
+                                            curlPreviewVisible = false
+                                            fingerCurlProgress = 0f
+                                            curlBackBitmap = null
+                                            curlUnderBitmap = null
+                                            curlUnderlayBitmap = null
                                         }
-                                        dragTotal = 0f
-                                    },
-                                    onDragCancel = { dragTotal = 0f }
-                                )
-                            }
+
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {
+                                                dragTotal = 0f
+                                                fingerDragActive = true
+                                                curlPreviewVisible = false
+                                                fingerCurlProgress = 0f
+                                                curlBackBitmap = null
+                                                curlUnderBitmap = null
+                                                curlUnderlayBitmap = null
+                                            },
+                                            onHorizontalDrag = { change, amount ->
+                                                change.consume()
+                                                dragTotal += amount
+                                                if (scale <= 1.01f && dragTotal != 0f) {
+                                                    val forward = dragTotal > 0f
+                                                    val back = if (forward) nextCurlBackBitmap else previousCurlBackBitmap
+                                                    val under = if (forward) nextCurlUnderBitmap else previousCurlUnderBitmap
+                                                    if (back != null) {
+                                                        val target = if (forward) page + 1 else page - 1
+                                                        fingerCurlDirection = mushafCurlDirectionForPageTransition(page, target)
+                                                        curlBackBitmap = back
+                                                        curlUnderBitmap = under ?: back
+                                                        curlUnderlayBitmap = under ?: back
+                                                        fingerCurlProgress = mushafCurlDragProgress(
+                                                            horizontalDragPx = dragTotal,
+                                                            viewportWidthPx = size.width.toFloat()
+                                                        )
+                                                        curlPreviewVisible = true
+                                                    }
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                val targetPage = mushafSwipeTarget(
+                                                    page = page,
+                                                    horizontalDragPx = dragTotal,
+                                                    thresholdPx = mushafSwipeThresholdPx(size.width.toFloat())
+                                                )
+                                                val back = curlBackBitmap
+                                                val releaseProgress = fingerCurlProgress
+                                                val direction = fingerCurlDirection
+
+                                                if (targetPage != null) {
+                                                    haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+                                                    if (back != null && motionAllowed) {
+                                                        scope.launch {
+                                                            pageCurlProgress.snapTo(releaseProgress)
+                                                            fingerDragActive = false
+                                                            pageCurlProgress.animateTo(
+                                                                1f,
+                                                                animationSpec = tween(360, easing = FastOutSlowInEasing)
+                                                            )
+                                                            turningPageBitmap = back
+                                                            lastLoadedPage = targetPage
+                                                            bitmap = null
+                                                            pageTurnDirection = direction
+                                                            pageCurlProgress.snapTo(1f)
+                                                            curlPreviewVisible = false
+                                                            curlBackBitmap = null
+                                                            curlUnderBitmap = null
+                                                            curlUnderlayBitmap = null
+                                                            fingerCurlProgress = 0f
+                                                            onPageChange(targetPage)
+                                                        }
+                                                    } else {
+                                                        fingerDragActive = false
+                                                        curlPreviewVisible = false
+                                                        curlBackBitmap = null
+                                                        curlUnderBitmap = null
+                                                        curlUnderlayBitmap = null
+                                                        fingerCurlProgress = 0f
+                                                        onPageChange(targetPage)
+                                                    }
+                                                } else if (curlPreviewVisible) {
+                                                    scope.launch { returnCurlToRest(releaseProgress) }
+                                                } else {
+                                                    fingerDragActive = false
+                                                    fingerCurlProgress = 0f
+                                                }
+                                                dragTotal = 0f
+                                            },
+                                            onDragCancel = {
+                                                val releaseProgress = fingerCurlProgress
+                                                if (curlPreviewVisible) {
+                                                    scope.launch { returnCurlToRest(releaseProgress) }
+                                                } else {
+                                                    fingerDragActive = false
+                                                    fingerCurlProgress = 0f
+                                                    curlBackBitmap = null
+                                                    curlUnderBitmap = null
+                                                    curlUnderlayBitmap = null
+                                                }
+                                                dragTotal = 0f
+                                            }
+                                        )
+                                    }
                                 } else {
                                     Modifier
                                 }
@@ -3807,7 +3945,7 @@ private fun MushafPageViewer(
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
-                            visiblePageBitmap!!.asImageBitmap(),
+                            displayedPageBitmap!!.asImageBitmap(),
                             contentDescription = tr(language, "mushaf_view") + " " + page,
                             contentScale = ContentScale.Fit,
                             colorFilter = when {
@@ -3817,7 +3955,7 @@ private fun MushafPageViewer(
                             },
                             modifier = Modifier.fillMaxSize()
                         )
-                        if (verseRects.isNotEmpty()) {
+                        if (verseRects.isNotEmpty() && !curlPreviewVisible) {
                             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                                 val fit = minOf(size.width / 1148f, size.height / 1641f)
                                 val left = (size.width - 1148f * fit) / 2f
@@ -3837,11 +3975,24 @@ private fun MushafPageViewer(
                                 }
                             }
                         }
-                        if (bitmap != null && turningPageBitmap != null && motionAllowed) {
+                        val overlayFrontBitmap = if (curlPreviewVisible) bitmap else turningPageBitmap
+                        val overlayBackBitmap = if (curlPreviewVisible) curlBackBitmap else bitmap
+                        val overlayProgress = if (curlPreviewVisible && fingerDragActive) {
+                            fingerCurlProgress
+                        } else {
+                            pageCurlProgress.value
+                        }
+                        val overlayDirection = if (curlPreviewVisible) fingerCurlDirection else pageTurnDirection
+                        val shouldDrawCurl = curlPreviewVisible ||
+                            (bitmap != null && turningPageBitmap != null && motionAllowed)
+                        if (shouldDrawCurl && motionAllowed &&
+                            overlayFrontBitmap != null && overlayBackBitmap != null
+                        ) {
                             MushafPageCurlOverlay(
-                                pageBitmap = turningPageBitmap!!,
-                                progress = pageCurlProgress.value,
-                                direction = pageTurnDirection,
+                                pageBitmap = overlayFrontBitmap,
+                                backPageBitmap = overlayBackBitmap,
+                                progress = overlayProgress,
+                                direction = overlayDirection,
                                 darkMode = darkMode,
                                 sepiaMode = sepiaMode,
                                 modifier = Modifier.fillMaxSize()
