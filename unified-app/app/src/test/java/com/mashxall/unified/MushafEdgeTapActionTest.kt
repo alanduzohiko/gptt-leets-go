@@ -26,18 +26,18 @@ class MushafEdgeTapActionTest {
     }
 
     @Test
-    fun leftPageMarginAdvancesToTheNextPage() {
+    fun rightPageMarginAdvancesToTheNextPage() {
         assertEquals(
             MushafEdgeTapAction.NEXT_PAGE,
-            mushafEdgeTapAction(xFraction = 0.03f, page = 80, scale = 1f, verseWasHit = false)
+            mushafEdgeTapAction(xFraction = 0.97f, page = 80, scale = 1f, verseWasHit = false)
         )
     }
 
     @Test
-    fun rightPageMarginReturnsToThePreviousPage() {
+    fun leftPageMarginReturnsToThePreviousPage() {
         assertEquals(
             MushafEdgeTapAction.PREVIOUS_PAGE,
-            mushafEdgeTapAction(xFraction = 0.97f, page = 80, scale = 1f, verseWasHit = false)
+            mushafEdgeTapAction(xFraction = 0.03f, page = 80, scale = 1f, verseWasHit = false)
         )
     }
 
@@ -69,11 +69,11 @@ class MushafEdgeTapActionTest {
     fun edgeTapCannotGoBeyondTheFirstOrLastMushafPage() {
         assertEquals(
             MushafEdgeTapAction.NONE,
-            mushafEdgeTapAction(xFraction = 0.98f, page = 1, scale = 1f, verseWasHit = false)
+            mushafEdgeTapAction(xFraction = 0.02f, page = 1, scale = 1f, verseWasHit = false)
         )
         assertEquals(
             MushafEdgeTapAction.NONE,
-            mushafEdgeTapAction(xFraction = 0.02f, page = 604, scale = 1f, verseWasHit = false)
+            mushafEdgeTapAction(xFraction = 0.98f, page = 604, scale = 1f, verseWasHit = false)
         )
     }
 
