@@ -3431,26 +3431,23 @@ internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: 
     }
 }
 
-/** Normalize finger travel to a stable curl amount across phone widths. */
-internal fun mushafSwipeProgress(horizontalDragPx: Float, viewportWidthPx: Float): Float {
-    if (!horizontalDragPx.isFinite() || !viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 0f
-    return (horizontalDragPx / (viewportWidthPx * 0.34f)).coerceIn(-1f, 1f)
+/** A single sheet rotates away from the RTL hinge after the finger gesture commits. */
+internal fun mushafPageCurlRotationDegrees(direction: Float, progress: Float): Float {
+    if (!direction.isFinite() || direction == 0f || !progress.isFinite()) return 0f
+    val sign = if (direction > 0f) 1f else -1f
+    return sign * progress.coerceIn(0f, 1f) * 168f
 }
 
-/** A stronger 3D turn follows the finger while keeping the correct RTL page hinge. */
-internal fun mushafSwipeRotationDegrees(horizontalDragPx: Float, viewportWidthPx: Float): Float =
-    mushafSwipeProgress(horizontalDragPx, viewportWidthPx) * 52f
-
-internal fun mushafSwipePivotFraction(horizontalDragPx: Float): Float = when {
-    !horizontalDragPx.isFinite() || horizontalDragPx == 0f -> 0.5f
-    horizontalDragPx > 0f -> 0.94f
+internal fun mushafPageCurlPivotFraction(direction: Float): Float = when {
+    !direction.isFinite() || direction == 0f -> 0.5f
+    direction > 0f -> 0.94f
     else -> 0.06f
 }
 
-/** Adapt the page-turn threshold to the actual viewport instead of using a tiny fixed pixel distance. */
-internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
-    if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
-    return maxOf(72f, viewportWidthPx * 0.16f)
+/** Hide the printed front just before it would become mirrored on the back side. */
+internal fun mushafPageCurlFrontFaceAlpha(direction: Float, progress: Float): Float {
+    val angle = kotlin.math.abs(mushafPageCurlRotationDegrees(direction, progress))
+    return 1f - ((angle - 82f) / 8f).coerceIn(0f, 1f)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -3481,18 +3478,7 @@ private fun MushafPageViewer(
     val pageCurlProgress = remember { Animatable(1f) }
     var pageTurnDirection by remember { mutableFloatStateOf(1f) }
     var lastLoadedPage by remember { mutableIntStateOf(page) }
-    var swipePreviewX by remember(page) { mutableFloatStateOf(0f) }
-    val animatedSwipePreviewX by animateFloatAsState(
-        targetValue = swipePreviewX,
-        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
-        label = "Mushaf finger-follow page drag"
-    )
     var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
-    val animatedSwipeRotationY by animateFloatAsState(
-        targetValue = mushafSwipeRotationDegrees(swipePreviewX, viewportSize.width.toFloat()),
-        animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
-        label = "Mushaf finger-follow page curl"
-    )
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
@@ -3560,7 +3546,7 @@ private fun MushafPageViewer(
             if (bitmap != null) {
                 lastLoadedPage = page
                 if (turningPageBitmap != null && motionAllowed) {
-                    pageCurlProgress.animateTo(1f, animationSpec = tween(520, easing = FastOutSlowInEasing))
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(620, easing = FastOutSlowInEasing))
                 } else {
                     pageCurlProgress.snapTo(1f)
                 }
@@ -3611,22 +3597,11 @@ private fun MushafPageViewer(
             )
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
                 Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
-                AnimatedContent(
-                    targetState = page,
-                    transitionSpec = {
-                        if (!motionAllowed) {
-                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                        } else {
-                            (fadeIn(tween(130)) + scaleIn(initialScale = 0.92f, animationSpec = tween(170)) +
-                                slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(170))) togetherWith
-                                (fadeOut(tween(100)) + scaleOut(targetScale = 1.04f, animationSpec = tween(100)) +
-                                    slideOutVertically(targetOffsetY = { -it / 4 }, animationSpec = tween(100)))
-                        }
-                    },
-                    label = "Mushaf toolbar page number transition"
-                ) { visiblePage ->
-                    Text(tr(language, "page") + " " + visiblePage + " / 604", color = PaleGold, fontSize = 10.sp)
-                }
+                Text(
+                    tr(language, "page") + " " + page + " / 604",
+                    color = PaleGold,
+                    fontSize = 10.sp
+                )
             }
             val toolbarVerse = selectedVerse ?: pageVerses.firstOrNull()
             PremiumTextButton(
@@ -3804,16 +3779,9 @@ private fun MushafPageViewer(
                                 if (loading || bitmap == null) return@pointerInput
                                 var dragTotal = 0f
                                 detectHorizontalDragGestures(
-                                    onDragStart = {
-                                        dragTotal = 0f
-                                        swipePreviewX = 0f
-                                    },
+                                    onDragStart = { dragTotal = 0f },
                                     onHorizontalDrag = { _, amount ->
-                                        if (scale <= 1.01f) {
-                                            dragTotal += amount
-                                            swipePreviewX = (swipePreviewX + amount)
-                                                .coerceIn(-size.width * 0.34f, size.width * 0.34f)
-                                        }
+                                        if (scale <= 1.01f) dragTotal += amount
                                     },
                                     onDragEnd = {
                                         if (scale <= 1.01f) {
@@ -3825,63 +3793,11 @@ private fun MushafPageViewer(
                                             if (nextPage != null) {
                                                 haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                 onPageChange(nextPage)
-                                            } else {
-                                                // A short gesture returns the paper to its resting position.
-                                                swipePreviewX = 0f
                                             }
                                         }
                                         dragTotal = 0f
                                     },
-                                    onDragCancel = {
-                                        dragTotal = 0f
-                                        swipePreviewX = 0f
-                                    }
-                                )
-                            }
-                            .pointerInput(page, scale, bitmap, loading) {
-                                if (loading || bitmap == null) return@pointerInput
-                                detectTapGestures(
-                                    onDoubleTap = {
-                                        if (scale > 1.01f) {
-                                            scale = 1f
-                                            offsetX = 0f
-                                            offsetY = 0f
-                                        } else {
-                                            scale = 2f
-                                        }
-                                    },
-                                    onTap = { tap ->
-                                        val fit = minOf(size.width / 1148f, size.height / 1641f)
-                                        if (fit > 0f) {
-                                            val left = (size.width - 1148f * fit) / 2f
-                                            val top = (size.height - 1641f * fit) / 2f
-                                            val x = (tap.x - left) / fit
-                                            val y = (tap.y - top) / fit
-                                            if (x in 0f..1148f && y in 0f..1641f) {
-                                                scope.launch {
-                                                    val hit = ContentRepository.findMushafVerseAtPoint(context, page, x, y)
-                                                    if (hit != null) {
-                                                        selectedVerse = hit
-                                                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                                                        onVerseClick(hit.surah, hit.ayah)
-                                                    } else {
-                                                        val edgeAction = mushafEdgeTapAction(x / 1148f, page, scale, verseWasHit = false)
-                                                        when (edgeAction) {
-                                                            MushafEdgeTapAction.NEXT_PAGE -> {
-                                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                                                                onPageChange((page + 1).coerceAtMost(604))
-                                                            }
-                                                            MushafEdgeTapAction.PREVIOUS_PAGE -> {
-                                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                                                                onPageChange((page - 1).coerceAtLeast(1))
-                                                            }
-                                                            MushafEdgeTapAction.NONE -> Unit
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    onDragCancel = { dragTotal = 0f }
                                 )
                             },
                         contentAlignment = Alignment.Center
@@ -3895,79 +3811,7 @@ private fun MushafPageViewer(
                                 sepiaMode -> ColorFilter.colorMatrix(MushafSepiaColorMatrix)
                                 else -> null
                             },
-                            modifier = Modifier.fillMaxSize().graphicsLayer {
-                                translationX = animatedSwipePreviewX
-                                rotationY = animatedSwipeRotationY
-                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                                    mushafSwipePivotFraction(animatedSwipePreviewX),
-                                    0.5f
-                                )
-                                cameraDistance = 42.dp.toPx()
-                                shadowElevation = animatedSwipeRotationY * animatedSwipeRotationY * 0.035f
-                            }.drawWithContent {
-                                drawContent()
-                                val dragProgress = mushafSwipeProgress(
-                                    animatedSwipePreviewX,
-                                    size.width
-                                )
-                                val direction = when {
-                                    dragProgress > 0.01f -> 1f
-                                    dragProgress < -0.01f -> -1f
-                                    else -> 0f
-                                }
-                                val foldStrength = kotlin.math.abs(dragProgress).coerceIn(0f, 1f)
-                                if (motionAllowed && direction != 0f && foldStrength > 0.01f && size.width > 0f) {
-                                    val foldWidth = (size.width * (0.035f + foldStrength * 0.105f))
-                                        .coerceAtMost(size.width * 0.18f)
-                                    val foldLeft = if (direction > 0f) size.width - foldWidth else 0f
-                                    val foldBrush = if (direction > 0f) {
-                                        Brush.horizontalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                Color.Black.copy(alpha = 0.12f * foldStrength),
-                                                Color.White.copy(alpha = 0.38f * foldStrength),
-                                                Color.Black.copy(alpha = 0.16f * foldStrength)
-                                            ),
-                                            startX = foldLeft,
-                                            endX = size.width
-                                        )
-                                    } else {
-                                        Brush.horizontalGradient(
-                                            colors = listOf(
-                                                Color.Black.copy(alpha = 0.16f * foldStrength),
-                                                Color.White.copy(alpha = 0.38f * foldStrength),
-                                                Color.Black.copy(alpha = 0.12f * foldStrength),
-                                                Color.Transparent
-                                            ),
-                                            startX = 0f,
-                                            endX = foldWidth
-                                        )
-                                    }
-                                    drawRect(
-                                        brush = foldBrush,
-                                        topLeft = androidx.compose.ui.geometry.Offset(foldLeft, 0f),
-                                        size = androidx.compose.ui.geometry.Size(foldWidth, size.height)
-                                    )
-                                    val highlightX = if (direction > 0f) {
-                                        foldLeft + foldWidth * 0.28f
-                                    } else {
-                                        foldWidth * 0.72f
-                                    }
-                                    drawLine(
-                                        color = Color.White.copy(alpha = 0.34f * foldStrength),
-                                        start = androidx.compose.ui.geometry.Offset(highlightX, 0f),
-                                        end = androidx.compose.ui.geometry.Offset(highlightX, size.height),
-                                        strokeWidth = 1.25.dp.toPx()
-                                    )
-                                    val shadowX = highlightX + if (direction > 0f) 2.dp.toPx() else -2.dp.toPx()
-                                    drawLine(
-                                        color = Color.Black.copy(alpha = 0.20f * foldStrength),
-                                        start = androidx.compose.ui.geometry.Offset(shadowX, 0f),
-                                        end = androidx.compose.ui.geometry.Offset(shadowX, size.height),
-                                        strokeWidth = 1.6.dp.toPx()
-                                    )
-                                }
-                            }
+                            modifier = Modifier.fillMaxSize()
                         )
                         if (verseRects.isNotEmpty()) {
                             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
@@ -4002,15 +3846,15 @@ private fun MushafPageViewer(
                                 modifier = Modifier.fillMaxSize()
                                     .graphicsLayer {
                                         val progress = pageCurlProgress.value.coerceIn(0f, 1f)
-                                        rotationY = pageTurnDirection * progress * 168f
+                                        rotationY = mushafPageCurlRotationDegrees(pageTurnDirection, progress)
                                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                                            if (pageTurnDirection > 0f) 0.94f else 0.06f,
+                                            mushafPageCurlPivotFraction(pageTurnDirection),
                                             0.5f
                                         )
                                         cameraDistance = 42.dp.toPx()
                                         translationX = pageTurnDirection * progress * 10.dp.toPx()
                                         shadowElevation = kotlin.math.sin(progress * 3.14159f) * 28f
-                                        alpha = 1f - ((progress - 0.82f) / 0.18f).coerceIn(0f, 1f)
+                                        alpha = mushafPageCurlFrontFaceAlpha(pageTurnDirection, progress)
                                     }
                                     .drawWithContent {
                                         drawContent()
