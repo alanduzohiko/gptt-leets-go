@@ -3988,7 +3988,8 @@ private fun MushafPageViewer(
                                     }
                                 }
                             }
-                        }                        if (bitmap != null && turningPageBitmap != null && motionAllowed) {
+                        }
+                        if (bitmap != null && turningPageBitmap != null && motionAllowed) {
                             Image(
                                 bitmap = turningPageBitmap!!.asImageBitmap(),
                                 contentDescription = null,
