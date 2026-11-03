@@ -3488,6 +3488,7 @@ private fun MushafPageViewer(
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
         label = "Mushaf finger-follow page drag"
     )
+    var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
     val animatedSwipeRotationY by animateFloatAsState(
         targetValue = mushafSwipeRotationDegrees(swipePreviewX, viewportSize.width.toFloat()),
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
@@ -3535,7 +3536,6 @@ private fun MushafPageViewer(
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
-    var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         val nextScale = (scale * zoomChange).coerceIn(1f, 4f)
         scale = nextScale
