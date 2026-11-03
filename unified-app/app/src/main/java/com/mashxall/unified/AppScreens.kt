@@ -117,6 +117,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
@@ -3418,17 +3419,32 @@ internal fun clampMushafPanOffset(
 }
 
 /**
- * Physical left swipe advances the right-to-left Mushaf to the next page.
- * Physical right swipe returns to the previous page. Small drags and boundary
- * gestures are ignored so page selection and zooming remain usable.
+ * In this Mushaf's right-to-left reading flow, moving the finger to the right
+ * turns forward to the next page; moving left returns to the previous page.
  */
 internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: Float = 72f): Int? {
     if (page !in 1..604 || !horizontalDragPx.isFinite() || !thresholdPx.isFinite() || thresholdPx <= 0f) return null
     return when {
-        horizontalDragPx < -thresholdPx && page < 604 -> page + 1
-        horizontalDragPx > thresholdPx && page > 1 -> page - 1
+        horizontalDragPx > thresholdPx && page < 604 -> page + 1
+        horizontalDragPx < -thresholdPx && page > 1 -> page - 1
         else -> null
     }
+}
+
+/** Normalize finger travel to a stable curl amount across phone widths. */
+internal fun mushafSwipeProgress(horizontalDragPx: Float, viewportWidthPx: Float): Float {
+    if (!horizontalDragPx.isFinite() || !viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 0f
+    return (horizontalDragPx / (viewportWidthPx * 0.34f)).coerceIn(-1f, 1f)
+}
+
+/** A stronger 3D turn follows the finger while keeping the correct RTL page hinge. */
+internal fun mushafSwipeRotationDegrees(horizontalDragPx: Float, viewportWidthPx: Float): Float =
+    mushafSwipeProgress(horizontalDragPx, viewportWidthPx) * 52f
+
+internal fun mushafSwipePivotFraction(horizontalDragPx: Float): Float = when {
+    !horizontalDragPx.isFinite() || horizontalDragPx == 0f -> 0.5f
+    horizontalDragPx > 0f -> 0.06f
+    else -> 0.94f
 }
 
 /** Adapt the page-turn threshold to the actual viewport instead of using a tiny fixed pixel distance. */
@@ -3473,9 +3489,9 @@ private fun MushafPageViewer(
         label = "Mushaf finger-follow page drag"
     )
     val animatedSwipeRotationY by animateFloatAsState(
-        targetValue = (swipePreviewX / 160f).coerceIn(-1f, 1f) * 8.25f,
+        targetValue = mushafSwipeRotationDegrees(swipePreviewX, viewportSize.width.toFloat()),
         animationSpec = if (motionAllowed) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap(),
-        label = "Mushaf finger-follow page tilt"
+        label = "Mushaf finger-follow page curl"
     )
     var lastAnimatedPage by remember { mutableIntStateOf(page) }
     var bitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
@@ -3494,16 +3510,16 @@ private fun MushafPageViewer(
                 pageReveal.snapTo(1f)
             } else {
                 pageTurnPivot = if (entryDirection > 0f) 0.08f else 0.92f
-                pageTurnOffset.snapTo(entryDirection * 48f)
-                pageTurnRotation.snapTo(entryDirection * 12f)
-                pageReveal.snapTo(0.92f)
+                pageTurnOffset.snapTo(entryDirection * 28f)
+                pageTurnRotation.snapTo(entryDirection * 68f)
+                pageReveal.snapTo(0.94f)
                 val slideAnimation = launch {
-                    pageTurnOffset.animateTo(0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
+                    pageTurnOffset.animateTo(0f, animationSpec = tween(390, easing = FastOutSlowInEasing))
                 }
                 val rotationAnimation = launch {
-                    pageTurnRotation.animateTo(0f, animationSpec = tween(260, easing = FastOutSlowInEasing))
+                    pageTurnRotation.animateTo(0f, animationSpec = tween(430, easing = FastOutSlowInEasing))
                 }
-                pageReveal.animateTo(1f, animationSpec = tween(240, easing = FastOutSlowInEasing))
+                pageReveal.animateTo(1f, animationSpec = tween(390, easing = FastOutSlowInEasing))
                 slideAnimation.join()
                 rotationAnimation.join()
             }
@@ -3895,51 +3911,90 @@ private fun MushafPageViewer(
                                 alpha = pageReveal.value
                                 translationX = pageTurnOffset.value + animatedSwipePreviewX
                                 rotationY = pageTurnRotation.value + animatedSwipeRotationY
-                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(pageTurnPivot, 0.5f)
-                                cameraDistance = 28.dp.toPx()
+                                transformOrigin = if (kotlin.math.abs(animatedSwipePreviewX) > 1f) {
+                                    androidx.compose.ui.graphics.TransformOrigin(
+                                        mushafSwipePivotFraction(animatedSwipePreviewX),
+                                        0.5f
+                                    )
+                                } else {
+                                    androidx.compose.ui.graphics.TransformOrigin(pageTurnPivot, 0.5f)
+                                }
+                                cameraDistance = 42.dp.toPx()
                                 shadowElevation = (
                                     pageTurnRotation.value * pageTurnRotation.value +
                                         animatedSwipeRotationY * animatedSwipeRotationY
-                                    ) * 0.18f
+                                    ) * 0.035f
                                 scaleX = 0.97f + pageReveal.value * 0.03f
                                 scaleY = 0.97f + pageReveal.value * 0.03f
+                            }.drawWithContent {
+                                drawContent()
+                                val dragProgress = mushafSwipeProgress(
+                                    animatedSwipePreviewX,
+                                    size.width
+                                )
+                                val entryProgress = (pageTurnRotation.value / 68f).coerceIn(-1f, 1f)
+                                val direction = when {
+                                    kotlin.math.abs(dragProgress) > 0.01f -> if (dragProgress > 0f) 1f else -1f
+                                    kotlin.math.abs(entryProgress) > 0.01f -> if (entryProgress > 0f) 1f else -1f
+                                    else -> 0f
+                                }
+                                val foldStrength = maxOf(
+                                    kotlin.math.abs(dragProgress),
+                                    kotlin.math.abs(entryProgress)
+                                ).coerceIn(0f, 1f)
+                                if (motionAllowed && direction != 0f && foldStrength > 0.01f && size.width > 0f) {
+                                    val foldWidth = (size.width * (0.035f + foldStrength * 0.105f))
+                                        .coerceAtMost(size.width * 0.18f)
+                                    val foldLeft = if (direction > 0f) size.width - foldWidth else 0f
+                                    val foldBrush = if (direction > 0f) {
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.12f * foldStrength),
+                                                Color.White.copy(alpha = 0.38f * foldStrength),
+                                                Color.Black.copy(alpha = 0.16f * foldStrength)
+                                            ),
+                                            startX = foldLeft,
+                                            endX = size.width
+                                        )
+                                    } else {
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = 0.16f * foldStrength),
+                                                Color.White.copy(alpha = 0.38f * foldStrength),
+                                                Color.Black.copy(alpha = 0.12f * foldStrength),
+                                                Color.Transparent
+                                            ),
+                                            startX = 0f,
+                                            endX = foldWidth
+                                        )
+                                    }
+                                    drawRect(
+                                        brush = foldBrush,
+                                        topLeft = androidx.compose.ui.geometry.Offset(foldLeft, 0f),
+                                        size = androidx.compose.ui.geometry.Size(foldWidth, size.height)
+                                    )
+                                    val highlightX = if (direction > 0f) {
+                                        foldLeft + foldWidth * 0.28f
+                                    } else {
+                                        foldWidth * 0.72f
+                                    }
+                                    drawLine(
+                                        color = Color.White.copy(alpha = 0.34f * foldStrength),
+                                        start = androidx.compose.ui.geometry.Offset(highlightX, 0f),
+                                        end = androidx.compose.ui.geometry.Offset(highlightX, size.height),
+                                        strokeWidth = 1.25.dp.toPx()
+                                    )
+                                    val shadowX = highlightX + if (direction > 0f) 2.dp.toPx() else -2.dp.toPx()
+                                    drawLine(
+                                        color = Color.Black.copy(alpha = 0.20f * foldStrength),
+                                        start = androidx.compose.ui.geometry.Offset(shadowX, 0f),
+                                        end = androidx.compose.ui.geometry.Offset(shadowX, size.height),
+                                        strokeWidth = 1.6.dp.toPx()
+                                    )
+                                }
                             }
                         )
-                        val swipeEdgeFraction = if (viewportSize.width > 0) {
-                            (animatedSwipePreviewX / viewportSize.width.toFloat()).coerceIn(-0.34f, 0.34f)
-                        } else 0f
-                        val swipeEdgeStrength = when {
-                            swipeEdgeFraction < -0.015f -> (-swipeEdgeFraction / 0.34f).coerceIn(0f, 1f)
-                            swipeEdgeFraction > 0.015f -> (swipeEdgeFraction / 0.34f).coerceIn(0f, 1f)
-                            else -> 0f
-                        }
-                        if (motionAllowed && swipeEdgeFraction < -0.015f) {
-                            Box(
-                                Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(25.dp)
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(
-                                                Color.Transparent,
-                                                Color.Black.copy(alpha = swipeEdgeStrength * 0.13f),
-                                                Color.White.copy(alpha = swipeEdgeStrength * 0.20f)
-                                            )
-                                        )
-                                    )
-                            )
-                        } else if (motionAllowed && swipeEdgeFraction > 0.015f) {
-                            Box(
-                                Modifier.align(Alignment.CenterStart).fillMaxHeight().width(25.dp)
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(
-                                                Color.White.copy(alpha = swipeEdgeStrength * 0.20f),
-                                                Color.Black.copy(alpha = swipeEdgeStrength * 0.13f),
-                                                Color.Transparent
-                                            )
-                                        )
-                                    )
-                            )
-                        }
                         if (verseRects.isNotEmpty()) {
                             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                                 val fit = minOf(size.width / 1148f, size.height / 1641f)
