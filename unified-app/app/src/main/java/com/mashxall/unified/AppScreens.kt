@@ -3772,7 +3772,9 @@ private fun MushafPageViewer(
                                 translationX = offsetX
                                 translationY = offsetY
                             }
-                            .pointerInput(page, scale, loading, bitmap) {
+                            .then(
+                                if (scale <= 1.01f) {
+                                Modifier.pointerInput(page, loading, bitmap) {
                                 if (loading || bitmap == null) return@pointerInput
                                 var dragTotal = 0f
                                 detectHorizontalDragGestures(
@@ -3797,6 +3799,10 @@ private fun MushafPageViewer(
                                     onDragCancel = { dragTotal = 0f }
                                 )
                             }
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .transformable(transformState, canPan = { scale > 1.01f }),
                         contentAlignment = Alignment.Center
                     ) {
