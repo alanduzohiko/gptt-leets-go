@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MushafSwipeNavigationTest {
@@ -35,23 +36,35 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun oneSheetCurlUsesTheCorrectHingeAndDirection() {
-        assertEquals(0f, mushafPageCurlRotationDegrees(1f, 0f), 0.001f)
-        assertEquals(84f, mushafPageCurlRotationDegrees(1f, 0.5f), 0.001f)
-        assertEquals(168f, mushafPageCurlRotationDegrees(1f, 1f), 0.001f)
-        assertEquals(-84f, mushafPageCurlRotationDegrees(-1f, 0.5f), 0.001f)
-        assertEquals(0f, mushafPageCurlRotationDegrees(1f, Float.NaN), 0.001f)
-        assertEquals(0f, mushafPageCurlRotationDegrees(0f, 0.8f), 0.001f)
-        assertEquals(0.94f, mushafPageCurlPivotFraction(1f), 0.001f)
-        assertEquals(0.06f, mushafPageCurlPivotFraction(-1f), 0.001f)
-        assertEquals(0.5f, mushafPageCurlPivotFraction(0f), 0.001f)
+    fun forwardCurlMovesAcrossThePageAndCreatesADiagonalCrease() {
+        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, 1f, 0f), 0.001f)
+        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, 1f, 1f), 0.001f)
+        assertEquals(0f, mushafCurlBoundaryX(1000f, 0.5f, 1f, 1f), 0.001f)
+        assertTrue(mushafCurlSeamX(1000f, 0.1f, 1f, 0.5f) <
+            mushafCurlSeamX(1000f, 0.9f, 1f, 0.5f))
     }
 
     @Test
-    fun sheetFrontFadesBeforeQuranTextCanAppearMirrored() {
-        assertEquals(1f, mushafPageCurlFrontFaceAlpha(1f, 0.45f), 0.001f)
-        assertEquals(0.75f, mushafPageCurlFrontFaceAlpha(1f, 0.5f), 0.001f)
-        assertEquals(0f, mushafPageCurlFrontFaceAlpha(1f, 0.54f), 0.001f)
-        assertEquals(0.75f, mushafPageCurlFrontFaceAlpha(-1f, 0.5f), 0.001f)
+    fun backwardCurlMovesInTheOppositeDirection() {
+        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, -1f, 0f), 0.001f)
+        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, -1f, 1f), 0.001f)
+        assertTrue(mushafCurlSeamX(1000f, 0.1f, -1f, 0.5f) >
+            mushafCurlSeamX(1000f, 0.9f, -1f, 0.5f))
     }
+
+    @Test
+    fun curlBandGrowsInTheMiddleAndCollapsesAtTheEnds() {
+        assertEquals(0f, mushafCurlBandWidth(1000f, 0f), 0.001f)
+        assertEquals(220f, mushafCurlBandWidth(1000f, 0.5f), 0.001f)
+        assertEquals(0f, mushafCurlBandWidth(1000f, 1f), 0.001f)
+    }
+
+    @Test
+    fun printedPageWarpsOnlyInsideTheMovingCurlBand() {
+        assertEquals(250f, mushafCurlWarpX(250f, 300f, 100f, 1f), 0.001f)
+        assertEquals(338f, mushafCurlWarpX(350f, 300f, 100f, 1f), 0.01f)
+        assertEquals(400f, mushafCurlWarpX(400f, 300f, 100f, 1f), 0.001f)
+        assertEquals(362f, mushafCurlWarpX(350f, 400f, 100f, -1f), 0.01f)
+    }
+
 }

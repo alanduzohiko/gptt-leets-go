@@ -3431,25 +3431,6 @@ internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: 
     }
 }
 
-/** A single sheet rotates away from the RTL hinge after the finger gesture commits. */
-internal fun mushafPageCurlRotationDegrees(direction: Float, progress: Float): Float {
-    if (!direction.isFinite() || direction == 0f || !progress.isFinite()) return 0f
-    val sign = if (direction > 0f) 1f else -1f
-    return sign * progress.coerceIn(0f, 1f) * 168f
-}
-
-internal fun mushafPageCurlPivotFraction(direction: Float): Float = when {
-    !direction.isFinite() || direction == 0f -> 0.5f
-    direction > 0f -> 0.94f
-    else -> 0.06f
-}
-
-/** Hide the printed front just before it would become mirrored on the back side. */
-internal fun mushafPageCurlFrontFaceAlpha(direction: Float, progress: Float): Float {
-    val angle = kotlin.math.abs(mushafPageCurlRotationDegrees(direction, progress))
-    return 1f - ((angle - 82f) / 8f).coerceIn(0f, 1f)
-}
-
 /** Scale the swipe threshold with the viewport while keeping a safe minimum. */
 internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
     if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
@@ -3552,7 +3533,7 @@ private fun MushafPageViewer(
             if (bitmap != null) {
                 lastLoadedPage = page
                 if (turningPageBitmap != null && motionAllowed) {
-                    pageCurlProgress.animateTo(1f, animationSpec = tween(620, easing = FastOutSlowInEasing))
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(420, easing = FastOutSlowInEasing))
                 } else {
                     pageCurlProgress.snapTo(1f)
                 }
@@ -3840,79 +3821,13 @@ private fun MushafPageViewer(
                             }
                         }
                         if (bitmap != null && turningPageBitmap != null && motionAllowed) {
-                            Image(
-                                bitmap = turningPageBitmap!!.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                colorFilter = when {
-                                    darkMode -> ColorFilter.colorMatrix(MushafNightColorMatrix)
-                                    sepiaMode -> ColorFilter.colorMatrix(MushafSepiaColorMatrix)
-                                    else -> null
-                                },
+                            MushafPageCurlOverlay(
+                                pageBitmap = turningPageBitmap!!,
+                                progress = pageCurlProgress.value,
+                                direction = pageTurnDirection,
+                                darkMode = darkMode,
+                                sepiaMode = sepiaMode,
                                 modifier = Modifier.fillMaxSize()
-                                    .graphicsLayer {
-                                        val progress = pageCurlProgress.value.coerceIn(0f, 1f)
-                                        rotationY = mushafPageCurlRotationDegrees(pageTurnDirection, progress)
-                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                                            mushafPageCurlPivotFraction(pageTurnDirection),
-                                            0.5f
-                                        )
-                                        cameraDistance = 42.dp.toPx()
-                                        translationX = pageTurnDirection * progress * 10.dp.toPx()
-                                        shadowElevation = kotlin.math.sin(progress * 3.14159f) * 28f
-                                        alpha = mushafPageCurlFrontFaceAlpha(pageTurnDirection, progress)
-                                    }
-                                    .drawWithContent {
-                                        drawContent()
-                                        val progress = pageCurlProgress.value.coerceIn(0f, 1f)
-                                        val strength = maxOf(0.18f, kotlin.math.sin(progress * 3.14159f))
-                                        val foldWidth = (size.width * (0.04f + strength * 0.10f))
-                                            .coerceAtMost(size.width * 0.18f)
-                                        val foldX = if (pageTurnDirection > 0f) {
-                                            size.width - foldWidth
-                                        } else {
-                                            0f
-                                        }
-                                        val foldBrush = if (pageTurnDirection > 0f) {
-                                            Brush.horizontalGradient(
-                                                listOf(
-                                                    Color.Transparent,
-                                                    Color.Black.copy(alpha = 0.16f * strength),
-                                                    Color.White.copy(alpha = 0.44f * strength),
-                                                    Color.Black.copy(alpha = 0.22f * strength)
-                                                ),
-                                                startX = foldX,
-                                                endX = size.width
-                                            )
-                                        } else {
-                                            Brush.horizontalGradient(
-                                                listOf(
-                                                    Color.Black.copy(alpha = 0.22f * strength),
-                                                    Color.White.copy(alpha = 0.44f * strength),
-                                                    Color.Black.copy(alpha = 0.16f * strength),
-                                                    Color.Transparent
-                                                ),
-                                                startX = 0f,
-                                                endX = foldWidth
-                                            )
-                                        }
-                                        drawRect(
-                                            brush = foldBrush,
-                                            topLeft = androidx.compose.ui.geometry.Offset(foldX, 0f),
-                                            size = androidx.compose.ui.geometry.Size(foldWidth, size.height)
-                                        )
-                                        val highlightX = if (pageTurnDirection > 0f) {
-                                            foldX + foldWidth * 0.26f
-                                        } else {
-                                            foldWidth * 0.74f
-                                        }
-                                        drawLine(
-                                            color = Color.White.copy(alpha = 0.44f * strength),
-                                            start = androidx.compose.ui.geometry.Offset(highlightX, 0f),
-                                            end = androidx.compose.ui.geometry.Offset(highlightX, size.height),
-                                            strokeWidth = 1.5.dp.toPx()
-                                        )
-                                    }
                             )
                         }
 
