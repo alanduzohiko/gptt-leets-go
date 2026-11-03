@@ -3450,6 +3450,12 @@ internal fun mushafPageCurlFrontFaceAlpha(direction: Float, progress: Float): Fl
     return 1f - ((angle - 82f) / 8f).coerceIn(0f, 1f)
 }
 
+/** Scale the swipe threshold with the viewport while keeping a safe minimum. */
+internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
+    if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
+    return maxOf(72f, viewportWidthPx * 0.16f)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
