@@ -3431,6 +3431,17 @@ internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: 
     }
 }
 
+
+/**
+ * The page bitmap transition is a physical-sheet movement, opposite the
+ * visible finger travel: advancing with a rightward finger drag peels the
+ * current sheet toward the right edge, while going back peels it left.
+ */
+internal fun mushafCurlDirectionForPageTransition(fromPage: Int, toPage: Int): Float {
+    if (fromPage !in 1..604 || toPage !in 1..604 || fromPage == toPage) return 0f
+    return if (toPage > fromPage) -1f else 1f
+}
+
 /** Scale the swipe threshold with the viewport while keeping a safe minimum. */
 internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
     if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
@@ -3497,7 +3508,7 @@ private fun MushafPageViewer(
         val previousPageBitmap = bitmap ?: turningPageBitmap
         if (previousPageBitmap != null && lastLoadedPage != page) {
             turningPageBitmap = previousPageBitmap
-            pageTurnDirection = if (page > lastLoadedPage) 1f else -1f
+            pageTurnDirection = mushafCurlDirectionForPageTransition(lastLoadedPage, page)
             pageCurlProgress.snapTo(0f)
         }
         loading = true
@@ -3761,7 +3772,6 @@ private fun MushafPageViewer(
                                 translationX = offsetX
                                 translationY = offsetY
                             }
-                            .transformable(transformState, canPan = { scale > 1.01f })
                             .pointerInput(page, scale, loading, bitmap) {
                                 if (loading || bitmap == null) return@pointerInput
                                 var dragTotal = 0f
@@ -3786,7 +3796,8 @@ private fun MushafPageViewer(
                                     },
                                     onDragCancel = { dragTotal = 0f }
                                 )
-                            },
+                            }
+                            .transformable(transformState, canPan = { scale > 1.01f }),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(

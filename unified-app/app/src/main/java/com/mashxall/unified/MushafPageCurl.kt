@@ -34,7 +34,7 @@ internal fun mushafCurlSeamX(
     ) return 0f
     val p = progress.coerceIn(0f, 1f)
     val wave = sin(PI * p).toFloat()
-    val skew = widthPx * 0.14f * wave * (yFraction.coerceIn(0f, 1f) - 0.5f)
+    val skew = widthPx * 0.62f * wave * (yFraction.coerceIn(0f, 1f) - 0.5f)
     val start = if (direction > 0f) widthPx * (1f - p) else widthPx * p
     return (start + if (direction > 0f) skew else -skew).coerceIn(0f, widthPx)
 }
@@ -42,7 +42,7 @@ internal fun mushafCurlSeamX(
 internal fun mushafCurlBandWidth(widthPx: Float, progress: Float): Float {
     if (!widthPx.isFinite() || widthPx <= 0f || !progress.isFinite()) return 0f
     val p = progress.coerceIn(0f, 1f)
-    return widthPx * 0.22f * sin(PI * p).toFloat()
+    return widthPx * 0.28f * sin(PI * p).toFloat()
 }
 
 internal fun mushafCurlBoundaryX(
@@ -72,7 +72,7 @@ internal fun mushafCurlWarpX(
     val distance = (sourceX - seamX) * sign
     if (distance <= 0f) return sourceX
     val t = (distance / bandWidth).coerceIn(0f, 1f)
-    val curved = t - 0.12f * sin(PI * t).toFloat()
+    val curved = t - 0.24f * sin(PI * t).toFloat()
     return seamX + sign * bandWidth * curved
 }
 
@@ -168,7 +168,7 @@ internal fun MushafPageCurlOverlay(
                     0f
                 }
                 val curvedX = mushafCurlWarpX(sourceX, seam, bandWidth, direction)
-                val depth = height * 0.014f * wave
+                val depth = height * 0.04f * wave
                 val curvedY = sourceY + depth * sin(PI * t).toFloat() *
                     sin(PI * yFraction).toFloat()
                 val index = (row * (meshColumns + 1) + column) * 2
@@ -238,9 +238,9 @@ internal fun MushafPageCurlOverlay(
                 val seamCenter = seamAt(centerY)
                 val edgeCenter = boundaryAt(centerY)
                 val shades = if (sign > 0f) {
-                    intArrayOf(0x3A000000, 0x58FFFFFF, 0x50000000)
+                    intArrayOf(0x46000000, 0x76FFFFFF, 0x66000000)
                 } else {
-                    intArrayOf(0x50000000, 0x58FFFFFF, 0x3A000000)
+                    intArrayOf(0x66000000, 0x76FFFFFF, 0x46000000)
                 }
                 shadingPaint.shader = LinearGradient(
                     seamCenter,
@@ -257,10 +257,10 @@ internal fun MushafPageCurlOverlay(
                 // A broad, soft edge shadow and a narrow paper highlight give
                 // the crease depth without the mirrored text of a card flip.
                 shadowPaint.color = 0x26000000
-                shadowPaint.strokeWidth = 34f
+                shadowPaint.strokeWidth = 42f
                 canvas.drawPath(seamPath, shadowPaint)
                 shadowPaint.color = 0x4A000000
-                shadowPaint.strokeWidth = 12f
+                shadowPaint.strokeWidth = 16f
                 canvas.drawPath(seamPath, shadowPaint)
                 shadowPaint.color = 0x33000000
                 shadowPaint.strokeWidth = 5f

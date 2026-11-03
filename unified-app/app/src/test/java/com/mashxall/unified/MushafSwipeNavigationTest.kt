@@ -11,6 +11,8 @@ class MushafSwipeNavigationTest {
         assertEquals(3, mushafSwipeTarget(page = 2, horizontalDragPx = 120f))
         assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = -120f))
         assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 120f))
+        assertEquals(3, mushafSwipeTarget(page = 2, horizontalDragPx = 150f))
+        assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = -150f))
     }
 
     @Test
@@ -33,6 +35,17 @@ class MushafSwipeNavigationTest {
         assertEquals(null, mushafSwipeTarget(page = 604, horizontalDragPx = 160f))
         assertEquals(null, mushafSwipeTarget(page = 0, horizontalDragPx = 160f))
         assertEquals(null, mushafSwipeTarget(page = 20, horizontalDragPx = Float.NaN))
+    }
+
+    @Test
+    fun rightSwipeAdvanceUsesRightwardPeelAndLeftSwipeBackUsesLeftwardPeel() {
+        // Pointer delta: positive means the finger physically travelled right.
+        assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 140f))
+        assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = -140f))
+        // Positive direction moves the seam right-to-left; negative moves it left-to-right.
+        assertEquals(-1f, mushafCurlDirectionForPageTransition(1, 2), 0.001f)
+        assertEquals(1f, mushafCurlDirectionForPageTransition(2, 1), 0.001f)
+        assertEquals(0f, mushafCurlDirectionForPageTransition(2, 2), 0.001f)
     }
 
     @Test
