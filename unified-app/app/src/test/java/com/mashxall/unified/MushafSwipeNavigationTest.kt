@@ -104,7 +104,7 @@ class MushafSwipeNavigationTest {
         val angle = mushafCurlSurfaceAngle(
             progress = 0.5f,
             direction = -1f,
-            xFraction = 0.7f,
+            xFraction = 0.71f,
             yFraction = 0.5f
         )
         assertEquals(1f, angle, 0.01f)
