@@ -47,6 +47,16 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
+    fun curlPreviewUsesOnlyTheAdjacentPageAndNeverSkipsAhead() {
+        assertEquals(2, mushafCurlAdjacentPage(page = 1, forward = true))
+        assertEquals(1, mushafCurlAdjacentPage(page = 2, forward = false))
+        assertEquals(604, mushafCurlAdjacentPage(page = 603, forward = true))
+        assertEquals(null, mushafCurlAdjacentPage(page = 604, forward = true))
+        assertEquals(null, mushafCurlAdjacentPage(page = 1, forward = false))
+        assertEquals(null, mushafCurlAdjacentPage(page = 0, forward = true))
+    }
+
+    @Test
     fun rightSwipeAdvanceUsesRightwardPeelAndLeftSwipeBackUsesLeftwardPeel() {
         // Pointer delta: positive means the finger physically travelled right.
         assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 140f))
