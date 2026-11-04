@@ -24,7 +24,7 @@ internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Fl
     return (kotlin.math.abs(horizontalDragPx) / viewportWidthPx).coerceIn(0f, 0.985f)
 }
 
-private const val MUSHAF_CURL_RADIUS_FRACTION = 0.16f
+private const val MUSHAF_CURL_RADIUS_FRACTION = 0.15f
 
 /**
  * The next-page gesture sweeps a moving fold across one paper leaf. The reverse
