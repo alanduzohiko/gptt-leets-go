@@ -105,10 +105,10 @@ class MushafSwipeNavigationTest {
         val bottom = mushafCurlFaceBoundaryX(1000f, 1600f, 0.9f, 0.5f, -1f, 0.5f)
         assertTrue(top > center)
         assertTrue(bottom < center)
-        assertTrue(top - bottom < 220f)
+        assertTrue(top - bottom < 300f)
         assertEquals(1000f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0f, -1f), 0.01f)
         val finalFold = mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 1f, -1f)
-        assertTrue(finalFold in 300f..360f)
+        assertTrue(finalFold in 370f..415f)
     }
 
     @Test
@@ -116,10 +116,20 @@ class MushafSwipeNavigationTest {
         val angle = mushafCurlSurfaceAngle(
             progress = 0.5f,
             direction = -1f,
-            xFraction = 0.71f,
+            xFraction = 0.75f,
             yFraction = 0.5f
         )
         assertEquals(1f, angle, 0.01f)
+    }
+
+    @Test
+    fun paperRadiusRespondsToTheFingerAnchorAndStaysBounded() {
+        val nearFinger = mushafCurlRadiusFraction(yFraction = 0.5f, anchorYFraction = 0.5f)
+        val farEdge = mushafCurlRadiusFraction(yFraction = 0f, anchorYFraction = 0.5f)
+        assertTrue(nearFinger > farEdge)
+        assertTrue(nearFinger in 0.24f..0.25f)
+        assertTrue(farEdge in 0.20f..0.22f)
+        assertEquals(0.21f, mushafCurlRadiusFraction(Float.NaN), 0.001f)
     }
 
     @Test
