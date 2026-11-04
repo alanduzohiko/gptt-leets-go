@@ -87,15 +87,27 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun faceBoundaryMovesDiagonallyAroundTheFingerAnchor() {
+    fun faceBoundaryMovesDiagonallyButDoesNotTwistAcrossTheWholePage() {
         val top = mushafCurlFaceBoundaryX(1000f, 1600f, 0.1f, 0.5f, -1f, 0.5f)
         val center = mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0.5f, -1f, 0.5f)
         val bottom = mushafCurlFaceBoundaryX(1000f, 1600f, 0.9f, 0.5f, -1f, 0.5f)
         assertTrue(top > center)
         assertTrue(bottom < center)
+        assertTrue(top - bottom < 220f)
         assertEquals(1000f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0f, -1f), 0.01f)
         val finalFold = mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 1f, -1f)
-        assertTrue(finalFold in 230f..270f)
+        assertTrue(finalFold in 300f..360f)
+    }
+
+    @Test
+    fun curledLeafHasAVisibleBroadSurfaceRatherThanAThinEdgeOnStripe() {
+        val angle = mushafCurlSurfaceAngle(
+            progress = 0.5f,
+            direction = -1f,
+            xFraction = 0.7f,
+            yFraction = 0.5f
+        )
+        assertEquals(1f, angle, 0.01f)
     }
 
     @Test
