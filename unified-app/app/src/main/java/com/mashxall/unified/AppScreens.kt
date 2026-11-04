@@ -3592,7 +3592,7 @@ private fun MushafPageViewer(
             if (bitmap != null) {
                 lastLoadedPage = page
                 if (turningPageBitmap != null && motionAllowed) {
-                    pageCurlProgress.animateTo(1f, animationSpec = tween(420, easing = FastOutSlowInEasing))
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(540, easing = FastOutSlowInEasing))
                 } else {
                     pageCurlProgress.snapTo(1f)
                 }
@@ -3895,7 +3895,7 @@ private fun MushafPageViewer(
                                                             fingerDragActive = false
                                                             pageCurlProgress.animateTo(
                                                                 1f,
-                                                                animationSpec = tween(360, easing = FastOutSlowInEasing)
+                                                                animationSpec = tween(620, easing = FastOutSlowInEasing)
                                                             )
                                                             turningPageBitmap = back
                                                             lastLoadedPage = targetPage
