@@ -320,51 +320,76 @@ internal fun MushafPageCurlOverlay(
             silhouettePath.lineTo(px, py)
         }
 
-        // Face boundary projected from its true diagonal 3-D fold, rather than
-        // clipping two independent page images with a straight moving seam.
+        // The two visible faces exactly share the projected fold curve.
+        // Their outer edges are sampled from the same mesh so the clip masks
+        // do not cut across curved corners with straight, artificial chords.
         if (forward) {
+            // Advancing: front is left of the fold, reverse is right of it.
             frontPath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
-            frontPath.lineTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
-            backPath.moveTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
+            frontPath.lineTo(
+                left + projectX(boundaryAt(0f), 0f) * fit,
+                top + projectY(boundaryAt(0f), 0f) * fit
+            )
+            backPath.moveTo(
+                left + projectX(boundaryAt(0f), 0f) * fit,
+                top + projectY(boundaryAt(0f), 0f) * fit
+            )
             backPath.lineTo(left + projectX(width, 0f) * fit, top + projectY(width, 0f) * fit)
-        } else {
-            frontPath.moveTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
-            frontPath.lineTo(left + projectX(width, 0f) * fit, top + projectY(width, 0f) * fit)
-            backPath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
-            backPath.lineTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
-        }
 
-        if (forward) {
-            // Front face is left of the fold; reverse face is right of it.
             for (i in 1..samples) {
                 val y = height * i / samples
-                val b = boundaryAt(y)
-                frontPath.lineTo(left + projectX(b, y) * fit, top + projectY(b, y) * fit)
-                backPath.lineTo(left + projectX(b, y) * fit, top + projectY(b, y) * fit)
+                val boundary = boundaryAt(y)
+                frontPath.lineTo(left + projectX(boundary, y) * fit, top + projectY(boundary, y) * fit)
+                backPath.lineTo(left + projectX(width, y) * fit, top + projectY(width, y) * fit)
             }
             frontPath.lineTo(left + projectX(0f, height) * fit, top + projectY(0f, height) * fit)
-            backPath.lineTo(left + projectX(width, height) * fit, top + projectY(width, height) * fit)
-            backPath.lineTo(left + projectX(boundaryAt(height), height) * fit, top + projectY(boundaryAt(height), height) * fit)
+            backPath.lineTo(
+                left + projectX(boundaryAt(height), height) * fit,
+                top + projectY(boundaryAt(height), height) * fit
+            )
             for (i in samples - 1 downTo 0) {
                 val y = height * i / samples
-                backPath.lineTo(left + projectX(boundaryAt(y), y) * fit, top + projectY(boundaryAt(y), y) * fit)
+                frontPath.lineTo(left + projectX(0f, y) * fit, top + projectY(0f, y) * fit)
+                backPath.lineTo(
+                    left + projectX(boundaryAt(y), y) * fit,
+                    top + projectY(boundaryAt(y), y) * fit
+                )
             }
-            frontPath.close()
-            backPath.close()
         } else {
-            // For a return gesture the front face is on the right side.
+            // Returning: front is right of the fold, reverse is left of it.
+            frontPath.moveTo(
+                left + projectX(boundaryAt(0f), 0f) * fit,
+                top + projectY(boundaryAt(0f), 0f) * fit
+            )
+            frontPath.lineTo(left + projectX(width, 0f) * fit, top + projectY(width, 0f) * fit)
+            backPath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
+            backPath.lineTo(
+                left + projectX(boundaryAt(0f), 0f) * fit,
+                top + projectY(boundaryAt(0f), 0f) * fit
+            )
+
             for (i in 1..samples) {
                 val y = height * i / samples
-                val b = boundaryAt(y)
+                val boundary = boundaryAt(y)
                 frontPath.lineTo(left + projectX(width, y) * fit, top + projectY(width, y) * fit)
-                backPath.lineTo(left + projectX(b, y) * fit, top + projectY(b, y) * fit)
+                backPath.lineTo(left + projectX(boundary, y) * fit, top + projectY(boundary, y) * fit)
             }
-            frontPath.lineTo(left + projectX(boundaryAt(height), height) * fit, top + projectY(boundaryAt(height), height) * fit)
-            frontPath.lineTo(left + projectX(width, height) * fit, top + projectY(width, height) * fit)
+            frontPath.lineTo(
+                left + projectX(boundaryAt(height), height) * fit,
+                top + projectY(boundaryAt(height), height) * fit
+            )
             backPath.lineTo(left + projectX(0f, height) * fit, top + projectY(0f, height) * fit)
-            backPath.close()
-            frontPath.close()
+            for (i in samples - 1 downTo 0) {
+                val y = height * i / samples
+                frontPath.lineTo(
+                    left + projectX(boundaryAt(y), y) * fit,
+                    top + projectY(boundaryAt(y), y) * fit
+                )
+                backPath.lineTo(left + projectX(0f, y) * fit, top + projectY(0f, y) * fit)
+            }
         }
+        frontPath.close()
+        backPath.close()
 
         // The outer edge and fold line are traced through the same projected mesh
         // so their shadows stay attached to the moving sheet.
