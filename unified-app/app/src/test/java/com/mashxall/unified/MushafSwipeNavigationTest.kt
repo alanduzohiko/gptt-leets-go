@@ -66,10 +66,20 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun paperProjectionStaysInPlaceWhenFlatAndMirrorsWhenTurnedOver() {
+    fun paperProjectionBuildsAVisibleCylinderAndCarriesTheTurnedLeafPastThePage() {
         assertEquals(250f, mushafCurlProjectedX(1000f, 250f, 0f, -1f), 0.01f)
-        assertEquals(750f, mushafCurlProjectedX(1000f, 250f, 1f, -1f), 0.01f)
-        assertEquals(250f, mushafCurlProjectedX(1000f, 750f, 1f, 1f), 0.01f)
+        assertEquals(750f, mushafCurlProjectedX(1000f, 750f, 0f, 1f), 0.01f)
+
+        // Halfway around the fold, the paper bows outward instead of rotating flat.
+        val curlMiddle = mushafCurlProjectedX(1000f, 750f, 0.5f, -1f)
+        assertTrue(curlMiddle > 450f)
+        assertTrue(curlMiddle > 350f)
+
+        // At the end of a turn, the reverse face travels beyond the visible edge.
+        val turnedLeft = mushafCurlProjectedX(1000f, 600f, 1f, -1f)
+        val turnedRight = mushafCurlProjectedX(1000f, 400f, 1f, 1f)
+        assertTrue(turnedLeft < 0f)
+        assertTrue(turnedRight > 1000f)
     }
 
     @Test
@@ -80,7 +90,26 @@ class MushafSwipeNavigationTest {
         assertTrue(top > center)
         assertTrue(bottom < center)
         assertEquals(1000f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0f, -1f), 0.01f)
-        assertEquals(0f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 1f, -1f), 0.01f)
+        val finalFold = mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 1f, -1f)
+        assertTrue(finalFold in 100f..200f)
+    }
+
+    @Test
+    fun cylinderAngleIsLocalToTheMovingFoldNotTheWholeFlatPage() {
+        assertEquals(0f, mushafCurlSurfaceAngle(0f, -1f, 0.5f, 0.5f), 0.001f)
+        assertEquals(0f, mushafCurlSurfaceAngle(0f, 1f, 0.5f, 0.5f), 0.001f)
+
+        val flatSide = mushafCurlSurfaceAngle(0.5f, -1f, 0.1f, 0.5f)
+        val curledSide = mushafCurlSurfaceAngle(0.5f, -1f, 0.7f, 0.5f)
+        assertEquals(0f, flatSide, 0.001f)
+        assertTrue(curledSide > 0f)
+        assertTrue(curledSide <= Math.PI.toFloat())
+
+        assertEquals(
+            0.5f,
+            mushafCurlFoldPositionFraction(0.5f, -1f, 0.5f, 0.5f),
+            0.001f
+        )
     }
 
 
