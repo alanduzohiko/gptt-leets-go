@@ -312,7 +312,7 @@ internal fun MushafPageCurlOverlay(
         val left = (size.width - width * fit) * 0.5f
         val top = (size.height - height * fit) * 0.5f
         val p = progress.coerceIn(0f, 1f)
-        val forward = direction < 0f
+        val backFaceOnRight = direction < 0f
         val samples = 96
 
         fun projectX(x: Float, y: Float): Float =
@@ -360,7 +360,7 @@ internal fun MushafPageCurlOverlay(
         // The two visible faces exactly share the projected fold curve.
         // Their outer edges are sampled from the same mesh so the clip masks
         // do not cut across curved corners with straight, artificial chords.
-        if (forward) {
+        if (backFaceOnRight) {
             // Advancing: front is left of the fold, reverse is right of it.
             frontPath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
             frontPath.lineTo(
@@ -516,12 +516,12 @@ internal fun MushafPageCurlOverlay(
                 )
                 val foldBand = Path()
                 foldBand.moveTo(
-                    left + projectX((boundaryAt(0f) - if (forward) 52f else -52f).coerceIn(0f, width), 0f) * fit,
+                    left + projectX((boundaryAt(0f) - if (direction > 0f) 52f else -52f).coerceIn(0f, width), 0f) * fit,
                     top + projectY((boundaryAt(0f) - if (forward) 52f else -52f).coerceIn(0f, width), 0f) * fit
                 )
                 for (i in 1..samples) {
                     val y = height * i / samples
-                    val x = (boundaryAt(y) - if (forward) 52f else -52f).coerceIn(0f, width)
+                    val x = (boundaryAt(y) - if (direction > 0f) 52f else -52f).coerceIn(0f, width)
                     foldBand.lineTo(left + projectX(x, y) * fit, top + projectY(x, y) * fit)
                 }
                 for (i in samples downTo 0) {
