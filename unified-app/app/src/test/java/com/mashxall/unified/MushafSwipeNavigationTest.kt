@@ -52,8 +52,8 @@ class MushafSwipeNavigationTest {
         assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 140f))
         assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = -140f))
         // Advancing peels from the left edge toward the right; returning peels right-to-left.
-        assertEquals(-1f, mushafCurlDirectionForPageTransition(1, 2), 0.001f)
-        assertEquals(1f, mushafCurlDirectionForPageTransition(2, 1), 0.001f)
+        assertEquals(1f, mushafCurlDirectionForPageTransition(1, 2), 0.001f)
+        assertEquals(-1f, mushafCurlDirectionForPageTransition(2, 1), 0.001f)
         assertEquals(0f, mushafCurlDirectionForPageTransition(2, 2), 0.001f)
     }
 
@@ -66,20 +66,24 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun paperProjectionBuildsAVisibleCylinderAndCarriesTheTurnedLeafPastThePage() {
-        assertEquals(250f, mushafCurlProjectedX(1000f, 250f, 0f, -1f), 0.01f)
-        assertEquals(750f, mushafCurlProjectedX(1000f, 750f, 0f, 1f), 0.01f)
+    fun paperProjectionFollowsTheSameDirectionAsTheFinger() {
+        // A rightward advance leaves the left edge flat first, then carries
+        // the turned sheet off the right edge. Returning mirrors that path.
+        assertEquals(250f, mushafCurlProjectedX(1000f, 250f, 0f, 1f), 0.01f)
+        assertEquals(750f, mushafCurlProjectedX(1000f, 750f, 0f, -1f), 0.01f)
 
-        // Halfway around the fold, the paper bows outward instead of rotating flat.
-        val curlMiddle = mushafCurlProjectedX(1000f, 750f, 0.5f, -1f)
-        assertTrue(curlMiddle > 450f)
-        assertTrue(curlMiddle > 350f)
+        val foldStart = mushafCurlFoldPositionFraction(0f, 1f, 0.5f)
+        val foldEnd = mushafCurlFoldPositionFraction(1f, 1f, 0.5f)
+        assertEquals(0f, foldStart, 0.001f)
+        assertEquals(1f, foldEnd, 0.001f)
 
-        // At the end of a turn, the reverse face travels beyond the visible edge.
-        val turnedLeft = mushafCurlProjectedX(1000f, 600f, 1f, -1f)
+        val curlMiddle = mushafCurlProjectedX(1000f, 250f, 0.5f, 1f)
+        assertTrue(curlMiddle > 250f)
+
         val turnedRight = mushafCurlProjectedX(1000f, 400f, 1f, 1f)
-        assertTrue(turnedLeft < 0f)
+        val turnedLeft = mushafCurlProjectedX(1000f, 600f, 1f, -1f)
         assertTrue(turnedRight > 1000f)
+        assertTrue(turnedLeft < 0f)
     }
 
     @Test
