@@ -60,11 +60,13 @@ internal fun mushafCurlFoldPositionFraction(
     val bend = sin(PI * p).toFloat()
     val turnSign = if (direction < 0f) 1f else -1f
     val safeY = yFraction.coerceIn(0f, 1f)
-    val diagonal = (anchorYFraction.coerceIn(0f, 1f) - safeY) *
-        0.34f * bend * turnSign
-    // A shallow arc makes the fold follow the paper's natural tension rather
-    // than remaining a ruler-straight diagonal from top edge to bottom edge.
-    val edgeArc = sin(PI * safeY).toFloat() * 0.025f * bend * turnSign
+    val safeAnchor = anchorYFraction.coerceIn(0f, 1f)
+    val diagonal = (safeAnchor - safeY) * 0.34f * bend * turnSign
+    // A shallow arc makes the fold follow the paper's natural tension while
+    // keeping the crease exactly under the finger's vertical anchor.
+    val edgeArc = (
+        sin(PI * safeY).toFloat() - sin(PI * safeAnchor).toFloat()
+    ) * 0.025f * bend * turnSign
     return (base + diagonal + edgeArc).coerceIn(-0.30f, 1.30f)
 }
 
