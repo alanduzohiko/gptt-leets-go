@@ -27,6 +27,20 @@ internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Fl
 private const val MUSHAF_CURL_RADIUS_FRACTION = 0.21f
 
 /**
+ * A page pulled near one edge curls more tightly near the fingertip and relaxes
+ * toward the far edge. This gives the sheet a soft, cone-like paper response
+ * instead of a perfectly uniform cardboard cylinder.
+ */
+internal fun mushafCurlRadiusFraction(yFraction: Float, anchorYFraction: Float = 0.5f): Float {
+    if (!yFraction.isFinite() || !anchorYFraction.isFinite()) return MUSHAF_CURL_RADIUS_FRACTION
+    val distanceFromFinger = kotlin.math.abs(
+        yFraction.coerceIn(0f, 1f) - anchorYFraction.coerceIn(0f, 1f)
+    )
+    return (MUSHAF_CURL_RADIUS_FRACTION * (0.82f + 0.37f * (1f - distanceFromFinger)))
+        .coerceIn(0.17f, 0.25f)
+}
+
+/**
  * The next-page gesture sweeps a moving fold across one paper leaf. The reverse
  * gesture mirrors the sweep. The fold line follows the initial finger height,
  * reproducing the diagonal, twisted curl visible in the reference clip.
@@ -45,9 +59,13 @@ internal fun mushafCurlFoldPositionFraction(
     val base = if (direction < 0f) 1f - p else p
     val bend = sin(PI * p).toFloat()
     val turnSign = if (direction < 0f) 1f else -1f
-    val diagonal = (anchorYFraction.coerceIn(0f, 1f) - yFraction.coerceIn(0f, 1f)) *
-        0.24f * bend * turnSign
-    return (base + diagonal).coerceIn(-0.26f, 1.26f)
+    val safeY = yFraction.coerceIn(0f, 1f)
+    val diagonal = (anchorYFraction.coerceIn(0f, 1f) - safeY) *
+        0.34f * bend * turnSign
+    // A shallow arc makes the fold follow the paper's natural tension rather
+    // than remaining a ruler-straight diagonal from top edge to bottom edge.
+    val edgeArc = sin(PI * safeY).toFloat() * 0.025f * bend * turnSign
+    return (base + diagonal + edgeArc).coerceIn(-0.30f, 1.30f)
 }
 
 /**
@@ -69,7 +87,8 @@ internal fun mushafCurlSurfaceAngle(
 
     val fold = mushafCurlFoldPositionFraction(progress, direction, yFraction, anchorYFraction)
     val distance = if (direction < 0f) xFraction - fold else fold - xFraction
-    return (distance / MUSHAF_CURL_RADIUS_FRACTION).coerceIn(0f, PI.toFloat())
+    val radiusFraction = mushafCurlRadiusFraction(yFraction, anchorYFraction)
+    return (distance / radiusFraction).coerceIn(0f, PI.toFloat())
 }
 
 /** Project one paper point over a 180-degree cylindrical curl. */
@@ -91,7 +110,7 @@ internal fun mushafCurlProjectedX(
     val distance = if (direction < 0f) sourceX - foldX else foldX - sourceX
     if (distance <= 0f) return sourceX
 
-    val radius = maxOf(widthPx * MUSHAF_CURL_RADIUS_FRACTION, 20f)
+    val radius = maxOf(widthPx * mushafCurlRadiusFraction(yFraction, anchorYFraction), 20f)
     val arcLength = PI.toFloat() * radius
     val angle = (distance / radius).coerceIn(0f, PI.toFloat())
     val travelSign = direction
@@ -102,10 +121,10 @@ internal fun mushafCurlProjectedX(
     }
 
     val depth = if (distance <= arcLength) radius * (1f - cos(angle).toFloat()) else 0f
-    val cameraDistance = widthPx * 3.2f
+    val cameraDistance = widthPx * 2.6f
     val perspective = (cameraDistance / (cameraDistance - depth))
-        .coerceIn(0.82f, 1.24f)
-    val edgeTwist = travelSign * radius * 0.025f * sin(angle).toFloat() *
+        .coerceIn(0.80f, 1.28f)
+    val edgeTwist = travelSign * radius * 0.055f * sin(angle).toFloat() *
         (yFraction.coerceIn(0f, 1f) - 0.5f)
     return foldX + (wrappedX - foldX) * perspective + edgeTwist
 }
@@ -134,16 +153,16 @@ internal fun mushafCurlProjectedY(
     } else {
         fold * widthPx - sourceX
     }
-    val radius = maxOf(widthPx * MUSHAF_CURL_RADIUS_FRACTION, 20f)
+    val radius = maxOf(widthPx * mushafCurlRadiusFraction(yFraction, anchorYFraction), 20f)
     val angle = (distance / radius).coerceIn(0f, PI.toFloat())
     val arcLength = PI.toFloat() * radius
     val depth = if (distance in 0f..arcLength) radius * (1f - cos(angle).toFloat()) else 0f
-    val cameraDistance = widthPx * 3.2f
+    val cameraDistance = widthPx * 2.6f
     val perspective = (cameraDistance / (cameraDistance - depth))
-        .coerceIn(0.82f, 1.24f)
-    val verticalTwist = direction * radius * 0.10f * sin(angle).toFloat() *
+        .coerceIn(0.80f, 1.28f)
+    val verticalTwist = direction * radius * 0.17f * sin(angle).toFloat() *
         (yFraction - anchorYFraction.coerceIn(0f, 1f))
-    val verticalBow = heightPx * 0.006f * sin(angle).toFloat() *
+    val verticalBow = heightPx * 0.014f * sin(angle).toFloat() *
         (xFraction - fold)
     return heightPx * 0.5f + (sourceY - heightPx * 0.5f) * perspective +
         verticalTwist + verticalBow
@@ -455,46 +474,64 @@ internal fun MushafPageCurlOverlay(
                 // Real paper has one soft cast shadow and one narrow contact
                 // crease. Keep both attached to the fold instead of outlining the
                 // entire distorted page as the previous effect did.
-                shadowPaint.color = 0x2A000000
+                // A layered, low-contrast shadow gives the crease depth without
+                // drawing the old hard grey frame around the whole page.
+                shadowPaint.color = 0x10000000
+                shadowPaint.strokeWidth = 42f * fit * wave
+                canvas.drawPath(creasePath, shadowPaint)
+                shadowPaint.color = 0x18000000
                 shadowPaint.strokeWidth = 24f * fit * wave
                 canvas.drawPath(creasePath, shadowPaint)
-
-                shadowPaint.color = 0x56000000
-                shadowPaint.strokeWidth = 6f * fit * wave
+                shadowPaint.color = 0x22000000
+                shadowPaint.strokeWidth = 10f * fit * wave
+                canvas.drawPath(creasePath, shadowPaint)
+                shadowPaint.color = 0x28000000
+                shadowPaint.strokeWidth = 3.2f * fit * wave
                 canvas.drawPath(creasePath, shadowPaint)
 
                 val centerY = height * 0.5f
                 val creaseX = projectX(boundaryAt(centerY), centerY) * fit + left
+                val shadeHalfWidth = width * 0.115f * fit
+                foldPaint.alpha = (wave * 255f).toInt().coerceIn(0, 255)
                 foldPaint.shader = LinearGradient(
-                    creaseX - 30f * fit,
+                    creaseX - shadeHalfWidth,
                     top,
-                    creaseX + 30f * fit,
+                    creaseX + shadeHalfWidth,
                     top,
-                    intArrayOf(0x0A000000, 0x32FFFFFF, 0x3A000000),
-                    floatArrayOf(0f, 0.46f, 1f),
+                    intArrayOf(
+                        0x00FFFFFF,
+                        0x12000000,
+                        0x2A000000,
+                        0x1CFFFFFF,
+                        0x00FFFFFF
+                    ),
+                    floatArrayOf(0f, 0.34f, 0.52f, 0.69f, 1f),
                     Shader.TileMode.CLAMP
                 )
                 val foldBand = Path()
+                val lowAtTop = (boundaryAt(0f) - width * 0.115f).coerceIn(0f, width)
                 foldBand.moveTo(
-                    left + projectX((boundaryAt(0f) - if (direction > 0f) 30f else -30f).coerceIn(0f, width), 0f) * fit,
-                    top + projectY((boundaryAt(0f) - if (direction > 0f) 30f else -30f).coerceIn(0f, width), 0f) * fit
+                    left + projectX(lowAtTop, 0f) * fit,
+                    top + projectY(lowAtTop, 0f) * fit
                 )
                 for (i in 1..samples) {
                     val y = height * i / samples
-                    val x = (boundaryAt(y) - if (direction > 0f) 30f else -30f).coerceIn(0f, width)
+                    val x = (boundaryAt(y) - width * 0.115f).coerceIn(0f, width)
                     foldBand.lineTo(left + projectX(x, y) * fit, top + projectY(x, y) * fit)
                 }
                 for (i in samples downTo 0) {
                     val y = height * i / samples
-                    val x = boundaryAt(y)
+                    val x = (boundaryAt(y) + width * 0.115f).coerceIn(0f, width)
                     foldBand.lineTo(left + projectX(x, y) * fit, top + projectY(x, y) * fit)
                 }
                 foldBand.close()
                 canvas.drawPath(foldBand, foldPaint)
                 foldPaint.shader = null
+                foldPaint.alpha = 255
 
-                highlightPaint.color = 0xB8FFFFFF.toInt()
-                highlightPaint.strokeWidth = 1.4f * fit
+                // One restrained highlight catches the raised paper edge.
+                highlightPaint.color = 0x72FFFFFF
+                highlightPaint.strokeWidth = 1.8f * fit
                 canvas.drawPath(creasePath, highlightPaint)
             }
 
