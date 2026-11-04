@@ -1,3 +1,23 @@
+package com.mashxall.unified
+
+import android.graphics.Bitmap
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+
 /** Convert horizontal finger travel to a continuous turn amount. */
 internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Float): Float {
     if (!horizontalDragPx.isFinite() || !viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 0f
@@ -7,9 +27,9 @@ internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Fl
 private const val MUSHAF_CURL_RADIUS_FRACTION = 0.095f
 
 /**
- * The advancing page is peeled from its left edge toward the right-hand spine.
- * The reverse gesture mirrors that travel. Moving the fold line diagonally
- * around the initial touch point reproduces the twisted leaf seen in the clip.
+ * The next-page gesture sweeps a moving fold across one paper leaf. The reverse
+ * gesture mirrors the sweep. The fold line follows the initial finger height,
+ * reproducing the diagonal, twisted curl visible in the reference clip.
  */
 internal fun mushafCurlFoldPositionFraction(
     progress: Float,
