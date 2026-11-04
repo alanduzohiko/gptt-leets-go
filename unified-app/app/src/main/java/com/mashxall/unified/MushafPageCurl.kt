@@ -1,36 +1,40 @@
-package com.mashxall.unified
-
-import android.graphics.Bitmap
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.LinearGradient
-import android.graphics.Matrix
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.Shader
-import androidx.compose.foundation.Canvas
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
-
 /** Convert horizontal finger travel to a continuous turn amount. */
 internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Float): Float {
     if (!horizontalDragPx.isFinite() || !viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 0f
-    return (abs(horizontalDragPx) / viewportWidthPx).coerceIn(0f, 0.985f)
+    return (kotlin.math.abs(horizontalDragPx) / viewportWidthPx).coerceIn(0f, 0.985f)
+}
+
+private const val MUSHAF_CURL_RADIUS_FRACTION = 0.095f
+
+/**
+ * The advancing page is peeled from its left edge toward the right-hand spine.
+ * The reverse gesture mirrors that travel. Moving the fold line diagonally
+ * around the initial touch point reproduces the twisted leaf seen in the clip.
+ */
+internal fun mushafCurlFoldPositionFraction(
+    progress: Float,
+    direction: Float,
+    yFraction: Float,
+    anchorYFraction: Float = 0.5f
+): Float {
+    if (!progress.isFinite() || !direction.isFinite() || direction == 0f ||
+        !yFraction.isFinite() || !anchorYFraction.isFinite()
+    ) return if (direction < 0f) 1f else 0f
+
+    val p = progress.coerceIn(0f, 1f)
+    val base = if (direction < 0f) 1f - p else p
+    val bend = sin(PI * p).toFloat()
+    val turnSign = if (direction < 0f) 1f else -1f
+    val diagonal = (anchorYFraction.coerceIn(0f, 1f) - yFraction.coerceIn(0f, 1f)) *
+        0.26f * bend * turnSign
+    return (base + diagonal).coerceIn(-0.26f, 1.26f)
 }
 
 /**
- * The paper is a single bent surface. Its local angle varies across both axes,
- * so the fold line is diagonal and the top/bottom corners do not move together.
+ * Local paper angle around the moving cylindrical fold.
  *
- * direction < 0: advancing (finger moves right)
- * direction > 0: returning (finger moves left)
+ * Values before the fold stay flat; the next 180 degrees form the visible curl;
+ * points beyond the curl are the turned-over reverse of the same paper leaf.
  */
 internal fun mushafCurlSurfaceAngle(
     progress: Float,
@@ -42,16 +46,13 @@ internal fun mushafCurlSurfaceAngle(
     if (!progress.isFinite() || !direction.isFinite() || direction == 0f ||
         !xFraction.isFinite() || !yFraction.isFinite() || !anchorYFraction.isFinite()
     ) return 0f
-    val p = progress.coerceIn(0f, 1f)
-    val wave = sin(PI * p).toFloat()
-    val turnSign = if (direction < 0f) 1f else -1f
-    val acrossPage = (xFraction.coerceIn(0f, 1f) - 0.5f) * 0.72f
-    val aroundFinger = (yFraction.coerceIn(0f, 1f) - anchorYFraction.coerceIn(0f, 1f)) * 0.92f
-    val diagonalTwist = (acrossPage + aroundFinger) * 0.72f * wave * turnSign
-    return (PI.toFloat() * p + diagonalTwist).coerceIn(0f, PI.toFloat())
+
+    val fold = mushafCurlFoldPositionFraction(progress, direction, yFraction, anchorYFraction)
+    val distance = if (direction < 0f) xFraction - fold else fold - xFraction
+    return (distance / MUSHAF_CURL_RADIUS_FRACTION).coerceIn(0f, PI.toFloat())
 }
 
-/** Project one point of the paper through a shallow perspective camera. */
+/** Project one paper point over a 180-degree cylindrical curl. */
 internal fun mushafCurlProjectedX(
     widthPx: Float,
     sourceX: Float,
@@ -64,24 +65,32 @@ internal fun mushafCurlProjectedX(
     if (!widthPx.isFinite() || widthPx <= 0f || !sourceX.isFinite() ||
         !progress.isFinite() || !direction.isFinite() || direction == 0f
     ) return sourceX
+
     val p = progress.coerceIn(0f, 1f)
-    val wave = sin(PI * p).toFloat()
-    val theta = mushafCurlSurfaceAngle(p, direction, xFraction, yFraction, anchorYFraction)
-    val center = widthPx * 0.5f
-    val radiusX = sourceX - center
-    val turnSign = if (direction < 0f) 1f else -1f
-    val depth = turnSign * (
-        radiusX * sin(theta).toFloat() * 0.66f +
-            widthPx * 0.13f * wave * sin(PI * xFraction.coerceIn(0f, 1f)).toFloat()
-        )
+    val foldX = mushafCurlFoldPositionFraction(p, direction, yFraction, anchorYFraction) * widthPx
+    val distance = if (direction < 0f) sourceX - foldX else foldX - sourceX
+    if (distance <= 0f) return sourceX
+
+    val radius = maxOf(widthPx * MUSHAF_CURL_RADIUS_FRACTION, 20f)
+    val arcLength = PI.toFloat() * radius
+    val angle = (distance / radius).coerceIn(0f, PI.toFloat())
+    val travelSign = -direction
+    val wrappedX = if (distance <= arcLength) {
+        foldX + travelSign * radius * sin(angle).toFloat()
+    } else {
+        foldX + direction * (distance - arcLength)
+    }
+
+    val depth = if (distance <= arcLength) radius * (1f - cos(angle).toFloat()) else 0f
     val cameraDistance = widthPx * 3.2f
-    val perspective = (cameraDistance / (cameraDistance + depth))
-        .coerceIn(0.72f, 1.34f)
-    val foldSweep = turnSign * widthPx * 0.075f * wave * sin(theta).toFloat() *
-        (0.25f + 0.75f * yFraction.coerceIn(0f, 1f))
-    return center + (radiusX * cos(theta).toFloat() + foldSweep) * perspective
+    val perspective = (cameraDistance / (cameraDistance - depth))
+        .coerceIn(0.82f, 1.24f)
+    val edgeTwist = travelSign * radius * 0.045f * sin(angle).toFloat() *
+        (yFraction.coerceIn(0f, 1f) - 0.5f)
+    return foldX + (wrappedX - foldX) * perspective + edgeTwist
 }
 
+/** Vertical perspective and corner twist keep the curled sheet from looking flat. */
 internal fun mushafCurlProjectedY(
     widthPx: Float,
     heightPx: Float,
@@ -95,28 +104,34 @@ internal fun mushafCurlProjectedY(
         !sourceX.isFinite() || !sourceY.isFinite() || !progress.isFinite() ||
         !direction.isFinite() || direction == 0f
     ) return sourceY
+
     val xFraction = (sourceX / widthPx).coerceIn(0f, 1f)
     val yFraction = (sourceY / heightPx).coerceIn(0f, 1f)
     val p = progress.coerceIn(0f, 1f)
-    val wave = sin(PI * p).toFloat()
-    val theta = mushafCurlSurfaceAngle(p, direction, xFraction, yFraction, anchorYFraction)
-    val turnSign = if (direction < 0f) 1f else -1f
-    val radiusX = sourceX - widthPx * 0.5f
-    val depth = turnSign * (
-        radiusX * sin(theta).toFloat() * 0.66f +
-            widthPx * 0.13f * wave * sin(PI * xFraction).toFloat()
-        )
+    val fold = mushafCurlFoldPositionFraction(p, direction, yFraction, anchorYFraction)
+    val distance = if (direction < 0f) {
+        sourceX - fold * widthPx
+    } else {
+        fold * widthPx - sourceX
+    }
+    val radius = maxOf(widthPx * MUSHAF_CURL_RADIUS_FRACTION, 20f)
+    val angle = (distance / radius).coerceIn(0f, PI.toFloat())
+    val arcLength = PI.toFloat() * radius
+    val depth = if (distance in 0f..arcLength) radius * (1f - cos(angle).toFloat()) else 0f
     val cameraDistance = widthPx * 3.2f
-    val perspective = (cameraDistance / (cameraDistance + depth)).coerceIn(0.72f, 1.34f)
-    val verticalBow = turnSign * heightPx * 0.045f * wave *
-        sin(theta).toFloat() * (xFraction - 0.5f)
+    val perspective = (cameraDistance / (cameraDistance - depth))
+        .coerceIn(0.82f, 1.24f)
+    val verticalTwist = (-direction) * radius * 0.22f * sin(angle).toFloat() *
+        (yFraction - anchorYFraction.coerceIn(0f, 1f))
+    val verticalBow = heightPx * 0.012f * sin(angle).toFloat() *
+        (xFraction - fold)
     return heightPx * 0.5f + (sourceY - heightPx * 0.5f) * perspective +
-        verticalBow
+        verticalTwist + verticalBow
 }
 
 /**
- * X coordinate of the front/back face boundary at a given y. The boundary is
- * solved from the local paper angle instead of drawing a fixed straight edge.
+ * Source X coordinate where the two printed faces meet visually. On the curl
+ * cylinder this is the 90-degree point, where the sheet is edge-on.
  */
 internal fun mushafCurlFaceBoundaryX(
     widthPx: Float,
@@ -129,6 +144,7 @@ internal fun mushafCurlFaceBoundaryX(
     if (!widthPx.isFinite() || widthPx <= 0f || !heightPx.isFinite() || heightPx <= 0f ||
         !yFraction.isFinite() || !progress.isFinite() || !direction.isFinite() || direction == 0f
     ) return 0f
+
     val p = progress.coerceIn(0f, 1f)
     val leftAngle = mushafCurlSurfaceAngle(p, direction, 0f, yFraction, anchorYFraction)
     val rightAngle = mushafCurlSurfaceAngle(p, direction, 1f, yFraction, anchorYFraction)
@@ -139,10 +155,11 @@ internal fun mushafCurlFaceBoundaryX(
     if (minOf(leftAngle, rightAngle) >= halfTurn) {
         return if (direction < 0f) 0f else widthPx
     }
+
     var low = 0f
     var high = 1f
     val increasing = rightAngle > leftAngle
-    repeat(22) {
+    repeat(24) {
         val middle = (low + high) * 0.5f
         val angle = mushafCurlSurfaceAngle(p, direction, middle, yFraction, anchorYFraction)
         if ((angle < halfTurn) == increasing) low = middle else high = middle
@@ -436,20 +453,21 @@ internal fun MushafPageCurlOverlay(
             edgePaint.strokeWidth = 2.1f * fit
             canvas.drawPath(silhouettePath, edgePaint)
 
-            // The reverse page is drawn first, then the still-facing front.
-            canvas.save()
-            canvas.clipPath(backPath)
-            canvas.drawBitmapMesh(
-                mirroredBackBitmap, meshColumns, meshRows,
-                backVertices, 0, null, 0, backPaint
-            )
-            canvas.restore()
-
+            // Draw the unturned paper first. The curled reverse then travels over it,
+            // just as a lifted physical leaf passes across the page beneath.
             canvas.save()
             canvas.clipPath(frontPath)
             canvas.drawBitmapMesh(
                 pageBitmap, meshColumns, meshRows,
                 frontVertices, 0, null, 0, frontPaint
+            )
+            canvas.restore()
+
+            canvas.save()
+            canvas.clipPath(backPath)
+            canvas.drawBitmapMesh(
+                mirroredBackBitmap, meshColumns, meshRows,
+                backVertices, 0, null, 0, backPaint
             )
             canvas.restore()
 
