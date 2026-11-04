@@ -3433,13 +3433,13 @@ internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: 
 
 
 /**
- * The page bitmap transition is a physical-sheet movement, opposite the
- * visible finger travel: advancing with a rightward finger drag peels the
- * current sheet toward the right edge, while going back peels it left.
+ * Keep the physical curl direction identical to the user's finger movement:
+ * rightward advance (+X) sweeps the fold from left to right; leftward return
+ * (-X) sweeps it from right to left.
  */
 internal fun mushafCurlDirectionForPageTransition(fromPage: Int, toPage: Int): Float {
     if (fromPage !in 1..604 || toPage !in 1..604 || fromPage == toPage) return 0f
-    return if (toPage > fromPage) -1f else 1f
+    return if (toPage > fromPage) 1f else -1f
 }
 
 /** Scale the swipe threshold with the viewport while keeping a safe minimum. */
