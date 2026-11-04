@@ -78,7 +78,7 @@ class MushafSwipeNavigationTest {
         assertEquals(1f, foldEnd, 0.001f)
 
         val curlMiddle = mushafCurlProjectedX(1000f, 250f, 0.5f, 1f)
-        assertTrue(curlMiddle > 250f)
+        assertTrue(curlMiddle > 550f)
 
         val turnedRight = mushafCurlProjectedX(1000f, 400f, 1f, 1f)
         val turnedLeft = mushafCurlProjectedX(1000f, 600f, 1f, -1f)
@@ -95,7 +95,7 @@ class MushafSwipeNavigationTest {
         assertTrue(bottom < center)
         assertEquals(1000f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0f, -1f), 0.01f)
         val finalFold = mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 1f, -1f)
-        assertTrue(finalFold in 100f..200f)
+        assertTrue(finalFold in 230f..270f)
     }
 
     @Test
