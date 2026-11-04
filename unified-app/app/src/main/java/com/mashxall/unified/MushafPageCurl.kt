@@ -298,10 +298,11 @@ internal fun MushafPageCurlOverlay(
                 val index = (row * (meshColumns + 1) + column) * 2
                 val projectedX = projectX(sourceX, sourceY)
                 val projectedY = projectY(sourceX, sourceY)
-                frontVertices[index] = projectedX
-                frontVertices[index + 1] = projectedY
-                backVertices[index] = projectedX
-                backVertices[index + 1] = projectedY
+                // Mesh vertices and clip paths share screen-pixel coordinates.
+                frontVertices[index] = left + projectedX * fit
+                frontVertices[index + 1] = top + projectedY * fit
+                backVertices[index] = left + projectedX * fit
+                backVertices[index + 1] = top + projectedY * fit
             }
         }
 
