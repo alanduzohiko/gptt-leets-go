@@ -3483,12 +3483,9 @@ private fun MushafPageViewer(
     var fingerCurlDirection by remember { mutableFloatStateOf(-1f) }
     var fingerCurlAnchorY by remember { mutableFloatStateOf(0.5f) }
     var curlBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var curlUnderBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var curlUnderlayBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var nextCurlBackBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
-    var nextCurlUnderBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var previousCurlBackBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
-    var previousCurlUnderBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
     var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -3519,9 +3516,7 @@ private fun MushafPageViewer(
     LaunchedEffect(page) { pageInput = page.toString() }
     LaunchedEffect(page, motionAllowed) {
         nextCurlBackBitmap = null
-        nextCurlUnderBitmap = null
         previousCurlBackBitmap = null
-        previousCurlUnderBitmap = null
         if (!motionAllowed) return@LaunchedEffect
 
         suspend fun renderPreview(targetPage: Int): Bitmap? {
@@ -3543,12 +3538,12 @@ private fun MushafPageViewer(
             }
         }
 
-        // Prepare both sides and the page beneath in advance so slow drags
-        // follow the fingertip without waiting for SVG decompression.
-        nextCurlBackBitmap = renderPreview(page + 1)
-        nextCurlUnderBitmap = renderPreview(page + 2)
-        previousCurlBackBitmap = renderPreview(page - 1)
-        previousCurlUnderBitmap = renderPreview(page - 2)
+        // Prepare only the adjacent page. In the single-page reader, revealing
+        // page +2 beneath page +1 makes the Mushaf appear to skip the first page.
+        val nextPage = mushafCurlAdjacentPage(page, forward = true)
+        val previousPage = mushafCurlAdjacentPage(page, forward = false)
+        nextCurlBackBitmap = nextPage?.let { renderPreview(it) }
+        previousCurlBackBitmap = previousPage?.let { renderPreview(it) }
     }
     LaunchedEffect(page, retryPageLoad) {
         val previousPageBitmap = bitmap ?: turningPageBitmap
@@ -3837,7 +3832,6 @@ private fun MushafPageViewer(
                                             curlPreviewVisible = false
                                             fingerCurlProgress = 0f
                                             curlBackBitmap = null
-                                            curlUnderBitmap = null
                                             curlUnderlayBitmap = null
                                         }
 
@@ -3853,7 +3847,6 @@ private fun MushafPageViewer(
                                                 curlPreviewVisible = false
                                                 fingerCurlProgress = 0f
                                                 curlBackBitmap = null
-                                                curlUnderBitmap = null
                                                 curlUnderlayBitmap = null
                                             },
                                             onHorizontalDrag = { _, amount ->
@@ -3862,14 +3855,13 @@ private fun MushafPageViewer(
                                                 dragTotal += amount
                                                 if (scale <= 1.01f && dragTotal != 0f) {
                                                     val forward = dragTotal > 0f
+                                                    val target = mushafCurlAdjacentPage(page, forward)
                                                     val back = if (forward) nextCurlBackBitmap else previousCurlBackBitmap
-                                                    val under = if (forward) nextCurlUnderBitmap else previousCurlUnderBitmap
-                                                    if (back != null) {
-                                                        val target = if (forward) page + 1 else page - 1
+                                                    if (back != null && target != null) {
                                                         fingerCurlDirection = mushafCurlDirectionForPageTransition(page, target)
                                                         curlBackBitmap = back
-                                                        curlUnderBitmap = under ?: back
-                                                        curlUnderlayBitmap = under ?: back
+                                                        // Keep the next page visible beneath the turn; never expose page +2 early.
+                                                        curlUnderlayBitmap = back
                                                         fingerCurlProgress = mushafCurlDragProgress(
                                                             horizontalDragPx = dragTotal,
                                                             viewportWidthPx = size.width.toFloat()
@@ -3905,7 +3897,6 @@ private fun MushafPageViewer(
                                                             pageCurlProgress.snapTo(1f)
                                                             curlPreviewVisible = false
                                                             curlBackBitmap = null
-                                                            curlUnderBitmap = null
                                                             curlUnderlayBitmap = null
                                                             fingerCurlProgress = 0f
                                                             onPageChange(targetPage)
@@ -3914,7 +3905,6 @@ private fun MushafPageViewer(
                                                         fingerDragActive = false
                                                         curlPreviewVisible = false
                                                         curlBackBitmap = null
-                                                        curlUnderBitmap = null
                                                         curlUnderlayBitmap = null
                                                         fingerCurlProgress = 0f
                                                         onPageChange(targetPage)
@@ -3935,7 +3925,6 @@ private fun MushafPageViewer(
                                                     fingerDragActive = false
                                                     fingerCurlProgress = 0f
                                                     curlBackBitmap = null
-                                                    curlUnderBitmap = null
                                                     curlUnderlayBitmap = null
                                                 }
                                                 dragTotal = 0f
