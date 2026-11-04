@@ -3,78 +3,151 @@ package com.mashxall.unified
 import android.graphics.Bitmap
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 
-/** Live finger travel becomes the page curl amount, capped just before the edge. */
+/** Convert horizontal finger travel to a continuous turn amount. */
 internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Float): Float {
     if (!horizontalDragPx.isFinite() || !viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 0f
     return (abs(horizontalDragPx) / viewportWidthPx).coerceIn(0f, 0.985f)
 }
 
-/** Diagonal fold line that travels across the page with the user's drag. */
-internal fun mushafCurlSeamX(
-    widthPx: Float,
-    yFraction: Float,
+/**
+ * The paper is a single bent surface. Its local angle varies across both axes,
+ * so the fold line is diagonal and the top/bottom corners do not move together.
+ *
+ * direction < 0: advancing (finger moves right)
+ * direction > 0: returning (finger moves left)
+ */
+internal fun mushafCurlSurfaceAngle(
+    progress: Float,
     direction: Float,
-    progress: Float
+    xFraction: Float,
+    yFraction: Float,
+    anchorYFraction: Float = 0.5f
 ): Float {
-    if (!widthPx.isFinite() || widthPx <= 0f ||
-        !yFraction.isFinite() || !direction.isFinite() || direction == 0f ||
-        !progress.isFinite()
+    if (!progress.isFinite() || !direction.isFinite() || direction == 0f ||
+        !xFraction.isFinite() || !yFraction.isFinite() || !anchorYFraction.isFinite()
     ) return 0f
     val p = progress.coerceIn(0f, 1f)
     val wave = sin(PI * p).toFloat()
-    val skew = widthPx * 0.62f * wave * (yFraction.coerceIn(0f, 1f) - 0.5f)
-    val start = if (direction > 0f) widthPx * (1f - p) else widthPx * p
-    return (start + if (direction > 0f) -skew else skew).coerceIn(0f, widthPx)
+    val turnSign = if (direction < 0f) 1f else -1f
+    val acrossPage = (xFraction.coerceIn(0f, 1f) - 0.5f) * 0.72f
+    val aroundFinger = (yFraction.coerceIn(0f, 1f) - anchorYFraction.coerceIn(0f, 1f)) * 0.92f
+    val diagonalTwist = (acrossPage + aroundFinger) * 0.72f * wave * turnSign
+    return (PI.toFloat() * p + diagonalTwist).coerceIn(0f, PI.toFloat())
 }
 
-internal fun mushafCurlBandWidth(widthPx: Float, progress: Float): Float {
-    if (!widthPx.isFinite() || widthPx <= 0f || !progress.isFinite()) return 0f
-    val p = progress.coerceIn(0f, 1f)
-    return widthPx * 0.28f * sin(PI * p).toFloat()
-}
-
-internal fun mushafCurlBoundaryX(
+/** Project one point of the paper through a shallow perspective camera. */
+internal fun mushafCurlProjectedX(
     widthPx: Float,
-    yFraction: Float,
+    sourceX: Float,
+    progress: Float,
     direction: Float,
-    progress: Float
+    xFraction: Float = if (widthPx > 0f) sourceX / widthPx else 0f,
+    yFraction: Float = 0.5f,
+    anchorYFraction: Float = 0.5f
 ): Float {
-    val seam = mushafCurlSeamX(widthPx, yFraction, direction, progress)
-    val band = mushafCurlBandWidth(widthPx, progress)
-    val sign = if (direction > 0f) 1f else -1f
-    return (seam + sign * band).coerceIn(0f, widthPx.coerceAtLeast(0f))
+    if (!widthPx.isFinite() || widthPx <= 0f || !sourceX.isFinite() ||
+        !progress.isFinite() || !direction.isFinite() || direction == 0f
+    ) return sourceX
+    val p = progress.coerceIn(0f, 1f)
+    val wave = sin(PI * p).toFloat()
+    val theta = mushafCurlSurfaceAngle(p, direction, xFraction, yFraction, anchorYFraction)
+    val center = widthPx * 0.5f
+    val radiusX = sourceX - center
+    val turnSign = if (direction < 0f) 1f else -1f
+    val depth = turnSign * (
+        radiusX * sin(theta) * 0.66f +
+            widthPx * 0.13f * wave * sin(PI * xFraction.coerceIn(0f, 1f))
+        )
+    val cameraDistance = widthPx * 3.2f
+    val perspective = (cameraDistance / (cameraDistance + depth))
+        .coerceIn(0.72f, 1.34f)
+    val foldSweep = turnSign * widthPx * 0.075f * wave * sin(theta) *
+        (0.25f + 0.75f * yFraction.coerceIn(0f, 1f))
+    return center + (radiusX * cos(theta) + foldSweep) * perspective
 }
 
-/** Compress both printed faces toward the rolling edge, revealing the next leaf underneath. */
-internal fun mushafCurlWarpX(
+internal fun mushafCurlProjectedY(
+    widthPx: Float,
+    heightPx: Float,
     sourceX: Float,
-    seamX: Float,
-    bandWidth: Float,
-    direction: Float
+    sourceY: Float,
+    progress: Float,
+    direction: Float,
+    anchorYFraction: Float = 0.5f
 ): Float {
-    if (!sourceX.isFinite() || !seamX.isFinite() ||
-        !bandWidth.isFinite() || bandWidth <= 0f ||
+    if (!widthPx.isFinite() || widthPx <= 0f || !heightPx.isFinite() || heightPx <= 0f ||
+        !sourceX.isFinite() || !sourceY.isFinite() || !progress.isFinite() ||
         !direction.isFinite() || direction == 0f
-    ) return sourceX
-    val sign = if (direction > 0f) 1f else -1f
-    val distance = (sourceX - seamX) * sign
-    if (distance <= 0f) return sourceX
-    val t = (distance / bandWidth).coerceIn(0f, 1f)
-    val curved = t - 0.24f * sin(PI * t).toFloat()
-    return seamX + sign * bandWidth * curved
+    ) return sourceY
+    val xFraction = (sourceX / widthPx).coerceIn(0f, 1f)
+    val yFraction = (sourceY / heightPx).coerceIn(0f, 1f)
+    val p = progress.coerceIn(0f, 1f)
+    val wave = sin(PI * p).toFloat()
+    val theta = mushafCurlSurfaceAngle(p, direction, xFraction, yFraction, anchorYFraction)
+    val turnSign = if (direction < 0f) 1f else -1f
+    val radiusX = sourceX - widthPx * 0.5f
+    val depth = turnSign * (
+        radiusX * sin(theta) * 0.66f +
+            widthPx * 0.13f * wave * sin(PI * xFraction)
+        )
+    val cameraDistance = widthPx * 3.2f
+    val perspective = (cameraDistance / (cameraDistance + depth)).coerceIn(0.72f, 1.34f)
+    val verticalBow = turnSign * heightPx * 0.045f * wave *
+        sin(theta) * (xFraction - 0.5f)
+    return heightPx * 0.5f + (sourceY - heightPx * 0.5f) * perspective +
+        verticalBow
+}
+
+/**
+ * X coordinate of the front/back face boundary at a given y. The boundary is
+ * solved from the local paper angle instead of drawing a fixed straight edge.
+ */
+internal fun mushafCurlFaceBoundaryX(
+    widthPx: Float,
+    heightPx: Float,
+    yFraction: Float,
+    progress: Float,
+    direction: Float,
+    anchorYFraction: Float = 0.5f
+): Float {
+    if (!widthPx.isFinite() || widthPx <= 0f || !heightPx.isFinite() || heightPx <= 0f ||
+        !yFraction.isFinite() || !progress.isFinite() || !direction.isFinite() || direction == 0f
+    ) return 0f
+    val p = progress.coerceIn(0f, 1f)
+    val leftAngle = mushafCurlSurfaceAngle(p, direction, 0f, yFraction, anchorYFraction)
+    val rightAngle = mushafCurlSurfaceAngle(p, direction, 1f, yFraction, anchorYFraction)
+    val halfTurn = PI.toFloat() * 0.5f
+    if (maxOf(leftAngle, rightAngle) <= halfTurn) {
+        return if (direction < 0f) widthPx else 0f
+    }
+    if (minOf(leftAngle, rightAngle) >= halfTurn) {
+        return if (direction < 0f) 0f else widthPx
+    }
+    var low = 0f
+    var high = 1f
+    val increasing = rightAngle > leftAngle
+    repeat(22) {
+        val middle = (low + high) * 0.5f
+        val angle = mushafCurlSurfaceAngle(p, direction, middle, yFraction, anchorYFraction)
+        if ((angle < halfTurn) == increasing) low = middle else high = middle
+    }
+    return ((low + high) * 0.5f) * widthPx
 }
 
 @Composable
@@ -83,18 +156,39 @@ internal fun MushafPageCurlOverlay(
     backPageBitmap: Bitmap,
     progress: Float,
     direction: Float,
+    anchorYFraction: Float = 0.5f,
     darkMode: Boolean,
     sepiaMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val meshColumns = 40
-    val meshRows = 56
-    val meshFloatCount = (meshColumns + 1) * (meshRows + 1) * 2
-    val meshes = remember(pageBitmap, backPageBitmap) {
-        FloatArray(meshFloatCount) to FloatArray(meshFloatCount)
+    val meshColumns = 48
+    val meshRows = 64
+    val vertexCount = (meshColumns + 1) * (meshRows + 1) * 2
+    val frontVertices = remember(pageBitmap, backPageBitmap) { FloatArray(vertexCount) }
+    val backVertices = remember(pageBitmap, backPageBitmap) { FloatArray(vertexCount) }
+
+    // The reverse print is mirrored in texture space. The projected paper mesh
+    // also turns over, so the reader sees normally oriented Arabic on the back.
+    val mirroredBackBitmap = remember(backPageBitmap) {
+        val matrix = Matrix().apply {
+            setScale(-1f, 1f)
+            postTranslate(backPageBitmap.width.toFloat(), 0f)
+        }
+        Bitmap.createBitmap(
+            backPageBitmap,
+            0,
+            0,
+            backPageBitmap.width,
+            backPageBitmap.height,
+            matrix,
+            true
+        )
     }
-    val frontVertices = meshes.first
-    val backVertices = meshes.second
+    DisposableEffect(mirroredBackBitmap) {
+        onDispose {
+            if (!mirroredBackBitmap.isRecycled) mirroredBackBitmap.recycle()
+        }
+    }
 
     val frontPaint = remember(pageBitmap, darkMode, sepiaMode) {
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -119,7 +213,7 @@ internal fun MushafPageCurlOverlay(
             }
         }
     }
-    val backPaint = remember(backPageBitmap, darkMode, sepiaMode) {
+    val backPaint = remember(mirroredBackBitmap, darkMode, sepiaMode) {
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             colorFilter = when {
                 darkMode -> ColorMatrixColorFilter(
@@ -152,12 +246,22 @@ internal fun MushafPageCurlOverlay(
             strokeJoin = Paint.Join.ROUND
         }
     }
+    val edgePaint = remember {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+    }
     val highlightPaint = remember {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         }
+    }
+    val paths = remember(pageBitmap, backPageBitmap) {
+        arrayOf(Path(), Path(), Path(), Path())
     }
 
     Canvas(modifier = modifier) {
@@ -168,144 +272,211 @@ internal fun MushafPageCurlOverlay(
         ) return@Canvas
 
         val fit = minOf(size.width / width, size.height / height)
-        val left = (size.width - width * fit) / 2f
-        val top = (size.height - height * fit) / 2f
+        val left = (size.width - width * fit) * 0.5f
+        val top = (size.height - height * fit) * 0.5f
         val p = progress.coerceIn(0f, 1f)
         val forward = direction < 0f
-        val bandWidth = mushafCurlBandWidth(width, p)
-        val curlDepth = height * 0.052f * sin(PI * p).toFloat()
         val samples = 96
 
-        fun seamAt(y: Float) = mushafCurlSeamX(width, y / height, direction, p)
-        fun boundaryAt(y: Float) = mushafCurlBoundaryX(width, y / height, direction, p)
+        fun projectX(x: Float, y: Float): Float =
+            mushafCurlProjectedX(
+                width, x, p, direction,
+                xFraction = x / width,
+                yFraction = y / height,
+                anchorYFraction = anchorYFraction
+            )
 
-        val frontPath = Path()
-        val backPath = Path()
-        val foldPath = Path()
-        val seamPath = Path()
-        val boundaryPath = Path()
+        fun projectY(x: Float, y: Float): Float =
+            mushafCurlProjectedY(width, height, x, y, p, direction, anchorYFraction)
 
-        if (forward) {
-            frontPath.moveTo(seamAt(0f), 0f)
-            frontPath.lineTo(width, 0f)
-            frontPath.lineTo(width, height)
-            for (i in samples downTo 0) {
-                val y = height * i / samples
-                frontPath.lineTo(seamAt(y), y)
-            }
-
-            backPath.moveTo(0f, 0f)
-            for (i in 0..samples) {
-                val y = height * i / samples
-                backPath.lineTo(boundaryAt(y), y)
-            }
-            backPath.lineTo(0f, height)
-        } else {
-            frontPath.moveTo(0f, 0f)
-            frontPath.lineTo(seamAt(0f), 0f)
-            for (i in 0..samples) {
-                val y = height * i / samples
-                frontPath.lineTo(seamAt(y), y)
-            }
-            frontPath.lineTo(0f, height)
-
-            backPath.moveTo(boundaryAt(0f), 0f)
-            backPath.lineTo(width, 0f)
-            backPath.lineTo(width, height)
-            for (i in samples downTo 0) {
-                val y = height * i / samples
-                backPath.lineTo(boundaryAt(y), y)
-            }
-        }
-        frontPath.close()
-        backPath.close()
-
-        foldPath.moveTo(boundaryAt(0f), 0f)
-        foldPath.lineTo(seamAt(0f), 0f)
-        for (i in 1..samples) {
-            val y = height * i / samples
-            foldPath.lineTo(seamAt(y), y)
-        }
-        for (i in samples downTo 0) {
-            val y = height * i / samples
-            foldPath.lineTo(boundaryAt(y), y)
-        }
-        foldPath.close()
-
-        seamPath.moveTo(seamAt(0f), 0f)
-        boundaryPath.moveTo(boundaryAt(0f), 0f)
-        for (i in 1..samples) {
-            val y = height * i / samples
-            seamPath.lineTo(seamAt(y), y)
-            boundaryPath.lineTo(boundaryAt(y), y)
-        }
-
-        // Make the printed front and reverse faces bend toward the fold from
-        // opposite sides. The under-page remains a separate, visible layer.
+        // Build a perspective mesh of the whole leaf. Each vertex bends in both
+        // X and Y; its angle is solved from the slow finger-led progress.
         for (row in 0..meshRows) {
             val sourceY = height * row / meshRows
-            val yFraction = sourceY / height
-            val seam = seamAt(sourceY)
             for (column in 0..meshColumns) {
                 val sourceX = width * column / meshColumns
-                val frontX = mushafCurlWarpX(sourceX, seam, bandWidth, -direction)
-                val backX = mushafCurlWarpX(sourceX, seam, bandWidth, direction)
-                val t = if (bandWidth > 0f) (abs(sourceX - seam) / bandWidth).coerceIn(0f, 1f) else 0f
-                val lift = curlDepth * sin(PI * t).toFloat() * sin(PI * yFraction).toFloat()
                 val index = (row * (meshColumns + 1) + column) * 2
-                frontVertices[index] = frontX
-                frontVertices[index + 1] = sourceY + lift
-                backVertices[index] = backX
-                backVertices[index + 1] = sourceY + lift
+                val projectedX = projectX(sourceX, sourceY)
+                val projectedY = projectY(sourceX, sourceY)
+                frontVertices[index] = projectedX
+                frontVertices[index + 1] = projectedY
+                backVertices[index] = projectedX
+                backVertices[index + 1] = projectedY
             }
+        }
+
+        val frontPath = paths[0].apply { reset() }
+        val backPath = paths[1].apply { reset() }
+        val creasePath = paths[2].apply { reset() }
+        val silhouettePath = paths[3].apply { reset() }
+
+        fun boundaryAt(y: Float): Float =
+            mushafCurlFaceBoundaryX(width, height, y / height, p, direction, anchorYFraction)
+
+        fun point(x: Float, y: Float) {
+            val px = left + projectX(x, y) * fit
+            val py = top + projectY(x, y) * fit
+            silhouettePath.lineTo(px, py)
+        }
+
+        // Face boundary projected from its true diagonal 3-D fold, rather than
+        // clipping two independent page images with a straight moving seam.
+        if (forward) {
+            frontPath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
+            frontPath.lineTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
+            backPath.moveTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
+            backPath.lineTo(left + projectX(width, 0f) * fit, top + projectY(width, 0f) * fit)
+        } else {
+            frontPath.moveTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
+            frontPath.lineTo(left + projectX(width, 0f) * fit, top + projectY(width, 0f) * fit)
+            backPath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
+            backPath.lineTo(left + projectX(boundaryAt(0f), 0f) * fit, top + projectY(boundaryAt(0f), 0f) * fit)
+        }
+
+        if (forward) {
+            // Front face is left of the fold; reverse face is right of it.
+            for (i in 1..samples) {
+                val y = height * i / samples
+                val b = boundaryAt(y)
+                frontPath.lineTo(left + projectX(b, y) * fit, top + projectY(b, y) * fit)
+                backPath.lineTo(left + projectX(b, y) * fit, top + projectY(b, y) * fit)
+            }
+            frontPath.lineTo(left + projectX(0f, height) * fit, top + projectY(0f, height) * fit)
+            backPath.lineTo(left + projectX(width, height) * fit, top + projectY(width, height) * fit)
+            backPath.lineTo(left + projectX(boundaryAt(height), height) * fit, top + projectY(boundaryAt(height), height) * fit)
+            for (i in samples - 1 downTo 0) {
+                val y = height * i / samples
+                backPath.lineTo(left + projectX(boundaryAt(y), y) * fit, top + projectY(boundaryAt(y), y) * fit)
+            }
+            frontPath.close()
+            backPath.close()
+        } else {
+            // For a return gesture the front face is on the right side.
+            for (i in 1..samples) {
+                val y = height * i / samples
+                val b = boundaryAt(y)
+                frontPath.lineTo(left + projectX(width, y) * fit, top + projectY(width, y) * fit)
+                backPath.lineTo(left + projectX(b, y) * fit, top + projectY(b, y) * fit)
+            }
+            frontPath.lineTo(left + projectX(boundaryAt(height), height) * fit, top + projectY(boundaryAt(height), height) * fit)
+            frontPath.lineTo(left + projectX(width, height) * fit, top + projectY(width, height) * fit)
+            backPath.lineTo(left + projectX(0f, height) * fit, top + projectY(0f, height) * fit)
+            backPath.close()
+            frontPath.close()
+        }
+
+        // The outer edge and fold line are traced through the same projected mesh
+        // so their shadows stay attached to the moving sheet.
+        silhouettePath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
+        for (i in 1..meshRows) {
+            val y = height * i / meshRows
+            point(0f, y)
+        }
+        for (i in 1..meshColumns) {
+            val x = width * i / meshColumns
+            point(x, height)
+        }
+        for (i in meshRows downTo 0) {
+            val y = height * i / meshRows
+            point(width, y)
+        }
+        for (i in meshColumns downTo 0) {
+            val x = width * i / meshColumns
+            point(x, 0f)
+        }
+        silhouettePath.close()
+
+        creasePath.moveTo(
+            left + projectX(boundaryAt(0f), 0f) * fit,
+            top + projectY(boundaryAt(0f), 0f) * fit
+        )
+        for (i in 1..samples) {
+            val y = height * i / samples
+            creasePath.lineTo(
+                left + projectX(boundaryAt(y), y) * fit,
+                top + projectY(boundaryAt(y), y) * fit
+            )
         }
 
         drawIntoCanvas { composeCanvas ->
             val canvas = composeCanvas.nativeCanvas
             val saved = canvas.save()
-            canvas.translate(left, top)
-            canvas.scale(fit, fit)
 
-            // The reverse side is real page content, not a blank white card.
+            // Contact shadow and thin paper edge behind both printed faces.
+            shadowPaint.color = 0x50000000
+            shadowPaint.strokeWidth = 30f * fit
+            canvas.drawPath(silhouettePath, shadowPaint)
+            edgePaint.color = 0x9A82745F.toInt()
+            edgePaint.strokeWidth = 2.1f * fit
+            canvas.drawPath(silhouettePath, edgePaint)
+
+            // The reverse page is drawn first, then the still-facing front.
             canvas.save()
             canvas.clipPath(backPath)
-            canvas.drawBitmapMesh(backPageBitmap, meshColumns, meshRows, backVertices, 0, null, 0, backPaint)
+            canvas.drawBitmapMesh(
+                mirroredBackBitmap, meshColumns, meshRows,
+                backVertices, 0, null, 0, backPaint
+            )
             canvas.restore()
 
             canvas.save()
             canvas.clipPath(frontPath)
-            canvas.drawBitmapMesh(pageBitmap, meshColumns, meshRows, frontVertices, 0, null, 0, frontPaint)
+            canvas.drawBitmapMesh(
+                pageBitmap, meshColumns, meshRows,
+                frontVertices, 0, null, 0, frontPaint
+            )
             canvas.restore()
 
-            if (bandWidth > 1f && p > 0.003f && p < 0.997f) {
+            val wave = sin(PI * p).toFloat()
+            if (wave > 0.01f) {
+                // A soft broad shadow, a deep crease, and a narrow paper highlight
+                // reproduce the edge lighting seen in the reference frames.
+                shadowPaint.color = 0x44000000
+                shadowPaint.strokeWidth = 46f * fit * wave
+                canvas.drawPath(creasePath, shadowPaint)
+
+                shadowPaint.color = 0x72000000
+                shadowPaint.strokeWidth = 12f * fit * wave
+                canvas.drawPath(creasePath, shadowPaint)
+
                 val centerY = height * 0.5f
-                val boundaryX = boundaryAt(centerY)
-                val seamX = seamAt(centerY)
-                val colors = if (forward) {
-                    intArrayOf(0x3A000000, 0x28FFFFFF, 0x52000000)
-                } else {
-                    intArrayOf(0x52000000, 0x28FFFFFF, 0x3A000000)
-                }
+                val creaseX = projectX(boundaryAt(centerY), centerY) * fit + left
                 foldPaint.shader = LinearGradient(
-                    boundaryX, 0f, seamX, 0f,
-                    colors, floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
+                    creaseX - 38f * fit,
+                    top,
+                    creaseX + 38f * fit,
+                    top,
+                    intArrayOf(0x10000000, 0x58FFFFFF, 0x5A000000),
+                    floatArrayOf(0f, 0.48f, 1f),
+                    Shader.TileMode.CLAMP
                 )
-                canvas.drawPath(foldPath, foldPaint)
+                val foldBand = Path()
+                foldBand.moveTo(
+                    left + projectX((boundaryAt(0f) - if (forward) 52f else -52f).coerceIn(0f, width), 0f) * fit,
+                    top + projectY((boundaryAt(0f) - if (forward) 52f else -52f).coerceIn(0f, width), 0f) * fit
+                )
+                for (i in 1..samples) {
+                    val y = height * i / samples
+                    val x = (boundaryAt(y) - if (forward) 52f else -52f).coerceIn(0f, width)
+                    foldBand.lineTo(left + projectX(x, y) * fit, top + projectY(x, y) * fit)
+                }
+                for (i in samples downTo 0) {
+                    val y = height * i / samples
+                    val x = boundaryAt(y)
+                    foldBand.lineTo(left + projectX(x, y) * fit, top + projectY(x, y) * fit)
+                }
+                foldBand.close()
+                canvas.drawPath(foldBand, foldPaint)
                 foldPaint.shader = null
 
-                shadowPaint.color = 0x31000000
-                shadowPaint.strokeWidth = 40f
-                canvas.drawPath(boundaryPath, shadowPaint)
-                shadowPaint.color = 0x4A000000
-                shadowPaint.strokeWidth = 13f
-                canvas.drawPath(seamPath, shadowPaint)
-                highlightPaint.color = 0xDFFFFFFF.toInt()
-                highlightPaint.strokeWidth = 2.8f
-                canvas.drawPath(boundaryPath, highlightPaint)
-                highlightPaint.color = 0x78FFFFFF
-                highlightPaint.strokeWidth = 1.4f
-                canvas.drawPath(seamPath, highlightPaint)
+                highlightPaint.color = 0xE8FFFFFF.toInt()
+                highlightPaint.strokeWidth = 2.4f * fit
+                canvas.drawPath(creasePath, highlightPaint)
+                highlightPaint.color = 0x7AFFFFFF
+                highlightPaint.strokeWidth = 1.1f * fit
+                canvas.drawPath(silhouettePath, highlightPaint)
             }
+
             canvas.restoreToCount(saved)
         }
     }

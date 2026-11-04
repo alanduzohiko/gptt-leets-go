@@ -58,36 +58,31 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
-    fun forwardCurlMovesLeftToRightAndCreatesADiagonalCrease() {
-        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, -1f, 0f), 0.001f)
-        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, -1f, 1f), 0.001f)
-        assertEquals(1000f, mushafCurlBoundaryX(1000f, 0.5f, -1f, 1f), 0.001f)
-        assertTrue(mushafCurlSeamX(1000f, 0.1f, -1f, 0.5f) <
-            mushafCurlSeamX(1000f, 0.9f, -1f, 0.5f))
+    fun paperAngleStartsFlatAndEndsWithItsPrintedReverseFace() {
+        assertEquals(0f, mushafCurlSurfaceAngle(0f, -1f, 0.5f, 0.5f), 0.001f)
+        assertEquals(Math.PI.toFloat(), mushafCurlSurfaceAngle(1f, -1f, 0.5f, 0.5f), 0.001f)
+        assertEquals(0f, mushafCurlSurfaceAngle(0f, 1f, 0.5f, 0.5f), 0.001f)
+        assertEquals(Math.PI.toFloat(), mushafCurlSurfaceAngle(1f, 1f, 0.5f, 0.5f), 0.001f)
     }
 
     @Test
-    fun backwardCurlMovesRightToLeftInTheOppositeDirection() {
-        assertEquals(1000f, mushafCurlSeamX(1000f, 0.5f, 1f, 0f), 0.001f)
-        assertEquals(0f, mushafCurlSeamX(1000f, 0.5f, 1f, 1f), 0.001f)
-        assertEquals(0f, mushafCurlBoundaryX(1000f, 0.5f, 1f, 1f), 0.001f)
-        assertTrue(mushafCurlSeamX(1000f, 0.1f, 1f, 0.5f) >
-            mushafCurlSeamX(1000f, 0.9f, 1f, 0.5f))
+    fun paperProjectionStaysInPlaceWhenFlatAndMirrorsWhenTurnedOver() {
+        assertEquals(250f, mushafCurlProjectedX(1000f, 250f, 0f, -1f), 0.01f)
+        assertEquals(750f, mushafCurlProjectedX(1000f, 250f, 1f, -1f), 0.01f)
+        assertEquals(250f, mushafCurlProjectedX(1000f, 750f, 1f, 1f), 0.01f)
     }
 
     @Test
-    fun curlBandGrowsInTheMiddleAndCollapsesAtTheEnds() {
-        assertEquals(0f, mushafCurlBandWidth(1000f, 0f), 0.001f)
-        assertEquals(280f, mushafCurlBandWidth(1000f, 0.5f), 0.001f)
-        assertEquals(0f, mushafCurlBandWidth(1000f, 1f), 0.001f)
+    fun faceBoundaryMovesDiagonallyAroundTheFingerAnchor() {
+        val top = mushafCurlFaceBoundaryX(1000f, 1600f, 0.1f, 0.5f, -1f, 0.5f)
+        val center = mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0.5f, -1f, 0.5f)
+        val bottom = mushafCurlFaceBoundaryX(1000f, 1600f, 0.9f, 0.5f, -1f, 0.5f)
+        assertTrue(top > center)
+        assertTrue(bottom < center)
+        assertEquals(1000f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 0f, -1f), 0.01f)
+        assertEquals(0f, mushafCurlFaceBoundaryX(1000f, 1600f, 0.5f, 1f, -1f), 0.01f)
     }
 
-    @Test
-    fun printedPageWarpsOnlyInsideTheMovingCurlBand() {
-        assertEquals(250f, mushafCurlWarpX(250f, 300f, 100f, 1f), 0.001f)
-        assertEquals(326f, mushafCurlWarpX(350f, 300f, 100f, 1f), 0.01f)
-        assertEquals(400f, mushafCurlWarpX(400f, 300f, 100f, 1f), 0.001f)
-        assertEquals(374f, mushafCurlWarpX(350f, 400f, 100f, -1f), 0.01f)
-    }
+
 
 }

@@ -3481,6 +3481,7 @@ private fun MushafPageViewer(
     var fingerDragActive by remember { mutableStateOf(false) }
     var fingerCurlProgress by remember { mutableFloatStateOf(0f) }
     var fingerCurlDirection by remember { mutableFloatStateOf(-1f) }
+    var fingerCurlAnchorY by remember { mutableFloatStateOf(0.5f) }
     var curlBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var curlUnderBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var curlUnderlayBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -3529,7 +3530,7 @@ private fun MushafPageViewer(
             return withContext(Dispatchers.Default) {
                 try {
                     val svg = SVG.getFromString(source)
-                    Bitmap.createBitmap(720, 1030, Bitmap.Config.ARGB_8888).also { image ->
+                    Bitmap.createBitmap(900, 1287, Bitmap.Config.ARGB_8888).also { image ->
                         image.eraseColor(AndroidColor.WHITE)
                         svg.renderToCanvas(Canvas(image))
                     }
@@ -3841,8 +3842,13 @@ private fun MushafPageViewer(
                                         }
 
                                         detectHorizontalDragGestures(
-                                            onDragStart = {
+                                            onDragStart = { startPosition ->
                                                 dragTotal = 0f
+                                                fingerCurlAnchorY = if (size.height > 0) {
+                                                    (startPosition.y / size.height.toFloat()).coerceIn(0.04f, 0.96f)
+                                                } else {
+                                                    0.5f
+                                                }
                                                 fingerDragActive = true
                                                 curlPreviewVisible = false
                                                 fingerCurlProgress = 0f
@@ -3992,6 +3998,7 @@ private fun MushafPageViewer(
                                 backPageBitmap = overlayBackBitmap,
                                 progress = overlayProgress,
                                 direction = overlayDirection,
+                                anchorYFraction = if (curlPreviewVisible) fingerCurlAnchorY else 0.5f,
                                 darkMode = darkMode,
                                 sepiaMode = sepiaMode,
                                 modifier = Modifier.fillMaxSize()
