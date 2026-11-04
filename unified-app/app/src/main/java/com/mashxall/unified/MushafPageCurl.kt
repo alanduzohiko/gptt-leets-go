@@ -24,7 +24,7 @@ internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Fl
     return (kotlin.math.abs(horizontalDragPx) / viewportWidthPx).coerceIn(0f, 0.985f)
 }
 
-private const val MUSHAF_CURL_RADIUS_FRACTION = 0.095f
+private const val MUSHAF_CURL_RADIUS_FRACTION = 0.16f
 
 /**
  * The next-page gesture sweeps a moving fold across one paper leaf. The reverse
@@ -46,7 +46,7 @@ internal fun mushafCurlFoldPositionFraction(
     val bend = sin(PI * p).toFloat()
     val turnSign = if (direction < 0f) 1f else -1f
     val diagonal = (anchorYFraction.coerceIn(0f, 1f) - yFraction.coerceIn(0f, 1f)) *
-        0.26f * bend * turnSign
+        0.40f * bend * turnSign
     return (base + diagonal).coerceIn(-0.26f, 1.26f)
 }
 
