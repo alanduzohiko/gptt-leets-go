@@ -71,15 +71,15 @@ internal fun mushafCurlProjectedX(
     val radiusX = sourceX - center
     val turnSign = if (direction < 0f) 1f else -1f
     val depth = turnSign * (
-        radiusX * sin(theta) * 0.66f +
-            widthPx * 0.13f * wave * sin(PI * xFraction.coerceIn(0f, 1f))
+        radiusX * sin(theta).toFloat() * 0.66f +
+            widthPx * 0.13f * wave * sin(PI * xFraction.coerceIn(0f, 1f)).toFloat()
         )
     val cameraDistance = widthPx * 3.2f
     val perspective = (cameraDistance / (cameraDistance + depth))
         .coerceIn(0.72f, 1.34f)
-    val foldSweep = turnSign * widthPx * 0.075f * wave * sin(theta) *
+    val foldSweep = turnSign * widthPx * 0.075f * wave * sin(theta).toFloat() *
         (0.25f + 0.75f * yFraction.coerceIn(0f, 1f))
-    return center + (radiusX * cos(theta) + foldSweep) * perspective
+    return center + (radiusX * cos(theta).toFloat() + foldSweep) * perspective
 }
 
 internal fun mushafCurlProjectedY(
@@ -103,13 +103,13 @@ internal fun mushafCurlProjectedY(
     val turnSign = if (direction < 0f) 1f else -1f
     val radiusX = sourceX - widthPx * 0.5f
     val depth = turnSign * (
-        radiusX * sin(theta) * 0.66f +
-            widthPx * 0.13f * wave * sin(PI * xFraction)
+        radiusX * sin(theta).toFloat() * 0.66f +
+            widthPx * 0.13f * wave * sin(PI * xFraction).toFloat()
         )
     val cameraDistance = widthPx * 3.2f
     val perspective = (cameraDistance / (cameraDistance + depth)).coerceIn(0.72f, 1.34f)
     val verticalBow = turnSign * heightPx * 0.045f * wave *
-        sin(theta) * (xFraction - 0.5f)
+        sin(theta).toFloat() * (xFraction - 0.5f)
     return heightPx * 0.5f + (sourceY - heightPx * 0.5f) * perspective +
         verticalBow
 }
