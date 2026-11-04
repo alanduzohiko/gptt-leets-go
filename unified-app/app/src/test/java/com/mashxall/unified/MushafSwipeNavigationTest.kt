@@ -59,10 +59,12 @@ class MushafSwipeNavigationTest {
 
     @Test
     fun paperAngleStartsFlatAndEndsWithItsPrintedReverseFace() {
-        assertEquals(0f, mushafCurlSurfaceAngle(0f, -1f, 0.5f, 0.5f), 0.001f)
-        assertEquals(Math.PI.toFloat(), mushafCurlSurfaceAngle(1f, -1f, 0.5f, 0.5f), 0.001f)
-        assertEquals(0f, mushafCurlSurfaceAngle(0f, 1f, 0.5f, 0.5f), 0.001f)
-        assertEquals(Math.PI.toFloat(), mushafCurlSurfaceAngle(1f, 1f, 0.5f, 0.5f), 0.001f)
+        // Sample the outer portion of each leaf: the wider curl radius keeps
+        // the page centre inside the smooth bend until the turn is complete.
+        assertEquals(0f, mushafCurlSurfaceAngle(0f, -1f, 0.8f, 0.5f), 0.001f)
+        assertEquals(Math.PI.toFloat(), mushafCurlSurfaceAngle(1f, -1f, 0.8f, 0.5f), 0.001f)
+        assertEquals(0f, mushafCurlSurfaceAngle(0f, 1f, 0.2f, 0.5f), 0.001f)
+        assertEquals(Math.PI.toFloat(), mushafCurlSurfaceAngle(1f, 1f, 0.2f, 0.5f), 0.001f)
     }
 
     @Test
