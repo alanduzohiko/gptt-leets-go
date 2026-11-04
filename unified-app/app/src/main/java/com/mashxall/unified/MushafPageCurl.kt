@@ -94,7 +94,7 @@ internal fun mushafCurlProjectedX(
     val radius = maxOf(widthPx * MUSHAF_CURL_RADIUS_FRACTION, 20f)
     val arcLength = PI.toFloat() * radius
     val angle = (distance / radius).coerceIn(0f, PI.toFloat())
-    val travelSign = -direction
+    val travelSign = direction
     val wrappedX = if (distance <= arcLength) {
         foldX + travelSign * radius * sin(angle).toFloat()
     } else {
@@ -141,7 +141,7 @@ internal fun mushafCurlProjectedY(
     val cameraDistance = widthPx * 3.2f
     val perspective = (cameraDistance / (cameraDistance - depth))
         .coerceIn(0.82f, 1.24f)
-    val verticalTwist = (-direction) * radius * 0.22f * sin(angle).toFloat() *
+    val verticalTwist = direction * radius * 0.22f * sin(angle).toFloat() *
         (yFraction - anchorYFraction.coerceIn(0f, 1f))
     val verticalBow = heightPx * 0.012f * sin(angle).toFloat() *
         (xFraction - fold)
