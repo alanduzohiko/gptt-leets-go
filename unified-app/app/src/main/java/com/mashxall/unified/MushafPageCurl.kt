@@ -24,7 +24,7 @@ internal fun mushafCurlDragProgress(horizontalDragPx: Float, viewportWidthPx: Fl
     return (kotlin.math.abs(horizontalDragPx) / viewportWidthPx).coerceIn(0f, 0.985f)
 }
 
-private const val MUSHAF_CURL_RADIUS_FRACTION = 0.15f
+private const val MUSHAF_CURL_RADIUS_FRACTION = 0.21f
 
 /**
  * The next-page gesture sweeps a moving fold across one paper leaf. The reverse
@@ -46,7 +46,7 @@ internal fun mushafCurlFoldPositionFraction(
     val bend = sin(PI * p).toFloat()
     val turnSign = if (direction < 0f) 1f else -1f
     val diagonal = (anchorYFraction.coerceIn(0f, 1f) - yFraction.coerceIn(0f, 1f)) *
-        0.40f * bend * turnSign
+        0.24f * bend * turnSign
     return (base + diagonal).coerceIn(-0.26f, 1.26f)
 }
 
@@ -105,7 +105,7 @@ internal fun mushafCurlProjectedX(
     val cameraDistance = widthPx * 3.2f
     val perspective = (cameraDistance / (cameraDistance - depth))
         .coerceIn(0.82f, 1.24f)
-    val edgeTwist = travelSign * radius * 0.045f * sin(angle).toFloat() *
+    val edgeTwist = travelSign * radius * 0.025f * sin(angle).toFloat() *
         (yFraction.coerceIn(0f, 1f) - 0.5f)
     return foldX + (wrappedX - foldX) * perspective + edgeTwist
 }
@@ -141,9 +141,9 @@ internal fun mushafCurlProjectedY(
     val cameraDistance = widthPx * 3.2f
     val perspective = (cameraDistance / (cameraDistance - depth))
         .coerceIn(0.82f, 1.24f)
-    val verticalTwist = direction * radius * 0.22f * sin(angle).toFloat() *
+    val verticalTwist = direction * radius * 0.10f * sin(angle).toFloat() *
         (yFraction - anchorYFraction.coerceIn(0f, 1f))
-    val verticalBow = heightPx * 0.012f * sin(angle).toFloat() *
+    val verticalBow = heightPx * 0.006f * sin(angle).toFloat() *
         (xFraction - fold)
     return heightPx * 0.5f + (sourceY - heightPx * 0.5f) * perspective +
         verticalTwist + verticalBow
@@ -283,13 +283,6 @@ internal fun MushafPageCurlOverlay(
             strokeJoin = Paint.Join.ROUND
         }
     }
-    val edgePaint = remember {
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
-    }
     val highlightPaint = remember {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -298,7 +291,7 @@ internal fun MushafPageCurlOverlay(
         }
     }
     val paths = remember(pageBitmap, backPageBitmap) {
-        arrayOf(Path(), Path(), Path(), Path())
+        arrayOf(Path(), Path(), Path())
     }
 
     Canvas(modifier = modifier) {
@@ -346,16 +339,9 @@ internal fun MushafPageCurlOverlay(
         val frontPath = paths[0].apply { reset() }
         val backPath = paths[1].apply { reset() }
         val creasePath = paths[2].apply { reset() }
-        val silhouettePath = paths[3].apply { reset() }
 
         fun boundaryAt(y: Float): Float =
             mushafCurlFaceBoundaryX(width, height, y / height, p, direction, anchorYFraction)
-
-        fun point(x: Float, y: Float) {
-            val px = left + projectX(x, y) * fit
-            val py = top + projectY(x, y) * fit
-            silhouettePath.lineTo(px, py)
-        }
 
         // The two visible faces exactly share the projected fold curve.
         // Their outer edges are sampled from the same mesh so the clip masks
@@ -428,27 +414,6 @@ internal fun MushafPageCurlOverlay(
         frontPath.close()
         backPath.close()
 
-        // The outer edge and fold line are traced through the same projected mesh
-        // so their shadows stay attached to the moving sheet.
-        silhouettePath.moveTo(left + projectX(0f, 0f) * fit, top + projectY(0f, 0f) * fit)
-        for (i in 1..meshRows) {
-            val y = height * i / meshRows
-            point(0f, y)
-        }
-        for (i in 1..meshColumns) {
-            val x = width * i / meshColumns
-            point(x, height)
-        }
-        for (i in meshRows downTo 0) {
-            val y = height * i / meshRows
-            point(width, y)
-        }
-        for (i in meshColumns downTo 0) {
-            val x = width * i / meshColumns
-            point(x, 0f)
-        }
-        silhouettePath.close()
-
         creasePath.moveTo(
             left + projectX(boundaryAt(0f), 0f) * fit,
             top + projectY(boundaryAt(0f), 0f) * fit
@@ -465,14 +430,8 @@ internal fun MushafPageCurlOverlay(
             val canvas = composeCanvas.nativeCanvas
             val saved = canvas.save()
 
-            // Contact shadow and thin paper edge behind both printed faces.
-            shadowPaint.color = 0x50000000
-            shadowPaint.strokeWidth = 30f * fit
-            canvas.drawPath(silhouettePath, shadowPaint)
-            edgePaint.color = 0x9A82745F.toInt()
-            edgePaint.strokeWidth = 2.1f * fit
-            canvas.drawPath(silhouettePath, edgePaint)
-
+            // The page itself is not outlined: only the lifted fold casts a
+            // soft contact shadow, preventing the old long grey frame/stripe.
             // Draw the unturned paper first. The curled reverse then travels over it,
             // just as a lifted physical leaf passes across the page beneath.
             canvas.save()
@@ -493,35 +452,36 @@ internal fun MushafPageCurlOverlay(
 
             val wave = sin(PI * p).toFloat()
             if (wave > 0.01f) {
-                // A soft broad shadow, a deep crease, and a narrow paper highlight
-                // reproduce the edge lighting seen in the reference frames.
-                shadowPaint.color = 0x44000000
-                shadowPaint.strokeWidth = 46f * fit * wave
+                // Real paper has one soft cast shadow and one narrow contact
+                // crease. Keep both attached to the fold instead of outlining the
+                // entire distorted page as the previous effect did.
+                shadowPaint.color = 0x2A000000
+                shadowPaint.strokeWidth = 24f * fit * wave
                 canvas.drawPath(creasePath, shadowPaint)
 
-                shadowPaint.color = 0x72000000
-                shadowPaint.strokeWidth = 12f * fit * wave
+                shadowPaint.color = 0x56000000
+                shadowPaint.strokeWidth = 6f * fit * wave
                 canvas.drawPath(creasePath, shadowPaint)
 
                 val centerY = height * 0.5f
                 val creaseX = projectX(boundaryAt(centerY), centerY) * fit + left
                 foldPaint.shader = LinearGradient(
-                    creaseX - 38f * fit,
+                    creaseX - 30f * fit,
                     top,
-                    creaseX + 38f * fit,
+                    creaseX + 30f * fit,
                     top,
-                    intArrayOf(0x10000000, 0x58FFFFFF, 0x5A000000),
-                    floatArrayOf(0f, 0.48f, 1f),
+                    intArrayOf(0x0A000000, 0x32FFFFFF, 0x3A000000),
+                    floatArrayOf(0f, 0.46f, 1f),
                     Shader.TileMode.CLAMP
                 )
                 val foldBand = Path()
                 foldBand.moveTo(
-                    left + projectX((boundaryAt(0f) - if (direction > 0f) 52f else -52f).coerceIn(0f, width), 0f) * fit,
-                    top + projectY((boundaryAt(0f) - if (direction > 0f) 52f else -52f).coerceIn(0f, width), 0f) * fit
+                    left + projectX((boundaryAt(0f) - if (direction > 0f) 30f else -30f).coerceIn(0f, width), 0f) * fit,
+                    top + projectY((boundaryAt(0f) - if (direction > 0f) 30f else -30f).coerceIn(0f, width), 0f) * fit
                 )
                 for (i in 1..samples) {
                     val y = height * i / samples
-                    val x = (boundaryAt(y) - if (direction > 0f) 52f else -52f).coerceIn(0f, width)
+                    val x = (boundaryAt(y) - if (direction > 0f) 30f else -30f).coerceIn(0f, width)
                     foldBand.lineTo(left + projectX(x, y) * fit, top + projectY(x, y) * fit)
                 }
                 for (i in samples downTo 0) {
@@ -533,12 +493,9 @@ internal fun MushafPageCurlOverlay(
                 canvas.drawPath(foldBand, foldPaint)
                 foldPaint.shader = null
 
-                highlightPaint.color = 0xE8FFFFFF.toInt()
-                highlightPaint.strokeWidth = 2.4f * fit
+                highlightPaint.color = 0xB8FFFFFF.toInt()
+                highlightPaint.strokeWidth = 1.4f * fit
                 canvas.drawPath(creasePath, highlightPaint)
-                highlightPaint.color = 0x7AFFFFFF
-                highlightPaint.strokeWidth = 1.1f * fit
-                canvas.drawPath(silhouettePath, highlightPaint)
             }
 
             canvas.restoreToCount(saved)
