@@ -3448,6 +3448,13 @@ internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
     return maxOf(72f, viewportWidthPx * 0.16f)
 }
 
+/** Resolve only the immediately adjacent page used by the single-page curl preview. */
+internal fun mushafCurlAdjacentPage(page: Int, forward: Boolean): Int? {
+    if (page !in 1..604) return null
+    val target = page + if (forward) 1 else -1
+    return target.takeIf { it in 1..604 }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
