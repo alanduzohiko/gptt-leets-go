@@ -517,7 +517,7 @@ internal fun MushafPageCurlOverlay(
                 val foldBand = Path()
                 foldBand.moveTo(
                     left + projectX((boundaryAt(0f) - if (direction > 0f) 52f else -52f).coerceIn(0f, width), 0f) * fit,
-                    top + projectY((boundaryAt(0f) - if (forward) 52f else -52f).coerceIn(0f, width), 0f) * fit
+                    top + projectY((boundaryAt(0f) - if (direction > 0f) 52f else -52f).coerceIn(0f, width), 0f) * fit
                 )
                 for (i in 1..samples) {
                     val y = height * i / samples
