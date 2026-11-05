@@ -220,8 +220,8 @@ internal fun stripHadithHSourceMarker(value: String): String =
 
 /** The lexicon's original encrypted payload is kept intact; identify it only for safe UI rendering. */
 internal fun isLikelyEncryptedLexiconPayload(value: String): Boolean {
-    val compact = value.filterNot(Char::isWhitespace)
-    if (compact.length < 96 || compact.length % 4 != 0) return false
+    val compact = value.trim()
+    if (compact.length < 96 || compact.length % 4 != 0 || compact.any(Char::isWhitespace)) return false
     if (!Regex("""[A-Za-z0-9+/]+={0,2}""").matches(compact)) return false
     val padding = compact.indexOf('=')
     return padding < 0 || (padding >= compact.length - 2 && compact.substring(padding).all { it == '=' })
