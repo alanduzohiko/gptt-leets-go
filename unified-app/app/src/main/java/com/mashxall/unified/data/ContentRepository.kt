@@ -1,6 +1,11 @@
 package com.mashxall.unified.data
 
 import android.content.Context
+import android.annotation.SuppressLint
+import android.graphics.RectF
+import android.util.Xml
+import androidx.core.graphics.PathParser
+import org.xmlpull.v1.XmlPullParser
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
@@ -11,6 +16,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import java.io.StringReader
 import java.io.IOException
 import java.io.File
 import java.util.zip.Inflater
@@ -211,6 +217,221 @@ data class MushafPageRect(
     val minY: Float,
     val maxY: Float
 )
+
+/** Bounds extracted from one tagged word in the exact SVG page displayed by the Mushaf. */
+internal data class MushafWordBounds(
+    val surah: Int,
+    val ayah: Int,
+    val lineNumber: Int,
+    val minX: Float,
+    val maxX: Float,
+    val minY: Float,
+    val maxY: Float
+)
+
+/** All of one ayah's tight, per-line regions in the currently displayed SVG page. */
+internal data class MushafPageVerseGeometry(
+    val verse: MushafPageVerse,
+    val rects: List<MushafPageRect>
+)
+
+/**
+ * Combine the paths belonging to an ayah into one tight region per printed line.
+ * Different ayahs are never merged, even when they share a line.
+ */
+internal fun buildMushafPageVerseGeometry(words: List<MushafWordBounds>): List<MushafPageVerseGeometry> {
+    val validWords = words.filter { word ->
+        word.surah in 1..114 &&
+            word.ayah in 1..286 &&
+            word.lineNumber >= 0 &&
+            word.minX.isFinite() && word.maxX.isFinite() &&
+            word.minY.isFinite() && word.maxY.isFinite() &&
+            word.minX >= 0f && word.minY >= 0f &&
+            word.maxX <= 1148f && word.maxY <= 1641f &&
+            word.maxX > word.minX && word.maxY > word.minY &&
+            word.maxX - word.minX <= 1148f * 0.80f &&
+            word.maxY - word.minY <= 1641f * 0.06f
+    }
+
+    return validWords.groupBy { MushafPageVerse(it.surah, it.ayah) }
+        .map { (verse, verseWords) ->
+            val lineRects = verseWords.groupBy { it.lineNumber }
+                .mapNotNull { (lineNumber, lineWords) ->
+                    val minX = lineWords.minOf { it.minX }
+                    val maxX = lineWords.maxOf { it.maxX }
+                    val minY = lineWords.minOf { it.minY }
+                    val maxY = lineWords.maxOf { it.maxY }
+                    if (maxX <= minX || maxY <= minY) null
+                    else MushafPageRect(
+                        glyphId = 0,
+                        lineNumber = lineNumber,
+                        minX = minX,
+                        maxX = maxX,
+                        minY = minY,
+                        maxY = maxY
+                    )
+                }
+                .sortedWith(compareBy<MushafPageRect> { it.minY }.thenBy { it.lineNumber })
+            MushafPageVerseGeometry(verse, lineRects)
+        }
+        .filter { it.rects.isNotEmpty() }
+        .sortedWith(compareBy<MushafPageVerseGeometry> { it.verse.surah }.thenBy { it.verse.ayah })
+}
+
+/**
+ * Resolve a tap against the displayed page's own vector-word bounds.
+ * A small finger-sized tolerance makes the text easy to hit without selecting a
+ * neighbouring verse or large blank areas around the printed text.
+ */
+internal fun findMushafPageVerseAtPoint(
+    regions: List<MushafPageVerseGeometry>,
+    x: Float,
+    y: Float,
+    tolerancePx: Float = 12f
+): MushafPageVerse? {
+    if (!x.isFinite() || !y.isFinite() || !tolerancePx.isFinite() || tolerancePx < 0f) return null
+
+    return regions.asSequence()
+        .flatMap { region -> region.rects.asSequence().map { rect -> region.verse to rect } }
+        .map { (verse, rect) ->
+            val dx = when {
+                x < rect.minX -> rect.minX - x
+                x > rect.maxX -> x - rect.maxX
+                else -> 0f
+            }
+            val dy = when {
+                y < rect.minY -> rect.minY - y
+                y > rect.maxY -> y - rect.maxY
+                else -> 0f
+            }
+            Triple(verse, rect, dx * dx + dy * dy)
+        }
+        .filter { (_, _, distanceSquared) -> distanceSquared <= tolerancePx * tolerancePx * 2f }
+        .minByOrNull { (_, rect, distanceSquared) ->
+            distanceSquared + (rect.maxX - rect.minX) * (rect.maxY - rect.minY) * 0.000001f
+        }
+        ?.first
+}
+
+/**
+ * Read verse hit regions from the exact page SVG used for display.
+ * The Noor page_data_line tables describe another page layout and are deliberately
+ * not used here: their stored rectangles do not line up with this 604-page SVG edition.
+ */
+@SuppressLint("RestrictedApi")
+internal fun parseMushafPageVerseGeometry(svgSource: String): List<MushafPageVerseGeometry> {
+    if (svgSource.isBlank()) return emptyList()
+
+    data class CapturedWord(
+        val depth: Int,
+        val surah: Int,
+        val ayah: Int,
+        val lineNumber: Int,
+        var minX: Float = Float.POSITIVE_INFINITY,
+        var maxX: Float = Float.NEGATIVE_INFINITY,
+        var minY: Float = Float.POSITIVE_INFINITY,
+        var maxY: Float = Float.NEGATIVE_INFINITY
+    )
+
+    return try {
+        val parser = Xml.newPullParser()
+        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+        parser.setInput(StringReader(svgSource.removePrefix("\uFEFF")), null)
+
+        var viewBoxLeft = 0f
+        var viewBoxTop = 0f
+        var viewBoxWidth = 382.68f
+        var viewBoxHeight = 547.09f
+        var scale = 1f
+        var offsetX = 0f
+        var offsetY = 0f
+        var capturedWord: CapturedWord? = null
+        val words = mutableListOf<MushafWordBounds>()
+
+        var event = parser.eventType
+        while (event != XmlPullParser.END_DOCUMENT) {
+            when (event) {
+                XmlPullParser.START_TAG -> when (parser.name) {
+                    "svg" -> {
+                        val viewBox = parser.getAttributeValue(null, "viewBox")
+                        val values = viewBox?.trim()?.split(Regex("[,\\s]+"))?.mapNotNull { it.toFloatOrNull() }
+                        if (values != null && values.size == 4 &&
+                            values[2].isFinite() && values[3].isFinite() &&
+                            values[2] > 0f && values[3] > 0f
+                        ) {
+                            viewBoxLeft = values[0]
+                            viewBoxTop = values[1]
+                            viewBoxWidth = values[2]
+                            viewBoxHeight = values[3]
+                        }
+                        scale = minOf(1148f / viewBoxWidth, 1641f / viewBoxHeight)
+                        offsetX = (1148f - viewBoxWidth * scale) * 0.5f
+                        offsetY = (1641f - viewBoxHeight * scale) * 0.5f
+                    }
+                    "g" -> {
+                        if (capturedWord == null && parser.getAttributeValue(null, "data-type") == "text") {
+                            val surah = parser.getAttributeValue(null, "data-surah")?.toIntOrNull()
+                            val ayah = parser.getAttributeValue(null, "data-aya")?.toIntOrNull()
+                            val line = parser.getAttributeValue(null, "data-line-number")?.toIntOrNull()
+                            if (surah != null && ayah != null && line != null) {
+                                capturedWord = CapturedWord(parser.depth, surah, ayah, line)
+                            }
+                        }
+                    }
+                    "path" -> {
+                        val word = capturedWord
+                        val pathData = parser.getAttributeValue(null, "d")
+                        if (word != null && !pathData.isNullOrBlank()) {
+                            try {
+                                val path = PathParser.createPathFromPathData(pathData)
+                                val bounds = RectF()
+                                path.computeBounds(bounds, true)
+                                if (!bounds.isEmpty && bounds.left.isFinite() && bounds.right.isFinite() &&
+                                    bounds.top.isFinite() && bounds.bottom.isFinite()
+                                ) {
+                                    val left = (bounds.left - viewBoxLeft) * scale + offsetX
+                                    val right = (bounds.right - viewBoxLeft) * scale + offsetX
+                                    val top = (bounds.top - viewBoxTop) * scale + offsetY
+                                    val bottom = (bounds.bottom - viewBoxTop) * scale + offsetY
+                                    word.minX = minOf(word.minX, left)
+                                    word.maxX = maxOf(word.maxX, right)
+                                    word.minY = minOf(word.minY, top)
+                                    word.maxY = maxOf(word.maxY, bottom)
+                                }
+                            } catch (pathError: Exception) {
+                                Log.w("MashxallMushaf", "Could not read one SVG word path", pathError)
+                            }
+                        }
+                    }
+                }
+                XmlPullParser.END_TAG -> {
+                    val word = capturedWord
+                    if (parser.name == "g" && word != null && parser.depth == word.depth) {
+                        if (word.minX.isFinite() && word.maxX.isFinite() &&
+                            word.minY.isFinite() && word.maxY.isFinite()
+                        ) {
+                            words += MushafWordBounds(
+                                surah = word.surah,
+                                ayah = word.ayah,
+                                lineNumber = word.lineNumber,
+                                minX = word.minX.coerceIn(0f, 1148f),
+                                maxX = word.maxX.coerceIn(0f, 1148f),
+                                minY = word.minY.coerceIn(0f, 1641f),
+                                maxY = word.maxY.coerceIn(0f, 1641f)
+                            )
+                        }
+                        capturedWord = null
+                    }
+                }
+            }
+            event = parser.next()
+        }
+        buildMushafPageVerseGeometry(words)
+    } catch (error: Exception) {
+        Log.e("MashxallMushaf", "Could not build verse regions from the displayed SVG page", error)
+        emptyList()
+    }
+}
 
 private data class MushafSvgMeta(
     val page: Int, val offset: Int, val compressedLength: Int,
@@ -624,9 +845,9 @@ object ContentRepository {
     }
 
     /**
-     * Original Noor page geometry for a selected verse. This powers the same
-     * translucent verse highlight used by the source Mushaf reader. Coordinates
-     * are in the original page SVG coordinate space, not screen pixels.
+     * Legacy Noor rectangles are retained for auditing only. The active Mushaf
+     * reader derives hit regions from the displayed SVG via parseMushafPageVerseGeometry,
+     * because these database rectangles belong to a different page layout.
      */
     suspend fun loadMushafVerseRects(
         context: Context,
@@ -672,8 +893,8 @@ object ContentRepository {
     }
 
     /**
-     * Resolve a page touch against the original Tajweed word bounds first;
-     * fall back to the source line bounds for gaps or legacy pages.
+     * Legacy database hit-testing retained for reference only. The active page
+     * reader must use findMushafPageVerseAtPoint on the displayed SVG geometry.
      */
     suspend fun findMushafVerseAtPoint(
         context: Context,

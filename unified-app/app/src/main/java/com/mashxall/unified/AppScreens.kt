@@ -3448,44 +3448,6 @@ internal fun mushafPageTouchPointFromViewport(
     return MushafPageTouchPoint(pageX, pageY)
 }
 
-/**
- * Collapse the original per-word geometry into one tight highlight band per text line.
- * Invalid/out-of-page source bounds are ignored instead of painting large detached blocks.
- */
-internal fun mushafVerseHighlightBands(rects: List<MushafPageRect>): List<MushafPageRect> {
-    val pageWidth = 1148f
-    val pageHeight = 1641f
-    val valid = rects.filter { rect ->
-        rect.lineNumber >= 0 &&
-            rect.minX.isFinite() && rect.maxX.isFinite() &&
-            rect.minY.isFinite() && rect.maxY.isFinite() &&
-            rect.minX >= 0f && rect.minY >= 0f &&
-            rect.maxX <= pageWidth && rect.maxY <= pageHeight &&
-            rect.maxX > rect.minX && rect.maxY > rect.minY &&
-            rect.maxX - rect.minX <= pageWidth * 0.99f &&
-            rect.maxY - rect.minY <= pageHeight * 0.08f
-    }
-
-    return valid.groupBy { it.lineNumber }
-        .mapNotNull { (lineNumber, lineRects) ->
-            if (lineRects.isEmpty()) return@mapNotNull null
-            val minX = lineRects.minOf { it.minX }
-            val maxX = lineRects.maxOf { it.maxX }
-            val minY = lineRects.minOf { it.minY }
-            val maxY = lineRects.maxOf { it.maxY }
-            if (maxX <= minX || maxY <= minY) null
-            else MushafPageRect(
-                glyphId = lineRects.minOf { it.glyphId },
-                lineNumber = lineNumber,
-                minX = minX,
-                maxX = maxX,
-                minY = minY,
-                maxY = maxY
-            )
-        }
-        .sortedWith(compareBy<MushafPageRect> { it.minY }.thenBy { it.lineNumber })
-}
-
 /** Keep a zoomed Mushaf page pannable without allowing it to disappear beyond the viewport. */
 internal fun clampMushafPanOffset(
     currentOffset: Float,
@@ -3579,6 +3541,7 @@ private fun MushafPageViewer(
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
+    var pageVerseGeometry by remember(page) { mutableStateOf<List<MushafPageVerseGeometry>>(emptyList()) }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
     var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
     var loading by remember(page) { mutableStateOf(true) }
@@ -3645,13 +3608,22 @@ private fun MushafPageViewer(
         failed = false
         bitmap = null
         pageVerses = emptyList()
+        pageVerseGeometry = emptyList()
+        verseRects = emptyList()
+        selectedVerse = null
         try {
-            val loadedPageVerses = ContentRepository.loadMushafPageVerses(context, page)
-            pageVerses = loadedPageVerses
-            loadedPageVerses.firstOrNull()?.let { firstVerse ->
+            val source = ContentRepository.loadMushafPageSvg(context, page)
+            if (source != null) {
+                pageVerseGeometry = withContext(Dispatchers.Default) {
+                    ContentRepository.parseMushafPageVerseGeometry(source)
+                }
+            }
+            pageVerses = pageVerseGeometry.map { it.verse }.ifEmpty {
+                ContentRepository.loadMushafPageVerses(context, page)
+            }
+            pageVerses.firstOrNull()?.let { firstVerse ->
                 onReadingPosition(firstVerse.surah, firstVerse.ayah)
             }
-            val source = ContentRepository.loadMushafPageSvg(context, page)
             bitmap = if (source == null) {
                 null
             } else {
@@ -3700,12 +3672,12 @@ private fun MushafPageViewer(
     }
     val visiblePageBitmap = bitmap ?: turningPageBitmap
     val displayedPageBitmap = if (curlPreviewVisible) curlUnderlayBitmap ?: visiblePageBitmap else visiblePageBitmap
-    LaunchedEffect(page, selectedVerse) {
+    LaunchedEffect(page, selectedVerse, pageVerseGeometry) {
         val selected = selectedVerse
-        verseRects = if (selected == null) emptyList() else {
-            mushafVerseHighlightBands(
-                ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
-            )
+        verseRects = if (selected == null) {
+            emptyList()
+        } else {
+            pageVerseGeometry.firstOrNull { it.verse == selected }?.rects.orEmpty()
         }
     }
     Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF081C18) else if (sepiaMode) Color(0xFFE4D2A9) else Color(0xFFF1EFE8))) {
@@ -4045,30 +4017,27 @@ private fun MushafPageViewer(
                                                 } else {
                                                     0.5f
                                                 }
-                                                scope.launch {
-                                                    val verse = ContentRepository.findMushafVerseAtPoint(
-                                                        context = context,
+                                                val verse = findMushafPageVerseAtPoint(
+                                                    regions = pageVerseGeometry,
+                                                    x = point.x,
+                                                    y = point.y
+                                                )
+                                                if (verse != null) {
+                                                    selectedVerse = verse
+                                                    haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+                                                    onVerseClick(verse.surah, verse.ayah)
+                                                } else {
+                                                    when (mushafEdgeTapAction(
+                                                        xFraction = xFraction,
                                                         page = targetPage,
-                                                        x = point.x,
-                                                        y = point.y
-                                                    )
-                                                    if (verse != null) {
-                                                        selectedVerse = verse
-                                                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                                                        onVerseClick(verse.surah, verse.ayah)
-                                                    } else {
-                                                        when (mushafEdgeTapAction(
-                                                            xFraction = xFraction,
-                                                            page = targetPage,
-                                                            scale = scale,
-                                                            verseWasHit = false
-                                                        )) {
-                                                            MushafEdgeTapAction.NEXT_PAGE ->
-                                                                if (targetPage < 604) onPageChange(targetPage + 1)
-                                                            MushafEdgeTapAction.PREVIOUS_PAGE ->
-                                                                if (targetPage > 1) onPageChange(targetPage - 1)
-                                                            MushafEdgeTapAction.NONE -> Unit
-                                                        }
+                                                        scale = scale,
+                                                        verseWasHit = false
+                                                    )) {
+                                                        MushafEdgeTapAction.NEXT_PAGE ->
+                                                            if (targetPage < 604) onPageChange(targetPage + 1)
+                                                        MushafEdgeTapAction.PREVIOUS_PAGE ->
+                                                            if (targetPage > 1) onPageChange(targetPage - 1)
+                                                        MushafEdgeTapAction.NONE -> Unit
                                                     }
                                                 }
                                             }
