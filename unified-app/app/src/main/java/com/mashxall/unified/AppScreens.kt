@@ -3615,7 +3615,7 @@ private fun MushafPageViewer(
             val source = ContentRepository.loadMushafPageSvg(context, page)
             if (source != null) {
                 pageVerseGeometry = withContext(Dispatchers.Default) {
-                    ContentRepository.parseMushafPageVerseGeometry(source)
+                    parseMushafPageVerseGeometry(source)
                 }
             }
             pageVerses = pageVerseGeometry.map { it.verse }.ifEmpty {

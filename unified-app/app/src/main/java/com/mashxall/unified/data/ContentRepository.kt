@@ -16,7 +16,6 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
-import java.io.StringReader
 import java.io.IOException
 import java.io.File
 import java.util.zip.Inflater
@@ -336,7 +335,10 @@ internal fun parseMushafPageVerseGeometry(svgSource: String): List<MushafPageVer
     return try {
         val parser = Xml.newPullParser()
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-        parser.setInput(StringReader(svgSource.removePrefix("\uFEFF")), null)
+        parser.setInput(
+            ByteArrayInputStream(svgSource.removePrefix("\uFEFF").toByteArray(Charsets.UTF_8)),
+            "UTF-8"
+        )
 
         var viewBoxLeft = 0f
         var viewBoxTop = 0f
