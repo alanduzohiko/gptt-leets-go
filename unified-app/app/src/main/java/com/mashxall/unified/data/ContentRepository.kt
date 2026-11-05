@@ -214,9 +214,9 @@ private data class MushafSvgMeta(
     val uncompressedLength: Int, val sha256: String
 )
 
-/** Remove Noor's isolated source marker from narration text without changing stored records. */
-internal fun stripHadithHSourceMarker(value: String): String =
-    value.replace(Regex("""<rr>\s*h\s*</rr>""", RegexOption.IGNORE_CASE), "")
+/** Remove isolated Latin source markers from narration text without changing stored records. */
+internal fun stripHadithLatinSourceMarkers(value: String): String =
+    value.replace(Regex("""<rr>\s*[A-Za-z]\s*</rr>""", RegexOption.IGNORE_CASE), "")
 
 /** The lexicon's original encrypted payload is kept intact; identify it only for safe UI rendering. */
 internal fun isLikelyEncryptedLexiconPayload(value: String): Boolean {
@@ -228,7 +228,7 @@ internal fun isLikelyEncryptedLexiconPayload(value: String): Boolean {
 }
 
 private fun readableHadithText(value: String): String {
-    val withoutSourceMarkers = stripHadithHSourceMarker(value)
+    val withoutSourceMarkers = stripHadithLatinSourceMarkers(value)
         .replace("<rr>", "")
         .replace("</rr>", "")
     return Html.fromHtml(withoutSourceMarkers, Html.FROM_HTML_MODE_LEGACY)
