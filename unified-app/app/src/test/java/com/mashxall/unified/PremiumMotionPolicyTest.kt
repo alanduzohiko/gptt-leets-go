@@ -121,7 +121,8 @@ class PremiumMotionPolicyTest {
         }
         assertEquals(false, shouldAnimateAmbientBackdrop("immersive_mushaf", motionAllowed = true))
         assertEquals(false, shouldAnimateAmbientBackdrop("quran", motionAllowed = false))
-        assertEquals(false, shouldAnimateAmbientBackdrop("home", motionAllowed = true, style = "ornament"))
+        assertEquals(true, shouldAnimateAmbientBackdrop("home", motionAllowed = true, style = "orbit"))
+        assertEquals(true, shouldAnimateAmbientBackdrop("home", motionAllowed = true, style = "ornament"))
         assertEquals(false, shouldAnimateAmbientBackdrop("home", motionAllowed = true, style = "off"))
         assertEquals(true, shouldShowAmbientBackdrop("ornament"))
         assertEquals(false, shouldShowAmbientBackdrop("off"))
@@ -148,6 +149,8 @@ class PremiumMotionPolicyTest {
         assertEquals(0.156f, premiumScreenOrnamentIntensity("prayer", 0f), 0.0001f)
         assertEquals(20_000, ambientMotionDurationMillis(10_000, 0.5f))
         assertEquals(10_000, ambientMotionDurationMillis(10_000, 1f))
+        assertEquals(6_897, ambientMotionDurationMillis(10_000, 1.45f))
+        assertEquals(22_222, ambientMotionDurationMillis(10_000, 0.45f))
     }
 
     @Test
