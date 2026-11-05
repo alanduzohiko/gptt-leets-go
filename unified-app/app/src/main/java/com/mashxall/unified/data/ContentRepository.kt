@@ -228,7 +228,7 @@ internal data class MushafWordBounds(
     val maxY: Float
 )
 
-/** All of one ayah's tight, per-line regions in the currently displayed SVG page. */
+/** Tight per-word regions for one ayah in the currently displayed SVG page. */
 internal data class MushafPageVerseGeometry(
     val verse: MushafPageVerse,
     val rects: List<MushafPageRect>
@@ -252,26 +252,26 @@ internal fun buildMushafPageVerseGeometry(words: List<MushafWordBounds>): List<M
             word.maxY - word.minY <= 1641f * 0.06f
     }
 
+    // Keep each source word as its own selectable/highlightable shape. Merging
+    // a whole printed line into one rectangle also paints the spaces between
+    // words, which made the old highlight look larger than the actual ayah.
     return validWords.groupBy { MushafPageVerse(it.surah, it.ayah) }
         .map { (verse, verseWords) ->
-            val lineRects = verseWords.groupBy { it.lineNumber }
-                .mapNotNull { (lineNumber, lineWords) ->
-                    val minX = lineWords.minOf { it.minX }
-                    val maxX = lineWords.maxOf { it.maxX }
-                    val minY = lineWords.minOf { it.minY }
-                    val maxY = lineWords.maxOf { it.maxY }
-                    if (maxX <= minX || maxY <= minY) null
-                    else MushafPageRect(
-                        glyphId = 0,
-                        lineNumber = lineNumber,
-                        minX = minX,
-                        maxX = maxX,
-                        minY = minY,
-                        maxY = maxY
-                    )
-                }
-                .sortedWith(compareBy<MushafPageRect> { it.minY }.thenBy { it.lineNumber })
-            MushafPageVerseGeometry(verse, lineRects)
+            val wordRects = verseWords.map { word ->
+                MushafPageRect(
+                    glyphId = 0,
+                    lineNumber = word.lineNumber,
+                    minX = word.minX,
+                    maxX = word.maxX,
+                    minY = word.minY,
+                    maxY = word.maxY
+                )
+            }.sortedWith(
+                compareBy<MushafPageRect> { it.lineNumber }
+                    .thenBy { it.minY }
+                    .thenBy { it.minX }
+            )
+            MushafPageVerseGeometry(verse, wordRects)
         }
         .filter { it.rects.isNotEmpty() }
         .sortedWith(compareBy<MushafPageVerseGeometry> { it.verse.surah }.thenBy { it.verse.ayah })

@@ -16,7 +16,7 @@ class MushafSvgVerseGeometryTest {
     ) = MushafWordBounds(surah, ayah, line, left, right, top, bottom)
 
     @Test
-    fun wordsOfOneAyahOnOnePrintedLineBecomeOneTightRegion() {
+    fun wordsOfOneAyahKeepSeparateTightHighlightsInsteadOfOneWideLineBox() {
         val regions = buildMushafPageVerseGeometry(
             listOf(
                 word(1, 2, 8, 430f, 500f, 910f, 950f),
@@ -27,12 +27,13 @@ class MushafSvgVerseGeometryTest {
 
         assertEquals(1, regions.size)
         assertEquals(MushafPageVerse(1, 2), regions.single().verse)
-        assertEquals(1, regions.single().rects.size)
-        val rect = regions.single().rects.single()
-        assertEquals(430f, rect.minX, 0.001f)
-        assertEquals(690f, rect.maxX, 0.001f)
-        assertEquals(909f, rect.minY, 0.001f)
-        assertEquals(951f, rect.maxY, 0.001f)
+        assertEquals(3, regions.single().rects.size)
+        assertEquals(430f, regions.single().rects[0].minX, 0.001f)
+        assertEquals(500f, regions.single().rects[0].maxX, 0.001f)
+        assertEquals(505f, regions.single().rects[1].minX, 0.001f)
+        assertEquals(560f, regions.single().rects[1].maxX, 0.001f)
+        assertEquals(565f, regions.single().rects[2].minX, 0.001f)
+        assertEquals(690f, regions.single().rects[2].maxX, 0.001f)
     }
 
     @Test

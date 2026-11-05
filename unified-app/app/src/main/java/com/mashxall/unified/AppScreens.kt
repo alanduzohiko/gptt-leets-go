@@ -4073,19 +4073,28 @@ private fun MushafPageViewer(
                                     if (rectWidth > 0f && rectHeight > 0f) {
                                         val topLeft = androidx.compose.ui.geometry.Offset(rectLeft, rectTop)
                                         val rectSize = androidx.compose.ui.geometry.Size(rectWidth, rectHeight)
-                                        val corners = androidx.compose.ui.geometry.CornerRadius(5.dp.toPx())
+                                        val inset = 0.8.dp.toPx()
+                                        val paddedTopLeft = androidx.compose.ui.geometry.Offset(
+                                            (rectLeft - inset).coerceAtLeast(left),
+                                            (rectTop - inset).coerceAtLeast(top)
+                                        )
+                                        val paddedSize = androidx.compose.ui.geometry.Size(
+                                            (rectWidth + inset * 2f).coerceAtMost(size.width - paddedTopLeft.x),
+                                            (rectHeight + inset * 2f).coerceAtMost(size.height - paddedTopLeft.y)
+                                        )
+                                        val corners = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
                                         drawRoundRect(
-                                            color = Color(0x35F4C542),
-                                            topLeft = topLeft,
-                                            size = rectSize,
+                                            color = Color(0x42F4C542),
+                                            topLeft = paddedTopLeft,
+                                            size = paddedSize,
                                             cornerRadius = corners
                                         )
                                         drawRoundRect(
-                                            color = Color(0x806E5417),
-                                            topLeft = topLeft,
-                                            size = rectSize,
+                                            color = Color(0x45B18A31),
+                                            topLeft = paddedTopLeft,
+                                            size = paddedSize,
                                             cornerRadius = corners,
-                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.9.dp.toPx())
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.55.dp.toPx())
                                         )
                                     }
                                 }
