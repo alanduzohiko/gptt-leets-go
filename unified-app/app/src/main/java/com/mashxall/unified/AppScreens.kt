@@ -4444,7 +4444,7 @@ private fun tafsirLabel(book: TafsirBook, language: AppLanguage): String = when 
 
 private fun cleanHadithDisplayText(value: String): String =
     Html.fromHtml(
-        stripHadithHSourceMarker(value).replace("<rr>", "").replace("</rr>", ""),
+        stripHadithLatinSourceMarkers(value).replace("<rr>", "").replace("</rr>", ""),
         Html.FROM_HTML_MODE_LEGACY
     )
         .toString()
