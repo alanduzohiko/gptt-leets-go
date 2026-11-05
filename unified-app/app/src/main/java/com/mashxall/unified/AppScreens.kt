@@ -2123,7 +2123,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         if (mushafMode) {
             AnimatedVisibility(
                 visible = true,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
                 enter = if (motionAllowed) {
                     fadeIn(tween(190)) +
                         scaleIn(initialScale = 0.985f, animationSpec = spring(
@@ -2134,6 +2134,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 } else fadeIn(tween(0))
             ) {
             MushafPageViewer(
+                modifier = Modifier.fillMaxSize(),
                 language = language,
                 foreground = foreground,
                 page = mushafPage,
@@ -2148,10 +2149,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     showSurahList = true
                 },
                 onReaderSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
-                onPlaySurah = { surahNumber, ayahNumber -> onPlayAudio(surahNumber, ayahNumber) },
+                onPlaySurah = { surahNumber, ayahNumber ->
+                    startInlineRecitation(surahNumber, ayahNumber)
+                },
                 onBookmarkVerse = { surahNumber, ayahNumber ->
                     toggleBookmark(surahNumber, ayahNumber)
                 },
+                playbackVerse = inlinePlaybackActiveVerse,
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -2168,19 +2172,62 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     selectedAyahForSheet = surahNumber to ayahNumber
                 },
                 onReadingPosition = { surahNumber, ayahNumber ->
-                    selected = surahNumber
-                    onSurah(surahNumber)
-                    onOpenVerse(surahNumber, ayahNumber)
-                    prefs.edit()
-                        .putString("quran_reader_mode", "mushaf")
-                        .putInt("last_surah", surahNumber)
-                        .putInt("last_ayah_number", ayahNumber)
-                        .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
-                        .putInt("last_mushaf_page", mushafPage)
-                        .apply()
-                    readingProgressRevision++
+                    if (!inlinePlaybackVisible) {
+                        selected = surahNumber
+                        onSurah(surahNumber)
+                        onOpenVerse(surahNumber, ayahNumber)
+                        prefs.edit()
+                            .putString("quran_reader_mode", "mushaf")
+                            .putInt("last_surah", surahNumber)
+                            .putInt("last_ayah_number", ayahNumber)
+                            .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
+                            .putInt("last_mushaf_page", mushafPage)
+                            .apply()
+                        readingProgressRevision++
+                    }
                 }
             )
+            }
+            if (inlinePlaybackVisible) {
+                val activeAyah = inlinePlaybackActiveVerse
+                    ?.takeIf { it.first == inlinePlaybackSurah }?.second
+                    ?: inlinePlaybackStartAyah
+                val inlineSurah = surahs.firstOrNull { it.number == inlinePlaybackSurah }
+                QuranInlinePlaybackBar(
+                    language = language,
+                    foreground = foreground,
+                    cardColor = cardColor,
+                    reciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId },
+                    surahName = inlineSurah?.let {
+                        if (language == AppLanguage.EN) it.englishName else it.arabicName
+                    } ?: inlinePlaybackSurah.toString(),
+                    activeAyah = activeAyah,
+                    ayahCount = inlineSurah?.ayahCount ?: 0,
+                    isPaused = inlinePlaybackPaused,
+                    isPrepared = AudioController.isPrepared(),
+                    repeatCurrent = inlinePlaybackRepeatCurrent,
+                    usesAyahClips = inlinePlaybackUsesAyahClips,
+                    hasNext = inlinePlaybackUsesAyahClips &&
+                        activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah),
+                    onChooseReciter = {
+                        inlineReciterSearch = ""
+                        showInlineReciterPicker = true
+                    },
+                    onRepeat = {
+                        inlinePlaybackRepeatCurrent = AudioController.toggleRepeatCurrentTrack()
+                    },
+                    onPrevious = { AudioController.skipPreviousSequenceTrack() },
+                    onTogglePause = {
+                        AudioController.togglePause()?.let { inlinePlaybackPaused = it }
+                    },
+                    onNext = { AudioController.skipNextSequenceTrack() },
+                    onStop = {
+                        AudioController.stop()
+                        inlinePlaybackVisible = false
+                        inlinePlaybackPaused = false
+                        inlinePlaybackRepeatCurrent = false
+                    }
+                )
             }
         } else if (showSurahList) {
             AnimatedVisibility(
@@ -2546,7 +2593,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 if (language == AppLanguage.EN) "Play this verse" else if (language == AppLanguage.AR) "استمع إلى هذه الآية" else "گوێگرتن لەم ئایەتە",
                                 pressedScale = quranReaderActionPressScale("play_verse")
                             ) {
-                                onPlayAudio(verse.surah, verse.number)
+                                startInlineRecitation(verse.surah, verse.number)
                             }
                             val verseBookmarked = bookmarkedVerses.contains(quranBookmarkKey(verse.surah, verse.number))
                             ReaderActionIcon(
@@ -3409,24 +3456,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 foreground = foreground,
                                 leadingIcon = if (sheetAudioPlaying) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle
                             ) {
-                                if (sheetAudioPlaying) {
+                                if (sheetAudioPlaying || inlinePlaybackVisible) {
                                     AudioController.stop()
                                     sheetAudioPlaying = false
+                                    inlinePlaybackVisible = false
+                                    inlinePlaybackPaused = false
+                                    inlinePlaybackRepeatCurrent = false
                                 } else {
-                                    val mode = ReaderPlaybackSettings.normalize(readerPlaybackMode)
-                                    val chosenId = resolveCompatibleReciterId(mode, preferredReaderReciterId, readerReciters)
-                                    val chosen = readerReciters.firstOrNull { it.id == chosenId }
-                                        ?: readerReciters.firstOrNull { it.audioType == 0 }
-                                        ?: readerReciters.firstOrNull()
-                                    val ayahCount = surahs.firstOrNull { it.number == target.first }?.ayahCount ?: 0
-                                    val startAyah = if (mode == "full") 1 else target.second
-                                    val sequence = if (chosen != null && ayahCount > 0) reciterAudioSequence(context, chosen, target.first, startAyah, ayahCount) else emptyList()
-                                    if (sequence.isEmpty()) {
-                                        Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        sheetAudioPlaying = true
-                                        AudioController.playSequence(context, sequence) { isPlaying -> sheetAudioPlaying = isPlaying }
-                                    }
+                                    startInlineRecitation(target.first, target.second)
                                 }
                             }
                         }
@@ -3445,6 +3482,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         ) {
                             AudioController.stop()
                             sheetAudioPlaying = false
+                            inlinePlaybackVisible = false
+                            inlinePlaybackPaused = false
                             onBrowseReciters(target.first, target.second)
                         }
                         Spacer(Modifier.height(8.dp))
