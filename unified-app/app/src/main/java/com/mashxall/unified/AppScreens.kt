@@ -1489,6 +1489,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var sheetWordLoading by remember { mutableStateOf(false) }
     var sheetAudioPlaying by remember { mutableStateOf(false) }
 
+    var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
+
     // The Mushaf owns its audio session. Starting a verse never navigates away
     // from the page; the active ayah is driven by the segment that actually starts.
     var inlinePlaybackVisible by rememberSaveable { mutableStateOf(false) }
@@ -1639,7 +1641,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             showSurahList = true
         }
     }
-    var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
     val surahIndexListState = rememberLazyListState()
     LaunchedEffect(retrySurahs) {
