@@ -6407,6 +6407,18 @@ private fun reciterAudioSequence(
     }
 }
 
+/** Map one prepared audio segment to the ayah that should glow in the Mushaf. */
+internal fun quranPlaybackAyahForTrack(audioType: Int, startingAyah: Int, trackIndex: Int): Int =
+    if (audioType == 0) startingAyah.coerceAtLeast(1) + trackIndex.coerceAtLeast(0)
+    else startingAyah.coerceAtLeast(1)
+
+/** Only ayah-segment recordings can advance the active Mushaf highlight precisely. */
+internal fun quranPlaybackTrackAyahs(audioType: Int, startingAyah: Int, ayahCount: Int): List<Int> {
+    if (ayahCount < 1) return emptyList()
+    val start = startingAyah.coerceIn(1, ayahCount)
+    return if (audioType == 0) (start..ayahCount).toList() else listOf(start)
+}
+
 private suspend fun downloadReciterSurah(
     context: Context,
     reciter: Reciter,
@@ -7566,9 +7578,36 @@ private object AudioController {
     private var playerPrepared by mutableStateOf(false)
     private var playbackPaused: Boolean = false
     private var preparationJob: Job? = null
+    private var sequenceTrackIndex: Int = 0
+    private var sequenceTrackCount: Int = 0
+    private var sequenceTrackRequest: ((Int) -> Unit)? = null
+    private var repeatCurrentTrack: Boolean = false
     private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     fun isPrepared(): Boolean = playerPrepared && player != null
+
+    fun hasNextSequenceTrack(): Boolean =
+        sequenceTrackRequest != null && sequenceTrackIndex < sequenceTrackCount - 1
+
+    fun skipNextSequenceTrack(): Boolean {
+        val request = sequenceTrackRequest ?: return false
+        val next = sequenceTrackIndex + 1
+        if (next !in 0 until sequenceTrackCount) return false
+        request(next)
+        return true
+    }
+
+    fun skipPreviousSequenceTrack(): Boolean {
+        val request = sequenceTrackRequest ?: return false
+        if (sequenceTrackCount <= 0) return false
+        request((sequenceTrackIndex - 1).coerceAtLeast(0))
+        return true
+    }
+
+    fun toggleRepeatCurrentTrack(): Boolean {
+        repeatCurrentTrack = !repeatCurrentTrack
+        return repeatCurrentTrack
+    }
 
     fun togglePause(): Boolean? {
         val active = player ?: return null
@@ -7593,6 +7632,10 @@ private object AudioController {
         preparationJob = null
         playerPrepared = false
         playbackPaused = false
+        sequenceTrackIndex = 0
+        sequenceTrackCount = 0
+        sequenceTrackRequest = null
+        repeatCurrentTrack = false
         val active = player
         player = null
         try { active?.stop() } catch (_: Exception) {}
@@ -7603,6 +7646,7 @@ private object AudioController {
         context: Context,
         sources: List<String>,
         failure: AudioPlaybackFailure = AudioPlaybackFailure.RECITATION_SEGMENT,
+        onTrackStarted: (Int) -> Unit = {},
         callback: (Boolean) -> Unit
     ) {
         stop()
@@ -7613,7 +7657,13 @@ private object AudioController {
         val generation = playbackGeneration
         var hasStartedPlayback = false
         var unavailableTrackCount = 0
+        sequenceTrackCount = sources.size
+        sequenceTrackIndex = 0
+        repeatCurrentTrack = false
         lateinit var playAt: (Int) -> Unit
+        sequenceTrackRequest = { targetIndex ->
+            if (generation == playbackGeneration && targetIndex in sources.indices) playAt(targetIndex)
+        }
 
         fun notifyPartialSequenceIfNeeded() {
             if (hasStartedPlayback && unavailableTrackCount > 0 && generation == playbackGeneration) {
@@ -7657,10 +7707,13 @@ private object AudioController {
                 playerPrepared = false
                 playbackPaused = false
                 player = null
+                sequenceTrackRequest = null
+                sequenceTrackCount = 0
                 notifyPartialSequenceIfNeeded()
                 callback(false)
                 return
             }
+            sequenceTrackIndex = index
             var currentPlayer: MediaPlayer? = null
             try {
                 val source = sources[index]
@@ -7681,6 +7734,7 @@ private object AudioController {
                         playerPrepared = true
                         playbackPaused = false
                         if (!hasStartedPlayback) hasStartedPlayback = true
+                        onTrackStarted(index)
                         callback(true)
                     } catch (_: Exception) {
                         runCatching { prepared.release() }
@@ -7697,7 +7751,7 @@ private object AudioController {
                     if (player === completed) player = null
                     playerPrepared = false
                     playbackPaused = false
-                    playAt(index + 1)
+                    if (repeatCurrentTrack) playAt(index) else playAt(index + 1)
                 }
                 next.setOnErrorListener { failed, _, _ ->
                     runCatching { failed.release() }
