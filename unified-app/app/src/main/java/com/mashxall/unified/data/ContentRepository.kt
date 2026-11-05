@@ -4,7 +4,10 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
+import android.util.Base64
 import android.text.Html
+import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -214,29 +217,64 @@ private data class MushafSvgMeta(
     val uncompressedLength: Int, val sha256: String
 )
 
-/** Remove isolated Latin source markers from narration text without changing stored records. */
-internal fun stripHadithLatinSourceMarkers(value: String): String =
-    value.replace(Regex("""<rr>\s*[A-Za-z]\s*</rr>""", RegexOption.IGNORE_CASE), "")
+/** Remove source-only letters and repair split source markup for display; never writes to SQLite. */
+internal fun stripHadithLatinSourceMarkers(value: String): String {
+    val repaired = value
+        // Noor occasionally splits the HTML non-breaking-space entity with marker tags.
+        .replace(Regex("""&n\s*<rr>b</rr>\s*<rr>s</rr>p;""", RegexOption.IGNORE_CASE), "&nbsp;")
+        .replace("\\n", "\n")
+        .replace(Regex("""<rr>\s*[A-Za-z]\s*</rr>""", RegexOption.IGNORE_CASE), "")
+        .replace("<rr>", "")
+        .replace("</rr>", "")
+    // These single Latin letters are source annotations, not part of the Arabic narration.
+    return repaired.replace(
+        Regex("""(?<=[\u0600-\u06FF])\s+[A-Za-z](?=\s*[\u0600-\u06FF:：،,.;!?؟»«\\-–—]|$)"""),
+        " "
+    )
+}
 
-/** The lexicon's original encrypted payload is kept intact; identify it only for safe UI rendering. */
+/** Normalize the original Arabic Hadith field without mutating its source row. */
+internal fun cleanHadithArabicSourceText(value: String): String =
+    Html.fromHtml(stripHadithLatinSourceMarkers(value), Html.FROM_HTML_MODE_LEGACY)
+        .toString()
+        .replace('\u00a0', ' ')
+        .replace(Regex("""[ \\t]+:"""), ":")
+        .trim()
+
+/** The Noor dictionary uses the original app's AES key and AES/ECB/PKCS5Padding format. */
+internal object NoorLexiconCipher {
+    internal const val KEY = "X8VKYizrHWxnUkUfEMGjk214eXU2Tjaa"
+
+    fun decrypt(value: String): String {
+        if (value.isBlank()) return ""
+        if (!isLikelyEncryptedLexiconPayload(value)) return value
+        return try {
+            val cipher = Cipher.getInstance("AES")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(KEY.toByteArray(Charsets.UTF_8), "AES")
+            )
+            String(
+                cipher.doFinal(Base64.decode(value, Base64.DEFAULT)),
+                Charsets.UTF_8
+            )
+        } catch (_: Exception) {
+            // Match the original app: never show unreadable ciphertext as dictionary text.
+            ""
+        }
+    }
+}
+
+/** Detect the original Base64 ciphertext only; the underlying database value is left untouched. */
 internal fun isLikelyEncryptedLexiconPayload(value: String): Boolean {
     val compact = value.trim()
-    if (compact.length < 96 || compact.length % 4 != 0 || compact.any(Char::isWhitespace)) return false
+    if (compact.length < 64 || compact.length % 4 != 0 || compact.any(Char::isWhitespace)) return false
     if (!Regex("""[A-Za-z0-9+/]+={0,2}""").matches(compact)) return false
     val padding = compact.indexOf('=')
     return padding < 0 || (padding >= compact.length - 2 && compact.substring(padding).all { it == '=' })
 }
 
-private fun readableHadithText(value: String): String {
-    val withoutSourceMarkers = stripHadithLatinSourceMarkers(value)
-        .replace("<rr>", "")
-        .replace("</rr>", "")
-    return Html.fromHtml(withoutSourceMarkers, Html.FROM_HTML_MODE_LEGACY)
-        .toString()
-        .replace('\u00a0', ' ')
-        .replace(Regex("""\s+:"""), ":")
-        .trim()
-}
+private fun readableHadithText(value: String): String = cleanHadithArabicSourceText(value)
 
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
@@ -2252,7 +2290,14 @@ object ContentRepository {
             ).use { c ->
                 buildList {
                     while (c.moveToNext()) {
-                        add(LexiconItem(c.string("title"), c.string("content"), c.string("reference_name"), c.string("root")))
+                        add(
+                            LexiconItem(
+                                c.string("title"),
+                                NoorLexiconCipher.decrypt(c.string("content")),
+                                c.string("reference_name"),
+                                c.string("root")
+                            )
+                        )
                     }
                 }
             }
