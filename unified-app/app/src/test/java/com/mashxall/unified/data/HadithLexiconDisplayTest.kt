@@ -9,7 +9,7 @@ class HadithLexiconDisplayTest {
     @Test
     fun stripsIsolatedLatinHadithSourceMarkers() {
         val source = "عَنِ الْمُغِيرَةِ بْنِ شُعْبَةَ <rr>h</rr><rr>s</rr><rr>a</rr><rr>m</rr>: أَنَّ النَّبِيَّ <rr>ﷺ</rr> قَالَ"
-        val displayed = stripHadithHSourceMarker(source)
+        val displayed = stripHadithLatinSourceMarkers(source)
 
         assertEquals("عَنِ الْمُغِيرَةِ بْنِ شُعْبَةَ : أَنَّ النَّبِيَّ <rr>ﷺ</rr> قَالَ", displayed)
         assertTrue(displayed.contains("ﷺ"))
