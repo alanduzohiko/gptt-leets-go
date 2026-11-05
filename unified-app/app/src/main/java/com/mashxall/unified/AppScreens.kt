@@ -8118,7 +8118,15 @@ private object AudioController {
         repeatCurrentTrack = false
         lateinit var playAt: (Int) -> Unit
         sequenceTrackRequest = { targetIndex ->
-            if (generation == playbackGeneration && targetIndex in sources.indices) playAt(targetIndex)
+            if (generation == playbackGeneration && targetIndex in sources.indices) {
+                val active = player
+                player = null
+                playerPrepared = false
+                playbackPaused = false
+                try { active?.stop() } catch (_: Exception) {}
+                try { active?.release() } catch (_: Exception) {}
+                playAt(targetIndex)
+            }
         }
 
         fun notifyPartialSequenceIfNeeded() {
