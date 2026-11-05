@@ -222,6 +222,21 @@ enum class AppScreen(val key: String) {
 /** Saved GPS coordinates are valid only with a recent, real Location.time timestamp. */
 internal const val MAX_SAVED_GPS_FIX_AGE_MILLIS: Long = 30L * 60L * 1000L
 
+/**
+ * A location explicitly chosen by the user is a saved place, not a short-lived
+ * sensor reading. Keep its valid coordinates usable across launches and while
+ * the device Location switch is off; a new GPS fix is requested only on demand.
+ */
+internal fun isValidPersistedGpsFix(
+    latitude: Double?,
+    longitude: Double?,
+    fixTimeMillis: Long
+): Boolean =
+    latitude != null && longitude != null &&
+        latitude.isFinite() && latitude in -90.0..90.0 &&
+        longitude.isFinite() && longitude in -180.0..180.0 &&
+        fixTimeMillis > 0L
+
 internal fun isUsableSavedGpsFix(
     latitude: Double?,
     longitude: Double?,
@@ -1936,8 +1951,8 @@ private fun HomeScreen(
     val usableSavedGps = remember {
         val lat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val lon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
-        if (locationMode == "gps" && isUsableSavedGpsFix(
-                lat, lon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+        if (locationMode == "gps" && isValidPersistedGpsFix(
+                lat, lon, prefs.getLong("gps_location_timestamp", 0L)
             )
         ) lat to lon else null
     }
@@ -2187,7 +2202,7 @@ private fun HomeScreen(
         if (savedMode == "city") {
             gpsLatitude = null
             gpsLongitude = null
-        } else if (isUsableSavedGpsFix(savedGpsLat, savedGpsLon, savedGpsTime, System.currentTimeMillis())) {
+        } else if (isValidPersistedGpsFix(savedGpsLat, savedGpsLon, savedGpsTime)) {
             gpsLatitude = savedGpsLat
             gpsLongitude = savedGpsLon
         } else {
