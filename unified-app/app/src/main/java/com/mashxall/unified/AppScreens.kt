@@ -6586,7 +6586,6 @@ fun AudioScreen(
     var playing by rememberSaveable { mutableStateOf("") }
     var audioPaused by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(if (focusAdhan) 2 else if (focusReciters) 1 else 0) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
     var adhanCategory by rememberSaveable { mutableStateOf("all") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
@@ -6595,7 +6594,6 @@ fun AudioScreen(
     LaunchedEffect(initialSurah, initialAyah, focusReciters, focusAdhan) {
         surahText = initialSurah.coerceIn(1, 114).toString()
         ayahText = initialAyah.coerceAtLeast(1).toString()
-        selectedTab = if (focusAdhan) 2 else if (focusReciters) 1 else 0
     }
     LaunchedEffect(playing) {
         audioPaused = false
@@ -6646,38 +6644,63 @@ fun AudioScreen(
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         PremiumSectionHero(
-            title = tr(language, "audio"),
-            subtitle = when (language) {
-                AppLanguage.EN -> "Reciters, bundled recordings and Adhan libraries in one place."
-                AppLanguage.AR -> "القرّاء والتسجيلات المضمّنة ومكتبات الأذان في مكان واحد."
-                AppLanguage.CKB -> "قورئان‌خوێن، تۆمارە ناوخۆییەکان و کتێبخانەی بانگ لە یەک شوێندا."
+            title = if (focusAdhan) {
+                when (language) {
+                    AppLanguage.EN -> "Adhan & mosque audio"
+                    AppLanguage.AR -> "الأذان وأصوات المساجد"
+                    AppLanguage.CKB -> "بانگ و دەنگی مزگەوت"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "Quran reciters"
+                    AppLanguage.AR -> "قرّاء القرآن"
+                    AppLanguage.CKB -> "قورئان‌خوێنەکان"
+                }
             },
-            icon = Icons.Outlined.GraphicEq,
+            subtitle = if (focusAdhan) {
+                when (language) {
+                    AppLanguage.EN -> "A dedicated collection of muezzin recordings and mosque audio."
+                    AppLanguage.AR -> "مكتبة مستقلة لتسجيلات المؤذنين وأصوات المساجد."
+                    AppLanguage.CKB -> "کتێبخانەیەکی جیاواز بۆ تۆمارەکانی موئەزین و دەنگی مزگەوت."
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "Choose a Quran reciter and listen to complete surahs or individual ayahs."
+                    AppLanguage.AR -> "اختر قارئًا للقرآن واستمع إلى السور كاملة أو إلى الآيات منفردة."
+                    AppLanguage.CKB -> "قورئان‌خوێن هەڵبژێرە و گوێ لە سوورەتی تەواو یان ئایەتەکان بگرە."
+                }
+            },
+            icon = if (focusAdhan) Icons.Outlined.NotificationsActive else Icons.Outlined.GraphicEq,
             foreground = foreground,
             accent = Color(0xFFE9B17B),
-            metric = when (language) { AppLanguage.EN -> "OFFLINE + STREAMING"; AppLanguage.AR -> "دون اتصال + بث"; AppLanguage.CKB -> "بەبێ ئینتەرنێت + پەخش" },
-            eyebrow = when (language) { AppLanguage.EN -> "SOUND & RECITATION"; AppLanguage.AR -> "الصوت والتلاوة"; AppLanguage.CKB -> "دەنگ و تلاوەت" }
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(listOf(0, 1, 2)) { index ->
-                PremiumChoicePill(
-                    label = when (index) {
-                        0 -> if (language == AppLanguage.EN) "On-device audio" else if (language == AppLanguage.AR) "صوتيات الجهاز" else "دەنگی ناوخۆیی"
-                        1 -> if (language == AppLanguage.EN) "Reciters" else if (language == AppLanguage.AR) "القرّاء" else "قورئان‌خوێنەکان"
-                        else -> if (language == AppLanguage.EN) "Adhan & mosque audio" else if (language == AppLanguage.AR) "الأذان وأصوات المساجد" else "بانگ و دەنگی مزگەوت"
-                    },
-                    selected = selectedTab == index,
-                    accent = Gold,
-                    foreground = foreground
-                ) {
-                    selectedTab = index
-                    AudioController.stop()
-                    playing = ""
-                    audioPaused = false
+            metric = if (focusAdhan) {
+                when (language) {
+                    AppLanguage.EN -> "MUEZZINS + MOSQUES"
+                    AppLanguage.AR -> "المؤذنون + المساجد"
+                    AppLanguage.CKB -> "موئەزین + مزگەوت"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "FULL SURAH + VERSE"
+                    AppLanguage.AR -> "السورة كاملة + الآية"
+                    AppLanguage.CKB -> "سوورەتی تەواو + ئایەت"
+                }
+            },
+            eyebrow = if (focusAdhan) {
+                when (language) {
+                    AppLanguage.EN -> "ADHAN LIBRARY"
+                    AppLanguage.AR -> "مكتبة الأذان"
+                    AppLanguage.CKB -> "کتێبخانەی بانگ"
+                }
+            } else {
+                when (language) {
+                    AppLanguage.EN -> "QURAN RECITERS"
+                    AppLanguage.AR -> "قرّاء القرآن"
+                    AppLanguage.CKB -> "قورئان‌خوێنەکان"
                 }
             }
-        }
+        )
+        Spacer(Modifier.height(10.dp))
         val normalizedPlayingKey = playing.removePrefix("loading:")
         val preparingAudio = playing.startsWith("loading:")
         val currentAudioTitle = when {
@@ -6829,7 +6852,7 @@ fun AudioScreen(
                 )
             }
         }
-        if (selectedTab == 2) {
+        if (focusAdhan) {
             val searchTerm = audioQuery.trim()
             val bundledAdhan = remember(audio) {
                 audio.mapNotNull { item ->
@@ -6924,6 +6947,7 @@ fun AudioScreen(
             if (visibleAdhan.isEmpty() && visibleBundledAdhan.isEmpty()) {
                 LoadingOrEmpty(loading, language, foreground, if (onlineAdhan.isEmpty() && bundledAdhan.isEmpty()) tr(language, "no_adhan_audio") else tr(language, "not_found"))
             } else LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -7184,88 +7208,6 @@ fun AudioScreen(
                     }
                 }
             }
-        } else if (selectedTab == 0) {
-            val visibleAudio = audio.filter { item ->
-                val name = (item.title + " " + item.assetPath + " " + item.group).lowercase(Locale.ROOT)
-                audioQuery.isBlank() || name.contains(audioQuery.trim().lowercase(Locale.ROOT))
-            }
-            if (visibleAudio.isEmpty()) LoadingOrEmpty(loading, language, foreground, tr(language, "no_data"))
-            else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                itemsIndexed(visibleAudio, key = { _, it -> it.assetPath }) { itemIndex, item ->
-                    val trackIsPlaying = playing == item.assetPath
-                    val trackIsLoading = playing == "loading:${item.assetPath}"
-                    val trackIsActive = trackIsPlaying || trackIsLoading
-                    val trackIsAudible = trackIsPlaying && !audioPaused
-                    val trackBorder by animateColorAsState(
-                        targetValue = if (trackIsActive) Gold.copy(alpha = 0.72f) else foreground.copy(alpha = 0.09f),
-                        animationSpec = if (motionAllowed) tween(230, easing = FastOutSlowInEasing) else snap(),
-                        label = "Local audio active track border"
-                    )
-                    Card(
-                        modifier = Modifier.fillMaxWidth()
-                            .staggeredEntrance(itemKey = item.assetPath, index = itemIndex),
-                        colors = CardDefaults.cardColors(containerColor = cardColor),
-                        shape = RoundedCornerShape(18.dp),
-                        border = BorderStroke(1.dp, trackBorder)
-                    ) {
-                        Row(Modifier.fillMaxWidth()
-                            .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = if (trackIsActive) 0.10f else 0.025f), cardColor)))
-                            .premiumClickable {
-                                when {
-                                    trackIsLoading -> {
-                                        AudioController.stop()
-                                        playing = ""
-                                        audioPaused = false
-                                    }
-                                    trackIsPlaying -> {
-                                        AudioController.togglePause()?.let { audioPaused = it }
-                                    }
-                                    else -> {
-                                        audioPaused = false
-                                        playing = "loading:${item.assetPath}"
-                                        AudioController.play(context, item.assetPath) { state ->
-                                            audioPaused = false
-                                            playing = if (state) item.assetPath else ""
-                                        }
-                                    }
-                                }
-                            }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (trackIsLoading) {
-                                PremiumLoadingIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(34.dp))
-                            } else {
-                                AnimatedContent(
-                                    targetState = trackIsAudible,
-                                    transitionSpec = {
-                                        if (motionAllowed) {
-                                            (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                                (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
-                                        } else {
-                                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                                        }
-                                    },
-                                    label = "Audio play pause medallion"
-                                ) { active ->
-                                    PremiumIconMedallion(
-                                        icon = if (active) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle,
-                                        tint = Gold,
-                                        size = 40.dp,
-                                        pulse = active
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(item.title, color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                Text(item.group, color = foreground.copy(alpha = 0.48f), fontSize = 10.sp)
-                            }
-                            PremiumAudioWaveform(
-                                active = trackIsAudible,
-                                accent = if (trackIsActive) Gold else foreground.copy(alpha = 0.52f)
-                            )
-                        }
-                    }
-                }
-            }
         } else {
             val visibleReciters = filterRecitersForPlaybackMode(reciters, playbackMode, audioQuery)
             Text(
@@ -7370,7 +7312,7 @@ fun AudioScreen(
                     else -> "لەو کاتەلۆگەدا قورئان‌خوێنی فایلە جیاوازەکانی ئایەت بەردەست نییە."
                 }
                 LoadingOrEmpty(false, language, foreground, emptyMessage)
-            } else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            } else LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(visibleReciters, key = { _, it -> it.id }) { itemIndex, reciter ->
                     val surahNumber = surahText.toIntOrNull()?.coerceIn(1, 114) ?: 1
                     val surahAyahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
