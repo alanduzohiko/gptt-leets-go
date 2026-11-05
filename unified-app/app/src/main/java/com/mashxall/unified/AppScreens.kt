@@ -9587,8 +9587,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     val usableSavedGps = remember {
         val lat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val lon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
-        if (locationMode == "gps" && isUsableSavedGpsFix(
-                lat, lon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+        if (locationMode == "gps" && isValidPersistedGpsFix(
+                lat, lon, prefs.getLong("gps_location_timestamp", 0L)
             )
         ) lat to lon else null
     }
@@ -9812,12 +9812,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         manualLatitude = savedManualLat
         manualLongitude = savedManualLon
         if (savedMode == "gps") {
-            val savedFixIsFresh = isUsableSavedGpsFix(
-                savedGpsLat, savedGpsLon, savedGpsTime, System.currentTimeMillis()
+            val savedFixIsAvailable = isValidPersistedGpsFix(
+                savedGpsLat, savedGpsLon, savedGpsTime
             )
-            gpsLatitude = savedGpsLat.takeIf { savedFixIsFresh }
-            gpsLongitude = savedGpsLon.takeIf { savedFixIsFresh }
-            gpsAccuracy = if (savedFixIsFresh) prefs.getString("gps_accuracy", null)?.toFloatOrNull() else null
+            gpsLatitude = savedGpsLat.takeIf { savedFixIsAvailable }
+            gpsLongitude = savedGpsLon.takeIf { savedFixIsAvailable }
+            gpsAccuracy = if (savedFixIsAvailable) prefs.getString("gps_accuracy", null)?.toFloatOrNull() else null
         } else {
             gpsLatitude = null
             gpsLongitude = null
@@ -9830,10 +9830,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             when {
-                fine || coarse -> {
-                    // Refresh current location on entry; schedule lookup remains tied to Salawati source rows.
-                    locateNow()
+                !missingGpsFix -> {
+                    // The first approved coordinates are the saved location.
+                    // Do not reopen Android Location settings or request GPS on every visit.
+                    Unit
                 }
+                fine || coarse -> locateNow()
                 !alreadyAsked -> {
                     prefs.edit().putBoolean("prayer_location_prompted", true).apply()
                     locateNow()
@@ -10845,8 +10847,8 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     val usableSavedGps = remember {
         val lat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val lon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
-        if (locationMode == "gps" && isUsableSavedGpsFix(
-                lat, lon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
+        if (locationMode == "gps" && isValidPersistedGpsFix(
+                lat, lon, prefs.getLong("gps_location_timestamp", 0L)
             )
         ) lat to lon else null
     }
@@ -10933,15 +10935,22 @@ fun QiblaScreen(language: AppLanguage, foreground: Color, cardColor: Color, sele
     LaunchedEffect(Unit) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (locationMode == "gps" && (fine || coarse)) {
+        val hasSavedLocation = isValidPersistedGpsFix(
+            gpsLatitude, gpsLongitude, prefs.getLong("gps_location_timestamp", 0L)
+        )
+        if (locationMode == "gps" && hasSavedLocation) {
+            // Qibla also uses the stored first fix. A disabled GPS switch does not
+            // erase the user's saved location or force Settings to open again.
+            locationMessage = when (language) {
+                AppLanguage.EN -> "Using your saved location."
+                AppLanguage.AR -> "يُستخدم موقعك المحفوظ."
+                AppLanguage.CKB -> "شوێنی پاشەکەوتکراوت بەکاردێت."
+            }
+        } else if (locationMode == "gps" && (fine || coarse)) {
             locating = true
             locationMessage = ""
             requestCurrentLocation(context, onFix, onLocationError)
         } else if (locationMode == "gps") {
-            gpsLatitude = null
-            gpsLongitude = null
-            prefs.edit().remove("gps_latitude").remove("gps_longitude")
-                .remove("gps_location_timestamp").remove("gps_accuracy").apply()
             locationMessage = when (language) {
                 AppLanguage.EN -> "Current location permission is off. Allow it or select a city in Prayer settings."
                 AppLanguage.AR -> "إذن الموقع الحالي متوقف. اسمح به أو اختر مدينة من إعدادات الصلاة."
