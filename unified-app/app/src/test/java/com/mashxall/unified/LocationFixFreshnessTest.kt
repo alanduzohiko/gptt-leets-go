@@ -33,6 +33,19 @@ class LocationFixFreshnessTest {
     }
 
     @Test
+    fun firstSavedLocationRemainsUsableAcrossManyAppLaunchesAndWhenGpsIsOff() {
+        val now = 1_800_000_000_000L
+        val savedOneYearAgo = now - 365L * 24L * 60L * 60L * 1000L
+
+        // Saved coordinates are the user's chosen place; they do not expire just
+        // because the device's Location switch was off or the app was not opened.
+        assertTrue(isValidPersistedGpsFix(36.19, 44.01, savedOneYearAgo))
+        assertFalse(isValidPersistedGpsFix(91.0, 44.01, savedOneYearAgo))
+        assertFalse(isValidPersistedGpsFix(36.19, -181.0, savedOneYearAgo))
+        assertFalse(isValidPersistedGpsFix(36.19, 44.01, 0L))
+    }
+
+    @Test
     fun savedGpsCoordinatesRequireARecentTimestampAndValidCoordinateBounds() {
         val now = 1_800_000_000_000L
         assertTrue(isUsableSavedGpsFix(36.19, 44.01, now - 20 * 60_000L, now))
