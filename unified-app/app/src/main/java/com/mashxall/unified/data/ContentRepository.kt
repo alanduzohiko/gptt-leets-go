@@ -4,7 +4,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
-import android.util.Base64
+import java.util.Base64
 import android.text.Html
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
@@ -228,7 +228,7 @@ internal fun stripHadithLatinSourceMarkers(value: String): String {
         .replace("</rr>", "")
     // These single Latin letters are source annotations, not part of the Arabic narration.
     return repaired.replace(
-        Regex("""(?<=[\u0600-\u06FF])\s+[A-Za-z](?=\s*[\u0600-\u06FF:：،,.;!?؟»«\\-–—]|$)"""),
+        Regex("""(?<=[\u0600-\u06FF])\s+[A-Za-z](?=\s*[\u0600-\u06FF:：،,.;!?؟»«–—-]|$)"""),
         " "
     )
 }
@@ -238,7 +238,7 @@ internal fun cleanHadithArabicSourceText(value: String): String =
     Html.fromHtml(stripHadithLatinSourceMarkers(value), Html.FROM_HTML_MODE_LEGACY)
         .toString()
         .replace('\u00a0', ' ')
-        .replace(Regex("""[ \\t]+:"""), ":")
+        .replace(Regex("""[ \t]+:"""), ":")
         .trim()
 
 /** The Noor dictionary uses the original app's AES key and AES/ECB/PKCS5Padding format. */
@@ -255,7 +255,7 @@ internal object NoorLexiconCipher {
                 SecretKeySpec(KEY.toByteArray(Charsets.UTF_8), "AES")
             )
             String(
-                cipher.doFinal(Base64.decode(value, Base64.DEFAULT)),
+                cipher.doFinal(Base64.getDecoder().decode(value.filterNot(Char::isWhitespace))),
                 Charsets.UTF_8
             )
         } catch (_: Exception) {
