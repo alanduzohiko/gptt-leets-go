@@ -1375,6 +1375,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     val listState = rememberLazyListState()
+    val surahIndexListState = rememberLazyListState()
     LaunchedEffect(retrySurahs) {
         surahsLoading = true
         surahsLoadFailed = false
@@ -1935,117 +1936,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         slideInVertically(tween(230)) { it / 24 }
                 } else fadeIn(tween(0))
             ) {
-            Column(Modifier.fillMaxSize()) {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    QuranSurahWelcomeCard(
-                        language = language,
-                        surahCount = surahs.size,
-                        hasReadingHistory = prefs.contains("last_surah") ||
-                            prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page"),
-                        lastReadSurahName = surahs.firstOrNull { it.number == initialSurah }?.let {
-                            if (language == AppLanguage.EN) it.englishName else it.arabicName
-                        }.orEmpty(),
-                        lastReadAyah = initialAyah.coerceAtLeast(1),
-                        lastMushafPage = mushafPage,
-                        onSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
-                        onContinue = {
-                            val resumeTarget = resolveQuranResumeTarget(
-                                savedSurah = prefs.getInt("last_surah", initialSurah),
-                                savedAyah = prefs.getInt("last_ayah_number", initialAyah),
-                                savedPage = prefs.getInt("last_mushaf_page", mushafPage),
-                                savedReaderMode = prefs.getString("quran_reader_mode", null),
-                                hasSavedPage = prefs.contains("last_mushaf_page"),
-                                hasReadingHistory = prefs.contains("last_surah") ||
-                                    prefs.contains("last_ayah_number") ||
-                                    prefs.contains("last_mushaf_page")
-                            )
-                            selected = resumeTarget.surah
-                            mushafPage = resumeTarget.mushafPage
-                            query = ""
-                            selectedAyahForSheet = null
-                            showSurahList = false
-                            openingMushaf = false
-                            mushafMode = resumeTarget.openMushaf
-                            onSurah(selected)
-                            if (resumeTarget.openMushaf) {
-                                prefs.edit()
-                                    .putString("quran_reader_mode", "mushaf")
-                                    .putInt("last_mushaf_page", resumeTarget.mushafPage)
-                                    .putInt("last_surah", resumeTarget.surah)
-                                    .apply()
-                            } else {
-                                onOpenVerse(selected, resumeTarget.ayah)
-                                prefs.edit()
-                                    .putString("quran_reader_mode", "verse")
-                                    .putInt("last_surah", resumeTarget.surah)
-                                    .putInt("last_ayah_number", resumeTarget.ayah)
-                                    .apply()
-                            }
-                        },
-                        onOpenMushaf = {
-                            val resumeTarget = resolveQuranResumeTarget(
-                                savedSurah = prefs.getInt("last_surah", initialSurah),
-                                savedAyah = prefs.getInt("last_ayah_number", initialAyah),
-                                savedPage = prefs.getInt("last_mushaf_page", mushafPage),
-                                savedReaderMode = "mushaf",
-                                hasSavedPage = prefs.contains("last_mushaf_page")
-                            )
-                            selected = resumeTarget.surah
-                            query = ""
-                            selectedAyahForSheet = null
-                            mushafPage = resumeTarget.mushafPage
-                            showSurahList = false
-                            openingMushaf = false
-                            mushafMode = true
-                            onSurah(selected)
-                            prefs.edit().putString("quran_reader_mode", "mushaf")
-                                .putInt("last_mushaf_page", mushafPage)
-                                .putInt("last_surah", selected)
-                                .apply()
-                        }
-                    )
-                    SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SurahOriginFilterChip(
-                            label = when (language) { AppLanguage.EN -> "All" ; AppLanguage.AR -> "الكل" ; AppLanguage.CKB -> "هەموو" },
-                            selected = surahOriginFilter == "all",
-                            foreground = foreground
-                        ) { surahOriginFilter = "all" }
-                        SurahOriginFilterChip(
-                            label = when (language) { AppLanguage.EN -> "Meccan" ; AppLanguage.AR -> "مكية" ; AppLanguage.CKB -> "مەککی" },
-                            selected = surahOriginFilter == "meccan",
-                            foreground = foreground
-                        ) { surahOriginFilter = "meccan" }
-                        SurahOriginFilterChip(
-                            label = when (language) { AppLanguage.EN -> "Medinan" ; AppLanguage.AR -> "مدنية" ; AppLanguage.CKB -> "مەدەنی" },
-                            selected = surahOriginFilter == "medinan",
-                            foreground = foreground
-                        ) { surahOriginFilter = "medinan" }
-                    }
-                    Spacer(Modifier.height(7.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        items(
-                            listOf(
-                                "all" to when (language) { AppLanguage.EN -> "All progress" ; AppLanguage.AR -> "كل التقدم" ; AppLanguage.CKB -> "هەموو" },
-                                "in_progress" to when (language) { AppLanguage.EN -> "In progress" ; AppLanguage.AR -> "قيد القراءة" ; AppLanguage.CKB -> "دەستی پێکراوە" },
-                                "completed" to when (language) { AppLanguage.EN -> "Completed" ; AppLanguage.AR -> "مكتملة" ; AppLanguage.CKB -> "تەواوکراوە" },
-                                "not_started" to when (language) { AppLanguage.EN -> "Not started" ; AppLanguage.AR -> "لم تبدأ" ; AppLanguage.CKB -> "دەست پێنەکراوە" }
-                            ),
-                            key = { it.first }
-                        ) { (filter, label) ->
-                            SurahOriginFilterChip(
-                                label = label,
-                                selected = surahProgressFilter == filter,
-                                foreground = foreground
-                            ) { surahProgressFilter = filter }
-                        }
-                    }
-                }
+                // Header, search/filters and all surahs share one scroll container.
+                // A nested list kept the tall header fixed and left only one card visible.
                 val filteredSurahs = surahs.filter { item ->
                     matchesSurahOriginFilter(item.place, surahOriginFilter) &&
                         matchesSurahProgressFilter(
@@ -2057,74 +1949,196 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             item.englishName.contains(query.trim(), true) ||
                             item.number.toString() == query.trim())
                 }
-                if (surahs.isEmpty()) {
-                    LoadingOrEmpty(
-                        loading = surahsLoading,
-                        language = language,
-                        foreground = foreground,
-                        message = when {
-                            surahsLoadFailed && language == AppLanguage.EN -> "Could not load the Quran index. Check the app data and try again."
-                            surahsLoadFailed && language == AppLanguage.AR -> "تعذّر تحميل فهرس القرآن. تحقّق من بيانات التطبيق ثم أعد المحاولة."
-                            surahsLoadFailed -> "نەتوانرا فهرستی قورئان باربکرێت؛ داتای ئەپ بپشکنە و دووبارە هەوڵ بدەوە."
-                            else -> tr(language, "no_data")
-                        },
-                        onRetry = if (surahsLoadFailed) ({ retrySurahs++ }) else null
-                    )
-                } else if (filteredSurahs.isEmpty()) {
-                    LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
-                } else LazyColumn(
+                LazyColumn(
+                    state = surahIndexListState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 13.dp, vertical = 5.dp),
+                    contentPadding = PaddingValues(bottom = 26.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    itemsIndexed(filteredSurahs, key = { _, item -> item.number }) { index, item ->
-                        val placeLabel = when {
-                            matchesSurahOriginFilter(item.place, "meccan") ->
-                                when (language) { AppLanguage.EN -> "Meccan"; AppLanguage.AR -> "مكية"; AppLanguage.CKB -> "مەککی" }
-                            matchesSurahOriginFilter(item.place, "medinan") ->
-                                when (language) { AppLanguage.EN -> "Medinan"; AppLanguage.AR -> "مدنية"; AppLanguage.CKB -> "مەدەنی" }
-                            else -> item.place
-                        }
-                        QuranSurahIndexCard(
-                            surah = item,
-                            placeLabel = placeLabel,
-                            index = index,
-                            isLastRead = item.number == initialSurah,
-                            progressAyah = progressBySurah[item.number] ?: 0,
-                            language = language,
-                            foreground = foreground,
-                            cardColor = cardColor,
-                            onClick = {
-                                selected = item.number
-                                onSurah(item.number)
-                                query = ""
-                                selectedAyahForSheet = null
-                                pendingMushafStartSurah = item.number
-                                showSurahList = false
-                                openingMushaf = true
-                                mushafMode = false
-                                prefs.edit()
-                                    .putInt("last_surah", item.number)
-                                    .putInt("last_ayah_number", 1)
-                                    .apply()
-                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                            }
-                        )
-                    }
-                    if (surahs.isNotEmpty()) {
-                        item(key = "quran-reading-progress-footer") {
-                            Spacer(Modifier.height(12.dp))
-                            QuranReadingProgressCard(
-                                summary = readingProgressSummary,
-                                foreground = foreground,
-                                cardColor = cardColor,
-                                language = language
+                    item(key = "quran-surah-index-header") {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            QuranSurahWelcomeCard(
+                                language = language,
+                                surahCount = surahs.size,
+                                hasReadingHistory = prefs.contains("last_surah") ||
+                                    prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page"),
+                                lastReadSurahName = surahs.firstOrNull { it.number == initialSurah }?.let {
+                                    if (language == AppLanguage.EN) it.englishName else it.arabicName
+                                }.orEmpty(),
+                                lastReadAyah = initialAyah.coerceAtLeast(1),
+                                lastMushafPage = mushafPage,
+                                onSettings = { readerSettingsSection = "overview"; showReaderSettings = true },
+                                onContinue = {
+                                    val resumeTarget = resolveQuranResumeTarget(
+                                        savedSurah = prefs.getInt("last_surah", initialSurah),
+                                        savedAyah = prefs.getInt("last_ayah_number", initialAyah),
+                                        savedPage = prefs.getInt("last_mushaf_page", mushafPage),
+                                        savedReaderMode = prefs.getString("quran_reader_mode", null),
+                                        hasSavedPage = prefs.contains("last_mushaf_page"),
+                                        hasReadingHistory = prefs.contains("last_surah") ||
+                                            prefs.contains("last_ayah_number") ||
+                                            prefs.contains("last_mushaf_page")
+                                    )
+                                    selected = resumeTarget.surah
+                                    mushafPage = resumeTarget.mushafPage
+                                    query = ""
+                                    selectedAyahForSheet = null
+                                    showSurahList = false
+                                    openingMushaf = false
+                                    mushafMode = resumeTarget.openMushaf
+                                    onSurah(selected)
+                                    if (resumeTarget.openMushaf) {
+                                        prefs.edit()
+                                            .putString("quran_reader_mode", "mushaf")
+                                            .putInt("last_mushaf_page", resumeTarget.mushafPage)
+                                            .putInt("last_surah", resumeTarget.surah)
+                                            .apply()
+                                    } else {
+                                        onOpenVerse(selected, resumeTarget.ayah)
+                                        prefs.edit()
+                                            .putString("quran_reader_mode", "verse")
+                                            .putInt("last_surah", resumeTarget.surah)
+                                            .putInt("last_ayah_number", resumeTarget.ayah)
+                                            .apply()
+                                    }
+                                },
+                                onOpenMushaf = {
+                                    val resumeTarget = resolveQuranResumeTarget(
+                                        savedSurah = prefs.getInt("last_surah", initialSurah),
+                                        savedAyah = prefs.getInt("last_ayah_number", initialAyah),
+                                        savedPage = prefs.getInt("last_mushaf_page", mushafPage),
+                                        savedReaderMode = "mushaf",
+                                        hasSavedPage = prefs.contains("last_mushaf_page")
+                                    )
+                                    selected = resumeTarget.surah
+                                    query = ""
+                                    selectedAyahForSheet = null
+                                    mushafPage = resumeTarget.mushafPage
+                                    showSurahList = false
+                                    openingMushaf = false
+                                    mushafMode = true
+                                    onSurah(selected)
+                                    prefs.edit().putString("quran_reader_mode", "mushaf")
+                                        .putInt("last_mushaf_page", mushafPage)
+                                        .putInt("last_surah", selected)
+                                        .apply()
+                                }
                             )
-                            Spacer(Modifier.height(12.dp))
+                            SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SurahOriginFilterChip(
+                                    label = when (language) { AppLanguage.EN -> "All" ; AppLanguage.AR -> "الكل" ; AppLanguage.CKB -> "هەموو" },
+                                    selected = surahOriginFilter == "all",
+                                    foreground = foreground
+                                ) { surahOriginFilter = "all" }
+                                SurahOriginFilterChip(
+                                    label = when (language) { AppLanguage.EN -> "Meccan" ; AppLanguage.AR -> "مكية" ; AppLanguage.CKB -> "مەککی" },
+                                    selected = surahOriginFilter == "meccan",
+                                    foreground = foreground
+                                ) { surahOriginFilter = "meccan" }
+                                SurahOriginFilterChip(
+                                    label = when (language) { AppLanguage.EN -> "Medinan" ; AppLanguage.AR -> "مدنية" ; AppLanguage.CKB -> "مەدەنی" },
+                                    selected = surahOriginFilter == "medinan",
+                                    foreground = foreground
+                                ) { surahOriginFilter = "medinan" }
+                            }
+                            Spacer(Modifier.height(7.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                items(
+                                    listOf(
+                                        "all" to when (language) { AppLanguage.EN -> "All progress" ; AppLanguage.AR -> "كل التقدم" ; AppLanguage.CKB -> "هەموو" },
+                                        "in_progress" to when (language) { AppLanguage.EN -> "In progress" ; AppLanguage.AR -> "قيد القراءة" ; AppLanguage.CKB -> "دەستی پێکراوە" },
+                                        "completed" to when (language) { AppLanguage.EN -> "Completed" ; AppLanguage.AR -> "مكتملة" ; AppLanguage.CKB -> "تەواوکراوە" },
+                                        "not_started" to when (language) { AppLanguage.EN -> "Not started" ; AppLanguage.AR -> "لم تبدأ" ; AppLanguage.CKB -> "دەست پێنەکراوە" }
+                                    ),
+                                    key = { it.first }
+                                ) { (filter, label) ->
+                                    SurahOriginFilterChip(
+                                        label = label,
+                                        selected = surahProgressFilter == filter,
+                                        foreground = foreground
+                                    ) { surahProgressFilter = filter }
+                                }
+                            }
+                        }
+                    }
+                    if (surahs.isEmpty()) {
+                        item(key = "quran-surah-index-empty") {
+                            LoadingOrEmpty(
+                                loading = surahsLoading,
+                                language = language,
+                                foreground = foreground,
+                                message = when {
+                                    surahsLoadFailed && language == AppLanguage.EN -> "Could not load the Quran index. Check the app data and try again."
+                                    surahsLoadFailed && language == AppLanguage.AR -> "تعذّر تحميل فهرس القرآن. تحقّق من بيانات التطبيق ثم أعد المحاولة."
+                                    surahsLoadFailed -> "نەتوانرا فهرستی قورئان باربکرێت؛ داتای ئەپ بپشکنە و دووبارە هەوڵ بدەوە."
+                                    else -> tr(language, "no_data")
+                                },
+                                onRetry = if (surahsLoadFailed) ({ retrySurahs++ }) else null
+                            )
+                        }
+                    } else if (filteredSurahs.isEmpty()) {
+                        item(key = "quran-surah-index-no-results") {
+                            LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
+                        }
+                    } else {
+                        itemsIndexed(filteredSurahs, key = { _, item -> item.number }) { index, item ->
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 13.dp)) {
+                                val placeLabel = when {
+                                    matchesSurahOriginFilter(item.place, "meccan") ->
+                                        when (language) { AppLanguage.EN -> "Meccan"; AppLanguage.AR -> "مكية"; AppLanguage.CKB -> "مەککی" }
+                                    matchesSurahOriginFilter(item.place, "medinan") ->
+                                        when (language) { AppLanguage.EN -> "Medinan"; AppLanguage.AR -> "مدنية"; AppLanguage.CKB -> "مەدەنی" }
+                                    else -> item.place
+                                }
+                                QuranSurahIndexCard(
+                                    surah = item,
+                                    placeLabel = placeLabel,
+                                    index = index,
+                                    isLastRead = item.number == initialSurah,
+                                    progressAyah = progressBySurah[item.number] ?: 0,
+                                    language = language,
+                                    foreground = foreground,
+                                    cardColor = cardColor,
+                                    onClick = {
+                                        selected = item.number
+                                        onSurah(item.number)
+                                        query = ""
+                                        selectedAyahForSheet = null
+                                        pendingMushafStartSurah = item.number
+                                        showSurahList = false
+                                        openingMushaf = true
+                                        mushafMode = false
+                                        prefs.edit()
+                                            .putInt("last_surah", item.number)
+                                            .putInt("last_ayah_number", 1)
+                                            .apply()
+                                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+                                    }
+                                )
+                            }
+                        }
+                        if (surahs.isNotEmpty()) {
+                            item(key = "quran-reading-progress-footer") {
+                                Column(Modifier.padding(horizontal = 13.dp)) {
+                                    Spacer(Modifier.height(12.dp))
+                                    QuranReadingProgressCard(
+                                        summary = readingProgressSummary,
+                                        foreground = foreground,
+                                        cardColor = cardColor,
+                                        language = language
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                }
+                            }
                         }
                     }
                 }
-            }
             }
         } else if (openingMushaf) {
             AnimatedVisibility(
