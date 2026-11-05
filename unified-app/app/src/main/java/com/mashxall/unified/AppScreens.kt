@@ -2145,6 +2145,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     prefs.edit().putInt("last_mushaf_page", mushafPage).apply()
                 },
                 onExitFullscreen = {
+                    if (inlinePlaybackVisible) {
+                        AudioController.stop()
+                        inlinePlaybackVisible = false
+                        inlinePlaybackPaused = false
+                        inlinePlaybackRepeatCurrent = false
+                    }
                     mushafMode = false
                     showSurahList = true
                 },
@@ -3588,22 +3594,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 }
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }
+                            val sheetPlaybackIsCurrent = inlinePlaybackVisible && inlinePlaybackActiveVerse == target
                             PremiumChoicePill(
                                 modifier = Modifier.weight(1f),
-                                label = if (language == AppLanguage.EN) if (sheetAudioPlaying) "Pause" else "Play"
-                                    else if (language == AppLanguage.AR) if (sheetAudioPlaying) "إيقاف" else "تشغيل"
-                                    else if (sheetAudioPlaying) "وەستان" else "لێدان",
-                                selected = sheetAudioPlaying,
+                                label = if (sheetPlaybackIsCurrent && !inlinePlaybackPaused) {
+                                    if (language == AppLanguage.EN) "Pause" else if (language == AppLanguage.AR) "إيقاف" else "وەستان"
+                                } else {
+                                    if (language == AppLanguage.EN) "Play" else if (language == AppLanguage.AR) "تشغيل" else "لێدان"
+                                },
+                                selected = sheetPlaybackIsCurrent && !inlinePlaybackPaused,
                                 accent = Gold,
                                 foreground = foreground,
-                                leadingIcon = if (sheetAudioPlaying) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle
+                                leadingIcon = if (sheetPlaybackIsCurrent && !inlinePlaybackPaused) Icons.Outlined.PauseCircle else Icons.Outlined.PlayCircle
                             ) {
-                                if (sheetAudioPlaying || inlinePlaybackVisible) {
-                                    AudioController.stop()
-                                    sheetAudioPlaying = false
-                                    inlinePlaybackVisible = false
-                                    inlinePlaybackPaused = false
-                                    inlinePlaybackRepeatCurrent = false
+                                if (sheetPlaybackIsCurrent) {
+                                    AudioController.togglePause()?.let { inlinePlaybackPaused = it }
                                 } else {
                                     startInlineRecitation(target.first, target.second)
                                 }
