@@ -382,6 +382,12 @@ def main() -> int:
 
             app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
+            if os.environ.get("MASHXALL_RE_DUMP_FOCUSED") == "1" and app_report["lexicon_source_contexts"]:
+                print("LEXICON_APP_SOURCE_BEGIN " + meta["label"], flush=True)
+                for item in app_report["lexicon_source_contexts"][:60]:
+                    print(f"LEXICON_SOURCE file={item['file']} line={item['match_line']} match={item['match']}", flush=True)
+                    print(item["context"][:18000], flush=True)
+                print("LEXICON_APP_SOURCE_END " + meta["label"], flush=True)
             # Manifest/resources and binaries stay temporary; only metadata and snippets are emitted.
             shutil.rmtree(decompiled, ignore_errors=True)
             base_apk.unlink(missing_ok=True)
