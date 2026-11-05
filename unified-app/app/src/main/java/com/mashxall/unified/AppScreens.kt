@@ -9056,6 +9056,9 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             }
         } else {
             itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$index" }) { itemIndex, item ->
+                    val readableLexiconContent = remember(item.content) {
+                        NoorLexiconCipher.decrypt(item.content)
+                    }
                     Card(
                         modifier = Modifier.fillMaxWidth()
                             .padding(horizontal = 14.dp)
@@ -9074,14 +9077,19 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
-                            if (item.content.isNotBlank() && !isLikelyEncryptedLexiconPayload(item.content)) {
-                                Text(item.content, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
-                            } else if (isLikelyEncryptedLexiconPayload(item.content)) {
+                            if (readableLexiconContent.isNotBlank()) {
+                                Text(
+                                    readableLexiconContent,
+                                    color = foreground,
+                                    fontSize = 12.sp,
+                                    lineHeight = 20.sp
+                                )
+                            } else if (item.content.isNotBlank()) {
                                 Text(
                                     when (language) {
-                                        AppLanguage.EN -> "A readable explanation is not available for this entry."
-                                        AppLanguage.AR -> "لا يتوفر شرح مقروء لهذه المفردة حاليًا."
-                                        AppLanguage.CKB -> "ڕوونکردنەوەی خوێندراو بۆ ئەم وشەیە ئێستا بەردەست نییە."
+                                        AppLanguage.EN -> "This entry's original explanation could not be decoded."
+                                        AppLanguage.AR -> "تعذّر فك شرح هذه المفردة من مصدره الأصلي."
+                                        AppLanguage.CKB -> "نەتوانرا ڕوونکردنەوەی ئەم وشەیە لە سەرچاوەی ڕەسەنەوە بکۆدرێتەوە."
                                     },
                                     color = foreground.copy(alpha = 0.56f),
                                     fontSize = 10.sp,
