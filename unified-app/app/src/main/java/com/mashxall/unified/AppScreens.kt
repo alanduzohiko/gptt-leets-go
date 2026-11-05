@@ -1357,6 +1357,140 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var sheetWords by remember { mutableStateOf<List<WordItem>>(emptyList()) }
     var sheetWordLoading by remember { mutableStateOf(false) }
     var sheetAudioPlaying by remember { mutableStateOf(false) }
+
+    // The Mushaf owns its audio session. Starting a verse never navigates away
+    // from the page; the active ayah is driven by the segment that actually starts.
+    var inlinePlaybackVisible by rememberSaveable { mutableStateOf(false) }
+    var inlinePlaybackPaused by rememberSaveable { mutableStateOf(false) }
+    var inlinePlaybackRepeatCurrent by rememberSaveable { mutableStateOf(false) }
+    var inlinePlaybackReciterId by rememberSaveable {
+        mutableIntStateOf(prefs.getInt("quran_inline_reciter_id", -1))
+    }
+    var inlinePlaybackSurah by rememberSaveable { mutableIntStateOf(initialSurah.coerceIn(1, 114)) }
+    var inlinePlaybackStartAyah by rememberSaveable { mutableIntStateOf(initialAyah.coerceAtLeast(1)) }
+    var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
+    var showInlineReciterPicker by remember { mutableStateOf(false) }
+    var inlineReciterSearch by rememberSaveable { mutableStateOf("") }
+
+    fun startInlineRecitation(
+        surahNumber: Int,
+        requestedAyah: Int,
+        reciterOverride: Reciter? = null,
+        continueFromCurrentAyah: Boolean = false
+    ) {
+        val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
+        if (surahNumber !in 1..114 || ayahCount < 1 || readerReciters.isEmpty()) {
+            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val storedInline = readerReciters.firstOrNull {
+            it.id == inlinePlaybackReciterId && it.surahTotal >= surahNumber
+        }
+        val preferred = readerReciters.firstOrNull {
+            it.id == preferredReaderReciterId && it.surahTotal >= surahNumber
+        }
+        val synchronizedChoice = readerReciters.firstOrNull {
+            it.audioType == 0 && it.surahTotal == 114 && surahNumber <= it.surahTotal
+        } ?: readerReciters.firstOrNull {
+            it.audioType == 0 && surahNumber <= it.surahTotal
+        }
+        // Prefer per-ayah source files for the in-Mushaf player so the highlight
+        // can follow the true recording boundaries instead of guessing timestamps.
+        val chosen = reciterOverride
+            ?: storedInline?.takeIf { it.audioType == 0 }
+            ?: preferred?.takeIf { it.audioType == 0 }
+            ?: synchronizedChoice
+            ?: storedInline
+            ?: preferred
+            ?: readerReciters.firstOrNull { it.surahTotal >= surahNumber }
+        if (chosen == null) {
+            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val configuredMode = ReaderPlaybackSettings.normalize(
+            prefs.getString("reciter_playback_mode", readerPlaybackMode)
+        )
+        val effectiveMode = when {
+            chosen.audioType != 0 -> "full"
+            continueFromCurrentAyah -> "verse"
+            else -> configuredMode
+        }
+        val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyah, ayahCount)
+        val sequence = reciterAudioSequence(context, chosen, surahNumber, startAyah, ayahCount)
+        if (sequence.isEmpty()) {
+            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+            return
+        }
+        inlinePlaybackVisible = true
+        inlinePlaybackPaused = false
+        inlinePlaybackRepeatCurrent = false
+        inlinePlaybackSurah = surahNumber
+        inlinePlaybackStartAyah = startAyah
+        inlinePlaybackReciterId = chosen.id
+        inlinePlaybackUsesAyahClips = chosen.audioType == 0
+        inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
+        inlinePlaybackActiveVerse = surahNumber to (inlinePlaybackTrackAyahs.firstOrNull() ?: startAyah)
+        selected = surahNumber
+        selectedAyahForSheet = null
+        sheetAudioPlaying = false
+        onSurah(surahNumber)
+        onOpenVerse(surahNumber, startAyah)
+        prefs.edit()
+            .putInt("quran_inline_reciter_id", chosen.id)
+            .putInt("last_surah", surahNumber)
+            .putInt("last_ayah_number", startAyah)
+            .putInt("quran_progress_ayah_$surahNumber", startAyah)
+            .apply()
+        readingProgressRevision++
+        AudioController.playSequence(
+            context = context,
+            sources = sequence,
+            onTrackStarted = { trackIndex ->
+                val activeAyah = quranPlaybackAyahForTrack(
+                    audioType = chosen.audioType,
+                    startingAyah = startAyah,
+                    trackIndex = trackIndex
+                ).coerceIn(1, ayahCount)
+                inlinePlaybackActiveVerse = surahNumber to activeAyah
+                inlinePlaybackSurah = surahNumber
+                selected = surahNumber
+                onSurah(surahNumber)
+                onOpenVerse(surahNumber, activeAyah)
+                prefs.edit()
+                    .putInt("last_surah", surahNumber)
+                    .putInt("last_ayah_number", activeAyah)
+                    .putInt("quran_progress_ayah_$surahNumber", activeAyah)
+                    .apply()
+                readingProgressRevision++
+            },
+            callback = { isPlaying ->
+                inlinePlaybackVisible = isPlaying
+                inlinePlaybackPaused = false
+                if (!isPlaying) inlinePlaybackRepeatCurrent = false
+            }
+        )
+    }
+
+    LaunchedEffect(inlinePlaybackActiveVerse, inlinePlaybackVisible, mushafMode) {
+        val target = inlinePlaybackActiveVerse
+        if (!inlinePlaybackVisible || !mushafMode || target == null) return@LaunchedEffect
+        val targetPage = ContentRepository.loadMushafPageForVerse(context, target.first, target.second)
+        if (targetPage != null && targetPage != mushafPage) {
+            mushafPage = targetPage
+            prefs.edit()
+                .putInt("last_mushaf_page", targetPage)
+                .putInt("last_surah", target.first)
+                .putInt("last_ayah_number", target.second)
+                .apply()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { AudioController.stop() }
+    }
+
     LaunchedEffect(mushafMode) { onImmersiveMushaf(mushafMode) }
     DisposableEffect(Unit) {
         onDispose { onImmersiveMushaf(false) }
