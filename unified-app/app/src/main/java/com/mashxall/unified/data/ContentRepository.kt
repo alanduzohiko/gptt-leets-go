@@ -847,6 +847,24 @@ object ContentRepository {
     }
 
     /**
+     * Resolve the printed Mushaf page for one playback verse using the original
+     * Quran database page column. Playback uses this to follow the recitation
+     * across page boundaries without scanning all 604 SVG pages.
+     */
+    suspend fun loadMushafPageForVerse(context: Context, surah: Int, ayah: Int): Int? = withContext(Dispatchers.IO) {
+        if (surah !in 1..114 || ayah !in 1..286) return@withContext null
+        val page = queryDb(context, QURAN_DB, 0) { db ->
+            db.rawQuery(
+                "SELECT page FROM quran WHERE surah_id=? AND verse_id=? LIMIT 1",
+                arrayOf(surah.toString(), ayah.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.int("page") else 0
+            }
+        }
+        page.takeIf { it in 1..604 }
+    }
+
+    /**
      * Legacy Noor rectangles are retained for auditing only. The active Mushaf
      * reader derives hit regions from the displayed SVG via parseMushafPageVerseGeometry,
      * because these database rectangles belong to a different page layout.
