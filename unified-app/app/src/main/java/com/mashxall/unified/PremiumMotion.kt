@@ -2040,10 +2040,6 @@ internal fun PremiumSlider(
     steps: Int = 0,
     onValueChangeFinished: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
-        systemAllowsDecorativeMotion(context)
-    }
     val haptics = LocalHapticFeedback.current
     var dragging by remember { mutableStateOf(false) }
     var lastBucket by remember(valueRange, steps) {
