@@ -1234,6 +1234,7 @@ internal fun loadQuranTextTypeface(context: Context, fontId: String): Typeface? 
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Boolean, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lexiconListState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -4443,8 +4444,14 @@ private fun tafsirLabel(book: TafsirBook, language: AppLanguage): String = when 
 
 
 private fun cleanHadithDisplayText(value: String): String =
-    Html.fromHtml(value.replace("<rr>", "").replace("</rr>", ""), Html.FROM_HTML_MODE_LEGACY)
-        .toString().replace('\u00a0', ' ').trim()
+    Html.fromHtml(
+        stripHadithHSourceMarker(value).replace("<rr>", "").replace("</rr>", ""),
+        Html.FROM_HTML_MODE_LEGACY
+    )
+        .toString()
+        .replace('\u00a0', ' ')
+        .replace(Regex("""\\s+:"""), ":")
+        .trim()
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -4500,8 +4507,14 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         loading = false
         listState.scrollToItem(0)
     }
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item(key = "hadith-screen-header") {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             PremiumSectionHero(
                 title = tr(language, "hadith"),
                 subtitle = when (language) {
@@ -4575,13 +4588,15 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     ) { selectedCollectionId = collection.id }
                 }
             }
+            }
         }
         if (selectedMode == 1) {
-            if (articles.isEmpty()) LoadingOrEmpty(loading, language, foreground, tr(language, "not_found"))
-            else LazyColumn(
-                contentPadding = PaddingValues(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+            if (articles.isEmpty()) {
+                item(key = "hadith-articles-empty") {
+                    LoadingOrEmpty(loading, language, foreground, tr(language, "not_found"))
+                }
+            }
+            else {
                 itemsIndexed(articles, key = { _, it -> "hadith-article-" + it.id }) { itemIndex, article ->
                     val localizedAuthor = when (language) {
                         AppLanguage.CKB -> article.authorCkb.ifBlank { article.authorArabic }
@@ -4600,6 +4615,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     }
                     Card(
                         modifier = Modifier.fillMaxWidth()
+                                    .padding(horizontal = 14.dp)
                                     .staggeredEntrance(itemKey = article.id, index = itemIndex)
                                     .premiumClickable { selectedArticleForDetails = article },
                         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -4624,7 +4640,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }
                             Spacer(Modifier.height(9.dp))
                             Text(
-                                localizedBody.replace("<rr>", "").replace("</rr>", "").take(190).let { if (localizedBody.length > 190) it.trimEnd() + "…" else it },
+                                cleanHadithDisplayText(localizedBody).take(190).let {
+                                    if (cleanHadithDisplayText(localizedBody).length > 190) it.trimEnd() + "…" else it
+                                },
                                 color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 20.sp, maxLines = 4
                             )
                             Spacer(Modifier.height(8.dp))
@@ -4636,11 +4654,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     }
                 }
             }
-        } else if (hadithItems.isEmpty()) LoadingOrEmpty(loading, language, foreground) else LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+        } else if (hadithItems.isEmpty()) {
+            item(key = "hadith-list-empty") {
+                LoadingOrEmpty(loading, language, foreground)
+            }
+        } else {
             itemsIndexed(hadithItems, key = { _, item -> item.id }) { index, hadith ->
                 var showEnglish by rememberSaveable(hadith.id) { mutableStateOf(language == AppLanguage.EN) }
                 var showNotes by rememberSaveable(hadith.id) { mutableStateOf(false) }
@@ -4678,6 +4696,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 }
                 Card(
                     modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 14.dp)
                         .staggeredEntrance(itemKey = hadith.id, index = index)
                         .premiumClickable(
                             onLongClickLabel = when (language) {
@@ -4771,7 +4790,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         accent = Gold,
                         foreground = foreground,
                         pressedScale = premiumActionButtonPressScale("load_more_hadith"),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                         enabled = !loadingMore,
                         loading = loadingMore
                     ) {
@@ -8986,9 +9005,16 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         offset = entries.size
         hasMore = offset < totalMatches && entries.size == 100
         loading = false
+        lexiconListState.scrollToItem(0)
     }
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    LazyColumn(
+        state = lexiconListState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item(key = "lexicon-screen-header") {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             PremiumSectionHero(
                 title = tr(language, "lexicon"),
                 subtitle = when (language) {
@@ -9004,17 +9030,17 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             )
             Spacer(Modifier.height(10.dp))
             SearchBox(language, query, { query = it }, tr(language, "search_words"))
+            }
         }
         if (entries.isEmpty()) {
-            LoadingOrEmpty(loading, language, foreground)
+            item(key = "lexicon-list-empty") {
+                LoadingOrEmpty(loading, language, foreground)
+            }
         } else {
-            LazyColumn(
-                contentPadding = PaddingValues(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$index" }) { itemIndex, item ->
+            itemsIndexed(entries, key = { index, item -> "${item.title}:${item.root}:$index" }) { itemIndex, item ->
                     Card(
                         modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = 14.dp)
                             .staggeredEntrance(itemKey = "${item.title}:${item.root}:$itemIndex", index = itemIndex)
                             .premiumAnimateContentSize(),
                         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -9030,7 +9056,20 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
-                            Text(item.content, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
+                            if (item.content.isNotBlank() && !isLikelyEncryptedLexiconPayload(item.content)) {
+                                Text(item.content, color = foreground, fontSize = 12.sp, lineHeight = 19.sp)
+                            } else if (isLikelyEncryptedLexiconPayload(item.content)) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "A readable explanation is not available for this entry."
+                                        AppLanguage.AR -> "لا يتوفر شرح مقروء لهذه المفردة حاليًا."
+                                        AppLanguage.CKB -> "ڕوونکردنەوەی خوێندراو بۆ ئەم وشەیە ئێستا بەردەست نییە."
+                                    },
+                                    color = foreground.copy(alpha = 0.56f),
+                                    fontSize = 10.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
                             if (item.reference.isNotBlank()) {
                                 Spacer(Modifier.height(6.dp))
                                 Text(
@@ -9052,7 +9091,7 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             icon = Icons.Outlined.Search,
                             accent = Color(0xFFB9A7F1),
                             foreground = foreground,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                             enabled = !loadingMore
                         ) {
                             if (!loadingMore) scope.launch {
@@ -9069,7 +9108,6 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         }
                     }
                 }
-            }
         }
     }
 }
