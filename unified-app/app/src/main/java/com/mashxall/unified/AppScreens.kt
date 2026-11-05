@@ -425,6 +425,137 @@ internal fun quranReaderSettingsCategoryPressScale(categoryKey: String): Float =
 
 
 @Composable
+private fun QuranInlinePlaybackBar(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    reciter: Reciter?,
+    surahName: String,
+    activeAyah: Int,
+    ayahCount: Int,
+    isPaused: Boolean,
+    isPrepared: Boolean,
+    repeatCurrent: Boolean,
+    usesAyahClips: Boolean,
+    hasNext: Boolean,
+    onChooseReciter: () -> Unit,
+    onRepeat: () -> Unit,
+    onPrevious: () -> Unit,
+    onTogglePause: () -> Unit,
+    onNext: () -> Unit,
+    onStop: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(17.dp),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.36f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth()
+                .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.12f), cardColor)))
+                .padding(horizontal = 8.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Column(
+                Modifier.weight(1f).clip(RoundedCornerShape(11.dp))
+                    .premiumClickable(hapticFeedback = true, onClick = onChooseReciter)
+                    .padding(start = 3.dp, top = 3.dp, bottom = 3.dp, end = 2.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PremiumAudioWaveform(
+                        active = isPrepared && !isPaused,
+                        accent = Gold,
+                        contentDescription = if (language == AppLanguage.EN) "Quran audio" else if (language == AppLanguage.AR) "تلاوة القرآن" else "دەنگی قورئان"
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "PLAYING IN MUSHAF"
+                            AppLanguage.AR -> "التلاوة داخل المصحف"
+                            AppLanguage.CKB -> "خوێندنەوە لە ناو مصحەفدا"
+                        },
+                        color = Gold, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.35.sp, maxLines = 1
+                    )
+                }
+                Text(
+                    reciter?.let { if (language == AppLanguage.EN) it.nameEnglish.ifBlank { it.nameArabic } else it.nameArabic }
+                        ?: if (language == AppLanguage.EN) "Quran reciter" else if (language == AppLanguage.AR) "قارئ القرآن" else "قورئان‌خوێن",
+                    color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                )
+                Text(
+                    "$surahName  •  " + when (language) {
+                        AppLanguage.EN -> "Ayah $activeAyah / $ayahCount"
+                        AppLanguage.AR -> "الآية $activeAyah / $ayahCount"
+                        AppLanguage.CKB -> "ئایەتی $activeAyah / $ayahCount"
+                    },
+                    color = foreground.copy(alpha = 0.65f), fontSize = 9.sp, maxLines = 1
+                )
+                if (!usesAyahClips) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "This full-surah file has no per-ayah timing."
+                            AppLanguage.AR -> "هذا الملف لا يحتوي توقيتًا منفصلًا لكل آية."
+                            AppLanguage.CKB -> "ئەم فایلە کاتی جیاوازی ئایەتەکانی تێدا نییە."
+                        },
+                        color = Gold.copy(alpha = 0.8f), fontSize = 8.sp, maxLines = 1
+                    )
+                }
+            }
+            ReaderActionIcon(
+                icon = Icons.Outlined.Repeat,
+                description = when (language) {
+                    AppLanguage.EN -> if (repeatCurrent) "Repeat current ayah" else "Repeat current ayah off"
+                    AppLanguage.AR -> if (repeatCurrent) "تكرار الآية الحالية مفعّل" else "تكرار الآية الحالية"
+                    AppLanguage.CKB -> if (repeatCurrent) "دووبارەکردنەوەی ئایەتی ئێستا چالاکە" else "دووبارەکردنەوەی ئایەتی ئێستا"
+                },
+                selected = repeatCurrent,
+                pressedScale = quranReaderActionPressScale("repeat_ayah"),
+                onClick = onRepeat
+            )
+            ReaderActionIcon(
+                icon = Icons.Outlined.ChevronRight,
+                description = if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو",
+                enabled = usesAyahClips,
+                rotationDegrees = 180f,
+                pressedScale = quranReaderActionPressScale("previous_ayah"),
+                onClick = onPrevious
+            )
+            if (isPrepared) {
+                ReaderActionIcon(
+                    icon = if (isPaused) Icons.Outlined.PlayCircle else Icons.Outlined.PauseCircle,
+                    description = if (isPaused) {
+                        if (language == AppLanguage.EN) "Resume recitation" else if (language == AppLanguage.AR) "استئناف التلاوة" else "بەردەوامبوون بە خوێندنەوە"
+                    } else {
+                        if (language == AppLanguage.EN) "Pause recitation" else if (language == AppLanguage.AR) "إيقاف التلاوة مؤقتًا" else "وەستاندنی کاتیی خوێندنەوە"
+                    },
+                    pressedScale = quranReaderActionPressScale("pause_recitation"),
+                    onClick = onTogglePause
+                )
+            } else {
+                PremiumLoadingIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(34.dp).padding(7.dp))
+            }
+            ReaderActionIcon(
+                icon = Icons.Outlined.ChevronRight,
+                description = if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر",
+                enabled = usesAyahClips && hasNext,
+                pressedScale = quranReaderActionPressScale("next_ayah"),
+                onClick = onNext
+            )
+            ReaderActionIcon(
+                icon = Icons.Outlined.Close,
+                description = if (language == AppLanguage.EN) "Stop recitation" else if (language == AppLanguage.AR) "إيقاف التلاوة" else "وەستاندنی خوێندنەوە",
+                pressedScale = quranReaderActionPressScale("stop_recitation"),
+                onClick = onStop
+            )
+        }
+    }
+}
+
+@Composable
 private fun ReaderActionIcon(
     icon: ImageVector,
     description: String?,
@@ -3630,6 +3761,7 @@ internal fun mushafCurlAdjacentPage(page: Int, forward: Boolean): Int? {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
+    modifier: Modifier = Modifier,
     language: AppLanguage,
     foreground: Color,
     page: Int,
@@ -3641,6 +3773,7 @@ private fun MushafPageViewer(
     onPlaySurah: (Int, Int) -> Unit,
     onBookmarkVerse: (Int, Int) -> Boolean,
     onVerseClick: (Int, Int) -> Unit,
+    playbackVerse: Pair<Int, Int>? = null,
     onReadingPosition: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
@@ -3807,7 +3940,15 @@ private fun MushafPageViewer(
             pageVerseGeometry.firstOrNull { it.verse == selected }?.rects.orEmpty()
         }
     }
-    Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF081C18) else if (sepiaMode) Color(0xFFE4D2A9) else Color(0xFFF1EFE8))) {
+    LaunchedEffect(page, playbackVerse, pageVerseGeometry) {
+        val active = playbackVerse
+        if (active != null) {
+            selectedVerse = pageVerseGeometry.firstOrNull {
+                it.verse.surah == active.first && it.verse.ayah == active.second
+            }?.verse
+        }
+    }
+    Column(modifier.fillMaxSize().background(if (darkMode) Color(0xFF081C18) else if (sepiaMode) Color(0xFFE4D2A9) else Color(0xFFF1EFE8))) {
         // Native, compact reader toolbar pinned above the page, like a real
         // Mushaf app rather than an ordinary scrollable content page.
         Row(
