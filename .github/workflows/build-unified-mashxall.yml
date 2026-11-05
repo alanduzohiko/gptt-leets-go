@@ -220,6 +220,15 @@ jobs:
           يجب إجراء اختبار فعلي على الجهاز قبل اعتبار الإصدار نهائيًا أو نشره.
           EOF
 
+      - name: Upload a clean APK-only package for phone installation
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-${{ github.run_number }}
+          path: dist/Mashxall-Unified-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
       - name: Upload APK, extracted content catalog and verification report
         uses: actions/upload-artifact@v4
         with:
