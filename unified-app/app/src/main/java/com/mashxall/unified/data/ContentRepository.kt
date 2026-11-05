@@ -235,8 +235,8 @@ internal data class MushafPageVerseGeometry(
 )
 
 /**
- * Combine the paths belonging to an ayah into one tight region per printed line.
- * Different ayahs are never merged, even when they share a line.
+ * Keep the paths for each tagged SVG word as its own tight region within the ayah.
+ * Different ayahs are never merged, even when they share a printed line.
  */
 internal fun buildMushafPageVerseGeometry(words: List<MushafWordBounds>): List<MushafPageVerseGeometry> {
     val validWords = words.filter { word ->
@@ -268,8 +268,8 @@ internal fun buildMushafPageVerseGeometry(words: List<MushafWordBounds>): List<M
                 )
             }.sortedWith(
                 compareBy<MushafPageRect> { it.lineNumber }
-                    .thenBy { it.minY }
                     .thenBy { it.minX }
+                    .thenBy { it.minY }
             )
             MushafPageVerseGeometry(verse, wordRects)
         }
