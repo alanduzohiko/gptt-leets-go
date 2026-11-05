@@ -78,6 +78,7 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Favorite
