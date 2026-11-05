@@ -1234,7 +1234,6 @@ internal fun loadQuranTextTypeface(context: Context, fontId: String): Typeface? 
 fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, initialSurah: Int, initialAyah: Int, onSurah: (Int) -> Unit, onTafsir: (Int, Int) -> Unit, onBookmark: (Int, Int) -> Boolean, onOpenVerse: (Int, Int) -> Unit = { _, _ -> }, onPlayAudio: (Int, Int) -> Unit = { _, _ -> }, onBrowseReciters: (Int, Int) -> Unit = { _, _ -> }, onImmersiveMushaf: (Boolean) -> Unit = {}, resumeLastMushaf: Boolean = false, onResumeMushafHandled: () -> Unit = {}, openSettingsOnEntry: Boolean = false, onSettingsRequestConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lexiconListState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
@@ -4450,7 +4449,7 @@ private fun cleanHadithDisplayText(value: String): String =
     )
         .toString()
         .replace('\u00a0', ' ')
-        .replace(Regex("""\\s+:"""), ":")
+        .replace(Regex("""\s+:"""), ":")
         .trim()
 
 @Composable
@@ -8988,6 +8987,7 @@ fun PdfReaderScreen(language: AppLanguage, foreground: Color, assetPath: String)
 fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lexiconListState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<LexiconItem>>(emptyList()) }
     var totalMatches by remember { mutableIntStateOf(0) }
