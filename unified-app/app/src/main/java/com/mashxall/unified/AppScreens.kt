@@ -1871,13 +1871,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 language = language,
                 foreground = foreground,
                 page = mushafPage,
-                onVerseView = {
-                    query = ""
-                    selectedAyahForSheet = null
-                    mushafMode = false
-                    showSurahList = false
-                    prefs.edit().putString("quran_reader_mode", "verse").apply()
-                },
                 darkMode = mushafDarkMode,
                 sepiaMode = mushafSepiaMode,
                 onPageChange = { requested ->
@@ -3505,7 +3498,6 @@ private fun MushafPageViewer(
     language: AppLanguage,
     foreground: Color,
     page: Int,
-    onVerseView: () -> Unit,
     darkMode: Boolean,
     sepiaMode: Boolean,
     onPageChange: (Int) -> Unit,
@@ -3688,16 +3680,6 @@ private fun MushafPageViewer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ReaderActionIcon(Icons.Outlined.ArrowBack, tr(language, "back"), pressedScale = quranReaderActionPressScale("back"), onClick = onExitFullscreen)
-            ReaderActionIcon(
-                Icons.Outlined.AutoStories,
-                when (language) {
-                    AppLanguage.EN -> "Open verse-text reader and Tajweed"
-                    AppLanguage.AR -> "فتح قارئ نص الآيات والتجويد"
-                    AppLanguage.CKB -> "کردنەوەی خوێندنەوەی دەقی ئایەت و تەجوید"
-                },
-                pressedScale = quranReaderActionPressScale("verse_view"),
-                onClick = onVerseView
-            )
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
                 Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                 Text(
