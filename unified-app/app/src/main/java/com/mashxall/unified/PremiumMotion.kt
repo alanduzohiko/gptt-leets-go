@@ -723,7 +723,7 @@ internal fun shouldAnimateAmbientBackdrop(
 ): Boolean {
     val safeStyle = normalizeAmbientBackdropStyle(style)
     return motionAllowed &&
-        (safeStyle == "ambient" || safeStyle == "orbit") &&
+        safeStyle != "off" &&
         screenKey != "immersive_mushaf"
 }
 
@@ -978,12 +978,12 @@ internal fun PremiumAmbientBackdrop(
     val safeStyle = normalizeAmbientBackdropStyle(style)
     val safeIntensity = normalizeAmbientBackdropIntensity(intensity)
     val safeSpeed = normalizeAmbientBackdropSpeed(speed)
-    val runMotion = animated && motionAllowed && (safeStyle == "ambient" || safeStyle == "orbit")
+    val runMotion = animated && motionAllowed && safeStyle != "off"
     val motion = if (runMotion) {
         val transition = rememberInfiniteTransition(label = "Mashxall shared ambient atmosphere")
         val driftX by transition.animateFloat(
-            initialValue = if (safeStyle == "ambient") -18f else 0f,
-            targetValue = if (safeStyle == "ambient") 20f else 0f,
+            initialValue = when (safeStyle) { "ambient" -> -18f; "ornament" -> -6f; else -> 0f },
+            targetValue = when (safeStyle) { "ambient" -> 20f; "ornament" -> 6f; else -> 0f },
             animationSpec = infiniteRepeatable(
                 animation = tween(ambientMotionDurationMillis(9_200, safeSpeed), easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse
@@ -991,8 +991,8 @@ internal fun PremiumAmbientBackdrop(
             label = "Mashxall ambient horizontal drift"
         )
         val driftY by transition.animateFloat(
-            initialValue = if (safeStyle == "ambient") 13f else 0f,
-            targetValue = if (safeStyle == "ambient") -15f else 0f,
+            initialValue = when (safeStyle) { "ambient" -> 13f; "ornament" -> 4f; else -> 0f },
+            targetValue = when (safeStyle) { "ambient" -> -15f; "ornament" -> -4f; else -> 0f },
             animationSpec = infiniteRepeatable(
                 animation = tween(ambientMotionDurationMillis(11_400, safeSpeed), easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse
@@ -1009,8 +1009,8 @@ internal fun PremiumAmbientBackdrop(
             label = "Mashxall ambient orbital rotation"
         )
         val shimmer by transition.animateFloat(
-            initialValue = 0.045f * safeIntensity,
-            targetValue = 0.105f * safeIntensity,
+            initialValue = (if (safeStyle == "ornament") 0.025f else 0.045f) * safeIntensity,
+            targetValue = (if (safeStyle == "ornament") 0.065f else 0.105f) * safeIntensity,
             animationSpec = infiniteRepeatable(
                 animation = tween(ambientMotionDurationMillis(6_400, safeSpeed), easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
@@ -1068,7 +1068,7 @@ internal fun PremiumAmbientBackdrop(
                 )
             }
         }
-        if (safeStyle == "ambient") {
+        if (safeStyle == "ambient" || safeStyle == "ornament") {
             Box(
                 Modifier.align(Alignment.Center).offset(x = 82.dp, y = 42.dp)
                     .size(146.dp).graphicsLayer { alpha = motion.shimmerAlpha }
@@ -1091,6 +1091,7 @@ internal fun PremiumScreenOrnamentOverlay(
     intensity: Float,
     screenKey: String,
     animated: Boolean,
+    speed: Float = 0.72f,
     immersiveMushaf: Boolean = false
 ) {
     val context = LocalContext.current
@@ -1099,13 +1100,14 @@ internal fun PremiumScreenOrnamentOverlay(
     }
     val motionAllowed = animated && systemMotionAllowed
     val safeIntensity = if (intensity.isFinite()) intensity.coerceIn(0f, 1f) else 0.2f
+    val safeSpeed = normalizeAmbientBackdropSpeed(speed)
     val (drift, orbit, shimmer) = if (motionAllowed) {
         val transition = rememberInfiniteTransition(label = "Mashxall screen edge ornaments")
         val driftValue by transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(7_600, easing = LinearEasing),
+                animation = tween(ambientMotionDurationMillis(7_600, safeSpeed), easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "Mashxall edge ornament drift"
@@ -1114,7 +1116,7 @@ internal fun PremiumScreenOrnamentOverlay(
             initialValue = 0f,
             targetValue = 360f,
             animationSpec = infiniteRepeatable(
-                animation = tween(38_000, easing = LinearEasing),
+                animation = tween(ambientMotionDurationMillis(38_000, safeSpeed), easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "Mashxall edge ornament orbit"
@@ -1123,7 +1125,7 @@ internal fun PremiumScreenOrnamentOverlay(
             initialValue = 0.38f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(2_500, easing = FastOutSlowInEasing),
+                animation = tween(ambientMotionDurationMillis(2_500, safeSpeed), easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "Mashxall edge ornament shimmer"
@@ -2047,14 +2049,6 @@ internal fun PremiumSlider(
     var lastBucket by remember(valueRange, steps) {
         mutableStateOf(premiumSliderHapticBucket(value, valueRange.start, valueRange.endInclusive, steps))
     }
-    val dragScale by animateFloatAsState(
-        targetValue = if (dragging) 1.025f else 1f,
-        animationSpec = if (motionAllowed) spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ) else snap(),
-        label = "Mashxall slider drag response"
-    )
     Slider(
         value = value.coerceIn(valueRange),
         onValueChange = { next ->
@@ -2081,7 +2075,7 @@ internal fun PremiumSlider(
             activeTickColor = accent,
             inactiveTickColor = foreground.copy(alpha = 0.10f)
         ),
-        modifier = modifier.graphicsLayer { scaleY = dragScale }
+        modifier = modifier.fillMaxWidth().height(48.dp)
     )
 }
 
