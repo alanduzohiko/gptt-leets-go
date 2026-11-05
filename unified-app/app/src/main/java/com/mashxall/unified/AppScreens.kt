@@ -65,6 +65,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -3250,7 +3251,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             items(quranTextFontOptions, key = { it.id }) { option ->
                                 val selectedFont = quranTextFontId == option.id
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().premiumClickable {
+                                    modifier = Modifier.fillMaxWidth().clickable(role = Role.RadioButton) {
                                         quranTextFontId = option.id
                                         prefs.edit().putString("quran_text_font", option.id).apply()
                                     },
