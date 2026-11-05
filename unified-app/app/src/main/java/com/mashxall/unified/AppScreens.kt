@@ -3418,6 +3418,74 @@ internal fun mushafEdgeTapAction(xFraction: Float, page: Int, scale: Float, vers
     }
 }
 
+/**
+ * Map a tap in the fitted Mushaf viewport back to the original SVG coordinate space.
+ * The letterboxed margins are deliberately excluded so they cannot select an unrelated verse.
+ */
+internal data class MushafPageTouchPoint(val x: Float, val y: Float)
+
+internal fun mushafPageTouchPointFromViewport(
+    touchX: Float,
+    touchY: Float,
+    viewportWidth: Float,
+    viewportHeight: Float,
+    pageWidth: Float = 1148f,
+    pageHeight: Float = 1641f
+): MushafPageTouchPoint? {
+    if (!touchX.isFinite() || !touchY.isFinite() ||
+        !viewportWidth.isFinite() || !viewportHeight.isFinite() ||
+        !pageWidth.isFinite() || !pageHeight.isFinite() ||
+        viewportWidth <= 0f || viewportHeight <= 0f || pageWidth <= 0f || pageHeight <= 0f
+    ) return null
+
+    val fit = minOf(viewportWidth / pageWidth, viewportHeight / pageHeight)
+    if (!fit.isFinite() || fit <= 0f) return null
+    val left = (viewportWidth - pageWidth * fit) * 0.5f
+    val top = (viewportHeight - pageHeight * fit) * 0.5f
+    val pageX = (touchX - left) / fit
+    val pageY = (touchY - top) / fit
+    if (pageX !in 0f..pageWidth || pageY !in 0f..pageHeight) return null
+    return MushafPageTouchPoint(pageX, pageY)
+}
+
+/**
+ * Collapse the original per-word geometry into one tight highlight band per text line.
+ * Invalid/out-of-page source bounds are ignored instead of painting large detached blocks.
+ */
+internal fun mushafVerseHighlightBands(rects: List<MushafPageRect>): List<MushafPageRect> {
+    val pageWidth = 1148f
+    val pageHeight = 1641f
+    val valid = rects.filter { rect ->
+        rect.lineNumber >= 0 &&
+            rect.minX.isFinite() && rect.maxX.isFinite() &&
+            rect.minY.isFinite() && rect.maxY.isFinite() &&
+            rect.minX >= 0f && rect.minY >= 0f &&
+            rect.maxX <= pageWidth && rect.maxY <= pageHeight &&
+            rect.maxX > rect.minX && rect.maxY > rect.minY &&
+            rect.maxX - rect.minX <= pageWidth * 0.99f &&
+            rect.maxY - rect.minY <= pageHeight * 0.08f
+    }
+
+    return valid.groupBy { it.lineNumber }
+        .mapNotNull { (lineNumber, lineRects) ->
+            if (lineRects.isEmpty()) return@mapNotNull null
+            val minX = lineRects.minOf { it.minX }
+            val maxX = lineRects.maxOf { it.maxX }
+            val minY = lineRects.minOf { it.minY }
+            val maxY = lineRects.maxOf { it.maxY }
+            if (maxX <= minX || maxY <= minY) null
+            else MushafPageRect(
+                glyphId = lineRects.minOf { it.glyphId },
+                lineNumber = lineNumber,
+                minX = minX,
+                maxX = maxX,
+                minY = minY,
+                maxY = maxY
+            )
+        }
+        .sortedWith(compareBy<MushafPageRect> { it.minY }.thenBy { it.lineNumber })
+}
+
 /** Keep a zoomed Mushaf page pannable without allowing it to disappear beyond the viewport. */
 internal fun clampMushafPanOffset(
     currentOffset: Float,
@@ -3635,7 +3703,9 @@ private fun MushafPageViewer(
     LaunchedEffect(page, selectedVerse) {
         val selected = selectedVerse
         verseRects = if (selected == null) emptyList() else {
-            ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
+            mushafVerseHighlightBands(
+                ContentRepository.loadMushafVerseRects(context, page, selected.surah, selected.ayah)
+            )
         }
     }
     Column(Modifier.fillMaxSize().background(if (darkMode) Color(0xFF081C18) else if (sepiaMode) Color(0xFFE4D2A9) else Color(0xFFF1EFE8))) {
@@ -3956,7 +4026,58 @@ private fun MushafPageViewer(
                                     Modifier
                                 }
                             )
-                            .transformable(transformState, canPan = { scale > 1.01f }),
+                            .transformable(transformState, canPan = { scale > 1.01f })
+                            .then(
+                                if (scale <= 1.01f) {
+                                    Modifier.pointerInput(page, scale, loading, bitmap) {
+                                        if (loading || bitmap == null) return@pointerInput
+                                        detectTapGestures(
+                                            onTap = { touch ->
+                                                val point = mushafPageTouchPointFromViewport(
+                                                    touchX = touch.x,
+                                                    touchY = touch.y,
+                                                    viewportWidth = size.width.toFloat(),
+                                                    viewportHeight = size.height.toFloat()
+                                                ) ?: return@detectTapGestures
+                                                val targetPage = page
+                                                val xFraction = if (size.width > 0) {
+                                                    (touch.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                                } else {
+                                                    0.5f
+                                                }
+                                                scope.launch {
+                                                    val verse = ContentRepository.findMushafVerseAtPoint(
+                                                        context = context,
+                                                        page = targetPage,
+                                                        x = point.x,
+                                                        y = point.y
+                                                    )
+                                                    if (verse != null) {
+                                                        selectedVerse = verse
+                                                        haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+                                                        onVerseClick(verse.surah, verse.ayah)
+                                                    } else {
+                                                        when (mushafEdgeTapAction(
+                                                            xFraction = xFraction,
+                                                            page = targetPage,
+                                                            scale = scale,
+                                                            verseWasHit = false
+                                                        )) {
+                                                            MushafEdgeTapAction.NEXT_PAGE ->
+                                                                if (targetPage < 604) onPageChange(targetPage + 1)
+                                                            MushafEdgeTapAction.PREVIOUS_PAGE ->
+                                                                if (targetPage > 1) onPageChange(targetPage - 1)
+                                                            MushafEdgeTapAction.NONE -> Unit
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
@@ -3981,10 +4102,21 @@ private fun MushafPageViewer(
                                     val rectWidth = (rect.maxX - rect.minX) * fit
                                     val rectHeight = (rect.maxY - rect.minY) * fit
                                     if (rectWidth > 0f && rectHeight > 0f) {
-                                        drawRect(
-                                            color = Color(0x66F4C542),
-                                            topLeft = androidx.compose.ui.geometry.Offset(rectLeft, rectTop),
-                                            size = androidx.compose.ui.geometry.Size(rectWidth, rectHeight)
+                                        val topLeft = androidx.compose.ui.geometry.Offset(rectLeft, rectTop)
+                                        val rectSize = androidx.compose.ui.geometry.Size(rectWidth, rectHeight)
+                                        val corners = androidx.compose.ui.geometry.CornerRadius(5.dp.toPx())
+                                        drawRoundRect(
+                                            color = Color(0x35F4C542),
+                                            topLeft = topLeft,
+                                            size = rectSize,
+                                            cornerRadius = corners
+                                        )
+                                        drawRoundRect(
+                                            color = Color(0x806E5417),
+                                            topLeft = topLeft,
+                                            size = rectSize,
+                                            cornerRadius = corners,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.9.dp.toPx())
                                         )
                                     }
                                 }
