@@ -927,6 +927,7 @@ fun MashxallApp(startScreen: String? = null) {
                                             motionAllowed,
                                             backgroundStyle
                                         ),
+                                        speed = backgroundSpeed,
                                         immersiveMushaf = immersiveMushaf
                                     )
                                 }
@@ -2806,12 +2807,22 @@ private fun SettingsScreen(
                         "emerald" -> "زەمرەدی"; "sapphire" -> "شین"; "violet" -> "مۆر"; "rose" -> "پەمەیی"; "turquoise" -> "فیرۆزەیی"; else -> "زێڕین"
                     }
                 }
-                PremiumChoicePill(
-                    label = label,
-                    selected = accentPalette == palette,
-                    accent = MashxallAppearance.colorFor(palette),
-                    foreground = foreground
-                ) { onAccent(palette) }
+                val paletteColor = MashxallAppearance.colorFor(palette)
+                val selectedPalette = accentPalette == palette
+                Row(
+                    Modifier.height(46.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (selectedPalette) paletteColor.copy(alpha = 0.16f) else foreground.copy(alpha = 0.035f))
+                        .border(1.dp, if (selectedPalette) paletteColor.copy(alpha = 0.72f) else foreground.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+                        .clickable(role = Role.RadioButton) { onAccent(palette) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Box(Modifier.size(16.dp).clip(CircleShape).background(paletteColor))
+                    Text(label, color = if (selectedPalette) foreground else foreground.copy(alpha = 0.72f), fontSize = 10.sp, fontWeight = if (selectedPalette) FontWeight.Bold else FontWeight.Medium)
+                    if (selectedPalette) Icon(Icons.Outlined.CheckCircle, null, tint = paletteColor, modifier = Modifier.size(14.dp))
+                }
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -2894,18 +2905,69 @@ private fun SettingsScreen(
                                 else -> "ناچالاک"
                             }
                         }
-                        PremiumChoicePill(
-                            label = label,
-                            selected = backgroundStyle == style,
+                        val selectedStyle = backgroundStyle == style
+                        val styleIcon = when (style) {
+                            "ambient" -> Icons.Outlined.Spa
+                            "orbit" -> Icons.Outlined.Explore
+                            "ornament" -> Icons.Outlined.Tune
+                            else -> Icons.Outlined.Info
+                        }
+                        Row(
+                            Modifier.height(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (selectedStyle) Gold.copy(alpha = 0.15f) else foreground.copy(alpha = 0.035f))
+                                .border(1.dp, if (selectedStyle) Gold.copy(alpha = 0.65f) else foreground.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+                                .clickable(role = Role.RadioButton) { onBackgroundStyle(style) }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(styleIcon, null, tint = if (selectedStyle) Gold else foreground.copy(alpha = 0.64f), modifier = Modifier.size(15.dp))
+                            Text(label, color = if (selectedStyle) foreground else foreground.copy(alpha = 0.70f), fontSize = 10.sp, fontWeight = if (selectedStyle) FontWeight.Bold else FontWeight.Medium)
+                            if (selectedStyle) Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(13.dp))
+                        }
+                    }
+                }
+                Box(
+                    Modifier.fillMaxWidth().height(92.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(1.dp, Gold.copy(alpha = 0.20f), RoundedCornerShape(16.dp))
+                ) {
+                    if (shouldShowAmbientBackdrop(backgroundStyle)) {
+                        PremiumAmbientBackdrop(
+                            modifier = Modifier.fillMaxSize(),
                             accent = Gold,
-                            foreground = foreground,
-                            leadingIcon = when (style) {
-                                "ambient" -> Icons.Outlined.Spa
-                                "orbit" -> Icons.Outlined.Explore
-                                "ornament" -> Icons.Outlined.Tune
-                                else -> Icons.Outlined.Info
-                            }
-                        ) { onBackgroundStyle(style) }
+                            dark = dark,
+                            animated = motionAllowed,
+                            style = backgroundStyle,
+                            intensity = backgroundIntensity,
+                            speed = backgroundSpeed
+                        )
+                    }
+                    Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 13.dp, vertical = 9.dp)) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "LIVE PREVIEW"
+                                AppLanguage.AR -> "معاينة مباشرة"
+                                AppLanguage.CKB -> "پێشبینینی زیندوو"
+                            },
+                            color = Gold, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp
+                        )
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Strength ${(backgroundIntensity * 100f).roundToInt()}%   •   Speed ${(backgroundSpeed * 100f).roundToInt()}%"
+                                AppLanguage.AR -> "القوة ${(backgroundIntensity * 100f).roundToInt()}٪   •   السرعة ${(backgroundSpeed * 100f).roundToInt()}٪"
+                                AppLanguage.CKB -> "هێز ${(backgroundIntensity * 100f).roundToInt()}٪   •   خێرایی ${(backgroundSpeed * 100f).roundToInt()}٪"
+                            },
+                            color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                        )
+                        if (!motionAllowed) {
+                            Text(
+                                if (language == AppLanguage.EN) "Enable motion in settings to preview movement." else if (language == AppLanguage.AR) "فعّل الحركة لمعاينة التأثير المتحرك." else "بۆ پێشبینینی جووڵە، چالاککردنی جووڵە پێویستە.",
+                                color = foreground.copy(alpha = 0.60f), fontSize = 9.sp
+                            )
+                        }
                     }
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(foreground.copy(alpha = 0.08f)))
