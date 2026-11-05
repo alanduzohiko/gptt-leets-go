@@ -157,7 +157,8 @@ def main() -> int:
                     stripped = " ".join(line.strip().split())
                     if not stripped:
                         continue
-                    # Capture original word_list/lexicon call sites with enough surrounding
+                    # Inspect source database-backed dictionary payloads without altering bundled records.
+            # Capture original word_list/lexicon call sites with enough surrounding
                     # source to identify the transformation applied before text reaches UI.
                     if re.search(r"db_words_lexicon|word_list", stripped, re.I) and len(app_report["lexicon_source_contexts"]) < 100:
                         context_key = (relative_file, line_no)
