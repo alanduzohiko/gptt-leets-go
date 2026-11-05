@@ -4452,6 +4452,9 @@ private fun cleanHadithDisplayText(value: String): String =
         .replace(Regex("""\s+:"""), ":")
         .trim()
 
+private fun cleanHadithArabicDisplayText(value: String): String =
+    cleanHadithArabicSourceText(value)
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
@@ -4693,6 +4696,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.AR -> hadith.arabic
                     AppLanguage.EN -> hadith.english
                 }
+                val translatedDisplayText = if (language == AppLanguage.AR) {
+                    cleanHadithArabicDisplayText(translatedText)
+                } else {
+                    cleanHadithDisplayText(translatedText)
+                }
                 Card(
                     modifier = Modifier.fillMaxWidth()
                         .padding(horizontal = 14.dp)
@@ -4705,7 +4713,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             },
                             onLongClick = {
                                 val copiedText = buildString {
-                                    append(cleanHadithDisplayText(hadith.arabic))
+                                    append(cleanHadithArabicDisplayText(hadith.arabic))
                                     if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
                                         append("\n\n").append(cleanHadithDisplayText(translatedText))
                                     }
@@ -4756,13 +4764,13 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            cleanHadithDisplayText(hadith.arabic).take(155).let { if (cleanHadithDisplayText(hadith.arabic).length > 155) it.trimEnd() + "…" else it },
+                            cleanHadithArabicDisplayText(hadith.arabic).take(155).let { if (cleanHadithArabicDisplayText(hadith.arabic).length > 155) it.trimEnd() + "…" else it },
                             color = foreground, fontSize = 17.sp, lineHeight = 28.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()
                         )
                         if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                cleanHadithDisplayText(translatedText).take(115).let { if (cleanHadithDisplayText(translatedText).length > 115) it.trimEnd() + "…" else it },
+                                translatedDisplayText.take(115).let { if (translatedDisplayText.length > 115) it.trimEnd() + "…" else it },
                                 color = foreground.copy(alpha = 0.75f), fontSize = 12.sp, lineHeight = 19.sp, maxLines = 3
                             )
                         }
@@ -4865,7 +4873,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     Spacer(Modifier.height(16.dp))
                     Text(if (language == AppLanguage.EN) "ARABIC SOURCE" else "النص العربي", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     Spacer(Modifier.height(5.dp))
-                    Text(cleanHadithDisplayText(article.bodyArabic), color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                    Text(cleanHadithArabicDisplayText(article.bodyArabic), color = foreground, fontSize = 18.sp, lineHeight = 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                 }
                 if (article.authorDetail.isNotBlank()) {
                     Spacer(Modifier.height(14.dp))
@@ -4918,7 +4926,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 Spacer(Modifier.height(5.dp))
                 Text(collection + " • " + (if (language == AppLanguage.EN) "No. " else if (language == AppLanguage.AR) "رقم " else "ژمارە ") + numberInBook, color = foreground.copy(alpha = 0.6f), fontSize = 11.sp)
                 Spacer(Modifier.height(15.dp))
-                Text(cleanHadithDisplayText(hadith.arabic), color = foreground, fontSize = 22.sp, lineHeight = 38.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                Text(cleanHadithArabicDisplayText(hadith.arabic), color = foreground, fontSize = 22.sp, lineHeight = 38.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                 if (hadith.sorani.isNotBlank()) {
                     Spacer(Modifier.height(16.dp))
                     Text(if (language == AppLanguage.EN) "SORANI TRANSLATION" else if (language == AppLanguage.AR) "الترجمة السورانية" else "وەرگێڕانی سۆرانی", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -4969,7 +4977,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         leadingIcon = Icons.Outlined.ContentCopy
                     ) {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", collection + "\n" + chapter + "\n\n" + cleanHadithDisplayText(hadith.arabic) + "\n\n" + cleanHadithDisplayText(hadith.sorani) + "\n\n" + cleanHadithDisplayText(hadith.english) + "\n" + numberInBook))
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith", collection + "\n" + chapter + "\n\n" + cleanHadithArabicDisplayText(hadith.arabic) + "\n\n" + cleanHadithDisplayText(hadith.sorani) + "\n\n" + cleanHadithDisplayText(hadith.english) + "\n" + numberInBook))
                         Toast.makeText(context, if (language == AppLanguage.EN) "Hadith copied" else if (language == AppLanguage.AR) "تم نسخ الحديث" else "فەرموودەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
                     }
                     PremiumChoicePill(
@@ -4984,7 +4992,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             append(collection)
                             if (chapter.isNotBlank()) append("\n").append(chapter)
                             append("\n").append(numberInBook)
-                            append("\n\n").append(cleanHadithDisplayText(hadith.arabic))
+                            append("\n\n").append(cleanHadithArabicDisplayText(hadith.arabic))
                             if (hadith.sorani.isNotBlank()) {
                                 append("\n\n").append(cleanHadithDisplayText(hadith.sorani))
                             }
