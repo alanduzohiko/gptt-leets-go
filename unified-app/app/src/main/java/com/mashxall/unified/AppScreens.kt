@@ -99,6 +99,7 @@ import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.NightsStay
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.WbTwilight
