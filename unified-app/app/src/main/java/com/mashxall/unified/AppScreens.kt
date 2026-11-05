@@ -2915,6 +2915,148 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     )
 
 
+    if (showInlineReciterPicker) Dialog(
+        onDismissRequest = { showInlineReciterPicker = false }
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.98f).heightIn(min = 390.dp, max = 650.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = cardColor,
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.32f)),
+            shadowElevation = 18.dp
+        ) {
+            Column(Modifier.fillMaxWidth().padding(15.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Choose a Quran reciter"
+                                AppLanguage.AR -> "اختر قارئ القرآن"
+                                AppLanguage.CKB -> "قورئان‌خوێن هەڵبژێرە"
+                            },
+                            color = foreground, fontSize = 17.sp, fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "The Mushaf stays open while the new recitation starts."
+                                AppLanguage.AR -> "سيبقى المصحف مفتوحًا عند بدء التلاوة الجديدة."
+                                AppLanguage.CKB -> "لە کاتی دەستپێکردنی خوێندنەوەی نوێدا مصحەفەکە کراوە دەمێنێتەوە."
+                            },
+                            color = foreground.copy(alpha = 0.6f), fontSize = 10.sp, lineHeight = 15.sp
+                        )
+                    }
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = if (language == AppLanguage.EN) "Close reciter list" else if (language == AppLanguage.AR) "إغلاق قائمة القراء" else "داخستنی لیستی قورئان‌خوێنەکان",
+                        accent = Gold,
+                        size = 36.dp,
+                        onClick = { showInlineReciterPicker = false }
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                SearchBox(
+                    language,
+                    inlineReciterSearch,
+                    { inlineReciterSearch = it },
+                    if (language == AppLanguage.EN) "Search all reciters…" else if (language == AppLanguage.AR) "ابحث في جميع القرّاء…" else "لە هەموو قورئان‌خوێنەکان بگەڕێ…"
+                )
+                Spacer(Modifier.height(7.dp))
+                val targetSurahForReciter = inlinePlaybackSurah.coerceIn(1, 114)
+                val inlineReciterResults = remember(readerReciters, inlineReciterSearch, targetSurahForReciter) {
+                    readerReciters.filter { reciter ->
+                        reciter.surahTotal >= targetSurahForReciter &&
+                            (
+                                inlineReciterSearch.isBlank() ||
+                                    (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.recitation)
+                                        .contains(inlineReciterSearch.trim(), ignoreCase = true)
+                            )
+                    }.sortedWith(
+                        compareBy<Reciter> { if (it.audioType == 0) 0 else 1 }
+                            .thenBy { it.order }
+                            .thenBy { it.nameEnglish.lowercase(Locale.ROOT) }
+                    )
+                }
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "${inlineReciterResults.size} editions available for this surah • ayah-synchronized editions are listed first"
+                        AppLanguage.AR -> "${inlineReciterResults.size} إصدارًا متاحًا لهذه السورة • الإصدارات المتزامنة آيةً بآية تظهر أولًا"
+                        AppLanguage.CKB -> "${inlineReciterResults.size} وەشان بۆ ئەم سوورەتە بەردەستن • وەشانی ئایەت‌بەئایەت یەکەم جار پیشان دەدرێن"
+                    },
+                    color = Gold, fontSize = 9.sp, fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(5.dp))
+                if (inlineReciterResults.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(tr(language, "not_found"), color = foreground.copy(alpha = 0.62f), fontSize = 12.sp)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        itemsIndexed(inlineReciterResults, key = { _, reciter -> reciter.id }) { index, reciter ->
+                            val isChosen = reciter.id == inlinePlaybackReciterId
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (isChosen) Gold.copy(alpha = 0.13f) else foreground.copy(alpha = 0.035f))
+                                    .border(1.dp, if (isChosen) Gold.copy(alpha = 0.48f) else foreground.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+                                    .premiumClickable(hapticFeedback = true) {
+                                        inlinePlaybackReciterId = reciter.id
+                                        prefs.edit().putInt("quran_inline_reciter_id", reciter.id).apply()
+                                        showInlineReciterPicker = false
+                                        val continueAyah = inlinePlaybackActiveVerse
+                                            ?.takeIf { it.first == inlinePlaybackSurah }?.second
+                                            ?: inlinePlaybackStartAyah
+                                        startInlineRecitation(
+                                            surahNumber = inlinePlaybackSurah,
+                                            requestedAyah = continueAyah,
+                                            reciterOverride = reciter,
+                                            continueFromCurrentAyah = true
+                                        )
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
+                                        .background(if (isChosen) Gold.copy(alpha = 0.19f) else DeepGreen),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.GraphicEq,
+                                        contentDescription = null,
+                                        tint = if (isChosen) Gold else PaleGold,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                                Spacer(Modifier.width(9.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 1)
+                                    Text(
+                                        when {
+                                            reciter.audioType == 0 && language == AppLanguage.EN -> "Ayah by ayah • synchronized highlight"
+                                            reciter.audioType == 0 && language == AppLanguage.AR -> "آيةً بآية • تمييز متزامن"
+                                            reciter.audioType == 0 -> "ئایەت بە ئایەت • نیشاندەری هاوکات"
+                                            language == AppLanguage.EN -> "Full-surah file • no per-ayah timing"
+                                            language == AppLanguage.AR -> "ملف سورة كاملة • دون توقيت منفصل للآيات"
+                                            else -> "فایلی تەواوی سوورەت • بەبێ کاتی جیاوازی ئایەت"
+                                        },
+                                        color = if (reciter.audioType == 0) Gold else foreground.copy(alpha = 0.48f),
+                                        fontSize = 8.sp, maxLines = 1
+                                    )
+                                }
+                                if (isChosen) Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(19.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (showReaderSettings) Dialog(
         onDismissRequest = { showReaderSettings = false; readerSettingsSection = "overview" }
     ) {
