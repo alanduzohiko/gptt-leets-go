@@ -1423,6 +1423,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var tajweedAyahs by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var tajweedLoadedSurah by remember { mutableIntStateOf(0) }
     var tajweedLoading by remember { mutableStateOf(false) }
+    var retryTajweed by remember { mutableIntStateOf(0) }
     var tajweedMessage by rememberSaveable { mutableStateOf("") }
     var showReaderSettings by remember { mutableStateOf(false) }
     var readerSettingsSection by rememberSaveable { mutableStateOf("overview") }
@@ -1444,10 +1445,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         quranTextTypeface?.let { FontFamily(it) } ?: FontFamily.Default
     }
     var quranFontLoadFailed by remember { mutableStateOf(false) }
+    var quranFontLoading by remember { mutableStateOf(false) }
     LaunchedEffect(quranTextFontId) {
+        quranFontLoading = true
         val loadedTypeface = withContext(Dispatchers.IO) { loadQuranTextTypeface(context, quranTextFontId) }
         quranTextTypeface = loadedTypeface
         quranFontLoadFailed = loadedTypeface == null
+        quranFontLoading = false
     }
     var selectedTafsirBook by rememberSaveable {
         mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
@@ -1780,7 +1784,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 onOpenVerse(surahNumber, ayahNumber)
             }
     }
-    LaunchedEffect(selected, coloredTajweed, mushafMode, showSurahList, openingMushaf, surahs) {
+    LaunchedEffect(selected, coloredTajweed, mushafMode, showSurahList, openingMushaf, surahs, retryTajweed, language) {
         tajweedAyahs = emptyMap()
         tajweedLoadedSurah = 0
         if (!coloredTajweed || mushafMode || showSurahList || openingMushaf) {
@@ -1813,6 +1817,15 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     "بيانات التجويد غير متاحة الآن. اتصل بالإنترنت عند الاستخدام الأول؛ وسيبقى نص القرآن العادي متاحًا."
                 else ->
                     "دەقی تەجوید ئێستا بەردەست نییە. بۆ یەکەم جار پەیوەندی ئینتەرنێت پێویستە؛ دەقی ئاسایی قورئان هەر بەردەستە."
+            }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            tajweedAyahs = emptyMap()
+            tajweedLoadedSurah = 0
+            tajweedMessage = when (language) {
+                AppLanguage.EN -> "Could not load coloured Tajweed. Check the internet connection and retry."
+                AppLanguage.AR -> "تعذّر تحميل التجويد الملوّن. تحقّق من الاتصال بالإنترنت ثم أعد المحاولة."
+                AppLanguage.CKB -> "نەتوانرا تەجویدی ڕەنگاوڕەنگ باربکرێت؛ پەیوەندی ئینتەرنێت بپشکنە و دووبارە هەوڵ بدەوە."
             }
         } finally {
             tajweedLoading = false
@@ -3181,12 +3194,47 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             item {
                                 Text(
                                     when (language) {
-                                        AppLanguage.EN -> "These options change the font in verse-text reading. They do not replace the separately rendered 604-page graphic Mushaf."
-                                        AppLanguage.AR -> "تغيّر هذه الخيارات الخط في عرض نص الآيات. وهي لا تستبدل المصحف المصوّر المنفصل ذي 604 صفحات."
-                                        AppLanguage.CKB -> "ئەم هەڵبژاردانە فۆنتی خوێندنەوەی دەقی ئایەت دەگۆڕن؛ جێگرەوەی مصحەفی وێنەیی ٦٠٤ پەڕە نین."
+                                        AppLanguage.EN -> "These fonts are applied to verse-text reading. The original 604-page Mushaf is a page image, so its printed lettering stays unchanged."
+                                        AppLanguage.AR -> "تُطبّق هذه الخطوط على عرض نص الآيات. أما المصحف الأصلي ذو 604 صفحات فهو صور صفحات، لذلك يبقى خطه المطبوع كما هو."
+                                        AppLanguage.CKB -> "ئەم فۆنتانە لە خوێندنەوەی دەقی ئایەت بەکاردێن؛ وێنەی پەڕەکانی مصحەفی ڕەسەنی ٦٠٤ پەڕە ناگۆڕدرێت."
                                     },
                                     color = foreground.copy(alpha = 0.62f), fontSize = 11.sp, lineHeight = 17.sp
                                 )
+                                Spacer(Modifier.height(7.dp))
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                                    shape = RoundedCornerShape(17.dp),
+                                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f))
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(13.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+                                            color = foreground,
+                                            fontSize = (25f * verseTextScale).sp,
+                                            lineHeight = (42f * verseTextScale).sp,
+                                            fontFamily = quranTextFontFamily,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Text(
+                                            when {
+                                                quranFontLoading && language == AppLanguage.EN -> "Loading selected font…"
+                                                quranFontLoading && language == AppLanguage.AR -> "جارٍ تحميل الخط المختار…"
+                                                quranFontLoading -> "فۆنتی هەڵبژێردراو دادەگیرێت…"
+                                                quranFontLoadFailed && language == AppLanguage.EN -> "Font unavailable; the system font is shown."
+                                                quranFontLoadFailed && language == AppLanguage.AR -> "الخط غير متاح؛ يظهر خط النظام بدلًا منه."
+                                                quranFontLoadFailed -> "فۆنتەکە بەردەست نییە؛ فۆنتی سیستەم پیشان دەدرێت."
+                                                language == AppLanguage.EN -> "Live font preview • ${quranTextFontOption(quranTextFontId).labelEnglish}"
+                                                language == AppLanguage.AR -> "معاينة مباشرة للخط • ${quranTextFontOption(quranTextFontId).labelArabic}"
+                                                else -> "پێشبینینی زیندووی فۆنت • ${quranTextFontOption(quranTextFontId).labelCkb}"
+                                            },
+                                            color = if (quranFontLoadFailed) Gold else foreground.copy(alpha = 0.64f),
+                                            fontSize = 9.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(7.dp))
                                 if (quranFontLoadFailed) {
                                     Spacer(Modifier.height(6.dp))
                                     Text(
@@ -3420,13 +3468,47 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         onCheckedChange = { enabled ->
                                             coloredTajweed = enabled
                                             prefs.edit().putBoolean("quran_colored_tajweed", enabled).apply()
-                                            if (!enabled) {
+                                            if (enabled) {
+                                                // Coloured Tajweed is a tagged verse-text feature.
+                                                // Enter that reader immediately so the toggle has a visible effect.
+                                                query = ""
+                                                showSurahList = false
+                                                openingMushaf = false
+                                                mushafMode = false
+                                                prefs.edit().putString("quran_reader_mode", "verse").apply()
+                                            } else {
                                                 tajweedAyahs = emptyMap()
                                                 tajweedLoadedSurah = 0
                                                 tajweedMessage = ""
                                             }
                                         }
                                     )
+                                }
+                            }
+                            if (coloredTajweed) {
+                                Spacer(Modifier.height(7.dp))
+                                Text(
+                                    when {
+                                        tajweedLoading && language == AppLanguage.EN -> "Loading the tagged Tajweed text for this surah…"
+                                        tajweedLoading && language == AppLanguage.AR -> "جارٍ تحميل نص التجويد الملوّن لهذه السورة…"
+                                        tajweedLoading -> "دەقی تەجویدی ئەم سوورەتە دادەگیرێت…"
+                                        tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty() && language == AppLanguage.EN -> "Tajweed is active for this surah."
+                                        tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty() && language == AppLanguage.AR -> "التجويد الملوّن فعّال لهذه السورة."
+                                        tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty() -> "تەجویدی ڕەنگاوڕەنگ بۆ ئەم سوورەتە چالاکە."
+                                        else -> tajweedMessage.ifBlank { if (language == AppLanguage.EN) "Tajweed data is not loaded yet." else if (language == AppLanguage.AR) "لم تُحمّل بيانات التجويد بعد." else "داتای تەجوید هێشتا بارنەکراوە." }
+                                    },
+                                    color = if (tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty()) Gold else foreground.copy(alpha = 0.66f),
+                                    fontSize = 10.sp,
+                                    lineHeight = 15.sp
+                                )
+                                if (!tajweedLoading && (tajweedLoadedSurah != selected || tajweedAyahs.isEmpty())) {
+                                    PremiumChoicePill(
+                                        label = if (language == AppLanguage.EN) "Retry Tajweed" else if (language == AppLanguage.AR) "إعادة تحميل التجويد" else "دووبارە بارکردنەوەی تەجوید",
+                                        selected = false,
+                                        accent = Gold,
+                                        foreground = foreground,
+                                        leadingIcon = Icons.Outlined.Refresh
+                                    ) { retryTajweed++ }
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -3460,6 +3542,30 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 foreground = foreground
                             )
                             Text(String.format(Locale.US, "%.0f%%", verseTextScale * 100f), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
+                            Spacer(Modifier.height(7.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = cardColor),
+                                shape = RoundedCornerShape(15.dp),
+                                border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
+                                        color = foreground,
+                                        fontSize = (23f * verseTextScale).sp,
+                                        lineHeight = (40f * verseTextScale).sp,
+                                        fontFamily = quranTextFontFamily,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Text(
+                                        if (language == AppLanguage.EN) "Live text-size preview • applies in verse-text view"
+                                        else if (language == AppLanguage.AR) "معاينة مباشرة للحجم • يُطبّق في عرض نص الآيات"
+                                        else "پێشبینینی زیندووی قەبارە • لە پێشان‌دانی دەقی ئایەتدا کاردەکات",
+                                        color = foreground.copy(alpha = 0.60f), fontSize = 9.sp, textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(14.dp))
                             Divider(color = Gold.copy(alpha = 0.18f))
                             Spacer(Modifier.height(10.dp))
