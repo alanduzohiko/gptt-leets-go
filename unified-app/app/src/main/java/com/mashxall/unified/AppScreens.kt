@@ -4615,6 +4615,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         AppLanguage.AR -> article.bodyArabic.ifBlank { article.bodyCkb }
                         AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
                     }
+                    val displayedArticlePreview = if (language == AppLanguage.AR) {
+                        cleanHadithArabicDisplayText(localizedBody)
+                    } else {
+                        cleanHadithDisplayText(localizedBody)
+                    }
                     Card(
                         modifier = Modifier.fillMaxWidth()
                                     .padding(horizontal = 14.dp)
@@ -4642,8 +4647,8 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }
                             Spacer(Modifier.height(9.dp))
                             Text(
-                                cleanHadithDisplayText(localizedBody).take(190).let {
-                                    if (cleanHadithDisplayText(localizedBody).length > 190) it.trimEnd() + "…" else it
+                                displayedArticlePreview.take(190).let {
+                                    if (displayedArticlePreview.length > 190) it.trimEnd() + "…" else it
                                 },
                                 color = foreground.copy(alpha = 0.78f), fontSize = 12.sp, lineHeight = 20.sp, maxLines = 4
                             )
@@ -4715,7 +4720,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                                 val copiedText = buildString {
                                     append(cleanHadithArabicDisplayText(hadith.arabic))
                                     if (translatedText.isNotBlank() && translatedText != hadith.arabic) {
-                                        append("\n\n").append(cleanHadithDisplayText(translatedText))
+                                        append("\n\n").append(translatedDisplayText)
                                     }
                                     append("\n\n").append(collection).append(" • ").append(numberInBook)
                                 }
@@ -4841,6 +4846,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             AppLanguage.AR -> article.bodyArabic.ifBlank { article.bodyCkb }
             AppLanguage.EN -> article.bodyEnglish.ifBlank { article.bodyCkb }
         }
+        val displayedLocalizedBody = if (language == AppLanguage.AR) {
+            cleanHadithArabicDisplayText(localizedBody)
+        } else {
+            cleanHadithDisplayText(localizedBody)
+        }
         ModalBottomSheet(
             onDismissRequest = { selectedArticleForDetails = null },
             containerColor = cardColor,
@@ -4856,7 +4866,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     )
                 }
                 Spacer(Modifier.height(15.dp))
-                Text(cleanHadithDisplayText(localizedBody), color = foreground, fontSize = 15.sp, lineHeight = 26.sp)
+                Text(displayedLocalizedBody, color = foreground, fontSize = 15.sp, lineHeight = 26.sp)
                 if (language != AppLanguage.CKB && article.bodyCkb.isNotBlank()) {
                     Spacer(Modifier.height(16.dp))
                     Text(if (language == AppLanguage.EN) "SORANI" else "السورانية", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
@@ -4885,7 +4895,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 PremiumOutlinedButton(
                     onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith article", localizedTitle + "\n\n" + cleanHadithDisplayText(localizedBody)))
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Mashxall Hadith article", localizedTitle + "\n\n" + displayedLocalizedBody))
                         Toast.makeText(context, if (language == AppLanguage.EN) "Article copied" else if (language == AppLanguage.AR) "تم نسخ المقالة" else "وتارەکە کۆپی کرا", Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.fillMaxWidth()
