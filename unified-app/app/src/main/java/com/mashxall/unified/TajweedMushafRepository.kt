@@ -16,10 +16,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.FileOutputStream
+import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipFile
@@ -178,48 +178,74 @@ internal object TajweedMushafRepository {
         target: File,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit
     ) {
-        val urls = listOf(
-            "https://drive.usercontent.google.com/download?id=$DRIVE_FILE_ID&export=download&confirm=t",
-            "https://drive.google.com/uc?export=download&id=$DRIVE_FILE_ID&confirm=t"
+        val endpoints = listOf(
+            "https://drive.google.com/uc?export=download&id=$DRIVE_FILE_ID",
+            "https://drive.usercontent.google.com/download?id=$DRIVE_FILE_ID&export=download"
         )
+        val cookies = linkedMapOf<String, String>()
+        var requestUrl = endpoints.first()
         var lastError: Exception? = null
-        for (downloadUrl in urls) {
+        var attempts = 0
+        var confirmations = 0
+
+        while (attempts < 7) {
             var connection: HttpURLConnection? = null
             try {
-                connection = (URL(downloadUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 25_000
-                    readTimeout = 60_000
-                    instanceFollowRedirects = true
-                    requestMethod = "GET"
-                    setRequestProperty(
-                        "User-Agent",
-                        "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36"
-                    )
-                    setRequestProperty("Accept", "application/zip,application/octet-stream,*/*")
-                }
+                val existing = target.takeIf { it.isFile }?.length() ?: 0L
+                connection = openDriveConnection(requestUrl, cookies, existing)
                 val response = connection.responseCode
-                if (response !in 200..299) throw IOException("Google Drive returned HTTP $response.")
+
+                if (response == 416 && existing == EXPECTED_ARCHIVE_BYTES) return
+
                 val contentType = connection.contentType.orEmpty().lowercase(Locale.ROOT)
-                if (contentType.contains("text/html")) {
-                    throw IOException("Google Drive returned a confirmation page instead of the ZIP. Check that the file is shared with anyone who has the link.")
+                if (contentType.contains("text/html") || response !in 200..299) {
+                    val html = readDriveHtml(connection)
+                    val confirmation = googleDriveConfirmationUrl(html, connection.url.toString(), cookies)
+                    if (confirmation != null && confirmations < 5) {
+                        confirmations++
+                        requestUrl = confirmation
+                        continue
+                    }
+                    throw IOException(googleDriveFailureReason(html, response))
                 }
 
-                val total = connection.contentLengthLong.takeIf { it > 0L } ?: EXPECTED_ARCHIVE_BYTES
+                val append = response == HttpURLConnection.HTTP_PARTIAL && existing > 0L
+                if (response != HttpURLConnection.HTTP_OK && response != HttpURLConnection.HTTP_PARTIAL) {
+                    throw IOException("Google Drive returned HTTP " + response + ".")
+                }
+                if (append) {
+                    val start = Regex("""^bytes\s+(\d+)-""", RegexOption.IGNORE_CASE)
+                        .find(connection.getHeaderField("Content-Range").orEmpty())
+                        ?.groupValues?.getOrNull(1)?.toLongOrNull()
+                    if (start != null && start != existing) {
+                        target.delete()
+                        throw IOException("Google Drive resumed from an unexpected byte position. Restarting safely.")
+                    }
+                } else if (existing > 0L) {
+                    // The server ignored Range and returned the whole file: replace the partial copy.
+                    target.delete()
+                }
+
+                val alreadyWritten = if (append) existing else 0L
                 connection.inputStream.use { input ->
-                    FileOutputStream(target).use { output ->
-                        val prefix = ByteArray(4)
-                        var prefixRead = 0
-                        while (prefixRead < prefix.size) {
-                            val count = input.read(prefix, prefixRead, prefix.size - prefixRead)
-                            if (count < 0) throw IOException("The Google Drive download ended unexpectedly.")
-                            prefixRead += count
+                    FileOutputStream(target, append).use { output ->
+                        if (alreadyWritten == 0L) {
+                            val header = ByteArray(4)
+                            var read = 0
+                            while (read < header.size) {
+                                val count = input.read(header, read, header.size - read)
+                                if (count < 0) throw IOException("Google Drive ended before sending a ZIP header.")
+                                read += count
+                            }
+                            if (header[0] != 0x50.toByte() || header[1] != 0x4b.toByte()) {
+                                target.delete()
+                                throw IOException("Google Drive did not return the Tajweed Mushaf ZIP archive.")
+                            }
+                            output.write(header)
                         }
-                        if (prefix[0] != 0x50.toByte() || prefix[1] != 0x4b.toByte()) {
-                            throw IOException("The shared Google Drive link did not return a ZIP archive.")
-                        }
-                        output.write(prefix)
-                        var downloaded = prefix.size.toLong()
-                        onProgress(downloaded, total)
+
+                        var downloaded = alreadyWritten + if (alreadyWritten == 0L) 4L else 0L
+                        onProgress(downloaded.coerceAtMost(EXPECTED_ARCHIVE_BYTES), EXPECTED_ARCHIVE_BYTES)
                         val buffer = ByteArray(128 * 1024)
                         var lastUpdate = System.nanoTime()
                         while (true) {
@@ -228,27 +254,260 @@ internal object TajweedMushafRepository {
                             output.write(buffer, 0, count)
                             downloaded += count
                             val now = System.nanoTime()
-                            if (now - lastUpdate >= 200_000_000L) {
-                                onProgress(downloaded, total)
+                            if (now - lastUpdate >= 250_000_000L) {
+                                onProgress(downloaded.coerceAtMost(EXPECTED_ARCHIVE_BYTES), EXPECTED_ARCHIVE_BYTES)
                                 lastUpdate = now
                             }
                         }
                         output.flush()
-                        onProgress(downloaded, total)
                     }
                 }
-                return
+
+                val size = target.length()
+                onProgress(size.coerceAtMost(EXPECTED_ARCHIVE_BYTES), EXPECTED_ARCHIVE_BYTES)
+                if (size == EXPECTED_ARCHIVE_BYTES) return
+                if (size > EXPECTED_ARCHIVE_BYTES) {
+                    target.delete()
+                    throw IOException("Google Drive sent more data than the verified Tajweed Mushaf archive.")
+                }
+                throw IOException(
+                    "The connection stopped at " + size + " of " + EXPECTED_ARCHIVE_BYTES +
+                        " bytes. The download will resume from this point."
+                )
             } catch (error: Exception) {
-                target.delete()
                 lastError = error
+                attempts++
+                if (target.length() > EXPECTED_ARCHIVE_BYTES) target.delete()
+                if (attempts >= 7) break
+
+                // Keep both the partial file and its confirmed URL when resuming.
+                if (target.length() == 0L && requestUrl in endpoints) {
+                    requestUrl = endpoints[attempts % endpoints.size]
+                }
+                try {
+                    Thread.sleep((attempts * 900L).coerceAtMost(4_000L))
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw IOException("The Tajweed Mushaf download was cancelled.", interrupted)
+                }
             } finally {
                 connection?.disconnect()
             }
         }
+
         throw IOException(
             lastError?.message ?: "Could not download the Tajweed Mushaf from Google Drive.",
             lastError
         )
+    }
+
+    private fun openDriveConnection(
+        startUrl: String,
+        cookies: MutableMap<String, String>,
+        rangeStart: Long
+    ): HttpURLConnection {
+        var url = URL(startUrl)
+        repeat(10) {
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 30_000
+                readTimeout = 90_000
+                instanceFollowRedirects = false
+                requestMethod = "GET"
+                setRequestProperty(
+                    "User-Agent",
+                    "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36"
+                )
+                setRequestProperty("Accept", "application/zip,application/octet-stream,text/html;q=0.9,*/*;q=0.8")
+                setRequestProperty("Accept-Encoding", "identity")
+                if (cookies.isNotEmpty() && isGoogleDriveHost(url.host)) {
+                    setRequestProperty("Cookie", cookies.entries.joinToString("; ") { entry ->
+                        entry.key + "=" + entry.value
+                    })
+                }
+                if (rangeStart > 0L) setRequestProperty("Range", "bytes=" + rangeStart + "-")
+            }
+
+            val code = connection.responseCode
+            connection.headerFields.entries
+                .filter { it.key?.equals("Set-Cookie", ignoreCase = true) == true }
+                .flatMap { it.value.orEmpty() }
+                .forEach { header ->
+                    val pair = header.substringBefore(';').trim()
+                    val equals = pair.indexOf('=')
+                    if (equals > 0) {
+                        cookies[pair.substring(0, equals).trim()] = pair.substring(equals + 1).trim()
+                    }
+                }
+
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                    ?: throw IOException("Google Drive redirected without a download location.")
+                val next = URL(url, location)
+                if (!isGoogleDriveHost(next.host)) {
+                    connection.disconnect()
+                    throw IOException("Google Drive redirected the download to an untrusted host.")
+                }
+                connection.disconnect()
+                url = next
+            } else {
+                return connection
+            }
+        }
+        throw IOException("Google Drive returned too many redirects.")
+    }
+
+    private fun isGoogleDriveHost(host: String): Boolean {
+        val value = host.lowercase(Locale.ROOT)
+        return value == "google.com" ||
+            value.endsWith(".google.com") ||
+            value == "googleusercontent.com" ||
+            value.endsWith(".googleusercontent.com")
+    }
+
+    private fun readDriveHtml(connection: HttpURLConnection): String {
+        val stream = runCatching { connection.inputStream }.getOrNull()
+            ?: connection.errorStream
+            ?: return ""
+        return stream.use { input ->
+            val bytes = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(16 * 1024)
+            var total = 0
+            while (total < 2 * 1024 * 1024) {
+                val count = input.read(buffer, 0, minOf(buffer.size, 2 * 1024 * 1024 - total))
+                if (count < 0) break
+                bytes.write(buffer, 0, count)
+                total += count
+            }
+            bytes.toString(Charsets.UTF_8.name())
+        }
+    }
+
+    internal fun googleDriveConfirmationUrl(
+        html: String,
+        currentUrl: String,
+        cookies: Map<String, String>
+    ): String? {
+        if (html.isBlank()) return null
+        val cookieToken = cookies.entries.firstOrNull {
+            it.key.startsWith("download_warning", ignoreCase = true)
+        }?.value
+
+        val forms = Regex(
+            """<form\b([^>]*)>(.*?)</form>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        val inputs = Regex(
+            """<input\b([^>]*)>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        for (form in forms.findAll(html)) {
+            val attributes = parseHtmlAttributes(form.groupValues[1])
+            val parameters = linkedMapOf<String, String>()
+            for (input in inputs.findAll(form.groupValues[2])) {
+                val fields = parseHtmlAttributes(input.groupValues[1])
+                val name = fields["name"] ?: continue
+                val type = fields["type"].orEmpty()
+                if (type.equals("hidden", true) || name in setOf("id", "export", "confirm", "uuid", "authuser")) {
+                    parameters[name] = fields["value"].orEmpty()
+                }
+            }
+
+            if (parameters["confirm"].isNullOrBlank() && !cookieToken.isNullOrBlank()) {
+                parameters["confirm"] = cookieToken
+            }
+            if (parameters["confirm"].isNullOrBlank()) continue
+
+            parameters.putIfAbsent("id", DRIVE_FILE_ID)
+            parameters.putIfAbsent("export", "download")
+            val action = htmlUnescape(attributes["action"].orEmpty()).ifBlank { currentUrl }
+            val resolved = runCatching { URL(URL(currentUrl), action).toString() }.getOrNull() ?: continue
+            return appendGoogleQueryParameters(resolved, parameters)
+        }
+
+        // Some Drive warning pages provide a "Download anyway" link instead of a form.
+        val anchors = Regex(
+            """<a\b([^>]*)>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        for (anchor in anchors.findAll(html)) {
+            val attributes = parseHtmlAttributes(anchor.groupValues[1])
+            val href = htmlUnescape(attributes["href"].orEmpty())
+            if (href.contains("confirm=", ignoreCase = true)) {
+                return runCatching { URL(URL(currentUrl), href).toString() }.getOrNull()
+            }
+        }
+
+        if (!cookieToken.isNullOrBlank()) {
+            return appendGoogleQueryParameters(
+                "https://drive.google.com/uc",
+                linkedMapOf("export" to "download", "id" to DRIVE_FILE_ID, "confirm" to cookieToken)
+            )
+        }
+        return null
+    }
+
+    private fun parseHtmlAttributes(source: String): Map<String, String> {
+        val pattern = Regex("""([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""")
+        return buildMap {
+            for (match in pattern.findAll(source)) {
+                val value = match.groups[2]?.value
+                    ?: match.groups[3]?.value
+                    ?: match.groups[4]?.value.orEmpty()
+                put(match.groupValues[1].lowercase(Locale.ROOT), htmlUnescape(value))
+            }
+        }
+    }
+
+    private fun htmlUnescape(value: String): String = value
+        .replace("&amp;", "&", ignoreCase = true)
+        .replace("&quot;", "\"", ignoreCase = true)
+        .replace("&#39;", "'", ignoreCase = true)
+        .replace("&#x27;", "'", ignoreCase = true)
+        .replace("&#61;", "=", ignoreCase = true)
+        .replace("&#x3d;", "=", ignoreCase = true)
+        .replace("\\u003d", "=", ignoreCase = true)
+        .replace("\\u0026", "&", ignoreCase = true)
+
+    private fun appendGoogleQueryParameters(url: String, updates: Map<String, String>): String {
+        val clean = url.substringBefore('#')
+        val fragment = url.substringAfter('#', "").takeIf { url.contains('#') }?.let { "#$it" }.orEmpty()
+        val path = clean.substringBefore('?')
+        val query = clean.substringAfter('?', "")
+        val values = linkedMapOf<String, String>()
+        if (query.isNotBlank()) {
+            query.split('&').filter { it.isNotBlank() }.forEach { part ->
+                val rawKey = part.substringBefore('=')
+                val rawValue = part.substringAfter('=', "")
+                val key = runCatching { java.net.URLDecoder.decode(rawKey, "UTF-8") }.getOrDefault(rawKey)
+                val value = runCatching { java.net.URLDecoder.decode(rawValue, "UTF-8") }.getOrDefault(rawValue)
+                values[key] = value
+            }
+        }
+        updates.forEach { (key, value) -> values[key] = value }
+        val encoded = values.entries.joinToString("&") { entry ->
+            java.net.URLEncoder.encode(entry.key, "UTF-8") + "=" +
+                java.net.URLEncoder.encode(entry.value, "UTF-8")
+        }
+        return "$path?$encoded$fragment"
+    }
+
+    private fun googleDriveFailureReason(html: String, response: Int): String {
+        val plain = html
+            .replace(Regex("""(?is)<(script|style)\b.*?</\1>"""), " ")
+            .replace(Regex("""(?is)<[^>]+>"""), " ")
+            .replace("&nbsp;", " ", ignoreCase = true)
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+            .take(260)
+        return when {
+            plain.contains("quota", ignoreCase = true) ->
+                "Google Drive temporarily limited downloads for this file. Please try again later."
+            plain.contains("sign in", ignoreCase = true) || plain.contains("access denied", ignoreCase = true) ->
+                "Google Drive requires file access. The shared link must allow anyone with the link to download it."
+            plain.isNotBlank() ->
+                "Google Drive returned a confirmation page that could not be completed: " + plain
+            else -> "Google Drive returned HTTP " + response + " without a usable download confirmation."
+        }
     }
 
     private fun verifyGlyphDatabase(file: File) {
