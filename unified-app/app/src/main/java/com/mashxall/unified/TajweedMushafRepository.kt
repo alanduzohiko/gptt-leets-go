@@ -11,7 +11,6 @@ import android.graphics.RectF
 import android.os.StatFs
 import com.mashxall.unified.data.MushafPageVerseGeometry
 import com.mashxall.unified.data.MushafWordBounds
-import com.mashxall.unified.data.buildMushafPageVerseGeometry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -359,7 +358,7 @@ internal object TajweedMushafRepository {
                 }
             }
         }
-        return buildMushafPageVerseGeometry(words)
+        return buildTajweedPageVerseGeometry(words)
     }
 
     private fun renderIntoPageViewport(source: Bitmap, width: Int, height: Int): Bitmap {
@@ -406,3 +405,47 @@ internal fun tajweedGlyphBoundsToPageSpace(
     minY = minY * scale + offsetY,
     maxY = maxY * scale + offsetY
 )
+
+
+/**
+ * The source glyph database uses taller line boxes than the SVG edition.
+ * Keep the hit areas tied to this edition's own 1340x1890 coordinate map;
+ * its maximum recorded glyph height is 155 source pixels (about 133 page pixels).
+ */
+internal fun buildTajweedPageVerseGeometry(
+    words: List<MushafWordBounds>
+): List<MushafPageVerseGeometry> {
+    return words.asSequence()
+        .filter { word ->
+            word.surah in 1..114 &&
+                word.ayah in 1..286 &&
+                word.lineNumber >= 0 &&
+                word.minX.isFinite() && word.maxX.isFinite() &&
+                word.minY.isFinite() && word.maxY.isFinite() &&
+                word.minX >= 0f && word.minY >= 0f &&
+                word.maxX <= 1148f && word.maxY <= 1641f &&
+                word.maxX > word.minX && word.maxY > word.minY &&
+                word.maxX - word.minX <= 1148f * 0.80f &&
+                word.maxY - word.minY <= 1641f * 0.09f
+        }
+        .groupBy { MushafPageVerse(it.surah, it.ayah) }
+        .map { (verse, verseWords) ->
+            val rects = verseWords.map { word ->
+                com.mashxall.unified.data.MushafPageRect(
+                    glyphId = 0,
+                    lineNumber = word.lineNumber,
+                    minX = word.minX,
+                    maxX = word.maxX,
+                    minY = word.minY,
+                    maxY = word.maxY
+                )
+            }.sortedWith(
+                compareBy<com.mashxall.unified.data.MushafPageRect> { it.lineNumber }
+                    .thenBy { it.minX }
+                    .thenBy { it.minY }
+            )
+            MushafPageVerseGeometry(verse, rects)
+        }
+        .filter { it.rects.isNotEmpty() }
+        .sortedWith(compareBy<MushafPageVerseGeometry> { it.verse.surah }.thenBy { it.verse.ayah })
+}
