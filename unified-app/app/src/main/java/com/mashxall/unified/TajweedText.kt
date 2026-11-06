@@ -215,12 +215,18 @@ internal object TajweedText {
                 wordRuleColors(encoded, darkMode)
             }
             val color = wordColors.getOrNull(wordIndex - 1) ?: return@replace match.value
+            // The page's night-mode ColorMatrix inverts every rendered pixel.
+            // Pre-invert only the Tajweed source fill so its final displayed hue
+            // remains the intended high-contrast dark-reader palette.
+            val renderedColor = if (darkMode) {
+                Color(1f - color.red, 1f - color.green, 1f - color.blue)
+            } else color
             val hex = String.format(
                 Locale.US,
                 "#%02X%02X%02X",
-                (color.red * 255f).toInt().coerceIn(0, 255),
-                (color.green * 255f).toInt().coerceIn(0, 255),
-                (color.blue * 255f).toInt().coerceIn(0, 255)
+                (renderedColor.red * 255f).roundToInt().coerceIn(0, 255),
+                (renderedColor.green * 255f).roundToInt().coerceIn(0, 255),
+                (renderedColor.blue * 255f).roundToInt().coerceIn(0, 255)
             )
             val colouredOpening = setFill(openingTag, hex)
             val pathTags = Regex("""<path\b[^>]*>""")
