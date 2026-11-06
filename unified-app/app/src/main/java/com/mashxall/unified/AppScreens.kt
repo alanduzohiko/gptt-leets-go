@@ -4185,7 +4185,7 @@ private fun MushafPageViewer(
     // Re-render the same vector page with inherited word fills once its tagged
     // Tajweed data is ready. The printed page, SVG paths and reader mode stay put.
     LaunchedEffect(page, coloredTajweed, pageTajweedBySurah, darkMode, loading) {
-        if (loading || bitmap == null) return@LaunchedEffect
+        if (loading || bitmap == null || lastLoadedPage != page) return@LaunchedEffect
         val source = ContentRepository.loadMushafPageSvg(context, page) ?: return@LaunchedEffect
         val renderSource = if (coloredTajweed) {
             TajweedText.colorMushafSvgWords(source, pageTajweedBySurah, darkMode)
