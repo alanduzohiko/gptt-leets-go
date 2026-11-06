@@ -2812,8 +2812,7 @@ private fun SettingsScreen(
                     label = label,
                     selected = selectedPalette,
                     accent = paletteColor,
-                    foreground = foreground,
-                    leadingIcon = Icons.Outlined.Circle
+                    foreground = foreground
                 ) { onAccent(palette) }
             }
         }
