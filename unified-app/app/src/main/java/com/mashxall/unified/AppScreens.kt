@@ -1428,6 +1428,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var tajweedMessage by rememberSaveable { mutableStateOf("") }
     var showReaderSettings by remember { mutableStateOf(false) }
     var readerSettingsSection by rememberSaveable { mutableStateOf("overview") }
+    LaunchedEffect(showReaderSettings) {
+        // Older saved UI state may still point to the now-hidden font controls.
+        if (showReaderSettings && readerSettingsSection == "font") {
+            readerSettingsSection = "overview"
+        }
+    }
     LaunchedEffect(openSettingsOnEntry) {
         if (openSettingsOnEntry) {
             readerSettingsSection = "overview"
@@ -3144,10 +3150,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 (if (language == AppLanguage.EN) "Mushaf & reading appearance" else if (language == AppLanguage.AR) "المصحف ومظهر القراءة" else "مصحەف و ڕووکاری خوێندنەوە") to
                                 (if (language == AppLanguage.EN) "Night mode, warm paper, text size and gestures" else if (language == AppLanguage.AR) "الوضع الليلي والورق الدافئ وحجم النص والإيماءات" else "دۆخی شەوانە، کاغەزی گەرم، قەبارەی دەق و جووڵەکان"),
                                 Icons.Outlined.AutoStories),
-                            Triple("font",
-                                (if (language == AppLanguage.EN) "Quran text font" else if (language == AppLanguage.AR) "خط نص القرآن" else "فۆنتی دەقی قورئان") to
-                                (if (language == AppLanguage.EN) "Choose one of six bundled original fonts" else if (language == AppLanguage.AR) "اختر واحدًا من ستة خطوط أصلية مضمّنة" else "یەکێک لە شەش فۆنتی ڕەسەنی ناو حەزمەکە هەڵبژێرە"),
-                                Icons.Outlined.AutoStories),
                             Triple("translation",
                                 (if (language == AppLanguage.EN) "Translations" else if (language == AppLanguage.AR) "الترجمات" else "وەرگێڕانەکان") to
                                 (if (language == AppLanguage.EN) "Choose the translation shown with an ayah" else if (language == AppLanguage.AR) "اختر الترجمة التي تظهر مع الآية" else "وەرگێڕانی هاوڕێی ئایەت هەڵبژێرە"),
@@ -3533,41 +3535,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         Text(if (language == AppLanguage.EN) "Soft cream tone for long reading" else if (language == AppLanguage.AR) "لون كريمي هادئ للقراءة الطويلة" else "ڕەنگی کرێمی نەرم بۆ خوێندنەوەی درێژ", color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
                                     }
                                     PremiumSwitch(checked = mushafSepiaMode, onCheckedChange = { mushafSepiaMode = it; if (it) mushafDarkMode = false; prefs.edit().putBoolean("mushaf_sepia_mode", it).putBoolean("mushaf_dark_mode", mushafDarkMode).apply() })
-                                }
-                            }
-                            Spacer(Modifier.height(14.dp))
-                            Text(if (language == AppLanguage.EN) "VERSE PANEL TEXT SIZE" else if (language == AppLanguage.AR) "حجم خط لوحة الآية" else "قەبارەی دەقی ئایەت", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            PremiumSlider(
-                                value = verseTextScale,
-                                onValueChange = { verseTextScale = it; prefs.edit().putFloat("quran_verse_text_scale", it).apply() },
-                                valueRange = 0.8f..1.6f,
-                                steps = 7,
-                                accent = Gold,
-                                foreground = foreground
-                            )
-                            Text(String.format(Locale.US, "%.0f%%", verseTextScale * 100f), color = foreground.copy(alpha = 0.65f), fontSize = 11.sp)
-                            Spacer(Modifier.height(7.dp))
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = cardColor),
-                                shape = RoundedCornerShape(15.dp),
-                                border = BorderStroke(1.dp, Gold.copy(alpha = 0.18f))
-                            ) {
-                                Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
-                                        color = foreground,
-                                        fontSize = (23f * verseTextScale).sp,
-                                        lineHeight = (40f * verseTextScale).sp,
-                                        fontFamily = quranTextFontFamily,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    Text(
-                                        if (language == AppLanguage.EN) "Live text-size preview • applies in verse-text view"
-                                        else if (language == AppLanguage.AR) "معاينة مباشرة للحجم • يُطبّق في عرض نص الآيات"
-                                        else "پێشبینینی زیندووی قەبارە • لە پێشان‌دانی دەقی ئایەتدا کاردەکات",
-                                        color = foreground.copy(alpha = 0.60f), fontSize = 9.sp, textAlign = TextAlign.Center
-                                    )
                                 }
                             }
                             Spacer(Modifier.height(14.dp))
