@@ -2015,11 +2015,22 @@ private fun HomeScreen(
     var savedQuranAyah by remember { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var savedQuranPage by remember { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     var savedQuranMode by remember { mutableStateOf(prefs.getString("quran_reader_mode", "verse") ?: "verse") }
-    val todayDate = remember(clockNow) {
-        Instant.ofEpochMilli(clockNow).atZone(ZoneId.systemDefault()).toLocalDate()
+    var todayDate by remember {
+        mutableStateOf(LocalDate.now(ZoneId.systemDefault()))
     }
     var dailyAyahContent by remember { mutableStateOf<DailyAyahCardContent?>(null) }
     var dailyAyahLoading by remember { mutableStateOf(false) }
+
+    // Re-check the local calendar day while Home is visible. This deliberately
+    // does not depend on the prayer-countdown clock, so the daily verse refreshes
+    // as soon as the local date changes, even if the app stays open overnight.
+    LaunchedEffect(isActive) {
+        if (!isActive) return@LaunchedEffect
+        while (true) {
+            todayDate = LocalDate.now(ZoneId.systemDefault())
+            delay(30_000L)
+        }
+    }
 
     LaunchedEffect(isActive) {
         if (!isActive) return@LaunchedEffect
