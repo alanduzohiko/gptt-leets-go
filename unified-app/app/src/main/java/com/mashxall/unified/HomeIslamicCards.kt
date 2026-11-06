@@ -176,7 +176,7 @@ internal fun IslamicOccasionsHomeCard(
     cardColor: Color,
     accent: Color
 ) {
-    val occasions = remember(today) { upcomingIslamicOccasions(today, limit = 6) }
+    val occasions = remember(today) { upcomingIslamicOccasions(today, limit = 12) }
     val next = occasions.firstOrNull()
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -254,7 +254,8 @@ internal fun IslamicOccasionsHomeCard(
                     color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
                 )
             }
-            occasions.drop(1).take(4).forEach { event ->
+            // Keep all of the user's requested milestones visible in the home calendar.
+            occasions.drop(1).take(8).forEach { event ->
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 1.dp),
                     verticalAlignment = Alignment.CenterVertically
