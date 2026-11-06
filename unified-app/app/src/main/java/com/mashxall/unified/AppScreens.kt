@@ -1418,8 +1418,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var pendingMushafStartSurah by remember { mutableIntStateOf(0) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
+    // Verse-text Tajweed is independent from the printed Mushaf edition.
     var coloredTajweed by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("quran_colored_tajweed", true))
+        mutableStateOf(prefs.getBoolean("quran_colored_tajweed", false))
+    }
+    // The standard uncoloured Mushaf remains the default. The second edition
+    // is an opt-in rendering layer over the same verified 604 source pages.
+    var mushafTajweedEdition by rememberSaveable {
+        mutableStateOf(prefs.getBoolean("mushaf_tajweed_edition", false))
     }
     var tajweedAyahs by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var tajweedLoadedSurah by remember { mutableIntStateOf(0) }
@@ -2184,7 +2190,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     toggleBookmark(surahNumber, ayahNumber)
                 },
                 playbackVerse = inlinePlaybackActiveVerse,
-                coloredTajweed = coloredTajweed,
+                coloredTajweed = mushafTajweedEdition,
                 surahAyahCounts = surahAyahCounts,
                 tajweedRetryKey = retryTajweed,
                 onVerseClick = { surahNumber, ayahNumber ->
@@ -3451,22 +3457,99 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     }
                     "appearance" -> {
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                            Text(if (language == AppLanguage.EN) "Included edition: original 604-page Mushaf." else if (language == AppLanguage.AR) "النسخة المضمّنة: المصحف الأصلي ذو 604 صفحات." else "وەشانی بەردەست: مصحەفی ڕەسەنی ٦٠٤ پەڕە.", color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
-                            Spacer(Modifier.height(12.dp))
-                            Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.22f))) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Choose the printed Mushaf edition"
+                                    AppLanguage.AR -> "اختر نوع المصحف"
+                                    AppLanguage.CKB -> "جۆری مصحەف هەڵبژێرە"
+                                },
+                                color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "The regular Mushaf is selected by default. You can switch to the Madinah Mushaf with Tajweed at any time."
+                                    AppLanguage.AR -> "المصحف العادي هو الاختيار الافتراضي. ويمكنك التبديل إلى مصحف المدينة مع التجويد في أي وقت."
+                                    AppLanguage.CKB -> "مصحەفی ئاسایی بە شێوەی بنەڕەتی هەڵبژێردراوە؛ هەر کاتێک دەتوانیت بگۆڕیت بۆ مصحەفی مەدینە لەگەڵ تەجوید."
+                                },
+                                color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 16.sp
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = cardColor),
+                                shape = RoundedCornerShape(17.dp),
+                                border = BorderStroke(1.dp, Gold.copy(alpha = 0.22f))
+                            ) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(11.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        ReaderModeSegment(
+                                            modifier = Modifier.weight(1f),
+                                            label = when (language) {
+                                                AppLanguage.EN -> "Standard Mushaf"
+                                                AppLanguage.AR -> "المصحف العادي"
+                                                AppLanguage.CKB -> "مصحەفی ئاسایی"
+                                            },
+                                            selected = !mushafTajweedEdition,
+                                            icon = Icons.Outlined.MenuBook,
+                                            foreground = foreground
+                                        ) {
+                                            mushafTajweedEdition = false
+                                            prefs.edit().putBoolean("mushaf_tajweed_edition", false).apply()
+                                        }
+                                        ReaderModeSegment(
+                                            modifier = Modifier.weight(1f),
+                                            label = when (language) {
+                                                AppLanguage.EN -> "Madinah + Tajweed"
+                                                AppLanguage.AR -> "مصحف المدينة مع التجويد"
+                                                AppLanguage.CKB -> "مەدینە لەگەڵ تەجوید"
+                                            },
+                                            selected = mushafTajweedEdition,
+                                            icon = Icons.Outlined.AutoStories,
+                                            foreground = foreground
+                                        ) {
+                                            mushafTajweedEdition = true
+                                            prefs.edit().putBoolean("mushaf_tajweed_edition", true).apply()
+                                            retryTajweed++
+                                        }
+                                    }
+                                    Text(
+                                        when (language) {
+                                            AppLanguage.EN -> "Your selection applies to all 604 pages. Both editions use the same original Mushaf pages; the Tajweed edition adds colour guidance without replacing any Quran text or source data."
+                                            AppLanguage.AR -> "يُطبّق اختيارك على الصفحات الـ604 كلها. النسختان تستخدمان صفحات المصحف الأصلية نفسها؛ نسخة التجويد تضيف إرشادات لونية دون استبدال أي نص قرآني أو بيانات مصدرية."
+                                            AppLanguage.CKB -> "هەڵبژاردەکەت لەسەر هەموو ٦٠٤ پەڕە جێبەجێ دەبێت. هەردوو وەشانەکە هەمان پەڕە ڕەسەنەکان بەکاردەهێنن؛ وەشانی تەجوید تەنها ڕێنمایی ڕەنگی زیاد دەکات و هیچ دەق یان داتایەک ناگۆڕێت."
+                                        },
+                                        color = foreground.copy(alpha = 0.54f), fontSize = 9.sp, lineHeight = 14.sp
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Verse-text Tajweed"
+                                    AppLanguage.AR -> "التجويد في عرض نص الآيات"
+                                    AppLanguage.CKB -> "تەجوید لە پێشان‌دانی دەقی ئایەت"
+                                },
+                                color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                            )
+                            Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.14f))) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(
-                                            if (language == AppLanguage.EN) "Colored Tajweed in the Mushaf"
-                                            else if (language == AppLanguage.AR) "التجويد الملوّن في المصحف"
-                                            else "تەجویدی ڕەنگاوڕەنگ لە مصحەف",
+                                            if (language == AppLanguage.EN) "Tajweed colours in verse text"
+                                            else if (language == AppLanguage.AR) "ألوان التجويد في نص الآيات"
+                                            else "ڕەنگەکانی تەجوید لە دەقی ئایەتەکان",
                                             color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                                         )
                                         Spacer(Modifier.height(3.dp))
                                         Text(
-                                            if (language == AppLanguage.EN) "Downloads the surah's Tajweed rules on first use, caches them privately, and colours matching words on the original Mushaf page without leaving the reader."
-                                            else if (language == AppLanguage.AR) "يحمّل أحكام التجويد للسورة عند أول استخدام ويحفظها محليًا، ثم يلوّن الكلمات المطابقة على صفحة المصحف الأصلية دون مغادرة القارئ."
-                                            else "لە یەکەم بەکارهێنان یاساکانی تەجویدی سوورەت دادەگرێت و لە ناو ئەپەکەدا دەپارێزرێت، پاشان وشە هاوتاکان لەسەر پەڕەی ڕەسەنی مصحەف ڕەنگ دەکاتەوە بێ ئەوەی خوێندنەوە دابخات.",
+                                            if (language == AppLanguage.EN) "This separate option affects only the verse-text reader. It does not change the printed Mushaf edition selected above."
+                                            else if (language == AppLanguage.AR) "هذا الخيار مستقل ويؤثر في عرض نص الآيات فقط، ولا يغيّر نوع المصحف المصوّر المحدد أعلاه."
+                                            else "ئەم هەڵبژاردەیە جیاوازە و تەنها پێشان‌دانی دەقی ئایەت دەگۆڕێت؛ جۆری مصحەفی پەڕەیی سەرەوە ناگۆڕێت.",
                                             color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
                                         )
                                     }
@@ -3475,8 +3558,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         onCheckedChange = { enabled ->
                                             coloredTajweed = enabled
                                             prefs.edit().putBoolean("quran_colored_tajweed", enabled).apply()
-                                            // The Mushaf stays on the same printed page; its SVG word
-                                            // groups receive the rule colours once the page cache loads.
                                             if (!enabled) {
                                                 tajweedAyahs = emptyMap()
                                                 tajweedLoadedSurah = 0
@@ -3492,9 +3573,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Spacer(Modifier.height(7.dp))
                                 Text(
                                     when {
-                                        mushafMode && language == AppLanguage.EN -> "Tajweed colours are applied to matching words on the page Mushaf; the reader remains open."
-                                        mushafMode && language == AppLanguage.AR -> "تُطبّق ألوان التجويد على الكلمات المطابقة في صفحة المصحف، ويبقى المصحف مفتوحًا."
-                                        mushafMode -> "ڕەنگەکانی تەجوید لەسەر وشە هاوتاکان لە پەڕەی مصحەف دادەنرێن؛ مصحەف کراوە دەمێنێتەوە."
                                         tajweedLoading && language == AppLanguage.EN -> "Loading the tagged Tajweed text for this surah…"
                                         tajweedLoading && language == AppLanguage.AR -> "جارٍ تحميل نص التجويد الملوّن لهذه السورة…"
                                         tajweedLoading -> "دەقی تەجویدی ئەم سوورەتە دادەگیرێت…"
@@ -3503,7 +3581,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty() -> "تەجویدی ڕەنگاوڕەنگ بۆ ئەم سوورەتە چالاکە."
                                         else -> tajweedMessage.ifBlank { if (language == AppLanguage.EN) "Tajweed data is not loaded yet." else if (language == AppLanguage.AR) "لم تُحمّل بيانات التجويد بعد." else "داتای تەجوید هێشتا بارنەکراوە." }
                                     },
-                                    color = if (mushafMode || (tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty())) Gold else foreground.copy(alpha = 0.66f),
+                                    color = if (tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty()) Gold else foreground.copy(alpha = 0.66f),
                                     fontSize = 10.sp,
                                     lineHeight = 15.sp
                                 )
