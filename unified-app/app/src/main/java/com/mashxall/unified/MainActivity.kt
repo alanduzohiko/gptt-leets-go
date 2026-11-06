@@ -2796,6 +2796,13 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 }
 
 @Composable
+private fun accentForPreview(style: String): Color = when (style) {
+    "ambient" -> Color(0xFF65B997)
+    "orbit" -> Color(0xFFD7B65B)
+    "ornament" -> Color(0xFF91A9E8)
+    else -> Color(0xFF8E9894)
+}
+
 private fun SettingsScreen(
     language: AppLanguage,
     foreground: Color,
@@ -2957,42 +2964,51 @@ private fun SettingsScreen(
             border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f))
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    items(listOf("ambient", "orbit", "ornament", "off")) { style ->
-                        val label = when (language) {
-                            AppLanguage.EN -> when (style) {
-                                "ambient" -> "Living aura"
-                                "orbit" -> "Golden orbit"
-                                "ornament" -> "Quiet ornament"
-                                else -> "Off"
-                            }
-                            AppLanguage.AR -> when (style) {
-                                "ambient" -> "هالة متحركة"
-                                "orbit" -> "مدارات ذهبية"
-                                "ornament" -> "زخرفة هادئة"
-                                else -> "إيقاف"
-                            }
-                            AppLanguage.CKB -> when (style) {
-                                "ambient" -> "ڕووناکیی جووڵاو"
-                                "orbit" -> "بازنەی زێڕین"
-                                "ornament" -> "ڕازاندنەوەی هێمن"
-                                else -> "ناچالاک"
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // A visible two-row grid keeps every preset fully on-screen and independently tappable.
+                    listOf("ambient", "orbit", "ornament", "off").chunked(2).forEach { stylePair ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            stylePair.forEach { style ->
+                                val label = when (language) {
+                                    AppLanguage.EN -> when (style) {
+                                        "ambient" -> "Living aura"
+                                        "orbit" -> "Golden orbit"
+                                        "ornament" -> "Quiet ornament"
+                                        else -> "Off"
+                                    }
+                                    AppLanguage.AR -> when (style) {
+                                        "ambient" -> "هالة متحركة"
+                                        "orbit" -> "مدارات ذهبية"
+                                        "ornament" -> "زخرفة هادئة"
+                                        else -> "إيقاف"
+                                    }
+                                    AppLanguage.CKB -> when (style) {
+                                        "ambient" -> "ڕووناکیی جووڵاو"
+                                        "orbit" -> "بازنەی زێڕین"
+                                        "ornament" -> "ڕازاندنەوەی هێمن"
+                                        else -> "ناچالاک"
+                                    }
+                                }
+                                val selectedStyle = backgroundStyle == style
+                                val styleIcon = when (style) {
+                                    "ambient" -> Icons.Outlined.Spa
+                                    "orbit" -> Icons.Outlined.Explore
+                                    "ornament" -> Icons.Outlined.Tune
+                                    else -> Icons.Outlined.Info
+                                }
+                                PremiumChoicePill(
+                                    label = label,
+                                    selected = selectedStyle,
+                                    accent = Gold,
+                                    foreground = foreground,
+                                    modifier = Modifier.weight(1f),
+                                    leadingIcon = styleIcon
+                                ) { onBackgroundStyle(style) }
                             }
                         }
-                        val selectedStyle = backgroundStyle == style
-                        val styleIcon = when (style) {
-                            "ambient" -> Icons.Outlined.Spa
-                            "orbit" -> Icons.Outlined.Explore
-                            "ornament" -> Icons.Outlined.Tune
-                            else -> Icons.Outlined.Info
-                        }
-                        PremiumChoicePill(
-                            label = label,
-                            selected = selectedStyle,
-                            accent = Gold,
-                            foreground = foreground,
-                            leadingIcon = styleIcon
-                        ) { onBackgroundStyle(style) }
                     }
                 }
                 Box(
@@ -3023,11 +3039,34 @@ private fun SettingsScreen(
                         )
                         Text(
                             when (language) {
+                                AppLanguage.EN -> when (backgroundStyle) {
+                                    "ambient" -> "Living aura"
+                                    "orbit" -> "Golden orbit"
+                                    "ornament" -> "Quiet ornament"
+                                    else -> "Background off"
+                                }
+                                AppLanguage.AR -> when (backgroundStyle) {
+                                    "ambient" -> "هالة متحركة"
+                                    "orbit" -> "مدارات ذهبية"
+                                    "ornament" -> "زخرفة هادئة"
+                                    else -> "الخلفية متوقفة"
+                                }
+                                AppLanguage.CKB -> when (backgroundStyle) {
+                                    "ambient" -> "ڕووناکیی جووڵاو"
+                                    "orbit" -> "بازنەی زێڕین"
+                                    "ornament" -> "ڕازاندنەوەی هێمن"
+                                    else -> "پاشبنەما ناچالاکە"
+                                }
+                            },
+                            color = accentForPreview(backgroundStyle), fontSize = 10.sp, fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            when (language) {
                                 AppLanguage.EN -> "Strength ${(backgroundIntensity * 100f).roundToInt()}%   •   Speed ${(backgroundSpeed * 100f).roundToInt()}%"
                                 AppLanguage.AR -> "القوة ${(backgroundIntensity * 100f).roundToInt()}٪   •   السرعة ${(backgroundSpeed * 100f).roundToInt()}٪"
                                 AppLanguage.CKB -> "هێز ${(backgroundIntensity * 100f).roundToInt()}٪   •   خێرایی ${(backgroundSpeed * 100f).roundToInt()}٪"
                             },
-                            color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                            color = foreground, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
                         )
                         if (!motionAllowed) {
                             Text(
