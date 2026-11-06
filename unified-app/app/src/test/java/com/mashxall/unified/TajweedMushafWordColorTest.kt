@@ -39,7 +39,7 @@ class TajweedMushafWordColorTest {
     @Test
     fun maddWordsAreSelectedForTheReferenceYellowHighlight() {
         assertEquals(
-            listOf(true, false, true),
+            listOf(true, false, false, true),
             TajweedText.wordMaddHighlightFlags("[n[قَالَ] وَ [q[ق] [o[مَدّ]")
         )
     }
