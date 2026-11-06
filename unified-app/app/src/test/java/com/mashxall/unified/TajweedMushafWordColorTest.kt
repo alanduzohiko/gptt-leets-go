@@ -42,6 +42,18 @@ class TajweedMushafWordColorTest {
     }
 
     @Test
+    fun nightModePrecompensatesForThePageInversionFilter() {
+        val svg = """<svg><g data-surah="001" data-aya="001" data-word-index-in-ayah="1"><path id="night"/></g></svg>"""
+        val tagged = mapOf(1 to mapOf(1 to "[q:1[ق]"))
+
+        val coloured = TajweedText.colorMushafSvgWords(svg, tagged, darkMode = true)
+
+        // The page is inverted after rendering; this source fill becomes darkPalette Qalqalah red.
+        assertTrue(coloured.contains("""fill="#008C86""""))
+        assertTrue(coloured.contains("""<path id="night" fill="#008C86"/>"""))
+    }
+
+    @Test
     fun disablingTajweedOrMissingPageDataLeavesTheOriginalSvgUntouched() {
         val svg = """<svg><g data-surah="001" data-aya="001" data-word-index-in-ayah="1"/></svg>"""
         assertEquals(svg, TajweedText.colorMushafSvgWords(svg, emptyMap()))
