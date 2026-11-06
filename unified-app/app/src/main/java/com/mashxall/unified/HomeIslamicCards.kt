@@ -77,6 +77,20 @@ internal data class DailyHadithCardContent(
     val reference: String
 )
 
+
+/**
+ * The home carousel follows the natural rightward swipe from the Ayah to the
+ * Hadith, and the opposite swipe returns to the Ayah.
+ */
+internal fun dailyAyahHadithSwipeTarget(showingHadith: Boolean, horizontalDragPx: Float): Boolean? {
+    if (!horizontalDragPx.isFinite()) return null
+    return when {
+        !showingHadith && horizontalDragPx > 72f -> true
+        showingHadith && horizontalDragPx < -72f -> false
+        else -> null
+    }
+}
+
 internal data class IslamicOccasion(
     val key: String,
     val date: LocalDate,
@@ -464,10 +478,7 @@ internal fun AyahOfTheDayHomeCard(
                     totalDrag += dragAmount
                 },
                 onDragEnd = {
-                    when {
-                        totalDrag < -72f -> showHadith = true
-                        totalDrag > 72f -> showHadith = false
-                    }
+                    dailyAyahHadithSwipeTarget(showHadith, totalDrag)?.let { showHadith = it }
                     totalDrag = 0f
                 },
                 onDragCancel = { totalDrag = 0f }
@@ -488,11 +499,11 @@ internal fun AyahOfTheDayHomeCard(
                 targetState = showHadith,
                 transitionSpec = {
                     if (targetState) {
-                        (slideInHorizontally(animationSpec = tween(220)) { it } + fadeIn(animationSpec = tween(180))) togetherWith
-                            (slideOutHorizontally(animationSpec = tween(220)) { -it } + fadeOut(animationSpec = tween(140)))
-                    } else {
                         (slideInHorizontally(animationSpec = tween(220)) { -it } + fadeIn(animationSpec = tween(180))) togetherWith
                             (slideOutHorizontally(animationSpec = tween(220)) { it } + fadeOut(animationSpec = tween(140)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(220)) { it } + fadeIn(animationSpec = tween(180))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(220)) { -it } + fadeOut(animationSpec = tween(140)))
                     }
                 },
                 label = "daily-ayah-hadith-swipe"
