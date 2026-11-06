@@ -64,10 +64,10 @@ internal object TajweedText {
     private val maddRuleCodes = setOf('n', 'p', 'm', 'o')
     private val lightMaddHighlight = Color(0xFFFFF1BE)
     private val darkMaddHighlight = Color(0xFF594A26)
-    private val wordGroupOpen = Regex("""<g\\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>""")
-    private val groupToken = Regex("""</?g\\b[^>]*>""")
-    private val pathTag = Regex("""<path\\b[^>]*>""")
-    private val pathDataAttribute = Regex("""\\bd="([^"]*)"""")
+    private val wordGroupOpen = Regex("""<g\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>""")
+    private val groupToken = Regex("""</?g\b[^>]*>""")
+    private val pathTag = Regex("""<path\b[^>]*>""")
+    private val pathDataAttribute = Regex("""\bd="([^"]*)"""")
 
     private data class WordRuleStyle(
         val color: Color?,
@@ -286,7 +286,7 @@ internal object TajweedText {
             val body = svgSource.substring(openEnd, closingStart)
 
             fun attribute(name: String): String? =
-                Regex("""\\b${Regex.escape(name)}="([^"]*)"""")
+                Regex("""\b${Regex.escape(name)}="([^"]*)"""")
                     .find(openingTag)?.groupValues?.getOrNull(1)
 
             val surah = attribute("data-surah")?.toIntOrNull()
@@ -361,7 +361,7 @@ internal object TajweedText {
     }
 
     private fun setFill(element: String, hex: String): String {
-        val fillAttribute = Regex("""\\bfill="[^"]*"""")
+        val fillAttribute = Regex("""\bfill="[^"]*"""")
         var result = if (fillAttribute.containsMatchIn(element)) {
             fillAttribute.replace(element, """fill="$hex"""")
         } else {
@@ -371,11 +371,11 @@ internal object TajweedText {
         }
 
         // Inline SVG styles override inherited fill attributes, so keep them aligned.
-        val styleAttribute = Regex("""\\bstyle="([^"]*)"""")
+        val styleAttribute = Regex("""\bstyle="([^"]*)"""")
         val style = styleAttribute.find(result)
         if (style != null) {
             val oldStyle = style.groupValues[1]
-            val fillRule = Regex("""(?:^|;)\\s*fill\\s*:\\s*[^;]*""")
+            val fillRule = Regex("""(?:^|;)\s*fill\s*:\s*[^;]*""")
             val newStyle = if (fillRule.containsMatchIn(oldStyle)) {
                 fillRule.replace(oldStyle) { match ->
                     val prefix = if (match.value.startsWith(";")) ";" else ""
