@@ -1456,6 +1456,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     },
                     Toast.LENGTH_LONG
                 ).show()
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 tajweedPackError = error.message ?: when (language) {
                     AppLanguage.EN -> "Could not download the Tajweed Mushaf. Check the link and try again."

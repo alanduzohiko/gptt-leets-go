@@ -171,6 +171,7 @@ internal object TajweedMushafRepository {
         } finally {
             archive.delete()
         }
+        Unit
     }
 
     private fun downloadArchive(
