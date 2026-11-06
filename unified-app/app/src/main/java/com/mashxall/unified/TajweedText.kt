@@ -161,12 +161,12 @@ internal object TajweedText {
         if (svgSource.isBlank() || taggedAyahsBySurah.isEmpty()) return svgSource
         val colorCache = mutableMapOf<Pair<Int, Int>, List<Color?>>()
         val wordGroup = Regex(
-            """(<g\\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>)(.*?)(</g>)""",
+            """(<g\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>)(.*?)(</g>)""",
             setOf(RegexOption.DOT_MATCHES_ALL)
         )
 
         fun setFill(element: String, hex: String): String {
-            val fillAttribute = Regex("""\\bfill="[^"]*"""")
+            val fillAttribute = Regex("""\bfill="[^"]*"""")
             var result = if (fillAttribute.containsMatchIn(element)) {
                 fillAttribute.replace(element, "fill=" + '"' + hex + '"')
             } else {
@@ -179,11 +179,11 @@ internal object TajweedText {
             }
 
             // An inline SVG style has higher precedence than the fill attribute.
-            val styleAttribute = Regex("""\\bstyle="([^"]*)"""")
+            val styleAttribute = Regex("""\bstyle="([^"]*)"""")
             val style = styleAttribute.find(result)
             if (style != null) {
                 val oldStyle = style.groupValues[1]
-                val fillRule = Regex("""(?:^|;)\\s*fill\\s*:\\s*[^;]*""")
+                val fillRule = Regex("""(?:^|;)\s*fill\s*:\s*[^;]*""")
                 val newStyle = if (fillRule.containsMatchIn(oldStyle)) {
                     fillRule.replace(oldStyle) { match ->
                         val prefix = if (match.value.startsWith(";")) ";" else ""
@@ -203,7 +203,7 @@ internal object TajweedText {
             val closingTag = match.groupValues[3]
 
             fun attribute(name: String): String? =
-                Regex("""\\b${Regex.escape(name)}="([^"]*)"""")
+                Regex("""\b${Regex.escape(name)}="([^"]*)"""")
                     .find(openingTag)?.groupValues?.getOrNull(1)
 
             val surah = attribute("data-surah")?.toIntOrNull() ?: return@replace match.value
@@ -223,7 +223,7 @@ internal object TajweedText {
                 (color.blue * 255f).toInt().coerceIn(0, 255)
             )
             val colouredOpening = setFill(openingTag, hex)
-            val pathTags = Regex("""<path\\b[^>]*>""")
+            val pathTags = Regex("""<path\b[^>]*>""")
             val colouredBody = pathTags.replace(body) { pathMatch ->
                 setFill(pathMatch.value, hex)
             }
