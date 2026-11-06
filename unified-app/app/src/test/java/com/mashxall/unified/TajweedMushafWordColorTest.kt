@@ -45,7 +45,7 @@ class TajweedMushafWordColorTest {
     fun disablingTajweedOrMissingPageDataLeavesTheOriginalSvgUntouched() {
         val svg = """<svg><g data-surah="001" data-aya="001" data-word-index-in-ayah="1"/></svg>"""
         assertEquals(svg, TajweedText.colorMushafSvgWords(svg, emptyMap()))
-        assertEquals(svg, TajweedText.colorMushafSvgWords(svg, mapOf(2 to mapOf(1 to "[q:1[ق]")))
+        assertEquals(svg, TajweedText.colorMushafSvgWords(svg, mapOf(2 to mapOf(1 to "[q:1[ق]"))))
     }
 
     @Test
