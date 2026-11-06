@@ -89,6 +89,106 @@ internal object TajweedText {
         }
     }
 
+    /**
+     * Resolve one dominant rule colour for each whitespace-delimited Quran word.
+     * The SVG Mushaf stores every printed word as its own tagged group with
+     * data-word-index-in-ayah, allowing the same Tajweed rules to colour the
+     * corresponding vector word without replacing the printed page layout.
+     */
+    internal fun wordRuleColors(encoded: String, darkMode: Boolean = false): List<Color?> {
+        if (encoded.isBlank()) return emptyList()
+        val palette = if (darkMode) darkPalette else lightPalette
+        val result = mutableListOf<Color?>()
+        val counts = linkedMapOf<Color, Int>()
+
+        fun finishWord() {
+            result += counts.maxByOrNull { it.value }?.key
+            counts.clear()
+        }
+
+        fun appendChunk(chunk: String, color: Color?) {
+            chunk.forEach { character ->
+                if (character.isWhitespace()) {
+                    if (counts.isNotEmpty() || result.isEmpty()) finishWord()
+                } else if (color != null) {
+                    counts[color] = (counts[color] ?: 0) + 1
+                } else if (counts.isNotEmpty()) {
+                    // Keep the colour score tied to the letters that actually
+                    // carry a Tajweed rule; uncoloured letters do not dilute it.
+                }
+            }
+        }
+
+        var cursor = 0
+        while (cursor < encoded.length) {
+            val tagStart = encoded.indexOf('[', cursor)
+            if (tagStart < 0) {
+                appendChunk(encoded.substring(cursor), null)
+                break
+            }
+            if (tagStart > cursor) appendChunk(encoded.substring(cursor, tagStart), null)
+
+            val ruleCode = encoded.getOrNull(tagStart + 1)
+            val color = ruleCode?.let(palette::get)
+            val markerEnd = encoded.indexOf('[', tagStart + 2)
+            val tagEnd = if (markerEnd >= 0) encoded.indexOf(']', markerEnd + 1) else -1
+
+            if (color != null && markerEnd > tagStart && tagEnd > markerEnd) {
+                appendChunk(encoded.substring(markerEnd + 1, tagEnd), color)
+                cursor = tagEnd + 1
+            } else {
+                appendChunk(encoded.substring(tagStart, tagStart + 1), null)
+                cursor = tagStart + 1
+            }
+        }
+        if (counts.isNotEmpty()) finishWord()
+        return result
+    }
+
+    /**
+     * Add the Tajweed colour as an inherited SVG fill on the precise tagged
+     * word group (surah, ayah and word index). Geometry, SVG paths, page order,
+     * typography and every original database row remain untouched.
+     */
+    internal fun colorMushafSvgWords(
+        svgSource: String,
+        taggedAyahsBySurah: Map<Int, Map<Int, String>>,
+        darkMode: Boolean = false
+    ): String {
+        if (svgSource.isBlank() || taggedAyahsBySurah.isEmpty()) return svgSource
+        val colorCache = mutableMapOf<Pair<Int, Int>, List<Color?>>()
+        val wordGroup = Regex("""<g\\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>""")
+        return wordGroup.replace(svgSource) { match ->
+            val tag = match.value
+            fun attribute(name: String): String? =
+                Regex("""\\b${Regex.escape(name)}="([^"]*)"""")
+                    .find(tag)?.groupValues?.getOrNull(1)
+
+            val surah = attribute("data-surah")?.toIntOrNull() ?: return@replace tag
+            val ayah = attribute("data-aya")?.toIntOrNull() ?: return@replace tag
+            val wordIndex = attribute("data-word-index-in-ayah")?.toIntOrNull() ?: return@replace tag
+            if (wordIndex < 1) return@replace tag
+            val encoded = taggedAyahsBySurah[surah]?.get(ayah) ?: return@replace tag
+            val wordColors = colorCache.getOrPut(surah to ayah) {
+                wordRuleColors(encoded, darkMode)
+            }
+            val color = wordColors.getOrNull(wordIndex - 1) ?: return@replace tag
+            val hex = String.format(
+                Locale.US,
+                "#%02X%02X%02X",
+                (color.red * 255f).toInt().coerceIn(0, 255),
+                (color.green * 255f).toInt().coerceIn(0, 255),
+                (color.blue * 255f).toInt().coerceIn(0, 255)
+            )
+            val existingFill = Regex("""\\sfill="[^"]*"""")
+            if (existingFill.containsMatchIn(tag)) {
+                existingFill.replace(tag, " fill=\\"$hex\\"")
+            } else {
+                tag.dropLast(1) + " fill=\\"$hex\\">"
+            }
+        }
+    }
+
     internal fun ruleColor(ruleCode: Char, darkMode: Boolean = false): Color? =
         (if (darkMode) darkPalette else lightPalette)[ruleCode]
 }
