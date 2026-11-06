@@ -1,5 +1,17 @@
 package com.mashxall.unified
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,11 +21,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,6 +47,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.pointer.consume
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.Surah
@@ -50,6 +68,14 @@ internal data class DailyAyahCardContent(
     val arabic: String,
     val kurdishTranslation: String,
     val kurdishTafsir: String
+)
+
+
+internal data class DailyHadithCardContent(
+    val hadithId: Int,
+    val arabic: String,
+    val sorani: String,
+    val reference: String
 )
 
 internal data class IslamicOccasion(
@@ -193,26 +219,26 @@ internal fun IslamicOccasionsHomeCard(
     val next = occasions.firstOrNull()
     var expanded by remember(today) { androidx.compose.runtime.mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(260)),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(23.dp),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.30f)),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             Modifier.fillMaxWidth()
-                .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.12f), cardColor, Color(0xFF1B6A55).copy(alpha = 0.035f))))
-                .padding(15.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.13f), cardColor, Color(0xFF1B6A55).copy(alpha = 0.045f))))
+                .padding(horizontal = 13.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(39.dp).background(accent.copy(alpha = 0.14f), RoundedCornerShape(13.dp)),
+                    Modifier.size(36.dp).background(accent.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.Event, contentDescription = null, tint = accent, modifier = Modifier.size(21.dp))
+                    Icon(Icons.Outlined.Event, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
                 }
-                Spacer(Modifier.size(10.dp))
+                Spacer(Modifier.size(9.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         when (language) {
@@ -220,49 +246,75 @@ internal fun IslamicOccasionsHomeCard(
                             AppLanguage.CKB -> "بۆنە ئیسلامییەکان"
                             AppLanguage.EN -> "Islamic occasions"
                         },
-                        color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Bold
+                        color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold
                     )
                     Text(
                         when (language) {
-                            AppLanguage.AR -> "أقرب مناسبة قادمة"
-                            AppLanguage.CKB -> "نزیکترین بۆنەی داهاتوو"
-                            AppLanguage.EN -> "Your next Islamic occasion"
+                            AppLanguage.AR -> "المناسبة القادمة حسب التقويم الهجري"
+                            AppLanguage.CKB -> "بۆنەی داهاتوو بەپێی ساڵنامەی کۆچی"
+                            AppLanguage.EN -> "Upcoming dates in the Hijri calendar"
                         },
-                        color = foreground.copy(alpha = 0.60f), fontSize = 10.sp
+                        color = foreground.copy(alpha = 0.58f), fontSize = 9.sp
+                    )
+                }
+                Box(
+                    Modifier.background(accent.copy(alpha = 0.10f), RoundedCornerShape(50))
+                        .border(1.dp, accent.copy(alpha = 0.20f), RoundedCornerShape(50))
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        when (language) {
+                            AppLanguage.AR -> "التقويم"
+                            AppLanguage.CKB -> "ساڵنامە"
+                            AppLanguage.EN -> "Calendar"
+                        },
+                        color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }
+
             if (next != null) {
                 Row(
                     Modifier.fillMaxWidth()
-                        .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.18f), accent.copy(alpha = 0.055f))), RoundedCornerShape(18.dp))
-                        .border(1.dp, accent.copy(alpha = 0.22f), RoundedCornerShape(18.dp))
-                        .padding(horizontal = 13.dp, vertical = 12.dp),
+                        .background(
+                            Brush.horizontalGradient(listOf(accent.copy(alpha = 0.18f), accent.copy(alpha = 0.065f))),
+                            RoundedCornerShape(17.dp)
+                        )
+                        .border(1.dp, accent.copy(alpha = 0.23f), RoundedCornerShape(17.dp))
+                        .padding(horizontal = 12.dp, vertical = 11.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(next.title(language), color = foreground, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-                        Spacer(Modifier.size(4.dp))
+                        Text(next.title(language), color = foreground, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            (if (language == AppLanguage.AR) "هجري: " else if (language == AppLanguage.CKB) "کۆچی: " else "Hijri: ") + next.hijriDateLabel(language),
-                            color = foreground.copy(alpha = 0.72f), fontSize = 10.sp
+                            (if (language == AppLanguage.AR) "هجري  " else if (language == AppLanguage.CKB) "کۆچی  " else "Hijri  ") + next.hijriDateLabel(language),
+                            color = foreground.copy(alpha = 0.75f), fontSize = 9.sp
                         )
                         Text(
-                            (if (language == AppLanguage.AR) "ميلادي: " else if (language == AppLanguage.CKB) "زایینی: " else "Gregorian: ") + next.gregorianDateLabel(),
-                            color = foreground.copy(alpha = 0.62f), fontSize = 10.sp
+                            (if (language == AppLanguage.AR) "ميلادي  " else if (language == AppLanguage.CKB) "زایینی  " else "Gregorian  ") + next.gregorianDateLabel(),
+                            color = foreground.copy(alpha = 0.60f), fontSize = 9.sp
                         )
-                        Spacer(Modifier.size(3.dp))
-                        Text(occasionCountdown(next.daysFrom(today), language), color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            occasionCountdown(next.daysFrom(today), language),
+                            color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                        )
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(next.daysFrom(today).toString(), color = accent, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
+                    Column(
+                        Modifier.padding(start = 10.dp)
+                            .background(accent.copy(alpha = 0.12f), RoundedCornerShape(15.dp))
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(next.daysFrom(today).toString(), color = accent, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
                         Text(
                             when (language) {
                                 AppLanguage.AR -> "يوم"
                                 AppLanguage.CKB -> "ڕۆژ"
                                 AppLanguage.EN -> "days"
                             },
-                            color = foreground.copy(alpha = 0.62f), fontSize = 9.sp, fontWeight = FontWeight.Bold
+                            color = foreground.copy(alpha = 0.62f), fontSize = 8.sp, fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -273,188 +325,366 @@ internal fun IslamicOccasionsHomeCard(
                         AppLanguage.CKB -> "لە ماوەی ئەم ساڵنامەیەدا بۆنەیەکی داهاتوو نییە."
                         AppLanguage.EN -> "No upcoming date is available in this calendar range."
                     },
-                    color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
+                    color = foreground.copy(alpha = 0.65f), fontSize = 10.sp
                 )
             }
+
             if (occasions.size > 1) {
-                TextButton(
+                Card(
                     onClick = { expanded = !expanded },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = accent)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.085f)),
+                    border = BorderStroke(1.dp, accent.copy(alpha = 0.18f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
-                    Text(
-                        when (language) {
-                            AppLanguage.AR -> if (expanded) "إخفاء بقية المناسبات ▲" else "عرض بقية المناسبات (${occasions.size - 1}) ▼"
-                            AppLanguage.CKB -> if (expanded) "شاردنەوەی بۆنەکانی تر ▲" else "پیشاندانی بۆنەکانی تر (${occasions.size - 1}) ▼"
-                            AppLanguage.EN -> if (expanded) "Hide other occasions ▲" else "Show other occasions (${occasions.size - 1}) ▼"
-                        },
-                        fontSize = 11.sp, fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(28.dp).background(accent.copy(alpha = 0.15f), RoundedCornerShape(9.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                contentDescription = null, tint = accent, modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(Modifier.size(9.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.AR -> if (expanded) "إخفاء المناسبات" else "استكشف بقية المناسبات"
+                                    AppLanguage.CKB -> if (expanded) "شاردنەوەی بۆنەکان" else "بینینی بۆنەکانی دیکە"
+                                    AppLanguage.EN -> if (expanded) "Collapse calendar" else "Explore other occasions"
+                                },
+                                color = foreground, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                when (language) {
+                                    AppLanguage.AR -> (occasions.size - 1).toString() + " مناسبة إضافية"
+                                    AppLanguage.CKB -> (occasions.size - 1).toString() + " بۆنەی تر"
+                                    AppLanguage.EN -> (occasions.size - 1).toString() + " more dates"
+                                },
+                                color = foreground.copy(alpha = 0.56f), fontSize = 8.sp
+                            )
+                        }
+                        Text(
+                            occasions.size.toString(),
+                            color = accent, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                 }
             }
-            if (expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    visibleAdditionalIslamicOccasions(occasions, expanded).forEach { event ->
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(animationSpec = tween(180)) + expandVertically(expandFrom = Alignment.Top, animationSpec = tween(240)),
+                exit = fadeOut(animationSpec = tween(130)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(200))
+            ) {
+                Column(
+                    Modifier.fillMaxWidth()
+                        .background(accent.copy(alpha = 0.045f), RoundedCornerShape(17.dp))
+                        .border(1.dp, accent.copy(alpha = 0.13f), RoundedCornerShape(17.dp))
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    visibleAdditionalIslamicOccasions(occasions, expanded).forEachIndexed { index, event ->
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                            Modifier.fillMaxWidth()
+                                .background(
+                                    Brush.horizontalGradient(listOf(cardColor.copy(alpha = 0.96f), accent.copy(alpha = 0.055f))),
+                                    RoundedCornerShape(13.dp)
+                                )
+                                .border(1.dp, accent.copy(alpha = 0.11f), RoundedCornerShape(13.dp))
+                                .padding(horizontal = 9.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(Modifier.size(6.dp).background(accent.copy(alpha = 0.82f), RoundedCornerShape(50)))
+                            Box(
+                                Modifier.size(27.dp).background(accent.copy(alpha = 0.13f), RoundedCornerShape(9.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text((index + 2).toString(), color = accent, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            }
                             Spacer(Modifier.size(8.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(event.title(language), color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text(event.title(language), color = foreground, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     event.hijriDateLabel(language) + "  •  " + event.gregorianDateLabel(),
-                                    color = foreground.copy(alpha = 0.54f), fontSize = 9.sp
+                                    color = foreground.copy(alpha = 0.53f), fontSize = 8.sp
                                 )
                             }
-                            Text(occasionCountdown(event.daysFrom(today), language), color = foreground.copy(alpha = 0.68f), fontSize = 9.sp)
+                            Box(
+                                Modifier.background(accent.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 7.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    occasionCountdown(event.daysFrom(today), language),
+                                    color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
             }
             Text(
                 when (language) {
-                    AppLanguage.AR -> "التواريخ الهجرية تقديرية وقد تتقدم أو تتأخر يومًا بحسب رؤية الهلال."
-                    AppLanguage.CKB -> "بەروارە کۆچییەکان خەمڵێنراون و بە پێی بینینی مانگ ڕەنگە یەک ڕۆژ بگۆڕێن."
+                    AppLanguage.AR -> "التواريخ الهجرية تقديرية وقد تختلف يومًا بحسب رؤية الهلال."
+                    AppLanguage.CKB -> "بەروارە کۆچییەکان خەمڵێنراون و ڕەنگە بە پێی بینینی مانگ یەک ڕۆژ بگۆڕێن."
                     AppLanguage.EN -> "Hijri dates are estimates and may shift by a day with local moon sighting."
                 },
-                color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, lineHeight = 14.sp
+                color = foreground.copy(alpha = 0.46f), fontSize = 8.sp, lineHeight = 12.sp
             )
         }
     }
 }
+
 
 @Composable
 internal fun AyahOfTheDayHomeCard(
     language: AppLanguage,
     content: DailyAyahCardContent?,
     loading: Boolean,
+    hadithContent: DailyHadithCardContent?,
+    hadithLoading: Boolean,
     foreground: Color,
     cardColor: Color,
     accent: Color,
     onOpenTafsir: () -> Unit
 ) {
+    var showHadith by remember(content?.surahNumber, content?.ayahNumber, hadithContent?.hadithId) {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+            var totalDrag = 0f
+            detectHorizontalDragGestures(
+                onHorizontalDrag = { change, dragAmount ->
+                    totalDrag += dragAmount
+                    change.consume()
+                },
+                onDragEnd = {
+                    when {
+                        totalDrag < -72f -> showHadith = true
+                        totalDrag > 72f -> showHadith = false
+                    }
+                    totalDrag = 0f
+                },
+                onDragCancel = { totalDrag = 0f }
+            )
+        },
         colors = CardDefaults.cardColors(containerColor = cardColor),
-        shape = RoundedCornerShape(23.dp),
+        shape = RoundedCornerShape(22.dp),
         border = BorderStroke(1.dp, accent.copy(alpha = 0.24f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             Modifier.fillMaxWidth()
                 .background(Brush.linearGradient(listOf(Color(0xFF1A6B55).copy(alpha = 0.075f), cardColor, accent.copy(alpha = 0.055f))))
-                .padding(15.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+                .padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(38.dp).background(accent.copy(alpha = 0.13f), RoundedCornerShape(13.dp)),
-                    contentAlignment = Alignment.Center
+            AnimatedContent(
+                targetState = showHadith,
+                transitionSpec = {
+                    if (targetState) {
+                        (slideInHorizontally(animationSpec = tween(220)) { it } + fadeIn(animationSpec = tween(180))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(220)) { -it } + fadeOut(animationSpec = tween(140)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(220)) { -it } + fadeIn(animationSpec = tween(180))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(220)) { it } + fadeOut(animationSpec = tween(140)))
+                    }
+                },
+                label = "daily-ayah-hadith-swipe"
+            ) { hadithPage ->
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.size(9.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when (language) {
-                            AppLanguage.AR -> "آية اليوم"
-                            AppLanguage.CKB -> "ئایەتی ئەمڕۆ"
-                            AppLanguage.EN -> "Ayah of the day"
-                        },
-                        color = foreground, fontSize = 15.sp, fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        when (language) {
-                            AppLanguage.AR -> "معنى وتفسير باللغة الكردية"
-                            AppLanguage.CKB -> "مانا و تەفسیری کوردی"
-                            AppLanguage.EN -> "Kurdish meaning and tafsir"
-                        },
-                        color = foreground.copy(alpha = 0.60f), fontSize = 10.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(35.dp).background(accent.copy(alpha = 0.13f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
+                        }
+                        Spacer(Modifier.size(9.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                when {
+                                    hadithPage && language == AppLanguage.AR -> "حديث اليوم"
+                                    hadithPage && language == AppLanguage.CKB -> "فەرموودەی ئەمڕۆ"
+                                    hadithPage -> "Hadith of the day"
+                                    language == AppLanguage.AR -> "آية اليوم"
+                                    language == AppLanguage.CKB -> "ئایەتی ئەمڕۆ"
+                                    else -> "Ayah of the day"
+                                },
+                                color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                when {
+                                    hadithPage && language == AppLanguage.AR -> "النص العربي وترجمته بالسورانية"
+                                    hadithPage && language == AppLanguage.CKB -> "دەقی عەرەبی و وەرگێڕانی سۆرانی"
+                                    hadithPage -> "Arabic narration with Sorani translation"
+                                    language == AppLanguage.AR -> "المعنى والتفسير باللغة الكردية"
+                                    language == AppLanguage.CKB -> "مانا و تەفسیری کوردی"
+                                    else -> "Kurdish meaning and tafsir"
+                                },
+                                color = foreground.copy(alpha = 0.58f), fontSize = 9.sp
+                            )
+                        }
+                        Box(
+                            Modifier.background(accent.copy(alpha = 0.10f), RoundedCornerShape(50))
+                                .border(1.dp, accent.copy(alpha = 0.18f), RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (hadithPage) "02 / 02" else "01 / 02", color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    when {
+                        hadithPage && hadithLoading -> Text(
+                            when (language) {
+                                AppLanguage.AR -> "جارٍ تحميل حديث اليوم والترجمة السورانية…"
+                                AppLanguage.CKB -> "فەرموودەی ئەمڕۆ و وەرگێڕانی سۆرانی بار دەکرێت…"
+                                AppLanguage.EN -> "Loading today's Hadith and Sorani translation…"
+                            },
+                            color = foreground.copy(alpha = 0.65f), fontSize = 10.sp
+                        )
+                        hadithPage && hadithContent == null -> Text(
+                            when (language) {
+                                AppLanguage.AR -> "لا تتوفر حاليًا رواية بترجمة سورانية ضمن البيانات المحلية."
+                                AppLanguage.CKB -> "لە داتای ناوخۆییدا ئێستا فەرموودەیەکی وەرگێڕدراو بۆ سۆرانی بەردەست نییە."
+                                AppLanguage.EN -> "No Hadith with a Sorani translation is available in the local data."
+                            },
+                            color = foreground.copy(alpha = 0.65f), fontSize = 10.sp, lineHeight = 16.sp
+                        )
+                        hadithPage -> {
+                            Text(
+                                hadithContent!!.arabic,
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                color = foreground, fontSize = 19.sp, lineHeight = 31.sp,
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 5
+                            )
+                            Text(
+                                hadithContent.sorani,
+                                color = foreground.copy(alpha = 0.84f), fontSize = 11.sp, lineHeight = 18.sp,
+                                textAlign = TextAlign.Start, maxLines = 5
+                            )
+                            Text(
+                                hadithContent.reference,
+                                color = accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        loading -> Text(
+                            when (language) {
+                                AppLanguage.AR -> "جارٍ تحميل آية اليوم…"
+                                AppLanguage.CKB -> "ئایەتی ئەمڕۆ بار دەکرێت…"
+                                AppLanguage.EN -> "Loading today's ayah…"
+                            },
+                            color = foreground.copy(alpha = 0.64f), fontSize = 10.sp
+                        )
+                        content == null -> Text(
+                            when (language) {
+                                AppLanguage.AR -> "تعذر تحميل آية اليوم من قاعدة القرآن المحلية."
+                                AppLanguage.CKB -> "نەتوانرا ئایەتی ئەمڕۆ لە داتابەیسی ناوخۆیی قورئان باربکرێت."
+                                AppLanguage.EN -> "Today's verse could not be loaded from the local Quran database."
+                            },
+                            color = foreground.copy(alpha = 0.64f), fontSize = 10.sp
+                        )
+                        else -> {
+                            Text(
+                                content.arabic,
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                color = foreground, fontSize = 22.sp, lineHeight = 35.sp,
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 3
+                            )
+                            Text(
+                                content.kurdishTranslation.ifBlank {
+                                    when (language) {
+                                        AppLanguage.AR -> "الترجمة الكردية غير متاحة لهذه الآية."
+                                        AppLanguage.CKB -> "وەرگێڕانی کوردی بۆ ئەم ئایەتە بەردەست نییە."
+                                        AppLanguage.EN -> "Kurdish translation is unavailable for this verse."
+                                    }
+                                },
+                                color = foreground.copy(alpha = 0.82f), fontSize = 11.sp, lineHeight = 18.sp,
+                                textAlign = TextAlign.Start, maxLines = 3
+                            )
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 1.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.AR -> "تفسير كردي"
+                                        AppLanguage.CKB -> "تەفسیری کوردی"
+                                        AppLanguage.EN -> "Kurdish tafsir"
+                                    },
+                                    color = accent, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold
+                                )
+                                Spacer(Modifier.weight(1f))
+                                Text(
+                                    content.surahName + " • " + content.ayahNumber.toString(),
+                                    color = foreground.copy(alpha = 0.55f), fontSize = 8.sp
+                                )
+                            }
+                            val tafsirPreview = content.kurdishTafsir.trim().let { full ->
+                                if (full.length > 115) full.take(115).trimEnd() + "…" else full
+                            }
+                            if (tafsirPreview.isNotBlank()) {
+                                Text(
+                                    tafsirPreview,
+                                    color = foreground.copy(alpha = 0.70f), fontSize = 9.sp, lineHeight = 14.sp, maxLines = 2
+                                )
+                            }
+                            TextButton(
+                                onClick = onOpenTafsir,
+                                modifier = Modifier.height(28.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 0.dp),
+                                colors = ButtonDefaults.textButtonColors(contentColor = accent)
+                            ) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.AR -> "افتح التفسير الكامل"
+                                        AppLanguage.CKB -> "تەفسیری تەواو بکەرەوە"
+                                        AppLanguage.EN -> "Open full tafsir"
+                                    },
+                                    fontSize = 9.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
             }
-            when {
-                loading -> Text(
-                    when (language) {
-                        AppLanguage.AR -> "جارٍ تحميل الآية والتفسير الكردي…"
-                        AppLanguage.CKB -> "ئایەت و تەفسیری کوردی بار دەکرێت…"
-                        AppLanguage.EN -> "Loading the verse and Kurdish tafsir…"
-                    },
-                    color = foreground.copy(alpha = 0.64f), fontSize = 11.sp
+            Row(
+                Modifier.fillMaxWidth().padding(top = 1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    Modifier.width(15.dp).height(3.dp).background(
+                        if (!showHadith) accent else accent.copy(alpha = 0.22f),
+                        RoundedCornerShape(50)
+                    )
                 )
-                content == null -> Text(
-                    when (language) {
-                        AppLanguage.AR -> "تعذر تحميل آية اليوم من قاعدة القرآن المحلية."
-                        AppLanguage.CKB -> "نەتوانرا ئایەتی ئەمڕۆ لە داتابەیسی ناوخۆیی قورئان باربکرێت."
-                        AppLanguage.EN -> "The daily verse could not be loaded from the local Quran database."
-                    },
-                    color = foreground.copy(alpha = 0.64f), fontSize = 11.sp
+                Spacer(Modifier.size(5.dp))
+                Box(
+                    Modifier.width(15.dp).height(3.dp).background(
+                        if (showHadith) accent else accent.copy(alpha = 0.22f),
+                        RoundedCornerShape(50)
+                    )
                 )
-                else -> {
-                    Text(
-                        content.arabic,
-                        modifier = Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 2.dp),
-                        color = foreground, fontSize = 24.sp, lineHeight = 42.sp,
-                        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
-                    )
-                    Text(
-                        content.kurdishTranslation.ifBlank {
-                            when (language) {
-                                AppLanguage.AR -> "الترجمة الكردية غير متاحة لهذه الآية."
-                                AppLanguage.CKB -> "وەرگێڕانی کوردی بۆ ئەم ئایەتە بەردەست نییە."
-                                AppLanguage.EN -> "Kurdish translation is unavailable for this verse."
-                            }
-                        },
-                        color = foreground.copy(alpha = 0.82f), fontSize = 12.sp, lineHeight = 21.sp,
-                        textAlign = TextAlign.Start
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            when (language) {
-                                AppLanguage.AR -> "التفسير الكردي"
-                                AppLanguage.CKB -> "تەفسیری کوردی"
-                                AppLanguage.EN -> "Kurdish tafsir"
-                            },
-                            color = accent, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold
-                        )
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            content.surahName + " • " + content.ayahNumber.toString(),
-                            color = foreground.copy(alpha = 0.56f), fontSize = 9.sp
-                        )
-                    }
-                    val tafsirPreview = content.kurdishTafsir.trim().let { full ->
-                        if (full.length > 520) full.take(520).trimEnd() + "…" else full
-                    }
-                    Text(
-                        tafsirPreview.ifBlank {
-                            when (language) {
-                                AppLanguage.AR -> "لا يتوفر شرح لهذه الآية في كتب التفسير الكردية المتاحة."
-                                AppLanguage.CKB -> "لە تەفسیرە کوردییە بەردەستەکاندا ڕوونکردنەوەی ئەم ئایەتە نییە."
-                                AppLanguage.EN -> "No explanation for this verse was found in the available Kurdish tafsir sources."
-                            }
-                        },
-                        color = foreground.copy(alpha = 0.76f), fontSize = 11.sp, lineHeight = 18.sp
-                    )
-                    TextButton(
-                        onClick = onOpenTafsir,
-                        colors = ButtonDefaults.textButtonColors(contentColor = accent)
-                    ) {
-                        Text(
-                            when (language) {
-                                AppLanguage.AR -> "افتح التفسير الكامل"
-                                AppLanguage.CKB -> "تەفسیری تەواو بکەرەوە"
-                                AppLanguage.EN -> "Open full tafsir"
-                            },
-                            fontSize = 11.sp, fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.AR -> if (showHadith) "اسحب لليمين للعودة إلى الآية" else "اسحب لليسار لعرض حديث اليوم"
+                        AppLanguage.CKB -> if (showHadith) "بۆ گەڕانەوە بۆ ئایەت بۆ لای ڕاست ڕابکێشە" else "بۆ بینینی فەرموودە بۆ لای چەپ ڕابکێشە"
+                        AppLanguage.EN -> if (showHadith) "Swipe right to return to the ayah" else "Swipe left to reveal today's Hadith"
+                    },
+                    color = foreground.copy(alpha = 0.48f), fontSize = 8.sp
+                )
             }
         }
     }
