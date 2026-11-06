@@ -10,6 +10,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.os.StatFs
 import com.mashxall.unified.data.MushafPageVerseGeometry
+import com.mashxall.unified.data.MushafPageVerse
 import com.mashxall.unified.data.MushafWordBounds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
