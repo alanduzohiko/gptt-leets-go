@@ -8,22 +8,31 @@ import org.junit.Test
 
 class TajweedTextTest {
     @Test
-    fun stripsMarkupAndColoursOnlyTheTaggedLetterSpans() {
+    fun stripsMarkupAndUsesTheCommonReferenceColours() {
         val text = TajweedText.annotate("بِسْمِ [q[ق] بِلَا [g[ن]")
         assertEquals("بِسْمِ ق بِلَا ن", text.text)
         assertEquals(2, text.spanStyles.size)
-        assertEquals(Color(0xFFDD0008), text.spanStyles[0].item.color)
-        assertEquals(Color(0xFFFF7E1E), text.spanStyles[1].item.color)
+        assertEquals(Color(0xFFD23935), text.spanStyles[0].item.color)
+        assertEquals(Color(0xFFDB7B2D), text.spanStyles[1].item.color)
         assertEquals(7, text.spanStyles[0].start)
         assertEquals(8, text.spanStyles[0].end)
     }
 
     @Test
-    fun acceptsRuleIdentifiersWithNumericSourceMetadata() {
+    fun neutralRulesKeepTheNormalTextColourAndStillRemoveTheirMarkup() {
         val text = TajweedText.annotate("ٱللَّهِ [h:9421[ٱ] نُورٌ")
         assertEquals("ٱللَّهِ ٱ نُورٌ", text.text)
-        assertEquals(1, text.spanStyles.size)
-        assertEquals(Color(0xFFAAAAAA), text.spanStyles.single().item.color)
+        assertTrue(text.spanStyles.isEmpty())
+    }
+
+    @Test
+    fun maddHighlightsTheWholeWordWithSoftYellow() {
+        val text = TajweedText.annotate("قَالَ [n[هُدًى] وَالْحَقُّ")
+        assertEquals("قَالَ هُدًى وَالْحَقُّ", text.text)
+        val highlight = text.spanStyles.first { it.item.background != Color.Unspecified }
+        assertEquals(Color(0xFFFFF1BE), highlight.item.background)
+        assertEquals(5, highlight.start)
+        assertEquals(10, highlight.end)
     }
 
     @Test
@@ -35,7 +44,7 @@ class TajweedTextTest {
     }
 
     @Test
-    fun darkReaderUsesAHighContrastPalette() {
+    fun darkReaderUsesAHighContrastCommonPalette() {
         assertNotEquals(
             TajweedText.ruleColor('q', darkMode = false),
             TajweedText.ruleColor('q', darkMode = true)
