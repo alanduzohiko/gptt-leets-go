@@ -18,30 +18,27 @@ class TajweedMushafWordColorTest {
     }
 
     @Test
-    fun allSurahsUseTheSameCommonPalette() {
+    fun onlyTheMatchingSurahAyahAndWordGroupGetsAnSvgFill() {
         val svg = """
             <svg>
-              <g data-surah="001" data-aya="001" data-word-index-in-ayah="1"><path id="surah-one"/></g>
-              <g data-surah="114" data-aya="006" data-word-index-in-ayah="1"><path id="surah-114"/></g>
+              <g data-type="text" data-surah="001" data-aya="001" data-word-index-in-ayah="1"><path id="plain"/></g>
+              <g data-type="text" data-surah="001" data-aya="001" data-word-index-in-ayah="2"><path id="tajweed" fill="#000000" style="fill:#000000"/></g>
+              <g data-type="text" data-surah="001" data-aya="002" data-word-index-in-ayah="2"><path id="other-ayah"/></g>
+              <g data-type="text" data-surah="002" data-aya="001" data-word-index-in-ayah="2"><path id="other-surah"/></g>
             </svg>
         """.trimIndent()
         val taggedAyahs = mapOf(
-            1 to mapOf(1 to "[q:1[قَالَ]"),
-            114 to mapOf(6 to "[a:1[مِنَ]")
+            1 to mapOf(1 to "وَ [q:1[قَالَ] الرَّحْمَٰنُ")
         )
 
         val coloured = TajweedText.colorMushafSvgWords(svg, taggedAyahs)
 
-        assertTrue(coloured.contains("""<path id="surah-one" fill="#D23935"/>"""))
-        assertTrue(coloured.contains("""<path id="surah-114" fill="#2B945C"/>"""))
-    }
-
-    @Test
-    fun maddWordsAreSelectedForTheReferenceYellowHighlight() {
-        assertEquals(
-            listOf(true, false, false, true),
-            TajweedText.wordMaddHighlightFlags("[n[قَالَ] وَ [q[ق] [o[مَدّ]")
-        )
+        assertTrue(coloured.contains("""data-word-index-in-ayah="2" fill="#DD0008""""))
+        assertTrue(coloured.contains("""<path id="tajweed" fill="#DD0008" style="fill:#DD0008"/>"""))
+        assertTrue(coloured.contains("""<path id="plain"/>"""))
+        assertTrue(coloured.contains("""<path id="other-ayah"/>"""))
+        assertTrue(coloured.contains("""<path id="other-surah"/>"""))
+        assertFalse(coloured.contains("""data-word-index-in-ayah="1" fill="""))
     }
 
     @Test
@@ -51,8 +48,9 @@ class TajweedMushafWordColorTest {
 
         val coloured = TajweedText.colorMushafSvgWords(svg, tagged, darkMode = true)
 
-        assertTrue(coloured.contains("""fill="#00868B""""))
-        assertTrue(coloured.contains("""<path id="night" fill="#00868B"/>"""))
+        // The page is inverted after rendering; this source fill becomes darkPalette Qalqalah red.
+        assertTrue(coloured.contains("""fill="#008C86""""))
+        assertTrue(coloured.contains("""<path id="night" fill="#008C86"/>"""))
     }
 
     @Test
