@@ -184,9 +184,9 @@ internal object TajweedText {
             )
             val existingFill = Regex("""\sfill="[^"]*"""")
             if (existingFill.containsMatchIn(tag)) {
-                existingFill.replace(tag, " fill=\\"$hex\\"")
+                existingFill.replace(tag, " fill=" + '"' + hex + '"')
             } else {
-                tag.dropLast(1) + " fill=\\"$hex\\">"
+                tag.dropLast(1) + " fill=" + '"' + hex + '"' + ">"
             }
         }
     }
