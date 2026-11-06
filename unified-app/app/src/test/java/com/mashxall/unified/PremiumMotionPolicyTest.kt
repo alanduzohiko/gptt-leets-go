@@ -154,6 +154,41 @@ class PremiumMotionPolicyTest {
     }
 
     @Test
+    fun eachLiveBackgroundPresetHasItsOwnVisualTreatment() {
+        val ambient = ambientBackdropStyleTraits("ambient")
+        val orbit = ambientBackdropStyleTraits("orbit")
+        val ornament = ambientBackdropStyleTraits("ornament")
+        val off = ambientBackdropStyleTraits("off")
+
+        assertEquals(true, ambient.geometricOrnament)
+        assertEquals(true, ambient.glowFields)
+        assertEquals(false, ambient.orbitalAccent)
+        assertEquals(true, ambient.breathingLight)
+        assertEquals(true, ambient.movesGlow)
+
+        assertEquals(false, orbit.geometricOrnament)
+        assertEquals(true, orbit.glowFields)
+        assertEquals(true, orbit.orbitalAccent)
+        assertEquals(false, orbit.breathingLight)
+        assertEquals(false, orbit.movesGlow)
+
+        assertEquals(true, ornament.geometricOrnament)
+        assertEquals(false, ornament.glowFields)
+        assertEquals(false, ornament.orbitalAccent)
+        assertEquals(true, ornament.breathingLight)
+        assertEquals(true, ornament.movesGlow)
+
+        assertEquals(
+            AmbientBackdropStyleTraits(false, false, false, false, false),
+            off
+        )
+        assertFalse(ambient == orbit)
+        assertFalse(ambient == ornament)
+        assertFalse(orbit == ornament)
+        assertEquals(ambient, ambientBackdropStyleTraits("unknown"))
+    }
+
+    @Test
     fun contentSizeMotionRespectsSystemPreferenceAndLocalDisable() {
         assertEquals(true, shouldAnimateContentSize(motionAllowed = true))
         assertEquals(false, shouldAnimateContentSize(motionAllowed = false))
