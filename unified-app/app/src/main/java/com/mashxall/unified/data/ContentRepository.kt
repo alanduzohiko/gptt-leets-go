@@ -27,6 +27,7 @@ import java.net.URL
 import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
 
@@ -202,6 +203,10 @@ internal fun reciterDisplayName(value: String): String = value
     .trim()
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
+
+/** Stable daily rotation over the original Hadith database; returns a safe zero-based row offset. */
+internal fun dailyHadithOffset(date: LocalDate, totalHadiths: Int): Int =
+    if (totalHadiths <= 0) 0 else Math.floorMod(date.toEpochDay(), totalHadiths.toLong()).toInt()
 private data class SalawatiAzkarText(val ckb: String, val english: String, val reference: String)
 private data class KhairahPageMeta(
     val id: Int, val volume: String, val page: String, val offset: Int,
@@ -1730,6 +1735,33 @@ object ContentRepository {
                 }
             }
         }
+    }
+
+
+    /**
+     * Select one source-backed Hadith for the local calendar day. Only records that
+     * include both Arabic and the database's original Sorani translation are shown;
+     * this never fabricates or machine-translates missing text.
+     */
+    suspend fun loadDailyHadith(context: Context, date: LocalDate): HadithItem? = withContext(Dispatchers.IO) {
+        val total = loadHadithCount(context)
+        if (total <= 0) return@withContext null
+
+        val offset = dailyHadithOffset(date, total)
+        val primary = loadHadiths(context, offset = offset, limit = 120)
+        fun readableCandidate(rows: List<HadithItem>): HadithItem? =
+            rows.firstNotNullOfOrNull { row ->
+                val arabic = cleanHadithArabicSourceText(row.arabic)
+                val sorani = cleanHadithArabicSourceText(row.sorani)
+                if (arabic.isBlank() || sorani.isBlank()) null
+                else row.copy(arabic = arabic, sorani = sorani)
+            }
+
+        readableCandidate(primary)?.let { return@withContext it }
+        if (offset == 0) return@withContext null
+
+        val wrapped = loadHadiths(context, offset = 0, limit = minOf(250, offset))
+        readableCandidate(wrapped)
     }
 
     private const val SALAWATI_ID_OFFSET = 1_000_000
