@@ -19,6 +19,15 @@ class HomePrayerPriorityTests(unittest.TestCase):
         self.assertLess(self.home.index("HomePrayerCountdown("), quick_access)
         self.assertLess(self.home.index("HomePrayerJourneyStrip("), quick_access)
 
+    def test_islamic_occasions_and_daily_ayah_follow_prayer_times(self):
+        quick_access = self.home.index('Text(tr(language, "quick_access")')
+        occasions = self.home.index("IslamicOccasionsHomeCard(")
+        daily_ayah = self.home.index("AyahOfTheDayHomeCard(")
+        self.assertLess(self.home.index("HomePrayerCountdown("), occasions)
+        self.assertLess(occasions, daily_ayah)
+        self.assertLess(daily_ayah, quick_access)
+        self.assertIn("onOpenDailyAyah", self.home)
+
     def test_quick_access_is_directly_ahead_of_welcome_and_resume_cards(self):
         quick_access = self.home.index('Text(tr(language, "quick_access")')
         welcome = self.home.index("PremiumHomeHero(", quick_access)
