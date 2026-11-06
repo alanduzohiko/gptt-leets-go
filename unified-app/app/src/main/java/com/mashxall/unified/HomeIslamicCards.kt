@@ -52,7 +52,9 @@ internal data class DailyAyahCardContent(
 internal data class IslamicOccasion(
     val key: String,
     val date: LocalDate,
-    val hijriDateLabel: String,
+    val hijriDay: Int,
+    val hijriMonth: Int,
+    val hijriYear: Int,
     val titleArabic: String,
     val titleKurdish: String,
     val titleEnglish: String
@@ -62,6 +64,10 @@ internal data class IslamicOccasion(
         AppLanguage.CKB -> titleKurdish
         AppLanguage.EN -> titleEnglish
     }
+
+    fun hijriDateLabel(language: AppLanguage): String =
+        hijriDay.toString() + " " + hijriMonthName(hijriMonth, language) + " " + hijriYear.toString() +
+            if (language == AppLanguage.AR) " هـ" else " AH"
 
     fun daysFrom(today: LocalDate): Long =
         ChronoUnit.DAYS.between(today, date).coerceAtLeast(0L)
@@ -109,12 +115,13 @@ internal fun upcomingIslamicOccasions(today: LocalDate, limit: Int = 6): List<Is
                 }.getOrNull() ?: return@forEach
                 val gregorianDate = LocalDate.from(hijrahDate)
                 if (!gregorianDate.isBefore(today)) {
-                    val monthName = hijriMonthName(spec.month, AppLanguage.AR)
                     add(
                         IslamicOccasion(
                             key = spec.key,
                             date = gregorianDate,
-                            hijriDateLabel = spec.day.toString() + " " + monthName + " " + year.toString() + " هـ",
+                            hijriDay = spec.day,
+                            hijriMonth = spec.month,
+                            hijriYear = year,
                             titleArabic = spec.titleArabic,
                             titleKurdish = spec.titleKurdish,
                             titleEnglish = spec.titleEnglish
@@ -222,7 +229,7 @@ internal fun IslamicOccasionsHomeCard(
                     Column(Modifier.weight(1f)) {
                         Text(next.title(language), color = foreground, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.size(3.dp))
-                        Text(next.hijriDateLabel, color = foreground.copy(alpha = 0.63f), fontSize = 10.sp)
+                        Text(next.hijriDateLabel(language), color = foreground.copy(alpha = 0.63f), fontSize = 10.sp)
                         Text(occasionCountdown(next.daysFrom(today), language), color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -373,8 +380,11 @@ internal fun AyahOfTheDayHomeCard(
                             color = foreground.copy(alpha = 0.56f), fontSize = 9.sp
                         )
                     }
+                    val tafsirPreview = content.kurdishTafsir.trim().let { full ->
+                        if (full.length > 520) full.take(520).trimEnd() + "…" else full
+                    }
                     Text(
-                        content.kurdishTafsir.ifBlank {
+                        tafsirPreview.ifBlank {
                             when (language) {
                                 AppLanguage.AR -> "لا يتوفر شرح لهذه الآية في كتب التفسير الكردية المتاحة."
                                 AppLanguage.CKB -> "لە تەفسیرە کوردییە بەردەستەکاندا ڕوونکردنەوەی ئەم ئایەتە نییە."
