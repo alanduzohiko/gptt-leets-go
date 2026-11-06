@@ -3455,16 +3455,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(
-                                            if (language == AppLanguage.EN) "Colored Tajweed in verse text"
-                                            else if (language == AppLanguage.AR) "التجويد الملوّن في نص الآيات"
-                                            else "تەجویدی ڕەنگاوڕەنگ لە دەقی ئایەت",
+                                            if (language == AppLanguage.EN) "Colored Tajweed in the Mushaf"
+                                            else if (language == AppLanguage.AR) "التجويد الملوّن في المصحف"
+                                            else "تەجویدی ڕەنگاوڕەنگ لە مصحەف",
                                             color = foreground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                                         )
                                         Spacer(Modifier.height(3.dp))
                                         Text(
-                                            if (language == AppLanguage.EN) "Loads the tagged text for the selected surah online on first use and keeps a private cache for offline reading. The printed page image stays unchanged."
-                                            else if (language == AppLanguage.AR) "يحمّل نص التجويد للسورة من الإنترنت عند أول استخدام ويحتفظ بنسخة خاصة للقراءة دون إنترنت. لا يغيّر صورة صفحات المصحف."
-                                            else "لە یەکەم بەکارهێنان دەقی تەجویدی سوورەتەکە لە ئۆنلاین دادەگیرێت و لە ناو ئەپەکەدا دەپارێزرێت؛ وێنەی پەڕەی مصحەف ناگۆڕێت.",
+                                            if (language == AppLanguage.EN) "Downloads the surah's Tajweed rules on first use, caches them privately, and colours matching words on the original Mushaf page without leaving the reader."
+                                            else if (language == AppLanguage.AR) "يحمّل أحكام التجويد للسورة عند أول استخدام ويحفظها محليًا، ثم يلوّن الكلمات المطابقة على صفحة المصحف الأصلية دون مغادرة القارئ."
+                                            else "لە یەکەم بەکارهێنان یاساکانی تەجویدی سوورەت دادەگرێت و لە ناو ئەپەکەدا دەپارێزرێت، پاشان وشە هاوتاکان لەسەر پەڕەی ڕەسەنی مصحەف ڕەنگ دەکاتەوە بێ ئەوەی خوێندنەوە دابخات.",
                                             color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 15.sp
                                         )
                                     }
@@ -3473,18 +3473,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         onCheckedChange = { enabled ->
                                             coloredTajweed = enabled
                                             prefs.edit().putBoolean("quran_colored_tajweed", enabled).apply()
-                                            if (enabled) {
-                                                // Coloured Tajweed is a tagged verse-text feature.
-                                                // Enter that reader immediately so the toggle has a visible effect.
-                                                query = ""
-                                                showSurahList = false
-                                                openingMushaf = false
-                                                mushafMode = false
-                                                prefs.edit().putString("quran_reader_mode", "verse").apply()
-                                            } else {
+                                            // The Mushaf stays on the same printed page; its SVG word
+                                            // groups receive the rule colours once the page cache loads.
+                                            if (!enabled) {
                                                 tajweedAyahs = emptyMap()
                                                 tajweedLoadedSurah = 0
                                                 tajweedMessage = ""
+                                            } else {
+                                                retryTajweed++
                                             }
                                         }
                                     )
@@ -3494,6 +3490,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 Spacer(Modifier.height(7.dp))
                                 Text(
                                     when {
+                                        mushafMode && language == AppLanguage.EN -> "Tajweed colours are applied to matching words on the page Mushaf; the reader remains open."
+                                        mushafMode && language == AppLanguage.AR -> "تُطبّق ألوان التجويد على الكلمات المطابقة في صفحة المصحف، ويبقى المصحف مفتوحًا."
+                                        mushafMode -> "ڕەنگەکانی تەجوید لەسەر وشە هاوتاکان لە پەڕەی مصحەف دادەنرێن؛ مصحەف کراوە دەمێنێتەوە."
                                         tajweedLoading && language == AppLanguage.EN -> "Loading the tagged Tajweed text for this surah…"
                                         tajweedLoading && language == AppLanguage.AR -> "جارٍ تحميل نص التجويد الملوّن لهذه السورة…"
                                         tajweedLoading -> "دەقی تەجویدی ئەم سوورەتە دادەگیرێت…"
@@ -3502,11 +3501,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty() -> "تەجویدی ڕەنگاوڕەنگ بۆ ئەم سوورەتە چالاکە."
                                         else -> tajweedMessage.ifBlank { if (language == AppLanguage.EN) "Tajweed data is not loaded yet." else if (language == AppLanguage.AR) "لم تُحمّل بيانات التجويد بعد." else "داتای تەجوید هێشتا بارنەکراوە." }
                                     },
-                                    color = if (tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty()) Gold else foreground.copy(alpha = 0.66f),
+                                    color = if (mushafMode || (tajweedLoadedSurah == selected && tajweedAyahs.isNotEmpty())) Gold else foreground.copy(alpha = 0.66f),
                                     fontSize = 10.sp,
                                     lineHeight = 15.sp
                                 )
-                                if (!tajweedLoading && (tajweedLoadedSurah != selected || tajweedAyahs.isEmpty())) {
+                                if (mushafMode || (!tajweedLoading && (tajweedLoadedSurah != selected || tajweedAyahs.isEmpty()))) {
                                     PremiumChoicePill(
                                         label = if (language == AppLanguage.EN) "Retry Tajweed" else if (language == AppLanguage.AR) "إعادة تحميل التجويد" else "دووبارە بارکردنەوەی تەجوید",
                                         selected = false,
