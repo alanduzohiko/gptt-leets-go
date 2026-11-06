@@ -271,6 +271,20 @@ def main() -> int:
         "total_content_bytes": sum(x["size_bytes"] for x in inventory["files"]),
         "mushaf_svg_pages": mushaf_index["page_count"],
     }
+    # Diagnostic inventory for identifying a genuinely separate Madinah/Tajweed
+    # page edition. These are filenames only; no source assets are modified.
+    mushaf_asset_candidates = [
+        item for item in inventory["files"]
+        if re.search(r"mushaf|quran|tajweed|madin|madina|page", item.get("asset_path", ""), re.I)
+        and item.get("extension") in IMAGES | {".pdf", ".ttf", ".otf"}
+    ]
+    print("MASHXALL_MUSHAF_SOURCE_CANDIDATES_BEGIN")
+    print(json.dumps({
+        "documents": inventory["documents"],
+        "fonts": inventory["fonts"],
+        "matching_assets": mushaf_asset_candidates,
+    }, ensure_ascii=False, separators=(",", ":")))
+    print("MASHXALL_MUSHAF_SOURCE_CANDIDATES_END")
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     catalog_path.write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(inventory["counts"], ensure_ascii=False, indent=2))
