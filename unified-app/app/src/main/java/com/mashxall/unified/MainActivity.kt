@@ -147,6 +147,9 @@ import com.mashxall.unified.data.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -729,6 +732,16 @@ fun MashxallApp(startScreen: String? = null) {
                                         resumeMushafRequested = prefs.contains("last_surah") ||
                                             prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page")
                                         navigateTo(AppScreen.QURAN.key)
+                                    },
+                                    onOpenDailyAyah = { surahNumber, ayahNumber ->
+                                        selectedSurah = surahNumber
+                                        selectedAyah = ayahNumber
+                                        prefs.edit()
+                                            .putInt("last_surah", surahNumber)
+                                            .putInt("last_ayah_number", ayahNumber)
+                                            .putInt("quran_progress_ayah_" + surahNumber, ayahNumber)
+                                            .apply()
+                                        navigateTo("tafsir")
                                     },
                                     isActive = screen == AppScreen.HOME.key
                                 )
@@ -1947,6 +1960,7 @@ private fun HomeScreen(
     use24Hour: Boolean,
     onOpen: (AppScreen) -> Unit,
     onResumeReading: () -> Unit = { onOpen(AppScreen.QURAN) },
+    onOpenDailyAyah: (Int, Int) -> Unit = { _, _ -> },
     isActive: Boolean = true
 ) {
     val context = LocalContext.current
@@ -1994,6 +2008,11 @@ private fun HomeScreen(
     var savedQuranAyah by remember { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
     var savedQuranPage by remember { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
     var savedQuranMode by remember { mutableStateOf(prefs.getString("quran_reader_mode", "verse") ?: "verse") }
+    val todayDate = remember(clockNow) {
+        Instant.ofEpochMilli(clockNow).atZone(ZoneId.systemDefault()).toLocalDate()
+    }
+    var dailyAyahContent by remember { mutableStateOf<DailyAyahCardContent?>(null) }
+    var dailyAyahLoading by remember { mutableStateOf(false) }
 
     LaunchedEffect(isActive) {
         if (!isActive) return@LaunchedEffect
@@ -2003,6 +2022,50 @@ private fun HomeScreen(
         savedQuranAyah = prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)
         savedQuranPage = prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)
         savedQuranMode = prefs.getString("quran_reader_mode", "verse") ?: "verse"
+    }
+
+    LaunchedEffect(isActive, todayDate) {
+        if (!isActive) return@LaunchedEffect
+        dailyAyahLoading = true
+        dailyAyahContent = null
+        try {
+            val surahsForDay = ContentRepository.loadSurahs(context)
+            val reference = dailyAyahReference(surahsForDay, todayDate)
+            val surah = reference?.let { ref -> surahsForDay.firstOrNull { it.number == ref.surah } }
+            if (reference != null && surah != null) {
+                val verses = ContentRepository.loadAyahs(
+                    context,
+                    reference.surah,
+                    "ckb",
+                    translationKey = "puxta"
+                )
+                val verse = verses.firstOrNull { it.number == reference.ayah }
+                if (verse != null) {
+                    var kurdishTafsir = ""
+                    for (bookId in listOf("roshn", "hazhar", "rebar", "hawrami", "maisar")) {
+                        kurdishTafsir = ContentRepository.loadTafsir(
+                            context, bookId, reference.surah, reference.ayah
+                        )
+                        if (kurdishTafsir.isNotBlank()) break
+                    }
+                    dailyAyahContent = DailyAyahCardContent(
+                        surahNumber = reference.surah,
+                        ayahNumber = reference.ayah,
+                        surahName = surah.arabicName,
+                        arabic = verse.arabic,
+                        kurdishTranslation = verse.translation,
+                        kurdishTafsir = kurdishTafsir
+                    )
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            android.util.Log.w("MashxallHome", "Could not load the Kurdish daily ayah", error)
+            dailyAyahContent = null
+        } finally {
+            dailyAyahLoading = false
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -2499,6 +2562,26 @@ private fun HomeScreen(
             }
         }
 
+        Spacer(Modifier.height(15.dp))
+        IslamicOccasionsHomeCard(
+            language = language,
+            today = todayDate,
+            foreground = foreground,
+            cardColor = cardColor,
+            accent = Gold
+        )
+        Spacer(Modifier.height(12.dp))
+        AyahOfTheDayHomeCard(
+            language = language,
+            content = dailyAyahContent,
+            loading = dailyAyahLoading,
+            foreground = foreground,
+            cardColor = cardColor,
+            accent = Gold,
+            onOpenTafsir = {
+                dailyAyahContent?.let { onOpenDailyAyah(it.surahNumber, it.ayahNumber) }
+            }
+        )
         Spacer(Modifier.height(15.dp))
         Row(
             Modifier.fillMaxWidth(),
