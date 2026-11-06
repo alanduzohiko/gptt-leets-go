@@ -2020,6 +2020,8 @@ private fun HomeScreen(
     }
     var dailyAyahContent by remember { mutableStateOf<DailyAyahCardContent?>(null) }
     var dailyAyahLoading by remember { mutableStateOf(false) }
+    var dailyHadithContent by remember { mutableStateOf<DailyHadithCardContent?>(null) }
+    var dailyHadithLoading by remember { mutableStateOf(false) }
 
     // Re-check the local calendar day while Home is visible. This deliberately
     // does not depend on the prayer-countdown clock, so the daily verse refreshes
@@ -2046,7 +2048,28 @@ private fun HomeScreen(
         if (!isActive) return@LaunchedEffect
         dailyAyahLoading = true
         dailyAyahContent = null
+        dailyHadithLoading = true
+        dailyHadithContent = null
         try {
+            val hadithForDay = try {
+                ContentRepository.loadDailyHadith(context, todayDate)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.w("MashxallHome", "Could not load the Sorani Hadith of the day", error)
+                null
+            }
+            dailyHadithContent = hadithForDay?.let { hadith ->
+                val referenceParts = listOf(hadith.bookName, hadith.sortInBook)
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                DailyHadithCardContent(
+                    hadithId = hadith.id,
+                    arabic = hadith.arabic,
+                    sorani = hadith.sorani,
+                    reference = referenceParts.joinToString(" • ").ifBlank { "#${hadith.id}" }
+                )
+            }
             val surahsForDay = ContentRepository.loadSurahs(context)
             val reference = dailyAyahReference(surahsForDay, todayDate)
             val surah = reference?.let { ref -> surahsForDay.firstOrNull { it.number == ref.surah } }
@@ -2083,6 +2106,7 @@ private fun HomeScreen(
             dailyAyahContent = null
         } finally {
             dailyAyahLoading = false
+            dailyHadithLoading = false
         }
     }
 
@@ -2593,6 +2617,8 @@ private fun HomeScreen(
             language = language,
             content = dailyAyahContent,
             loading = dailyAyahLoading,
+            hadithContent = dailyHadithContent,
+            hadithLoading = dailyHadithLoading,
             foreground = foreground,
             cardColor = cardColor,
             accent = Gold,
