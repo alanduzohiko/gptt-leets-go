@@ -365,9 +365,14 @@ internal object TajweedText {
         var result = if (fillAttribute.containsMatchIn(element)) {
             fillAttribute.replace(element, """fill="$hex"""")
         } else {
-            val closeIndex = element.lastIndexOf('>')
-            if (closeIndex < 0) element else
-                element.substring(0, closeIndex).trimEnd() + """ fill="$hex">"""
+            val trimmed = element.trimEnd()
+            if (trimmed.endsWith("/>")) {
+                trimmed.dropLast(2).trimEnd() + """ fill="$hex"/>"""
+            } else {
+                val closeIndex = trimmed.lastIndexOf('>')
+                if (closeIndex < 0) element else
+                    trimmed.substring(0, closeIndex).trimEnd() + """ fill="$hex">"""
+            }
         }
 
         // Inline SVG styles override inherited fill attributes, so keep them aligned.
