@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -163,6 +164,44 @@ def index_mushaf_svg_pages(pages_bin: Path, index_path: Path) -> dict:
     print(f"Indexed {len(pages)} Mushaf SVG pages from {pages_bin.name}; index: {index_path}")
     return result
 
+def pdf_document_probe(path: Path) -> dict:
+    """Read PDF page count and a short first-page text sample without altering the source."""
+    result = {"page_count": None, "page_count_method": None, "first_page_text": ""}
+    pdfinfo = shutil.which("pdfinfo")
+    if pdfinfo:
+        try:
+            proc = subprocess.run(
+                [pdfinfo, str(path)],
+                check=True, capture_output=True, text=True, timeout=20
+            )
+            match = re.search(r"^Pages:\\s+(\\d+)", proc.stdout, re.M)
+            if match:
+                result["page_count"] = int(match.group(1))
+                result["page_count_method"] = "pdfinfo"
+        except (subprocess.SubprocessError, OSError):
+            pass
+    if result["page_count"] is None:
+        try:
+            data = path.read_bytes()
+            counts = [int(value) for value in re.findall(rb"/Count\\s+(\\d+)", data)]
+            if counts:
+                result["page_count"] = max(counts)
+                result["page_count_method"] = "raw PDF page-tree count"
+        except OSError:
+            pass
+    pdftotext = shutil.which("pdftotext")
+    if pdftotext:
+        try:
+            proc = subprocess.run(
+                [pdftotext, "-f", "1", "-l", "2", "-layout", str(path), "-"],
+                check=True, capture_output=True, text=True, timeout=25
+            )
+            result["first_page_text"] = " ".join(proc.stdout.split())[:1200]
+        except (subprocess.SubprocessError, OSError):
+            pass
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle", required=True, type=Path)
@@ -278,11 +317,20 @@ def main() -> int:
         if re.search(r"mushaf|quran|tajweed|madin|madina|page", item.get("asset_path", ""), re.I)
         and item.get("extension") in IMAGES | {".pdf", ".ttf", ".otf"}
     ]
+    pdf_probes = []
+    for document in inventory["documents"]:
+        pdf_path = out / document["asset_path"]
+        pdf_probes.append({
+            **{key: document.get(key) for key in ("asset_path", "size_bytes", "sha256")},
+            **pdf_document_probe(pdf_path),
+        })
     print("MASHXALL_MUSHAF_SOURCE_CANDIDATES_BEGIN")
     print(json.dumps({
-        "documents": inventory["documents"],
+        "documents": pdf_probes,
         "fonts": inventory["fonts"],
         "matching_assets": mushaf_asset_candidates,
+        "pdfinfo_available": shutil.which("pdfinfo") is not None,
+        "pdftotext_available": shutil.which("pdftotext") is not None,
     }, ensure_ascii=False, separators=(",", ":")))
     print("MASHXALL_MUSHAF_SOURCE_CANDIDATES_END")
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
