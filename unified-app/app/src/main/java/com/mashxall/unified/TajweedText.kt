@@ -5,6 +5,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Parses the compact bracketed Tajweed markup used by AlQuranCloud's
