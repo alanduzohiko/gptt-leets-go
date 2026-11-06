@@ -1414,6 +1414,59 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
+    var mushafEdition by rememberSaveable {
+        mutableStateOf(prefs.getString("quran_mushaf_edition", "original") ?: "original")
+    }
+    var tajweedPackInstalled by remember { mutableStateOf(TajweedMushafRepository.isInstalled(context)) }
+    var tajweedPackDownloading by remember { mutableStateOf(false) }
+    var tajweedPackProgress by remember { mutableFloatStateOf(0f) }
+    var tajweedPackError by rememberSaveable { mutableStateOf("") }
+    fun chooseMushafEdition(edition: String) {
+        if (edition == "original") {
+            mushafEdition = "original"
+            prefs.edit().putString("quran_mushaf_edition", "original").apply()
+            return
+        }
+        tajweedPackInstalled = TajweedMushafRepository.isInstalled(context)
+        if (tajweedPackInstalled) {
+            mushafEdition = "tajweed"
+            prefs.edit().putString("quran_mushaf_edition", "tajweed").apply()
+            return
+        }
+        if (tajweedPackDownloading) return
+        tajweedPackDownloading = true
+        tajweedPackProgress = 0f
+        tajweedPackError = ""
+        scope.launch {
+            try {
+                TajweedMushafRepository.install(context) { downloaded, total ->
+                    if (total > 0L) {
+                        tajweedPackProgress = (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                    }
+                }
+                tajweedPackInstalled = true
+                mushafEdition = "tajweed"
+                prefs.edit().putString("quran_mushaf_edition", "tajweed").apply()
+                Toast.makeText(
+                    context,
+                    when (language) {
+                        AppLanguage.EN -> "The 604-page Tajweed Mushaf is ready offline."
+                        AppLanguage.AR -> "أصبح مصحف التجويد ذو 604 صفحات جاهزًا للعمل دون اتصال."
+                        AppLanguage.CKB -> "مصحەفی تەجویدی ٦٠٤ پەڕە ئێستا بۆ بەکارهێنانی بێ ئینتەرنێت ئامادەیە."
+                    },
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (error: Exception) {
+                tajweedPackError = error.message ?: when (language) {
+                    AppLanguage.EN -> "Could not download the Tajweed Mushaf. Check the link and try again."
+                    AppLanguage.AR -> "تعذّر تنزيل مصحف التجويد. تحقق من الرابط وحاول مجددًا."
+                    AppLanguage.CKB -> "داگرتنی مصحەفی تەجوید سەرکەوتوو نەبوو؛ لینکەکە بپشکنە و دووبارە هەوڵ بدە."
+                }
+            } finally {
+                tajweedPackDownloading = false
+            }
+        }
+    }
     var openingMushaf by remember { mutableStateOf(false) }
     var pendingMushafStartSurah by remember { mutableIntStateOf(0) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
@@ -1617,10 +1670,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         )
     }
 
-    LaunchedEffect(inlinePlaybackActiveVerse, inlinePlaybackVisible, mushafMode) {
+    LaunchedEffect(inlinePlaybackActiveVerse, inlinePlaybackVisible, mushafMode, mushafEdition) {
         val target = inlinePlaybackActiveVerse
         if (!inlinePlaybackVisible || !mushafMode || target == null) return@LaunchedEffect
-        val targetPage = ContentRepository.loadMushafPageForVerse(context, target.first, target.second)
+        val targetPage = if (mushafEdition == "tajweed") {
+            TajweedMushafRepository.loadPageForVerse(context, target.first, target.second)
+        } else {
+            ContentRepository.loadMushafPageForVerse(context, target.first, target.second)
+        }
         if (targetPage != null && targetPage != mushafPage) {
             mushafPage = targetPage
             prefs.edit()
@@ -1668,14 +1725,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
     }
     LaunchedEffect(initialSurah) { selected = initialSurah }
-    LaunchedEffect(pendingMushafStartSurah, language.key, translationKey) {
+    LaunchedEffect(pendingMushafStartSurah, language.key, translationKey, mushafEdition) {
         val requestedSurah = pendingMushafStartSurah
         if (requestedSurah !in 1..114) return@LaunchedEffect
         val page = runCatching {
-            val sourceVerses = ContentRepository.loadAyahs(
-                context, requestedSurah, language.key, translationKey = translationKey
-            )
-            resolveSurahStartPage(sourceVerses, requestedSurah)
+            if (mushafEdition == "tajweed") {
+                TajweedMushafRepository.loadPageForVerse(context, requestedSurah, 1)
+            } else {
+                val sourceVerses = ContentRepository.loadAyahs(
+                    context, requestedSurah, language.key, translationKey = translationKey
+                )
+                resolveSurahStartPage(sourceVerses, requestedSurah)
+            }
         }.getOrNull()
         if (pendingMushafStartSurah != requestedSurah) return@LaunchedEffect
         if (page != null) {
@@ -2160,6 +2221,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 language = language,
                 foreground = foreground,
                 page = mushafPage,
+                edition = mushafEdition,
                 darkMode = mushafDarkMode,
                 sepiaMode = mushafSepiaMode,
                 onPageChange = { requested ->
@@ -3185,9 +3247,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         Column(Modifier.weight(1f)) {
                                             Text(if (language == AppLanguage.EN) "Mushaf editions & Tajweed" else if (language == AppLanguage.AR) "طبعات المصحف والتجويد" else "چاپەکانی مصحەف و تەجوید", color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             Text(
-                                                if (language == AppLanguage.EN) "The original 604-page graphic Mushaf remains unchanged. Colored Tajweed is available in verse-text view; extra full-page Mushaf editions need complete verified page assets."
-                                                else if (language == AppLanguage.AR) "يبقى المصحف المصوّر الأصلي ذو 604 صفحات كما هو. التجويد الملوّن متاح في عرض نص الآيات؛ أما طبعات المصاحف المصوّرة الإضافية فتحتاج ملفات صفحات كاملة وموثوقة."
-                                                else "مصحەفی وێنەیی ڕەسەنی ٦٠٤ پەڕە ناگۆڕدرێت. تەجویدی ڕەنگاوڕەنگ لە پێشان‌دانی دەقی ئایەت بەردەستە؛ چاپی وێنەیی زیاتر پێویستی بە فایلە تەواو و پشتڕاستکراوەکانە.",
+                                                if (language == AppLanguage.EN) "The original graphic Mushaf remains intact. A separate 604-page Tajweed edition can be downloaded in Reader appearance settings and uses the same verse actions."
+                                                else if (language == AppLanguage.AR) "يبقى المصحف المصوّر الأصلي دون أي تغيير. يمكن تنزيل مصحف تجويد مستقل من إعدادات مظهر القارئ، ويستخدم وظائف الآيات نفسها."
+                                                else "مصحەفی وێنەیی ڕەسەن بەبێ گۆڕان دەمێنێتەوە؛ لە ڕێکخستنەکانی ڕووکاری خوێندنەوە دەتوانرێت مصحەفێکی تەجویدی سەربەخۆ دابەزێندرێت.",
                                                 color = foreground.copy(alpha = 0.62f), fontSize = 10.sp, lineHeight = 15.sp
                                             )
                                         }
@@ -3451,7 +3513,75 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     }
                     "appearance" -> {
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                            Text(if (language == AppLanguage.EN) "Included edition: original 604-page Mushaf." else if (language == AppLanguage.AR) "النسخة المضمّنة: المصحف الأصلي ذو 604 صفحات." else "وەشانی بەردەست: مصحەفی ڕەسەنی ٦٠٤ پەڕە.", color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp)
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Choose one of two independent 604-page editions. The original stays installed and remains the default."
+                                    AppLanguage.AR -> "اختر بين مصحفين مستقلين، لكل منهما 604 صفحات. يبقى المصحف العادي كما هو ويظل الاختيار الافتراضي."
+                                    AppLanguage.CKB -> "لە نێوان دوو وەشانی سەربەخۆی ٦٠٤ پەڕە هەڵبژێرە؛ مصحەفی ئاسایی وەک خۆی دەمێنێتەوە و بنەڕەتییە."
+                                },
+                                color = foreground.copy(alpha = 0.68f), fontSize = 11.sp, lineHeight = 17.sp
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = cardColor),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        if (language == AppLanguage.EN) "Mushaf edition" else if (language == AppLanguage.AR) "نسخة المصحف" else "وەشانی مصحەف",
+                                        color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        PremiumChoicePill(
+                                            label = if (language == AppLanguage.EN) "Original Mushaf" else if (language == AppLanguage.AR) "المصحف العادي" else "مصحەفی ئاسایی",
+                                            selected = mushafEdition == "original",
+                                            accent = Gold,
+                                            foreground = foreground
+                                        ) { chooseMushafEdition("original") }
+                                        PremiumChoicePill(
+                                            label = if (language == AppLanguage.EN) "Tajweed Mushaf" else if (language == AppLanguage.AR) "مصحف التجويد" else "مصحەفی تەجوید",
+                                            selected = mushafEdition == "tajweed",
+                                            accent = Gold,
+                                            foreground = foreground,
+                                            enabled = tajweedPackInstalled && !tajweedPackDownloading
+                                        ) { chooseMushafEdition("tajweed") }
+                                    }
+                                    if (!tajweedPackInstalled && !tajweedPackDownloading) {
+                                        Text(
+                                            if (language == AppLanguage.EN) "Download the separate 604-page edition once (about 138 MB). It is stored privately for offline use and does not increase the APK size."
+                                            else if (language == AppLanguage.AR) "يُنزل المصحف الثاني مرة واحدة (نحو 138 ميغابايت)، ويُحفظ داخل التطبيق للعمل دون اتصال، ولا يزيد حجم APK."
+                                            else "وەشانی دووەم تەنها یەک جار دادەگیرێت (نزیکەی ١٣٨ مێگابایت) و بۆ بەکارهێنانی بێ ئینتەرنێت لەناو ئەپەکە دەپارێزرێت؛ قەبارەی APK زیاد ناکات.",
+                                            color = foreground.copy(alpha = 0.60f), fontSize = 10.sp, lineHeight = 15.sp
+                                        )
+                                        PremiumChoicePill(
+                                            label = if (language == AppLanguage.EN) "Download Tajweed Mushaf • 138 MB" else if (language == AppLanguage.AR) "تنزيل مصحف التجويد • 138 م.ب" else "داگرتنی مصحەفی تەجوید • ١٣٨ م.ب",
+                                            selected = false,
+                                            accent = Gold,
+                                            foreground = foreground
+                                        ) { chooseMushafEdition("tajweed") }
+                                    }
+                                    if (tajweedPackDownloading) {
+                                        Text(
+                                            if (language == AppLanguage.EN) "Downloading and verifying… ${(tajweedPackProgress * 100f).toInt()}%"
+                                            else if (language == AppLanguage.AR) "جارٍ التنزيل والتحقق… ${(tajweedPackProgress * 100f).toInt()}٪"
+                                            else "داگرتن و پشتڕاستکردنەوە… ${(tajweedPackProgress * 100f).toInt()}٪",
+                                            color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    if (tajweedPackInstalled) {
+                                        Text(
+                                            if (language == AppLanguage.EN) "Downloaded and ready offline."
+                                            else if (language == AppLanguage.AR) "تم التنزيل وأصبح جاهزًا دون اتصال."
+                                            else "داگیراوە و بێ ئینتەرنێت ئامادەیە.",
+                                            color = Gold, fontSize = 10.sp
+                                        )
+                                    }
+                                    if (tajweedPackError.isNotBlank()) {
+                                        Text(tajweedPackError, color = Color(0xFFE59B83), fontSize = 10.sp, lineHeight = 15.sp)
+                                    }
+                                }
+                            }
                             Spacer(Modifier.height(12.dp))
                             Card(colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Gold.copy(alpha = 0.22f))) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -4029,6 +4159,7 @@ private fun MushafPageViewer(
     language: AppLanguage,
     foreground: Color,
     page: Int,
+    edition: String = "original",
     darkMode: Boolean,
     sepiaMode: Boolean,
     onPageChange: (Int) -> Unit,
@@ -4062,20 +4193,20 @@ private fun MushafPageViewer(
     var fingerCurlAnchorY by remember { mutableFloatStateOf(0.5f) }
     var curlBackBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var curlUnderlayBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var nextCurlBackBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
-    var previousCurlBackBitmap by remember(page) { mutableStateOf<Bitmap?>(null) }
-    var viewportSize by remember(page) { mutableStateOf(IntSize.Zero) }
+    var nextCurlBackBitmap by remember(page, edition) { mutableStateOf<Bitmap?>(null) }
+    var previousCurlBackBitmap by remember(page, edition) { mutableStateOf<Bitmap?>(null) }
+    var viewportSize by remember(page, edition) { mutableStateOf(IntSize.Zero) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
-    var pageVerseGeometry by remember(page) { mutableStateOf<List<MushafPageVerseGeometry>>(emptyList()) }
+    var pageVerses by remember(page, edition) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
+    var pageVerseGeometry by remember(page, edition) { mutableStateOf<List<MushafPageVerseGeometry>>(emptyList()) }
     var pageTajweedBySurah by remember(page) {
         mutableStateOf<Map<Int, Map<Int, String>>>(emptyMap())
     }
-    var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
-    var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
-    var loading by remember(page) { mutableStateOf(true) }
-    var failed by remember(page) { mutableStateOf(false) }
+    var selectedVerse by remember(page, edition) { mutableStateOf<MushafPageVerse?>(null) }
+    var verseRects by remember(page, edition) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
+    var loading by remember(page, edition) { mutableStateOf(true) }
+    var failed by remember(page, edition) { mutableStateOf(false) }
     var retryPageLoad by remember(page) { mutableIntStateOf(0) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
     var scale by remember(page) { mutableFloatStateOf(1f) }
@@ -4096,13 +4227,16 @@ private fun MushafPageViewer(
         }
     }
     LaunchedEffect(page) { pageInput = page.toString() }
-    LaunchedEffect(page, motionAllowed) {
+    LaunchedEffect(page, edition, motionAllowed) {
         nextCurlBackBitmap = null
         previousCurlBackBitmap = null
         if (!motionAllowed) return@LaunchedEffect
 
         suspend fun renderPreview(targetPage: Int): Bitmap? {
             if (targetPage !in 1..604) return null
+            if (edition == "tajweed") {
+                return TajweedMushafRepository.renderPageBitmap(context, targetPage, 900, 1287)
+            }
             val source = ContentRepository.loadMushafPageSvg(context, targetPage) ?: return null
             return withContext(Dispatchers.Default) {
                 try {
@@ -4127,8 +4261,8 @@ private fun MushafPageViewer(
         nextCurlBackBitmap = nextPage?.let { renderPreview(it) }
         previousCurlBackBitmap = previousPage?.let { renderPreview(it) }
     }
-    LaunchedEffect(page, coloredTajweed, pageVerses, surahAyahCounts, tajweedRetryKey) {
-        if (!coloredTajweed || pageVerses.isEmpty()) {
+    LaunchedEffect(page, edition, coloredTajweed, pageVerses, surahAyahCounts, tajweedRetryKey) {
+        if (edition != "original" || !coloredTajweed || pageVerses.isEmpty()) {
             pageTajweedBySurah = emptyMap()
             return@LaunchedEffect
         }
@@ -4151,8 +4285,8 @@ private fun MushafPageViewer(
 
     // Re-render the same vector page with inherited word fills once its tagged
     // Tajweed data is ready. The printed page, SVG paths and reader mode stay put.
-    LaunchedEffect(page, coloredTajweed, pageTajweedBySurah, darkMode, loading) {
-        if (loading || bitmap == null || lastLoadedPage != page) return@LaunchedEffect
+    LaunchedEffect(page, edition, coloredTajweed, pageTajweedBySurah, darkMode, loading) {
+        if (edition != "original" || loading || bitmap == null || lastLoadedPage != page) return@LaunchedEffect
         val source = ContentRepository.loadMushafPageSvg(context, page) ?: return@LaunchedEffect
         val renderSource = if (coloredTajweed) {
             TajweedText.colorMushafSvgWords(source, pageTajweedBySurah, darkMode)
@@ -4174,12 +4308,15 @@ private fun MushafPageViewer(
         if (updatedBitmap != null) bitmap = updatedBitmap
     }
 
-    LaunchedEffect(page, retryPageLoad) {
+    LaunchedEffect(page, edition, retryPageLoad) {
         val previousPageBitmap = bitmap ?: turningPageBitmap
         if (previousPageBitmap != null && lastLoadedPage != page) {
             turningPageBitmap = previousPageBitmap
             pageTurnDirection = mushafCurlDirectionForPageTransition(lastLoadedPage, page)
             pageCurlProgress.snapTo(0f)
+        } else if (lastLoadedPage == page) {
+            turningPageBitmap = null
+            pageCurlProgress.snapTo(1f)
         }
         loading = true
         failed = false
@@ -4189,33 +4326,43 @@ private fun MushafPageViewer(
         verseRects = emptyList()
         selectedVerse = null
         try {
-            val source = ContentRepository.loadMushafPageSvg(context, page)
-            if (source != null) {
-                pageVerseGeometry = withContext(Dispatchers.Default) {
-                    parseMushafPageVerseGeometry(source)
+            if (edition == "tajweed") {
+                val rendered = TajweedMushafRepository.loadRenderedPage(context, page)
+                pageVerseGeometry = rendered?.geometry.orEmpty()
+                pageVerses = pageVerseGeometry.map { it.verse }
+                pageVerses.firstOrNull()?.let { firstVerse ->
+                    onReadingPosition(firstVerse.surah, firstVerse.ayah)
                 }
-            }
-            pageVerses = pageVerseGeometry.map { it.verse }.ifEmpty {
-                ContentRepository.loadMushafPageVerses(context, page)
-            }
-            pageVerses.firstOrNull()?.let { firstVerse ->
-                onReadingPosition(firstVerse.surah, firstVerse.ayah)
-            }
-            bitmap = if (source == null) {
-                null
+                bitmap = rendered?.bitmap
             } else {
-                withContext(Dispatchers.Default) {
-                    try {
-                        val svg = SVG.getFromString(source)
-                        Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
-                            image.eraseColor(AndroidColor.WHITE)
-                            svg.renderToCanvas(Canvas(image))
+                val source = ContentRepository.loadMushafPageSvg(context, page)
+                if (source != null) {
+                    pageVerseGeometry = withContext(Dispatchers.Default) {
+                        parseMushafPageVerseGeometry(source)
+                    }
+                }
+                pageVerses = pageVerseGeometry.map { it.verse }.ifEmpty {
+                    ContentRepository.loadMushafPageVerses(context, page)
+                }
+                pageVerses.firstOrNull()?.let { firstVerse ->
+                    onReadingPosition(firstVerse.surah, firstVerse.ayah)
+                }
+                bitmap = if (source == null) {
+                    null
+                } else {
+                    withContext(Dispatchers.Default) {
+                        try {
+                            val svg = SVG.getFromString(source)
+                            Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
+                                image.eraseColor(AndroidColor.WHITE)
+                                svg.renderToCanvas(Canvas(image))
+                            }
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("MashxallMushaf", "Could not render SVG page $page", error)
+                            null
                         }
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        android.util.Log.e("MashxallMushaf", "Could not render SVG page $page", error)
-                        null
                     }
                 }
             }
@@ -4274,7 +4421,14 @@ private fun MushafPageViewer(
         ) {
             ReaderActionIcon(Icons.Outlined.ArrowBack, tr(language, "back"), pressedScale = quranReaderActionPressScale("back"), onClick = onExitFullscreen)
             Column(Modifier.weight(1f).padding(start = 3.dp)) {
-                Text(tr(language, "mushaf_view"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                Text(
+                    if (edition == "tajweed") {
+                        if (language == AppLanguage.EN) "Tajweed Mushaf"
+                        else if (language == AppLanguage.AR) "مصحف التجويد"
+                        else "مصحەفی تەجوید"
+                    } else tr(language, "mushaf_view"),
+                    color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1
+                )
                 Text(
                     tr(language, "page") + " " + page + " / 604",
                     color = PaleGold,
