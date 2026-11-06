@@ -139,6 +139,12 @@ internal fun upcomingIslamicOccasions(today: LocalDate, limit: Int = 6): List<Is
     return candidates.distinctBy { it.key to it.date }.sortedBy { it.date }.take(limit)
 }
 
+/** The home card keeps only the next occasion visible until the user expands it. */
+internal fun visibleAdditionalIslamicOccasions(
+    occasions: List<IslamicOccasion>,
+    expanded: Boolean
+): List<IslamicOccasion> = if (expanded) occasions.drop(1) else emptyList()
+
 /** Choose a repeatable Quran verse for each local calendar day without inventing text. */
 internal fun dailyAyahReference(surahs: List<Surah>, date: LocalDate): DailyAyahReference? {
     val orderedSurahs = surahs.filter { it.number in 1..114 && it.ayahCount > 0 }.sortedBy { it.number }
@@ -286,7 +292,7 @@ internal fun IslamicOccasionsHomeCard(
             }
             if (expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    occasions.drop(1).forEach { event ->
+                    visibleAdditionalIslamicOccasions(occasions, expanded).forEach { event ->
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 1.dp),
                             verticalAlignment = Alignment.CenterVertically
