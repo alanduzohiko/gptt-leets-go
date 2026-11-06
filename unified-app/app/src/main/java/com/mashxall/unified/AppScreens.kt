@@ -1419,7 +1419,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showSurahList by rememberSaveable { mutableStateOf(true) }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     var coloredTajweed by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("quran_colored_tajweed", false))
+        mutableStateOf(prefs.getBoolean("quran_colored_tajweed", true))
     }
     var tajweedAyahs by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var tajweedLoadedSurah by remember { mutableIntStateOf(0) }
