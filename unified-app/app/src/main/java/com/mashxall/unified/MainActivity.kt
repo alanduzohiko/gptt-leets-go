@@ -2802,7 +2802,6 @@ fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
     }
 }
 
-@Composable
 private fun accentForPreview(style: String): Color = when (style) {
     "ambient" -> Color(0xFF65B997)
     "orbit" -> Color(0xFFD7B65B)
@@ -2810,6 +2809,7 @@ private fun accentForPreview(style: String): Color = when (style) {
     else -> Color(0xFF8E9894)
 }
 
+@Composable
 private fun SettingsScreen(
     language: AppLanguage,
     foreground: Color,
