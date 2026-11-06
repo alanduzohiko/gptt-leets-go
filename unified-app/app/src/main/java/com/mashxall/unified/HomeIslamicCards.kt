@@ -37,6 +37,7 @@ import java.time.chrono.HijrahChronology
 import java.time.chrono.HijrahDate
 import java.time.temporal.ChronoField
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 internal data class DailyAyahReference(val surah: Int, val ayah: Int)
 
@@ -68,6 +69,10 @@ internal data class IslamicOccasion(
     fun hijriDateLabel(language: AppLanguage): String =
         hijriDay.toString() + " " + hijriMonthName(hijriMonth, language) + " " + hijriYear.toString() +
             if (language == AppLanguage.AR) " هـ" else " AH"
+
+    /** Gregorian calendar date, displayed separately from the estimated Hijri date. */
+    fun gregorianDateLabel(): String =
+        String.format(Locale.ROOT, "%02d/%02d/%04d", date.dayOfMonth, date.monthValue, date.year)
 
     fun daysFrom(today: LocalDate): Long =
         ChronoUnit.DAYS.between(today, date).coerceAtLeast(0L)
@@ -178,6 +183,7 @@ internal fun IslamicOccasionsHomeCard(
 ) {
     val occasions = remember(today) { upcomingIslamicOccasions(today, limit = 12) }
     val next = occasions.firstOrNull()
+    var expanded by remember(today) { androidx.compose.runtime.mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -210,9 +216,9 @@ internal fun IslamicOccasionsHomeCard(
                     )
                     Text(
                         when (language) {
-                            AppLanguage.AR -> "المناسبة القادمة حسب التقويم الهجري"
-                            AppLanguage.CKB -> "بۆنەی داهاتوو بەپێی ساڵنامەی کۆچی"
-                            AppLanguage.EN -> "Upcoming dates in the Hijri calendar"
+                            AppLanguage.AR -> "أقرب مناسبة قادمة"
+                            AppLanguage.CKB -> "نزیکترین بۆنەی داهاتوو"
+                            AppLanguage.EN -> "Your next Islamic occasion"
                         },
                         color = foreground.copy(alpha = 0.60f), fontSize = 10.sp
                     )
@@ -228,8 +234,16 @@ internal fun IslamicOccasionsHomeCard(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(next.title(language), color = foreground, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.size(4.dp))
+                        Text(
+                            (if (language == AppLanguage.AR) "هجري: " else if (language == AppLanguage.CKB) "کۆچی: " else "Hijri: ") + next.hijriDateLabel(language),
+                            color = foreground.copy(alpha = 0.72f), fontSize = 10.sp
+                        )
+                        Text(
+                            (if (language == AppLanguage.AR) "ميلادي: " else if (language == AppLanguage.CKB) "زایینی: " else "Gregorian: ") + next.gregorianDateLabel(),
+                            color = foreground.copy(alpha = 0.62f), fontSize = 10.sp
+                        )
                         Spacer(Modifier.size(3.dp))
-                        Text(next.hijriDateLabel(language), color = foreground.copy(alpha = 0.63f), fontSize = 10.sp)
                         Text(occasionCountdown(next.daysFrom(today), language), color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -254,23 +268,48 @@ internal fun IslamicOccasionsHomeCard(
                     color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
                 )
             }
-            // Keep all of the user's requested milestones visible in the home calendar.
-            occasions.drop(1).take(8).forEach { event ->
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            if (occasions.size > 1) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = accent)
                 ) {
-                    Box(Modifier.size(6.dp).background(accent.copy(alpha = 0.82f), RoundedCornerShape(50)))
-                    Spacer(Modifier.size(8.dp))
-                    Text(event.title(language), color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text(occasionCountdown(event.daysFrom(today), language), color = foreground.copy(alpha = 0.58f), fontSize = 9.sp)
+                    Text(
+                        when (language) {
+                            AppLanguage.AR -> if (expanded) "إخفاء بقية المناسبات ▲" else "عرض بقية المناسبات (${occasions.size - 1}) ▼"
+                            AppLanguage.CKB -> if (expanded) "شاردنەوەی بۆنەکانی تر ▲" else "پیشاندانی بۆنەکانی تر (${occasions.size - 1}) ▼"
+                            AppLanguage.EN -> if (expanded) "Hide other occasions ▲" else "Show other occasions (${occasions.size - 1}) ▼"
+                        },
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            if (expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    occasions.drop(1).forEach { event ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.size(6.dp).background(accent.copy(alpha = 0.82f), RoundedCornerShape(50)))
+                            Spacer(Modifier.size(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(event.title(language), color = foreground, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    event.hijriDateLabel(language) + "  •  " + event.gregorianDateLabel(),
+                                    color = foreground.copy(alpha = 0.54f), fontSize = 9.sp
+                                )
+                            }
+                            Text(occasionCountdown(event.daysFrom(today), language), color = foreground.copy(alpha = 0.68f), fontSize = 9.sp)
+                        }
+                    }
                 }
             }
             Text(
                 when (language) {
-                    AppLanguage.AR -> "التواريخ تقديرية وقد تتقدم أو تتأخر يومًا بحسب رؤية الهلال."
-                    AppLanguage.CKB -> "بەروارەکان خەمڵێنراون و بە پێی بینینی مانگ ڕەنگە یەک ڕۆژ بگۆڕێن."
-                    AppLanguage.EN -> "Dates are estimates and may shift by a day with local moon sighting."
+                    AppLanguage.AR -> "التواريخ الهجرية تقديرية وقد تتقدم أو تتأخر يومًا بحسب رؤية الهلال."
+                    AppLanguage.CKB -> "بەروارە کۆچییەکان خەمڵێنراون و بە پێی بینینی مانگ ڕەنگە یەک ڕۆژ بگۆڕێن."
+                    AppLanguage.EN -> "Hijri dates are estimates and may shift by a day with local moon sighting."
                 },
                 color = foreground.copy(alpha = 0.48f), fontSize = 9.sp, lineHeight = 14.sp
             )
