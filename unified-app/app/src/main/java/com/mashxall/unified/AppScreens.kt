@@ -1833,6 +1833,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
     }
     val currentSurah = surahs.firstOrNull { it.number == selected }
+    val surahAyahCounts = remember(surahs) { surahs.associate { it.number to it.ayahCount } }
     val currentTranslation = ContentRepository.quranTranslations.firstOrNull { it.id == translationKey }
         ?: ContentRepository.quranTranslations.first()
     LaunchedEffect(selectedAyahForSheet, language, translationKey, selectedTafsirBook) {
@@ -2177,6 +2178,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     toggleBookmark(surahNumber, ayahNumber)
                 },
                 playbackVerse = inlinePlaybackActiveVerse,
+                coloredTajweed = coloredTajweed,
+                surahAyahCounts = surahAyahCounts,
+                tajweedRetryKey = retryTajweed,
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
                     onSurah(surahNumber)
@@ -4068,6 +4072,9 @@ private fun MushafPageViewer(
     onBookmarkVerse: (Int, Int) -> Boolean,
     onVerseClick: (Int, Int) -> Unit,
     playbackVerse: Pair<Int, Int>? = null,
+    coloredTajweed: Boolean = false,
+    surahAyahCounts: Map<Int, Int> = emptyMap(),
+    tajweedRetryKey: Int = 0,
     onReadingPosition: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
@@ -4096,6 +4103,9 @@ private fun MushafPageViewer(
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var pageVerseGeometry by remember(page) { mutableStateOf<List<MushafPageVerseGeometry>>(emptyList()) }
+    var pageTajweedBySurah by remember(page) {
+        mutableStateOf<Map<Int, Map<Int, String>>>(emptyMap())
+    }
     var selectedVerse by remember(page) { mutableStateOf<MushafPageVerse?>(null) }
     var verseRects by remember(page) { mutableStateOf<List<MushafPageRect>>(emptyList()) }
     var loading by remember(page) { mutableStateOf(true) }
@@ -4151,6 +4161,53 @@ private fun MushafPageViewer(
         nextCurlBackBitmap = nextPage?.let { renderPreview(it) }
         previousCurlBackBitmap = previousPage?.let { renderPreview(it) }
     }
+    LaunchedEffect(page, coloredTajweed, pageVerses, surahAyahCounts, tajweedRetryKey) {
+        if (!coloredTajweed || pageVerses.isEmpty()) {
+            pageTajweedBySurah = emptyMap()
+            return@LaunchedEffect
+        }
+        val pageSurahs = pageVerses.map { it.surah }.distinct()
+        val loadedBySurah = linkedMapOf<Int, Map<Int, String>>()
+        try {
+            pageSurahs.forEach { surahNumber ->
+                val ayahCount = surahAyahCounts[surahNumber] ?: return@forEach
+                val loaded = ContentRepository.loadTajweedAyahs(context, surahNumber, ayahCount)
+                if (loaded.isNotEmpty()) loadedBySurah[surahNumber] = loaded
+            }
+            pageTajweedBySurah = loadedBySurah
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w("MashxallTajweed", "Could not load coloured Tajweed for Mushaf page $page", error)
+            pageTajweedBySurah = loadedBySurah
+        }
+    }
+
+    // Re-render the same vector page with inherited word fills once its tagged
+    // Tajweed data is ready. The printed page, SVG paths and reader mode stay put.
+    LaunchedEffect(page, coloredTajweed, pageTajweedBySurah, darkMode, loading) {
+        if (loading || bitmap == null) return@LaunchedEffect
+        val source = ContentRepository.loadMushafPageSvg(context, page) ?: return@LaunchedEffect
+        val renderSource = if (coloredTajweed) {
+            TajweedText.colorMushafSvgWords(source, pageTajweedBySurah, darkMode)
+        } else source
+        val updatedBitmap = withContext(Dispatchers.Default) {
+            try {
+                val svg = SVG.getFromString(renderSource)
+                Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
+                    image.eraseColor(AndroidColor.WHITE)
+                    svg.renderToCanvas(Canvas(image))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                android.util.Log.w("MashxallMushaf", "Could not apply Tajweed colours to page $page", error)
+                null
+            }
+        }
+        if (updatedBitmap != null) bitmap = updatedBitmap
+    }
+
     LaunchedEffect(page, retryPageLoad) {
         val previousPageBitmap = bitmap ?: turningPageBitmap
         if (previousPageBitmap != null && lastLoadedPage != page) {
