@@ -491,12 +491,10 @@ fun MashxallApp(startScreen: String? = null) {
     var backgroundSpeed by rememberSaveable {
         mutableStateOf(normalizeAmbientBackdropSpeed(prefs.getFloat("background_speed", 0.72f)))
     }
-    val animatedAccent by animateColorAsState(
-        targetValue = MashxallAppearance.colorFor(accentPalette),
-        animationSpec = tween(durationMillis = if (motionAllowed) 320 else 0, easing = FastOutSlowInEasing),
-        label = "Mashxall accent palette transition"
-    )
-    SideEffect { MashxallAppearance.accent = animatedAccent }
+    // Apply the selected palette as the source of truth immediately. Animating
+    // this global value from a captured previous frame made rapid selections
+    // briefly restore the old colour and felt like a required second tap.
+    SideEffect { MashxallAppearance.accent = MashxallAppearance.colorFor(accentPalette) }
     var screen by rememberSaveable {
         mutableStateOf(
             startScreen?.takeIf { candidate ->
@@ -2810,20 +2808,13 @@ private fun SettingsScreen(
                 }
                 val paletteColor = MashxallAppearance.colorFor(palette)
                 val selectedPalette = accentPalette == palette
-                Row(
-                    Modifier.height(46.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (selectedPalette) paletteColor.copy(alpha = 0.16f) else foreground.copy(alpha = 0.035f))
-                        .border(1.dp, if (selectedPalette) paletteColor.copy(alpha = 0.72f) else foreground.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
-                        .clickable(role = Role.RadioButton) { onAccent(palette) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    Box(Modifier.size(16.dp).clip(CircleShape).background(paletteColor))
-                    Text(label, color = if (selectedPalette) foreground else foreground.copy(alpha = 0.72f), fontSize = 10.sp, fontWeight = if (selectedPalette) FontWeight.Bold else FontWeight.Medium)
-                    if (selectedPalette) Icon(Icons.Outlined.CheckCircle, null, tint = paletteColor, modifier = Modifier.size(14.dp))
-                }
+                PremiumChoicePill(
+                    label = label,
+                    selected = selectedPalette,
+                    accent = paletteColor,
+                    foreground = foreground,
+                    leadingIcon = Icons.Outlined.Circle
+                ) { onAccent(palette) }
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -2913,20 +2904,13 @@ private fun SettingsScreen(
                             "ornament" -> Icons.Outlined.Tune
                             else -> Icons.Outlined.Info
                         }
-                        Row(
-                            Modifier.height(46.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (selectedStyle) Gold.copy(alpha = 0.15f) else foreground.copy(alpha = 0.035f))
-                                .border(1.dp, if (selectedStyle) Gold.copy(alpha = 0.65f) else foreground.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
-                                .clickable(role = Role.RadioButton) { onBackgroundStyle(style) }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(styleIcon, null, tint = if (selectedStyle) Gold else foreground.copy(alpha = 0.64f), modifier = Modifier.size(15.dp))
-                            Text(label, color = if (selectedStyle) foreground else foreground.copy(alpha = 0.70f), fontSize = 10.sp, fontWeight = if (selectedStyle) FontWeight.Bold else FontWeight.Medium)
-                            if (selectedStyle) Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(13.dp))
-                        }
+                        PremiumChoicePill(
+                            label = label,
+                            selected = selectedStyle,
+                            accent = Gold,
+                            foreground = foreground,
+                            leadingIcon = styleIcon
+                        ) { onBackgroundStyle(style) }
                     }
                 }
                 Box(
@@ -2982,7 +2966,7 @@ private fun SettingsScreen(
                         color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
                     )
                     Spacer(Modifier.weight(1f))
-                    Text("\${(backgroundIntensity * 100f).roundToInt()}%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("${(backgroundIntensity * 100f).roundToInt()}%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
                 PremiumSlider(
                     value = backgroundIntensity,
@@ -3002,7 +2986,7 @@ private fun SettingsScreen(
                         color = foreground, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
                     )
                     Spacer(Modifier.weight(1f))
-                    Text("\${(backgroundSpeed * 100f).roundToInt()}%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("${(backgroundSpeed * 100f).roundToInt()}%", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
                 PremiumSlider(
                     value = backgroundSpeed,
