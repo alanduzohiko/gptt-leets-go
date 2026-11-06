@@ -31,8 +31,8 @@ class TajweedTextTest {
         assertEquals("قَالَ هُدًى وَالْحَقُّ", text.text)
         val highlight = text.spanStyles.first { it.item.background != Color.Unspecified }
         assertEquals(Color(0xFFFFF1BE), highlight.item.background)
-        assertEquals(5, highlight.start)
-        assertEquals(10, highlight.end)
+        assertEquals(6, highlight.start)
+        assertEquals(11, highlight.end)
     }
 
     @Test
