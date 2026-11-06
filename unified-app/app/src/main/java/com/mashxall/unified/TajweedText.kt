@@ -160,22 +160,61 @@ internal object TajweedText {
     ): String {
         if (svgSource.isBlank() || taggedAyahsBySurah.isEmpty()) return svgSource
         val colorCache = mutableMapOf<Pair<Int, Int>, List<Color?>>()
-        val wordGroup = Regex("""<g\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>""")
-        return wordGroup.replace(svgSource) { match ->
-            val tag = match.value
-            fun attribute(name: String): String? =
-                Regex("""\b${Regex.escape(name)}="([^"]*)"""")
-                    .find(tag)?.groupValues?.getOrNull(1)
+        val wordGroup = Regex(
+            """(<g\\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>)(.*?)(</g>)""",
+            setOf(RegexOption.DOT_MATCHES_ALL)
+        )
 
-            val surah = attribute("data-surah")?.toIntOrNull() ?: return@replace tag
-            val ayah = attribute("data-aya")?.toIntOrNull() ?: return@replace tag
-            val wordIndex = attribute("data-word-index-in-ayah")?.toIntOrNull() ?: return@replace tag
-            if (wordIndex < 1) return@replace tag
-            val encoded = taggedAyahsBySurah[surah]?.get(ayah) ?: return@replace tag
+        fun setFill(element: String, hex: String): String {
+            val fillAttribute = Regex("""\\bfill="[^"]*"""")
+            var result = if (fillAttribute.containsMatchIn(element)) {
+                fillAttribute.replace(element, "fill=" + '"' + hex + '"')
+            } else {
+                val trimmed = element.trimEnd()
+                if (trimmed.endsWith("/>")) {
+                    trimmed.dropLast(2) + " fill=" + '"' + hex + '"' + "/>"
+                } else {
+                    trimmed.dropLast(1) + " fill=" + '"' + hex + '"' + ">"
+                }
+            }
+
+            // An inline SVG style has higher precedence than the fill attribute.
+            val styleAttribute = Regex("""\\bstyle="([^"]*)"""")
+            val style = styleAttribute.find(result)
+            if (style != null) {
+                val oldStyle = style.groupValues[1]
+                val fillRule = Regex("""(?:^|;)\\s*fill\\s*:\\s*[^;]*""")
+                val newStyle = if (fillRule.containsMatchIn(oldStyle)) {
+                    fillRule.replace(oldStyle) { match ->
+                        val prefix = if (match.value.startsWith(";")) ";" else ""
+                        prefix + "fill:$hex"
+                    }
+                } else {
+                    oldStyle.trimEnd().trimEnd(';') + ";fill:$hex"
+                }
+                result = styleAttribute.replace(result, "style=" + '"' + newStyle + '"')
+            }
+            return result
+        }
+
+        return wordGroup.replace(svgSource) { match ->
+            val openingTag = match.groupValues[1]
+            val body = match.groupValues[2]
+            val closingTag = match.groupValues[3]
+
+            fun attribute(name: String): String? =
+                Regex("""\\b${Regex.escape(name)}="([^"]*)"""")
+                    .find(openingTag)?.groupValues?.getOrNull(1)
+
+            val surah = attribute("data-surah")?.toIntOrNull() ?: return@replace match.value
+            val ayah = attribute("data-aya")?.toIntOrNull() ?: return@replace match.value
+            val wordIndex = attribute("data-word-index-in-ayah")?.toIntOrNull() ?: return@replace match.value
+            if (wordIndex < 1) return@replace match.value
+            val encoded = taggedAyahsBySurah[surah]?.get(ayah) ?: return@replace match.value
             val wordColors = colorCache.getOrPut(surah to ayah) {
                 wordRuleColors(encoded, darkMode)
             }
-            val color = wordColors.getOrNull(wordIndex - 1) ?: return@replace tag
+            val color = wordColors.getOrNull(wordIndex - 1) ?: return@replace match.value
             val hex = String.format(
                 Locale.US,
                 "#%02X%02X%02X",
@@ -183,12 +222,12 @@ internal object TajweedText {
                 (color.green * 255f).toInt().coerceIn(0, 255),
                 (color.blue * 255f).toInt().coerceIn(0, 255)
             )
-            val existingFill = Regex("""\sfill="[^"]*"""")
-            if (existingFill.containsMatchIn(tag)) {
-                existingFill.replace(tag, " fill=" + '"' + hex + '"')
-            } else {
-                tag.dropLast(1) + " fill=" + '"' + hex + '"' + ">"
+            val colouredOpening = setFill(openingTag, hex)
+            val pathTags = Regex("""<path\\b[^>]*>""")
+            val colouredBody = pathTags.replace(body) { pathMatch ->
+                setFill(pathMatch.value, hex)
             }
+            colouredOpening + colouredBody + closingTag
         }
     }
 
