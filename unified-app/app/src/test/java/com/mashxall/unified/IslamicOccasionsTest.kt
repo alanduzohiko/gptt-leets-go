@@ -28,6 +28,30 @@ class IslamicOccasionsTest {
     }
 
     @Test
+    fun gregorianDateLabelIncludesDayMonthAndFourDigitYear() {
+        val occasion = IslamicOccasion(
+            key = "test",
+            date = LocalDate.of(2030, 3, 8),
+            hijriDay = 8,
+            hijriMonth = 9,
+            hijriYear = 1451,
+            titleArabic = "اختبار",
+            titleKurdish = "تاقیکردنەوە",
+            titleEnglish = "Test"
+        )
+
+        assertEquals("08/03/2030", occasion.gregorianDateLabel())
+    }
+
+    @Test
+    fun otherOccasionsStayHiddenUntilTheCardIsExpanded() {
+        val occasions = upcomingIslamicOccasions(LocalDate.of(2026, 11, 6), limit = 20)
+
+        assertEquals(emptyList<IslamicOccasion>(), visibleAdditionalIslamicOccasions(occasions, expanded = false))
+        assertEquals(occasions.drop(1), visibleAdditionalIslamicOccasions(occasions, expanded = true))
+    }
+
+    @Test
     fun occasionLimitIsRespectedAndZeroReturnsNoRows() {
         val today = LocalDate.of(2026, 11, 6)
         assertEquals(3, upcomingIslamicOccasions(today, limit = 3).size)
