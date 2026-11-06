@@ -9725,49 +9725,83 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     val readableLexiconContent = remember(item.content) {
                         NoorLexiconCipher.decrypt(item.content)
                     }
+                    var expanded by rememberSaveable(item.title, item.root) { mutableStateOf(false) }
                     Card(
                         modifier = Modifier.fillMaxWidth()
                             .padding(horizontal = 14.dp)
                             .staggeredEntrance(itemKey = "${item.title}:${item.root}:$itemIndex", index = itemIndex)
                             .premiumAnimateContentSize(),
                         colors = CardDefaults.cardColors(containerColor = cardColor),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(0.7.dp, Gold.copy(alpha = if (expanded) 0.30f else 0.14f))
                     ) {
                         Column(Modifier.padding(14.dp)) {
-                            Text(item.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            if (item.root.isNotBlank()) {
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    (if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + item.root,
-                                    color = foreground.copy(alpha = 0.65f), fontSize = 10.sp
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            if (readableLexiconContent.isNotBlank()) {
-                                Text(
-                                    readableLexiconContent,
-                                    color = foreground,
-                                    fontSize = 12.sp,
-                                    lineHeight = 20.sp
-                                )
-                            } else if (item.content.isNotBlank()) {
-                                Text(
-                                    when (language) {
-                                        AppLanguage.EN -> "This entry's original explanation could not be decoded."
-                                        AppLanguage.AR -> "تعذّر فك شرح هذه المفردة من مصدره الأصلي."
-                                        AppLanguage.CKB -> "نەتوانرا ڕوونکردنەوەی ئەم وشەیە لە سەرچاوەی ڕەسەنەوە بکۆدرێتەوە."
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .premiumClickable(hapticFeedback = true) { expanded = !expanded }
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    if (item.root.isNotBlank()) {
+                                        Spacer(Modifier.height(3.dp))
+                                        Text(
+                                            (if (language == AppLanguage.EN) "Root: " else if (language == AppLanguage.AR) "الجذر: " else "ڕەگ: ") + item.root,
+                                            color = foreground.copy(alpha = 0.65f), fontSize = 10.sp
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.Outlined.ChevronRight,
+                                    contentDescription = if (expanded) {
+                                        if (language == AppLanguage.EN) "Collapse explanation"
+                                        else if (language == AppLanguage.AR) "طي الشرح"
+                                        else "شارده‌وه‌ی ڕوونکردنەوە"
+                                    } else {
+                                        if (language == AppLanguage.EN) "Show explanation"
+                                        else if (language == AppLanguage.AR) "عرض الشرح"
+                                        else "پیشاندانی ڕوونکردنەوە"
                                     },
-                                    color = foreground.copy(alpha = 0.56f),
-                                    fontSize = 10.sp,
-                                    lineHeight = 16.sp
+                                    tint = Gold,
+                                    modifier = Modifier.graphicsLayer { rotationZ = if (expanded) 90f else 0f }.size(22.dp)
                                 )
                             }
-                            if (item.reference.isNotBlank()) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    (if (language == AppLanguage.EN) "Reference: " else if (language == AppLanguage.AR) "المصدر: " else "سەرچاوە: ") + item.reference,
-                                    color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
-                                )
+                            AnimatedVisibility(
+                                visible = expanded,
+                                enter = expandVertically(tween(240)) + fadeIn(tween(160)),
+                                exit = shrinkVertically(tween(180)) + fadeOut(tween(120))
+                            ) {
+                                Column {
+                                    Spacer(Modifier.height(9.dp))
+                                    if (readableLexiconContent.isNotBlank()) {
+                                        Text(
+                                            readableLexiconContent,
+                                            color = foreground,
+                                            fontSize = 13.sp,
+                                            lineHeight = 22.sp
+                                        )
+                                    } else if (item.content.isNotBlank()) {
+                                        Text(
+                                            when (language) {
+                                                AppLanguage.EN -> "This entry's original explanation could not be decoded."
+                                                AppLanguage.AR -> "تعذّر فك شرح هذه المفردة من مصدره الأصلي."
+                                                AppLanguage.CKB -> "نەتوانرا ڕوونکردنەوەی ئەم وشەیە لە سەرچاوەی ڕەسەنەوە بکۆدرێتەوە."
+                                            },
+                                            color = foreground.copy(alpha = 0.56f),
+                                            fontSize = 10.sp,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                    if (item.reference.isNotBlank()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            (if (language == AppLanguage.EN) "Reference: " else if (language == AppLanguage.AR) "المصدر: " else "سەرچاوە: ") + item.reference,
+                                            color = foreground.copy(alpha = 0.5f), fontSize = 10.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
