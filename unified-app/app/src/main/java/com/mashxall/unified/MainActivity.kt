@@ -520,6 +520,7 @@ fun MashxallApp(startScreen: String? = null) {
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_mode", true)) }
     var selectedSurah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_surah", 1).coerceIn(1, 114)) }
     var selectedAyah by rememberSaveable { mutableIntStateOf(prefs.getInt("last_ayah_number", 1).coerceAtLeast(1)) }
+    var dailyAyahTafsirInitialBook by rememberSaveable { mutableStateOf<String?>(null) }
     var resumeMushafRequested by rememberSaveable { mutableStateOf(false) }
     var quranSettingsRequested by rememberSaveable { mutableStateOf(false) }
     var audioStartsAtReciters by rememberSaveable { mutableStateOf(false) }
@@ -734,6 +735,7 @@ fun MashxallApp(startScreen: String? = null) {
                                         navigateTo(AppScreen.QURAN.key)
                                     },
                                     onOpenDailyAyah = { surahNumber, ayahNumber ->
+                                        dailyAyahTafsirInitialBook = "roshn"
                                         selectedSurah = surahNumber
                                         selectedAyah = ayahNumber
                                         prefs.edit()
@@ -834,14 +836,19 @@ fun MashxallApp(startScreen: String? = null) {
                                     },
                                     isActive = screen == AppScreen.PRAYER.key
                                 )
-                                "tafsir" -> TafsirScreen(language, foreground, cardColor, selectedSurah, selectedAyah, onChangeVerse = { s, a ->
-                                    selectedSurah = s; selectedAyah = a
-                                    prefs.edit()
-                                        .putInt("last_surah", s)
-                                        .putInt("last_ayah_number", a)
-                                        .putInt("quran_progress_ayah_$s", a)
-                                        .apply()
-                                })
+                                "tafsir" -> TafsirScreen(
+                                    language, foreground, cardColor, selectedSurah, selectedAyah,
+                                    initialBook = dailyAyahTafsirInitialBook,
+                                    onInitialBookApplied = { dailyAyahTafsirInitialBook = null },
+                                    onChangeVerse = { s, a ->
+                                        selectedSurah = s; selectedAyah = a
+                                        prefs.edit()
+                                            .putInt("last_surah", s)
+                                            .putInt("last_ayah_number", a)
+                                            .putInt("quran_progress_ayah_$s", a)
+                                            .apply()
+                                    }
+                                )
                                 "hadith" -> HadithScreen(language, foreground, cardColor)
                                 "azkar" -> AzkarScreen(language, foreground, cardColor)
                                 "names" -> NamesScreen(language, foreground, cardColor)
