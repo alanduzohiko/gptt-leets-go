@@ -4922,11 +4922,26 @@ internal fun tafsirSwipeTarget(
 }
 
 @Composable
-fun TafsirScreen(language: AppLanguage, foreground: Color, cardColor: Color, surah: Int, ayah: Int, onChangeVerse: (Int, Int) -> Unit) {
+fun TafsirScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color,
+    surah: Int,
+    ayah: Int,
+    initialBook: String? = null,
+    onInitialBookApplied: () -> Unit = {},
+    onChangeVerse: (Int, Int) -> Unit
+) {
     val context = LocalContext.current
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val haptic = LocalHapticFeedback.current
     var selectedBook by rememberSaveable { mutableStateOf(if (language == AppLanguage.EN) "sahih" else if (language == AppLanguage.AR) "mukhtasar" else "roshn") }
+    LaunchedEffect(initialBook) {
+        if (!initialBook.isNullOrBlank() && ContentRepository.tafsirBooks.any { it.id == initialBook }) {
+            selectedBook = initialBook
+            onInitialBookApplied()
+        }
+    }
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
