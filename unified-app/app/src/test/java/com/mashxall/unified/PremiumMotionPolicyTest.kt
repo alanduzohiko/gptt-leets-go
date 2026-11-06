@@ -182,9 +182,9 @@ class PremiumMotionPolicyTest {
             AmbientBackdropStyleTraits(false, false, false, false, false),
             off
         )
-        assertFalse(ambient == orbit)
-        assertFalse(ambient == ornament)
-        assertFalse(orbit == ornament)
+        assertEquals(false, ambient == orbit)
+        assertEquals(false, ambient == ornament)
+        assertEquals(false, orbit == ornament)
         assertEquals(ambient, ambientBackdropStyleTraits("unknown"))
     }
 
