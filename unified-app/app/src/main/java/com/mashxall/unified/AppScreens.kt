@@ -9826,8 +9826,8 @@ fun LexiconScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             }
                             AnimatedVisibility(
                                 visible = expanded,
-                                enter = expandVertically(tween(240)) + fadeIn(tween(160)),
-                                exit = shrinkVertically(tween(180)) + fadeOut(tween(120))
+                                enter = androidx.compose.animation.expandVertically(tween(240)) + fadeIn(tween(160)),
+                                exit = androidx.compose.animation.shrinkVertically(tween(180)) + fadeOut(tween(120))
                             ) {
                                 Column {
                                     Spacer(Modifier.height(9.dp))
