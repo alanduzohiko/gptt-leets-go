@@ -22,7 +22,7 @@ class TajweedMushafWordColorTest {
         val svg = """
             <svg>
               <g data-type="text" data-surah="001" data-aya="001" data-word-index-in-ayah="1"><path id="plain"/></g>
-              <g data-type="text" data-surah="001" data-aya="001" data-word-index-in-ayah="2"><path id="tajweed"/></g>
+              <g data-type="text" data-surah="001" data-aya="001" data-word-index-in-ayah="2"><path id="tajweed" fill="#000000" style="fill:#000000"/></g>
               <g data-type="text" data-surah="001" data-aya="002" data-word-index-in-ayah="2"><path id="other-ayah"/></g>
               <g data-type="text" data-surah="002" data-aya="001" data-word-index-in-ayah="2"><path id="other-surah"/></g>
             </svg>
@@ -34,7 +34,7 @@ class TajweedMushafWordColorTest {
         val coloured = TajweedText.colorMushafSvgWords(svg, taggedAyahs)
 
         assertTrue(coloured.contains("""data-word-index-in-ayah="2" fill="#DD0008""""))
-        assertTrue(coloured.contains("""<path id="tajweed"/>"""))
+        assertTrue(coloured.contains("""<path id="tajweed" fill="#DD0008" style="fill:#DD0008"/>"""))
         assertTrue(coloured.contains("""<path id="plain"/>"""))
         assertTrue(coloured.contains("""<path id="other-ayah"/>"""))
         assertTrue(coloured.contains("""<path id="other-surah"/>"""))
