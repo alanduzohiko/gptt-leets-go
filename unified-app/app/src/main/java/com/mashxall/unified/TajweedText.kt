@@ -100,21 +100,23 @@ internal object TajweedText {
         val palette = if (darkMode) darkPalette else lightPalette
         val result = mutableListOf<Color?>()
         val counts = linkedMapOf<Color, Int>()
+        var wordHasCharacters = false
 
         fun finishWord() {
-            result += counts.maxByOrNull { it.value }?.key
-            counts.clear()
+            if (wordHasCharacters) {
+                result += counts.maxByOrNull { it.value }?.key
+                counts.clear()
+                wordHasCharacters = false
+            }
         }
 
         fun appendChunk(chunk: String, color: Color?) {
             chunk.forEach { character ->
                 if (character.isWhitespace()) {
-                    if (counts.isNotEmpty() || result.isEmpty()) finishWord()
-                } else if (color != null) {
-                    counts[color] = (counts[color] ?: 0) + 1
-                } else if (counts.isNotEmpty()) {
-                    // Keep the colour score tied to the letters that actually
-                    // carry a Tajweed rule; uncoloured letters do not dilute it.
+                    finishWord()
+                } else {
+                    wordHasCharacters = true
+                    if (color != null) counts[color] = (counts[color] ?: 0) + 1
                 }
             }
         }
@@ -141,7 +143,7 @@ internal object TajweedText {
                 cursor = tagStart + 1
             }
         }
-        if (counts.isNotEmpty()) finishWord()
+        finishWord()
         return result
     }
 
@@ -157,11 +159,11 @@ internal object TajweedText {
     ): String {
         if (svgSource.isBlank() || taggedAyahsBySurah.isEmpty()) return svgSource
         val colorCache = mutableMapOf<Pair<Int, Int>, List<Color?>>()
-        val wordGroup = Regex("""<g\\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>""")
+        val wordGroup = Regex("""<g\b[^>]*data-word-index-in-ayah="[^"]+"[^>]*>""")
         return wordGroup.replace(svgSource) { match ->
             val tag = match.value
             fun attribute(name: String): String? =
-                Regex("""\\b${Regex.escape(name)}="([^"]*)"""")
+                Regex("""\b${Regex.escape(name)}="([^"]*)"""")
                     .find(tag)?.groupValues?.getOrNull(1)
 
             val surah = attribute("data-surah")?.toIntOrNull() ?: return@replace tag
@@ -180,7 +182,7 @@ internal object TajweedText {
                 (color.green * 255f).toInt().coerceIn(0, 255),
                 (color.blue * 255f).toInt().coerceIn(0, 255)
             )
-            val existingFill = Regex("""\\sfill="[^"]*"""")
+            val existingFill = Regex("""\sfill="[^"]*"""")
             if (existingFill.containsMatchIn(tag)) {
                 existingFill.replace(tag, " fill=\\"$hex\\"")
             } else {
