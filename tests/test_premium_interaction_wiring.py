@@ -5,12 +5,20 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 APP_SCREENS = (ROOT / "unified-app/app/src/main/java/com/mashxall/unified/AppScreens.kt").read_text(encoding="utf-8")
 MOTION = (ROOT / "unified-app/app/src/main/java/com/mashxall/unified/PremiumMotion.kt").read_text(encoding="utf-8")
+MAIN_ACTIVITY = (ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt").read_text(encoding="utf-8")
 
 
 class PremiumInteractionWiringTests(unittest.TestCase):
     def test_screen_actions_use_shared_native_controls(self):
         self.assertIn("PremiumOutlinedButton(", APP_SCREENS)
-        self.assertIn("PremiumSlider(", APP_SCREENS)
+        # The Quran-reader text-size control was intentionally removed; background
+        # strength/speed sliders remain native controls on the main settings screen.
+        self.assertIn("PremiumSlider(", MAIN_ACTIVITY)
+        self.assertNotIn("VERSE PANEL TEXT SIZE", APP_SCREENS)
+        self.assertNotIn('onValueChange = { verseTextScale = it', APP_SCREENS)
+        categories = APP_SCREENS.split("val categories = listOf(", 1)[1].split("LazyColumn", 1)[0]
+        self.assertNotIn('Triple("font"', categories)
+        self.assertIn("quranTextFontOptions", APP_SCREENS)
         self.assertNotIn("\n                OutlinedButton(", APP_SCREENS)
         self.assertNotIn("\n                            Slider(", APP_SCREENS)
 
@@ -124,7 +132,9 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("if (!immersiveMushaf && shouldShowAmbientBackdrop(backgroundStyle))", main)
         self.assertIn("shouldAnimateAmbientBackdrop(visibleScreen, motionAllowed, backgroundStyle)", main)
         self.assertIn("ambientBackdropIntensityForScreen(visibleScreen, backgroundIntensity)", main)
-        self.assertIn('items(listOf("ambient", "orbit", "ornament", "off"))', main)
+        self.assertIn('listOf("ambient", "orbit", "ornament", "off").chunked(2)', main)
+        self.assertIn("modifier = Modifier.weight(1f)", main)
+        self.assertIn("accentForPreview(backgroundStyle)", main)
         self.assertIn("onBackgroundIntensityCommit", main)
         self.assertIn("onBackgroundSpeedCommit", main)
         self.assertIn('putString("background_style", backgroundStyle)', main)
