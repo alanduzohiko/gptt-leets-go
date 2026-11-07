@@ -2130,6 +2130,11 @@ private fun HomeScreen(
             }
         }
     }
+    // Refresh the home-screen widget when the saved prayer location changes or
+    // the app is opened; the widget then reads the same Salawati source timetable.
+    LaunchedEffect(locationMode, selectedCity, gpsLatitude, gpsLongitude) {
+        com.mashxall.unified.widgets.PrayerTimesWidgetProvider.requestRefresh(context)
+    }
     LaunchedEffect(selectedCity, locationMode, SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(clockNow)), gpsLatitude, gpsLongitude, prefs.getString("selected_city_country", ""), prayerRefreshRevision) {
         loadingTimes = true
         // Remove the previous city's timetable immediately; never leave stale times under a new location label.
