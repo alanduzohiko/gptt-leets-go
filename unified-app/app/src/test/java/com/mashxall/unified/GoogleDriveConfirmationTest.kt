@@ -63,4 +63,22 @@ class GoogleDriveConfirmationTest {
 
         assertFalse(url != null)
     }
+
+    @Test
+    fun sendsRangeOnlyToThePreviouslyVerifiedBinaryUrl() {
+        val confirmationUrl = "https://drive.google.com/uc?export=download&id=file"
+        val binaryUrl = "https://drive.usercontent.google.com/download?id=file&confirm=token"
+        assertFalse(shouldUseDriveRange(confirmationUrl, binaryUrl, 70_000_000L))
+        assertFalse(shouldUseDriveRange(binaryUrl + "&redirected=1", binaryUrl, 70_000_000L))
+        assertTrue(shouldUseDriveRange(binaryUrl, binaryUrl, 70_000_000L))
+        assertFalse(shouldUseDriveRange(binaryUrl, binaryUrl, 0L))
+    }
+
+    @Test
+    fun retries416OnlyByRestartingAnExistingPartialDownloadOnce() {
+        assertTrue(shouldRestartDriveDownloadAfter416(70_000_000L, false))
+        assertFalse(shouldRestartDriveDownloadAfter416(0L, false))
+        assertFalse(shouldRestartDriveDownloadAfter416(70_000_000L, true))
+    }
+
 }
