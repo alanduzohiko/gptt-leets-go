@@ -81,4 +81,25 @@ class TajweedMushafGeometryTest {
         assertEquals("", tajweedPageNumberLabel(605))
     }
 
+    @Test
+    fun directMushafPageEntryAcceptsArabicAndAsciiDigitsOnlyWithinBounds() {
+        assertEquals(1, parseMushafPageNumber("1"))
+        assertEquals(604, parseMushafPageNumber("٦٠٤"))
+        assertEquals(22, parseMushafPageNumber(" ٢٢ "))
+        assertNull(parseMushafPageNumber("0"))
+        assertNull(parseMushafPageNumber("605"))
+        assertNull(parseMushafPageNumber("page"))
+    }
+
+    @Test
+    fun mushafJuzIsResolvedFromThePrintedPageBoundaries() {
+        assertEquals(1, mushafJuzForPage(1))
+        assertEquals(1, mushafJuzForPage(21))
+        assertEquals(2, mushafJuzForPage(22))
+        assertEquals(7, mushafJuzForPage(121))
+        assertEquals(30, mushafJuzForPage(604))
+        assertEquals(0, mushafJuzForPage(0))
+        assertEquals(0, mushafJuzForPage(605))
+    }
+
 }
