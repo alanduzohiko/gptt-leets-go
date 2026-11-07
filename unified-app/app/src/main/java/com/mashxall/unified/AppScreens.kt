@@ -4135,6 +4135,7 @@ private fun MushafPageViewer(
     var viewportSize by remember(page, edition) { mutableStateOf(IntSize.Zero) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var turningPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var pendingPageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pageVerses by remember(page, edition) { mutableStateOf<List<MushafPageVerse>>(emptyList()) }
     var pageVerseGeometry by remember(page, edition) { mutableStateOf<List<MushafPageVerseGeometry>>(emptyList()) }
     var pageTajweedBySurah by remember(page) {
@@ -4247,7 +4248,13 @@ private fun MushafPageViewer(
 
     LaunchedEffect(page, edition, retryPageLoad) {
         val previousPageBitmap = bitmap ?: turningPageBitmap
-        if (previousPageBitmap != null && lastLoadedPage != page) {
+        val isPageTurn = previousPageBitmap != null && lastLoadedPage != page
+        pendingPageBitmap = null
+
+        if (isPageTurn) {
+            // Keep the already displayed page as the stable base image until the
+            // destination bitmap is ready and its curl animation has completed.
+            bitmap = previousPageBitmap
             turningPageBitmap = previousPageBitmap
             pageTurnDirection = mushafCurlDirectionForPageTransition(lastLoadedPage, page)
             pageCurlProgress.snapTo(0f)
@@ -4255,14 +4262,15 @@ private fun MushafPageViewer(
             turningPageBitmap = null
             pageCurlProgress.snapTo(1f)
         }
+
         loading = true
         failed = false
-        bitmap = null
         pageVerses = emptyList()
         pageVerseGeometry = emptyList()
         verseRects = emptyList()
         selectedVerse = null
         try {
+            var nextPageBitmap: Bitmap? = null
             if (edition == "tajweed") {
                 val rendered = TajweedMushafRepository.loadRenderedPage(context, page)
                 pageVerseGeometry = rendered?.geometry.orEmpty()
@@ -4270,7 +4278,7 @@ private fun MushafPageViewer(
                 pageVerses.firstOrNull()?.let { firstVerse ->
                     onReadingPosition(firstVerse.surah, firstVerse.ayah)
                 }
-                bitmap = rendered?.bitmap
+                nextPageBitmap = rendered?.bitmap
             } else {
                 val source = ContentRepository.loadMushafPageSvg(context, page)
                 if (source != null) {
@@ -4284,7 +4292,7 @@ private fun MushafPageViewer(
                 pageVerses.firstOrNull()?.let { firstVerse ->
                     onReadingPosition(firstVerse.surah, firstVerse.ayah)
                 }
-                bitmap = if (source == null) {
+                nextPageBitmap = if (source == null) {
                     null
                 } else {
                     withContext(Dispatchers.Default) {
@@ -4303,16 +4311,23 @@ private fun MushafPageViewer(
                     }
                 }
             }
-            failed = bitmap == null
-            if (bitmap != null) {
-                lastLoadedPage = page
-                if (turningPageBitmap != null && motionAllowed) {
-                    pageCurlProgress.animateTo(1f, animationSpec = tween(540, easing = FastOutSlowInEasing))
-                } else {
-                    pageCurlProgress.snapTo(1f)
-                }
+
+            if (nextPageBitmap == null) {
+                failed = true
+                bitmap = null
+                pendingPageBitmap = null
                 turningPageBitmap = null
+                lastLoadedPage = page
+                pageCurlProgress.snapTo(1f)
             } else {
+                if (turningPageBitmap != null && motionAllowed) {
+                    // The curl uses the new leaf as its reverse while the normal
+                    // Image remains on the old leaf underneath; no white frame leaks.
+                    pendingPageBitmap = nextPageBitmap
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(540, easing = FastOutSlowInEasing))
+                }
+                bitmap = nextPageBitmap
+                pendingPageBitmap = null
                 lastLoadedPage = page
                 turningPageBitmap = null
                 pageCurlProgress.snapTo(1f)
@@ -4323,6 +4338,7 @@ private fun MushafPageViewer(
             android.util.Log.e("MashxallMushaf", "Could not load Mushaf page $page", error)
             pageVerses = emptyList()
             bitmap = null
+            pendingPageBitmap = null
             turningPageBitmap = null
             lastLoadedPage = page
             pageCurlProgress.snapTo(1f)
@@ -4353,7 +4369,7 @@ private fun MushafPageViewer(
         // Native, compact reader toolbar pinned above the page, like a real
         // Mushaf app rather than an ordinary scrollable content page.
         Row(
-            Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 5.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().background(DeepGreen).padding(horizontal = 5.dp, vertical = if (edition == "tajweed") 2.dp else 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ReaderActionIcon(Icons.Outlined.ArrowBack, tr(language, "back"), pressedScale = quranReaderActionPressScale("back"), onClick = onExitFullscreen)
@@ -4434,7 +4450,7 @@ private fun MushafPageViewer(
             ReaderActionIcon(Icons.Outlined.Settings, tr(language, "settings"), pressedScale = quranReaderActionPressScale("reader_settings"), onClick = onReaderSettings)
         }
         Row(
-            Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = if (edition == "tajweed") 2.dp else 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
@@ -4472,52 +4488,56 @@ private fun MushafPageViewer(
                 onClick = { onPageChange(page + 1) }
             )
         }
-        val pageProgress by animateFloatAsState(
-            targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
-            animationSpec = if (motionAllowed) tween(380, easing = FastOutSlowInEasing) else snap(),
-            label = "Mushaf total page progress"
-        )
-        Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "READING PROGRESS"
-                        AppLanguage.AR -> "تقدم القراءة"
-                        AppLanguage.CKB -> "پێشکەوتنی خوێندنەوە"
-                    },
-                    color = if (darkMode) PaleGold.copy(alpha = 0.72f) else DeepGreen.copy(alpha = 0.66f),
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    String.format(Locale.US, "%.1f%%", pageProgress * 100f),
-                    color = if (darkMode) PaleGold else DeepGreen,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            Box(
-                Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
-                    .background(if (darkMode) Color.White.copy(alpha = 0.10f) else DeepGreen.copy(alpha = 0.10f))
-            ) {
+        if (edition != "tajweed") {
+            val pageProgress by animateFloatAsState(
+                targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
+                animationSpec = if (motionAllowed) tween(380, easing = FastOutSlowInEasing) else snap(),
+                label = "Mushaf total page progress"
+            )
+            Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "READING PROGRESS"
+                            AppLanguage.AR -> "تقدم القراءة"
+                            AppLanguage.CKB -> "پێشکەوتنی خوێندنەوە"
+                        },
+                        color = if (darkMode) PaleGold.copy(alpha = 0.72f) else DeepGreen.copy(alpha = 0.66f),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        String.format(Locale.US, "%.1f%%", pageProgress * 100f),
+                        color = if (darkMode) PaleGold else DeepGreen,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
                 Box(
-                    Modifier.fillMaxWidth(pageProgress).fillMaxHeight().clip(CircleShape)
-                        .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), PaleGold, Gold)))
-                )
+                    Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
+                        .background(if (darkMode) Color.White.copy(alpha = 0.10f) else DeepGreen.copy(alpha = 0.10f))
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth(pageProgress).fillMaxHeight().clip(CircleShape)
+                            .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), PaleGold, Gold)))
+                    )
+                }
             }
+            PremiumPageScrubber(
+                currentPage = page,
+                pageCount = 604,
+                pageLabel = if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "انتقل إلى صفحة" else "بڕۆ بۆ پەڕە",
+                foreground = if (darkMode) Color.White.copy(alpha = 0.82f) else DeepGreen,
+                accent = Gold,
+                modifier = Modifier.padding(horizontal = 9.dp)
+            ) { selectedPage -> onPageChange(selectedPage) }
+            Spacer(Modifier.height(5.dp))
+        } else {
+            Spacer(Modifier.height(2.dp))
         }
-        PremiumPageScrubber(
-            currentPage = page,
-            pageCount = 604,
-            pageLabel = if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "انتقل إلى صفحة" else "بڕۆ بۆ پەڕە",
-            foreground = if (darkMode) Color.White.copy(alpha = 0.82f) else DeepGreen,
-            accent = Gold,
-            modifier = Modifier.padding(horizontal = 9.dp)
-        ) { selectedPage -> onPageChange(selectedPage) }
-        Spacer(Modifier.height(7.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -4531,7 +4551,7 @@ private fun MushafPageViewer(
             shape = RoundedCornerShape(13.dp),
             border = BorderStroke(1.dp, Gold.copy(alpha = 0.25f))
         ) {
-            Box(Modifier.fillMaxSize().padding(5.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().padding(if (edition == "tajweed") 2.dp else 5.dp), contentAlignment = Alignment.Center) {
                 when {
                     displayedPageBitmap != null -> Box(
                         modifier = Modifier
@@ -4767,7 +4787,7 @@ private fun MushafPageViewer(
                             }
                         }
                         val overlayFrontBitmap = if (curlPreviewVisible) bitmap else turningPageBitmap
-                        val overlayBackBitmap = if (curlPreviewVisible) curlBackBitmap else bitmap
+                        val overlayBackBitmap = if (curlPreviewVisible) curlBackBitmap else pendingPageBitmap
                         val overlayProgress = if (curlPreviewVisible && fingerDragActive) {
                             fingerCurlProgress
                         } else {
@@ -4775,7 +4795,7 @@ private fun MushafPageViewer(
                         }
                         val overlayDirection = if (curlPreviewVisible) fingerCurlDirection else pageTurnDirection
                         val shouldDrawCurl = curlPreviewVisible ||
-                            (bitmap != null && turningPageBitmap != null && motionAllowed)
+                            (pendingPageBitmap != null && turningPageBitmap != null && motionAllowed)
                         if (shouldDrawCurl && motionAllowed &&
                             overlayFrontBitmap != null && overlayBackBitmap != null
                         ) {
