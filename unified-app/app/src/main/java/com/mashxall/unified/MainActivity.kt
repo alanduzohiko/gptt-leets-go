@@ -88,6 +88,8 @@ import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material.icons.outlined.MenuBook
@@ -141,6 +143,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -2952,7 +2955,7 @@ private fun AboutMashxallScreen(
                             fontSize = 9.sp
                         )
                     }
-                    Icon(Icons.Outlined.ArrowOutward, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
                 }
             }
         }
