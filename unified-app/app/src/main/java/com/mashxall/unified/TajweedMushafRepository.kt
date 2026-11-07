@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.os.StatFs
 import com.mashxall.unified.data.MushafPageVerseGeometry
 import com.mashxall.unified.data.MushafPageVerse
@@ -455,7 +456,7 @@ internal object TajweedMushafRepository {
             val file = pageFile(context, page) ?: return@withContext null
             val source = BitmapFactory.decodeFile(file.absolutePath) ?: return@withContext null
             val bitmap = try {
-                renderIntoPageViewport(source, TARGET_WIDTH, TARGET_HEIGHT)
+                renderIntoPageViewport(source, TARGET_WIDTH, TARGET_HEIGHT, page)
             } finally {
                 source.recycle()
             }
@@ -467,7 +468,7 @@ internal object TajweedMushafRepository {
             val file = pageFile(context, page) ?: return@withContext null
             val source = BitmapFactory.decodeFile(file.absolutePath) ?: return@withContext null
             try {
-                renderIntoPageViewport(source, width, height)
+                renderIntoPageViewport(source, width, height, page)
             } finally {
                 source.recycle()
             }
@@ -525,7 +526,7 @@ internal object TajweedMushafRepository {
         return buildTajweedPageVerseGeometry(words)
     }
 
-    private fun renderIntoPageViewport(source: Bitmap, width: Int, height: Int): Bitmap {
+    private fun renderIntoPageViewport(source: Bitmap, width: Int, height: Int, page: Int): Bitmap {
         val target = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val scale = minOf(width.toFloat() / source.width, height.toFloat() / source.height)
         val targetWidth = source.width * scale
@@ -539,9 +540,33 @@ internal object TajweedMushafRepository {
         Canvas(target).apply {
             drawColor(Color.WHITE)
             drawBitmap(source, null, destination, Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG))
+
+            // The Tajweed PNG artwork has no printed folio number. Add its page
+            // number to the rendered bitmap (not to the source ZIP or databases)
+            // so it sits on the paper and follows zoom/curl just like the original.
+            val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+                color = Color.BLACK
+                textAlign = Paint.Align.CENTER
+                textSize = 30f * (height.toFloat() / TARGET_HEIGHT).coerceAtLeast(0.5f)
+                typeface = Typeface.create("serif", Typeface.NORMAL)
+            }
+            drawText(
+                tajweedPageNumberLabel(page),
+                width * 0.5f,
+                height * 0.962f,
+                numberPaint
+            )
         }
         return target
     }
+}
+
+internal fun tajweedPageNumberLabel(page: Int): String {
+    if (page !in 1..604) return ""
+    val digits = "٠١٢٣٤٥٦٧٨٩"
+    return page.toString().map { digit ->
+        digits[digit.digitToInt()]
+    }.joinToString("")
 }
 
 internal fun shouldUseTajweedRange(
