@@ -124,7 +124,22 @@ class PremiumInteractionWiringTests(unittest.TestCase):
             reader.index("itemsIndexed(filteredSurahs"),
             reader.index('item(key = "quran-reading-progress-footer")')
         )
-        self.assertNotIn("QuranReadingProgressCard(", reader.split("SearchBox(language, query", 1)[0])
+        self.assertNotIn("QuranReadingProgressCard(", reader.split("SearchBox(", 1)[0])
+
+    def test_quran_index_searches_and_opens_matching_ayahs(self):
+        self.assertIn("ContentRepository.searchAyahs(", APP_SCREENS)
+        self.assertIn("quran-ayah-search-heading", APP_SCREENS)
+        self.assertIn('onOpenVerse(result.surah, result.number)', APP_SCREENS)
+        self.assertIn("Search surahs or Quran verses", APP_SCREENS)
+
+    def test_settings_expose_about_share_and_direct_email_contact(self):
+        main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
+        main = main_path.read_text(encoding="utf-8")
+        self.assertIn('"about_app" -> AboutMashxallScreen', main)
+        self.assertIn("onShareApp = { shareMashxallApp(context, language) }", main)
+        self.assertIn("aland.mashxall@gmail.com", main)
+        self.assertIn("Intent.ACTION_SENDTO", main)
+        self.assertNotIn("Data sources & rights", main)
 
     def test_shared_live_background_has_persistent_style_strength_and_speed_controls(self):
         main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
