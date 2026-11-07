@@ -553,7 +553,7 @@ internal object TajweedMushafRepository {
             drawText(
                 tajweedPageNumberLabel(page),
                 width * 0.5f,
-                height * 0.962f,
+                height * 0.92f,
                 numberPaint
             )
         }
