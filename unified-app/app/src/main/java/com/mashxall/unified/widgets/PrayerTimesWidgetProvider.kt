@@ -10,7 +10,6 @@ import android.os.Build
 import android.widget.RemoteViews
 import com.mashxall.unified.MainActivity
 import com.mashxall.unified.R
-import com.mashxall.unified.isUsableSavedGpsFix
 import com.mashxall.unified.resolvePrayerLocationMode
 import com.mashxall.unified.data.ContentRepository
 import com.mashxall.unified.data.PrayerRow
@@ -52,19 +51,29 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
     private suspend fun updateOne(context: Context, manager: AppWidgetManager, widgetId: Int) {
         val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
             .getString("language", "ckb") ?: "ckb"
+        val loaded = runCatching { loadTodayAndTomorrow(context) }
+            .onFailure { android.util.Log.w("MashxallPrayerWidget", "Could not refresh prayer widget data", it) }
+            .getOrNull()
+
+        // Keep the last good widget visible during transient database/location failures.
+        // Replacing it with six placeholders here made the widget appear empty even
+        // while the full Prayer screen still had a valid Salawati timetable.
+        val row = loaded?.today
+        if (!isCompleteWidgetPrayerRow(row)) {
+            android.util.Log.w("MashxallPrayerWidget", "No complete source timetable is available for this widget refresh")
+            return
+        }
+
         manager.updateAppWidget(
             widgetId,
-            render(context, widgetId, null, Companion.locationStatus(context, language), "")
+            render(
+                context,
+                widgetId,
+                row,
+                loaded.locationLabel,
+                loaded.nextPrayerLabel(language)
+            )
         )
-        val loaded = runCatching { loadTodayAndTomorrow(context) }.getOrNull()
-        val views = render(
-            context,
-            widgetId,
-            loaded?.today,
-            loaded?.locationLabel ?: Companion.locationStatus(context, language),
-            loaded?.nextPrayerLabel(language).orEmpty()
-        )
-        manager.updateAppWidget(widgetId, views)
     }
 
     private fun render(context: Context, widgetId: Int, row: PrayerRow?, locationLabel: String, nextPrayer: String): RemoteViews {
@@ -93,15 +102,16 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         })
 
         val entries = listOf(
-            Triple(R.id.widget_time_fajr, prayerLabel(language, "fajr"), row?.fajr),
-            Triple(R.id.widget_time_sunrise, prayerLabel(language, "sunrise"), row?.sunrise),
-            Triple(R.id.widget_time_dhuhr, prayerLabel(language, "dhuhr"), row?.dhuhr),
-            Triple(R.id.widget_time_asr, prayerLabel(language, "asr"), row?.asr),
-            Triple(R.id.widget_time_maghrib, prayerLabel(language, "maghrib"), row?.maghrib),
-            Triple(R.id.widget_time_isha, prayerLabel(language, "isha"), row?.isha)
+            WidgetPrayerCellIds(R.id.widget_label_fajr, R.id.widget_value_fajr, prayerLabel(language, "fajr"), row?.fajr),
+            WidgetPrayerCellIds(R.id.widget_label_sunrise, R.id.widget_value_sunrise, prayerLabel(language, "sunrise"), row?.sunrise),
+            WidgetPrayerCellIds(R.id.widget_label_dhuhr, R.id.widget_value_dhuhr, prayerLabel(language, "dhuhr"), row?.dhuhr),
+            WidgetPrayerCellIds(R.id.widget_label_asr, R.id.widget_value_asr, prayerLabel(language, "asr"), row?.asr),
+            WidgetPrayerCellIds(R.id.widget_label_maghrib, R.id.widget_value_maghrib, prayerLabel(language, "maghrib"), row?.maghrib),
+            WidgetPrayerCellIds(R.id.widget_label_isha, R.id.widget_value_isha, prayerLabel(language, "isha"), row?.isha)
         )
-        entries.forEach { (viewId, label, time) ->
-            views.setTextViewText(viewId, "$label\n${time?.takeIf { it.isNotBlank() } ?: "--:--"}")
+        entries.forEach { cell ->
+            views.setTextViewText(cell.labelViewId, cell.label)
+            views.setTextViewText(cell.valueViewId, widgetPrayerTimeValue(cell.time))
         }
         val openPrayer = Intent(context, MainActivity::class.java).putExtra(
             MainActivity.EXTRA_OPEN_SCREEN, "prayer"
@@ -120,15 +130,15 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         val manualLat = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLon = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
         val hasManualCoordinates = manualLat != null && manualLon != null
+        val savedGps = widgetGpsCoordinates(gpsLat, gpsLon)
         val locationMode = resolvePrayerLocationMode(
             prefs.getString("prayer_location_mode", null),
             gpsLat != null && gpsLon != null,
             hasManualCoordinates
         )
-        val freshGps = if (locationMode == "gps" && isUsableSavedGpsFix(
-                gpsLat, gpsLon, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
-            )
-        ) gpsLat!! to gpsLon!! else null
+        // Match the main Prayer screen: a saved, valid coordinate remains usable
+        // regardless of the timestamp of the last GPS fix.
+        val usableGps = if (locationMode == "gps") savedGps else null
         val cityName = com.mashxall.unified.notifications.usableSavedPrayerCityName(
             prefs.getString("selected_city", ""), hasManualCoordinates
         ).orEmpty()
@@ -137,7 +147,7 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
 
         suspend fun rowFor(date: Date): PrayerRow? {
             if (locationMode == "gps") {
-                val gps = freshGps ?: return null
+                val gps = usableGps ?: return null
                 return ContentRepository.loadPrayerTimesAtLocation(context, gps.first, gps.second, date)
             }
             if (cityName.isBlank()) return null
@@ -162,8 +172,8 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         }
         val tomorrowRow = rowFor(tomorrowCalendar.time)
         val locationLabel = when {
-            locationMode == "gps" && freshGps != null ->
-                String.format(Locale.US, "%.3f, %.3f", freshGps.first, freshGps.second)
+            locationMode == "gps" && usableGps != null ->
+                String.format(Locale.US, "%.3f, %.3f", usableGps.first, usableGps.second)
             locationMode == "gps" -> when (language) {
                 "en" -> "Getting current location…"
                 "ar" -> "جارٍ تحديد موقعك الحالي…"
@@ -237,13 +247,9 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
                 manualLatitude != null && manualLongitude != null
             )
             if (mode == "gps") {
-                val usable = isUsableSavedGpsFix(
-                    latitude, longitude, prefs.getLong("gps_location_timestamp", 0L), System.currentTimeMillis()
-                )
-                return if (usable) when (language) {
-                    "en" -> "GPS location • Salawati timetable unavailable nearby"
-                    "ar" -> "موقع GPS • لا يتوفر جدول صلواتي قريب"
-                    else -> "شوێنی GPS • خشتەی صەڵەواتی لە نزیکدا بەردەست نییە"
+                val saved = widgetGpsCoordinates(latitude, longitude)
+                return if (saved != null) {
+                    String.format(Locale.US, "%.3f, %.3f", saved.first, saved.second)
                 } else when (language) {
                     "en" -> "Getting current location…"
                     "ar" -> "جارٍ تحديد موقعك الحالي…"
@@ -256,6 +262,28 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
             return locationFallback(language)
         }
     }
+}
+
+private data class WidgetPrayerCellIds(
+    val labelViewId: Int,
+    val valueViewId: Int,
+    val label: String,
+    val time: String?
+)
+
+internal fun widgetPrayerTimeValue(value: String?): String =
+    value?.trim()?.takeIf { it.isNotEmpty() } ?: "--:--"
+
+internal fun isCompleteWidgetPrayerRow(row: PrayerRow?): Boolean =
+    row != null && listOf(row.fajr, row.sunrise, row.dhuhr, row.asr, row.maghrib, row.isha)
+        .all { it.isNotBlank() }
+
+internal fun widgetGpsCoordinates(latitude: Double?, longitude: Double?): Pair<Double, Double>? {
+    if (latitude == null || longitude == null ||
+        !latitude.isFinite() || !longitude.isFinite() ||
+        latitude !in -90.0..90.0 || longitude !in -180.0..180.0
+    ) return null
+    return latitude to longitude
 }
 
 private fun prayerLabel(language: String, key: String): String = when (key) {
