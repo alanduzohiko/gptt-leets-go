@@ -2547,7 +2547,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             Card(
                                 modifier = Modifier.fillMaxWidth()
                                     .padding(horizontal = 13.dp, vertical = 2.dp)
-                                    .premiumPress(pressedScale = quranReaderActionPressScale("ayah_search_result")) {
+                                    .clickable {
                                         selected = result.surah
                                         query = ""
                                         selectedAyahForSheet = null
