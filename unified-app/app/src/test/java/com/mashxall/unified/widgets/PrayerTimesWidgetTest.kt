@@ -1,6 +1,7 @@
 package com.mashxall.unified.widgets
 
 import com.mashxall.unified.data.PrayerRow
+import com.mashxall.unified.AppLanguage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -39,10 +40,10 @@ class PrayerTimesWidgetTest {
 
     @Test
     fun emptyTimeUsesVisiblePlaceholderRatherThanAnEmptyCell() {
-        assertEquals("05:03", widgetPrayerTimeValue("05:03"))
-        assertEquals("--:--", widgetPrayerTimeValue(null))
-        assertEquals("--:--", widgetPrayerTimeValue(""))
-        assertEquals("--:--", widgetPrayerTimeValue("  "))
+        assertEquals("05:03", widgetPrayerTimeValue("05:03", AppLanguage.EN, false))
+        assertEquals("--:--", widgetPrayerTimeValue(null, AppLanguage.EN, false))
+        assertEquals("--:--", widgetPrayerTimeValue("", AppLanguage.EN, false))
+        assertEquals("--:--", widgetPrayerTimeValue("  ", AppLanguage.EN, false))
     }
 
     @Test
@@ -61,4 +62,18 @@ class PrayerTimesWidgetTest {
         assertNull(widgetGpsCoordinates(95.0, 45.685))
         assertNull(widgetGpsCoordinates(35.327, 181.0))
     }
+    @Test
+    fun widgetUsesTheSameTwelveHourFormattingAsThePrayerScreen() {
+        assertEquals("2:49 PM", widgetPrayerTimeValue("14:49", AppLanguage.EN, false))
+        assertEquals("12:05 AM", widgetPrayerTimeValue("00:05", AppLanguage.EN, false))
+        assertEquals("12:00 PM", widgetPrayerTimeValue("12:00", AppLanguage.EN, false))
+        assertEquals("2:49 مساءً", widgetPrayerTimeValue("14:49", AppLanguage.AR, false))
+        assertEquals("2:49 د.ن", widgetPrayerTimeValue("14:49", AppLanguage.CKB, false))
+    }
+
+    @Test
+    fun widgetRespectsTheAppsExplicitTwentyFourHourPreference() {
+        assertEquals("14:49", widgetPrayerTimeValue("14:49", AppLanguage.EN, true))
+    }
+
 }
