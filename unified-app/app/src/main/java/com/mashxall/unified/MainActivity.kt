@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -814,7 +815,7 @@ fun MashxallApp(startScreen: String? = null) {
                                     openSettingsOnEntry = quranSettingsRequested,
                                     onSettingsRequestConsumed = { quranSettingsRequested = false }
                                 )
-                                                                "about_data" -> LibraryScreen(language, foreground, cardColor) { navigateTo(it.key) }
+                                                                "about_app", "about_data" -> AboutMashxallScreen(language, foreground, cardColor)
                                 "worship" -> WorshipScreen(language, foreground, cardColor) { navigateTo(it.key) }
                                 "prayer" -> PrayerScreen(language, foreground, cardColor, selectedCity, use24Hour = use24Hour, onCity = { city ->
                                     selectedCity = city.name
@@ -905,7 +906,9 @@ fun MashxallApp(startScreen: String? = null) {
                                 }, onTimeFormatChange = { enabled ->
                                     use24Hour = enabled
                                     prefs.edit().putBoolean("time_format_24h", enabled).apply()
-                                }, onDataInfo = { navigateTo("about_data") }, onBackup = { navigateTo("backup") }, onAudio = {
+                                }, onAboutApp = { navigateTo("about_app") },
+                                    onShareApp = { shareMashxallApp(context, language) },
+                                    onBackup = { navigateTo("backup") }, onAudio = {
                                     audioStartsAtReciters = true
                                     audioStartsAtAdhan = false
                                     audioAutoPlayRequested = false
@@ -2775,6 +2778,227 @@ fun LibraryScreen(language: AppLanguage, foreground: Color, cardColor: Color, on
 }
 
 @Composable
+private fun AboutMashxallScreen(
+    language: AppLanguage,
+    foreground: Color,
+    cardColor: Color
+) {
+    val context = LocalContext.current
+    val versionName = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "—"
+    }
+    val email = "aland.mashxall@gmail.com"
+    val contactSubject = when (language) {
+        AppLanguage.EN -> "Mashxall — feedback or issue"
+        AppLanguage.AR -> "مشخّل — مشكلة أو اقتراح"
+        AppLanguage.CKB -> "مەشخەڵ — کێشە یان پێشنیار"
+    }
+    val contactBody = when (language) {
+        AppLanguage.EN -> "Hello,\n\nI would like to report an issue or share a suggestion:\n\n"
+        AppLanguage.AR -> "مرحبًا،\n\nأود الإبلاغ عن مشكلة أو إرسال اقتراح:\n\n"
+        AppLanguage.CKB -> "سڵاو،\n\nدەمەوێت کێشەیەک ڕابگەیەنم یان پێشنیارێک بنێرم:\n\n"
+    }
+    val mailUri = Uri.parse(
+        "mailto:$email?subject=${Uri.encode(contactSubject)}&body=${Uri.encode(contactBody)}"
+    )
+    val aboutTitle = when (language) {
+        AppLanguage.EN -> "About Mashxall"
+        AppLanguage.AR -> "حول مشخّل"
+        AppLanguage.CKB -> "دەربارەی مەشخەڵ"
+    }
+    val summary = when (language) {
+        AppLanguage.EN -> "A thoughtful Islamic companion bringing Quran reading, worship and daily guidance together."
+        AppLanguage.AR -> "رفيق إسلامي يجمع قراءة القرآن والعبادات والإرشاد اليومي في مكان واحد."
+        AppLanguage.CKB -> "هاوڕێیەکی ئیسلامییە کە خوێندنەوەی قورئان و پەرستش و ڕێنمایی ڕۆژانە لە یەک شوێندا کۆدەکاتەوە."
+    }
+    val features = when (language) {
+        AppLanguage.EN -> listOf(
+            "The Holy Quran with original and Tajweed Mushaf editions",
+            "Translations, tafsir and verse tools",
+            "Prayer times and Qibla direction",
+            "Adhkar, duas, Hadith and Quran recitations",
+            "Sorani Kurdish, Arabic and English; selected content works offline"
+        )
+        AppLanguage.AR -> listOf(
+            "القرآن الكريم بالمصحف الأصلي ومصحف التجويد",
+            "الترجمات والتفاسير وأدوات الآيات",
+            "مواقيت الصلاة واتجاه القبلة",
+            "الأذكار والأدعية والأحاديث والتلاوات",
+            "الكردية السورانية والعربية والإنجليزية، ومحتوى متاح دون اتصال"
+        )
+        AppLanguage.CKB -> listOf(
+            "قورئانی پیرۆز بە مصحەفی ڕەسەن و مصحەفی تەجوید",
+            "وەرگێڕان، تەفسیر و ئامرازەکانی ئایەت",
+            "کاتەکانی نوێژ و ئاراستەی قیبلە",
+            "زیکر و دوعا، فەرموودە و تلاوەتی قورئان",
+            "کوردیی سۆرانی، عەرەبی و ئینگلیزی؛ هەندێک ناوەڕۆک بەبێ ئینتەرنێت"
+        )
+    }
+    val contactPrompt = when (language) {
+        AppLanguage.EN -> "For any issue or suggestion, please contact me at the email below."
+        AppLanguage.AR -> "عند وجود أي مشكلة أو اقتراح، يُرجى التواصل معي عبر البريد الإلكتروني أدناه."
+        AppLanguage.CKB -> "لە کاتی بوونی هەر کێشەیەک یان هەر پێشنیارێک، تکایە پەیوەندی بکەن بە ئیمەیڵی خوارەوە:"
+    }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
+    ) {
+        PremiumSectionHero(
+            title = aboutTitle,
+            subtitle = summary,
+            icon = Icons.Outlined.Info,
+            foreground = foreground,
+            accent = Gold,
+            eyebrow = when (language) {
+                AppLanguage.EN -> "MADE WITH CARE"
+                AppLanguage.AR -> "صُنع بعناية"
+                AppLanguage.CKB -> "بە خۆشەویستی دروست کراوە"
+            }
+        )
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.20f))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(15.dp)) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "WHAT YOU'LL FIND"
+                        AppLanguage.AR -> "ماذا يضم التطبيق"
+                        AppLanguage.CKB -> "چی لە مەشخەڵدا دەدۆزیتەوە"
+                    },
+                    color = Gold,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.7.sp
+                )
+                Spacer(Modifier.height(11.dp))
+                features.forEachIndexed { index, feature ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            Modifier.padding(top = 2.dp).size(21.dp).clip(CircleShape)
+                                .background(Gold.copy(alpha = 0.13f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("✓", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(9.dp))
+                        Text(
+                            feature,
+                            color = foreground.copy(alpha = 0.82f),
+                            fontSize = 11.sp,
+                            lineHeight = 17.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (index != features.lastIndex) {
+                        Spacer(Modifier.height(2.dp))
+                    }
+                }
+            }
+        }
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.20f))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(15.dp)) {
+                Text(
+                    contactPrompt,
+                    color = foreground,
+                    fontSize = 12.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(11.dp))
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Gold.copy(alpha = 0.10f))
+                        .premiumPress(pressedScale = 0.985f) {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_SENDTO, mailUri))
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                Toast.makeText(
+                                    context,
+                                    when (language) {
+                                        AppLanguage.EN -> "No email app is available on this device."
+                                        AppLanguage.AR -> "لا يوجد تطبيق بريد إلكتروني متاح على هذا الجهاز."
+                                        AppLanguage.CKB -> "هیچ ئەپێکی ئیمەیڵ لەم ئامێرەدا بەردەست نییە."
+                                    },
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.Email, contentDescription = null, tint = Gold, modifier = Modifier.size(21.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(email, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "Tap to write an email"
+                                AppLanguage.AR -> "اضغط لإرسال رسالة"
+                                AppLanguage.CKB -> "لێی بدە بۆ نووسینی ئیمەیڵ"
+                            },
+                            color = foreground.copy(alpha = 0.58f),
+                            fontSize = 9.sp
+                        )
+                    }
+                    Icon(Icons.Outlined.ArrowOutward, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        Text(
+            when (language) {
+                AppLanguage.EN -> "Version $versionName"
+                AppLanguage.AR -> "الإصدار $versionName"
+                AppLanguage.CKB -> "وەشانی $versionName"
+            },
+            color = foreground.copy(alpha = 0.48f),
+            fontSize = 10.sp,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+private fun shareMashxallApp(context: Context, language: AppLanguage) {
+    val subject = when (language) {
+        AppLanguage.EN -> "Discover Mashxall"
+        AppLanguage.AR -> "تعرّف على مشخّل"
+        AppLanguage.CKB -> "مەشخەڵ بناسە"
+    }
+    val message = when (language) {
+        AppLanguage.EN -> "Mashxall is an Islamic companion for Quran reading, original and Tajweed Mushaf editions, translations and tafsir, prayer times, Qibla, adhkar, duas, Hadith and recitations. Available in Sorani Kurdish, Arabic and English."
+        AppLanguage.AR -> "مشخّل رفيق إسلامي يجمع قراءة القرآن بالمصحف الأصلي ومصحف التجويد، والترجمات والتفاسير، ومواقيت الصلاة والقبلة والأذكار والأدعية والأحاديث والتلاوات. متاح بالكردية السورانية والعربية والإنجليزية."
+        AppLanguage.CKB -> "مەشخەڵ هاوڕێیەکی ئیسلامییە بۆ خوێندنەوەی قورئان بە مصحەفی ڕەسەن و تەجوید، وەرگێڕان و تەفسیر، کاتەکانی نوێژ و قیبلە، زیکر و دوعا، فەرموودە و تلاوەت. بە کوردیی سۆرانی، عەرەبی و ئینگلیزی."
+    }
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, message)
+    }
+    context.startActivity(
+        Intent.createChooser(
+            sendIntent,
+            when (language) {
+                AppLanguage.EN -> "Share Mashxall"
+                AppLanguage.AR -> "مشاركة مشخّل"
+                AppLanguage.CKB -> "هاوبەشکردنی مەشخەڵ"
+            }
+        )
+    )
+}
+
+@Composable
 fun WorshipScreen(language: AppLanguage, foreground: Color, cardColor: Color, onOpen: (AppScreen) -> Unit) {
     val context = LocalContext.current
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
@@ -2881,7 +3105,8 @@ private fun SettingsScreen(
     onDark: (Boolean) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
     onTimeFormatChange: (Boolean) -> Unit,
-    onDataInfo: () -> Unit,
+    onAboutApp: () -> Unit,
+    onShareApp: () -> Unit,
     onBackup: () -> Unit,
     onAudio: () -> Unit,
     onAdhan: () -> Unit,
@@ -3314,14 +3539,19 @@ private fun SettingsScreen(
                 Icons.Outlined.BookmarkBorder to onBackup
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Data sources & rights"; AppLanguage.AR -> "مصادر البيانات والحقوق"; AppLanguage.CKB -> "سەرچاوەی داتا و مافەکان" },
-                when (language) { AppLanguage.EN -> "Source details, licensing and offline availability"; AppLanguage.AR -> "تفاصيل المصادر والتراخيص والمحتوى المتاح دون اتصال"; AppLanguage.CKB -> "وردەکاری سەرچاوەکان، مۆڵەت و ناوەڕۆکی بێ ئینتەرنێت" },
-                Icons.Outlined.Info to onDataInfo
+                when (language) { AppLanguage.EN -> "About Mashxall"; AppLanguage.AR -> "حول مشخّل"; AppLanguage.CKB -> "دەربارەی مەشخەڵ" },
+                when (language) { AppLanguage.EN -> "Discover the app and contact its developer"; AppLanguage.AR -> "تعرّف على التطبيق وتواصل مع المطوّر"; AppLanguage.CKB -> "زیاتر لەبارەی ئەپەکە و پەیوەندی بە گەشەپێدەرەوە" },
+                Icons.Outlined.Info to onAboutApp
+            ),
+            Triple(
+                when (language) { AppLanguage.EN -> "Share Mashxall"; AppLanguage.AR -> "مشاركة مشخّل"; AppLanguage.CKB -> "هاوبەشکردنی مەشخەڵ" },
+                when (language) { AppLanguage.EN -> "Share a short introduction to the app"; AppLanguage.AR -> "شارك نبذة جميلة عن التطبيق"; AppLanguage.CKB -> "ناسنامەیەکی جوانی ئەپەکە هاوبەش بکە" },
+                Icons.Outlined.Share to onShareApp
             )
         )
         val actionKeys = listOf(
             "quran_reader", "prayer_location", "reciters",
-            "adhan_library", "backup_restore", "data_sources"
+            "adhan_library", "backup_restore", "about_app", "share_app"
         )
         actions.forEachIndexed { index, (title, subtitle, item) ->
             val (icon, callback) = item
