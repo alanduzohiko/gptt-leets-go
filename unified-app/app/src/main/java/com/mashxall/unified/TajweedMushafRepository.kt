@@ -30,7 +30,7 @@ import java.util.zip.ZipFile
  * The original graphic Mushaf and every existing Quran database remain untouched.
  */
 internal object TajweedMushafRepository {
-    private const val DRIVE_FILE_ID = "1gbRdMP2AZ_LGJ4sZIfWLxx2BkGyQ9B4B"
+    private const val DROPBOX_DOWNLOAD_URL = "https://www.dropbox.com/scl/fi/km281o5a052wrmfb24y5n/Mashxall-Tajweed-Source-144MB.zip?rlkey=q8uyz0ifi12vo3wrfivmqz8kx&dl=1"
     private const val EXPECTED_ARCHIVE_BYTES = 144220538L
     private const val EXPECTED_ARCHIVE_SHA256 =
         "ba814deb2db28951feab1f6e1022153d948ae905131c373331d8edd653acbdc0"
@@ -47,7 +47,7 @@ internal object TajweedMushafRepository {
 
     private val pageEntryPattern = Regex("""^tajweed/width_1280/page([0-9]{3})\.png$""")
 
-    private class NonRetryableDriveDownloadException(message: String) : IOException(message)
+    private class NonRetryableTajweedDownloadException(message: String) : IOException(message)
 
     fun isInstalled(context: Context): Boolean {
         val root = File(context.filesDir, PACK_DIRECTORY)
@@ -180,15 +180,10 @@ internal object TajweedMushafRepository {
         target: File,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit
     ) {
-        val endpoints = listOf(
-            "https://drive.google.com/uc?export=download&id=$DRIVE_FILE_ID",
-            "https://drive.usercontent.google.com/download?id=$DRIVE_FILE_ID&export=download"
-        )
-        val cookies = linkedMapOf<String, String>()
-        var requestUrl = endpoints.first()
+        val shareUrl = DROPBOX_DOWNLOAD_URL
+        var requestUrl = shareUrl
         var lastError: Exception? = null
         var attempts = 0
-        var confirmations = 0
         var binaryDownloadUrl: String? = null
         var restartedAfter416 = false
 
@@ -196,62 +191,65 @@ internal object TajweedMushafRepository {
             var connection: HttpURLConnection? = null
             try {
                 val existing = target.takeIf { it.isFile }?.length() ?: 0L
-                val rangeStart = if (shouldUseDriveRange(requestUrl, binaryDownloadUrl, existing)) existing else 0L
-                connection = openDriveConnection(requestUrl, cookies, rangeStart, binaryDownloadUrl)
+                val rangeStart = if (shouldUseTajweedRange(requestUrl, binaryDownloadUrl, existing)) {
+                    existing
+                } else {
+                    0L
+                }
+                connection = openDropboxConnection(requestUrl, rangeStart, binaryDownloadUrl)
                 val response = connection.responseCode
 
                 if (response == 416) {
                     if (existing == EXPECTED_ARCHIVE_BYTES) return
-                    if (shouldRestartDriveDownloadAfter416(existing, restartedAfter416)) {
-                        // A stale/unsupported Range request must never be repeated.
-                        // Restart the Google Drive confirmation handshake from byte zero.
+                    if (shouldRestartTajweedDownloadAfter416(existing, restartedAfter416)) {
+                        // Dropbox or its CDN rejected the stale byte range. Restart the public-link
+                        // redirect handshake from byte zero, and never repeat a second 416.
                         target.delete()
                         restartedAfter416 = true
                         binaryDownloadUrl = null
-                        requestUrl = endpoints.first()
-                        cookies.clear()
-                        confirmations = 0
+                        requestUrl = shareUrl
                         continue
                     }
-                    throw NonRetryableDriveDownloadException(
-                        "Google Drive rejected a clean download request with HTTP 416. " +
-                            "The shared Drive file or its download endpoint is not accepting this request."
+                    throw NonRetryableTajweedDownloadException(
+                        "Dropbox rejected a clean download request with HTTP 416. " +
+                            "The shared file link is not accepting the download request."
                     )
                 }
 
                 val contentType = connection.contentType.orEmpty().lowercase(Locale.ROOT)
-                if (contentType.contains("text/html") || response !in 200..299) {
-                    val html = readDriveHtml(connection)
-                    val confirmation = googleDriveConfirmationUrl(html, connection.url.toString(), cookies)
-                    if (confirmation != null && confirmations < 5) {
-                        confirmations++
-                        requestUrl = confirmation
-                        // Confirmation pages are handshake requests, never byte-range targets.
+                if (response !in 200..299 || contentType.contains("text/html")) {
+                    val html = readDropboxResponse(connection)
+                    if (response == 401 || response == 403 || response == 404 || response == 410 ||
+                        contentType.contains("text/html")
+                    ) {
+                        // A shared-link or CDN URL may have expired. Refresh the public link rather
+                        // than repeatedly requesting an expired CDN address with a partial Range.
+                        target.delete()
                         binaryDownloadUrl = null
-                        continue
+                        requestUrl = shareUrl
                     }
-                    throw IOException(googleDriveFailureReason(html, response))
+                    throw IOException(dropboxFailureReason(html, response))
                 }
 
                 val append = response == HttpURLConnection.HTTP_PARTIAL && rangeStart > 0L
                 if (response != HttpURLConnection.HTTP_OK && response != HttpURLConnection.HTTP_PARTIAL) {
-                    throw IOException("Google Drive returned HTTP " + response + ".")
+                    throw IOException("Dropbox returned HTTP " + response + ".")
                 }
-                // Save the final URL that actually returned the ZIP. Only this URL may
-                // receive a Range header on a later retry; redirects and confirmation
-                // forms are always requested from byte zero.
+
+                // Remember only the exact final URL that served the binary ZIP. Resumed requests
+                // may send Range to this URL, never to the public share page or its redirects.
                 binaryDownloadUrl = connection.url.toString()
                 requestUrl = binaryDownloadUrl.orEmpty()
                 if (append) {
-                    val start = Regex("""^bytes\s+(\d+)-""", RegexOption.IGNORE_CASE)
+                    val startByte = Regex("""^bytes\s+(\d+)-""", RegexOption.IGNORE_CASE)
                         .find(connection.getHeaderField("Content-Range").orEmpty())
                         ?.groupValues?.getOrNull(1)?.toLongOrNull()
-                    if (start != null && start != existing) {
+                    if (startByte != existing) {
                         target.delete()
-                        throw IOException("Google Drive resumed from an unexpected byte position. Restarting safely.")
+                        throw IOException("Dropbox resumed from an unexpected byte position. Restarting safely.")
                     }
                 } else if (existing > 0L) {
-                    // The server ignored Range and returned the whole file: replace the partial copy.
+                    // The CDN ignored Range or changed its download URL: replace the partial copy.
                     target.delete()
                 }
 
@@ -263,12 +261,12 @@ internal object TajweedMushafRepository {
                             var read = 0
                             while (read < header.size) {
                                 val count = input.read(header, read, header.size - read)
-                                if (count < 0) throw IOException("Google Drive ended before sending a ZIP header.")
+                                if (count < 0) throw IOException("Dropbox ended before sending a ZIP header.")
                                 read += count
                             }
                             if (header[0] != 0x50.toByte() || header[1] != 0x4b.toByte()) {
                                 target.delete()
-                                throw IOException("Google Drive did not return the Tajweed Mushaf ZIP archive.")
+                                throw IOException("Dropbox did not return the Tajweed Mushaf ZIP archive.")
                             }
                             output.write(header)
                         }
@@ -297,23 +295,22 @@ internal object TajweedMushafRepository {
                 if (size == EXPECTED_ARCHIVE_BYTES) return
                 if (size > EXPECTED_ARCHIVE_BYTES) {
                     target.delete()
-                    throw IOException("Google Drive sent more data than the verified Tajweed Mushaf archive.")
+                    throw IOException("Dropbox sent more data than the verified Tajweed Mushaf archive.")
                 }
                 throw IOException(
                     "The connection stopped at " + size + " of " + EXPECTED_ARCHIVE_BYTES +
-                        " bytes. The download will resume from this point."
+                        " bytes. The Dropbox download will resume from this point."
                 )
             } catch (error: Exception) {
-                if (error is NonRetryableDriveDownloadException) throw error
+                if (error is NonRetryableTajweedDownloadException) throw error
                 lastError = error
                 attempts++
                 if (target.length() > EXPECTED_ARCHIVE_BYTES) target.delete()
-                if (attempts >= 7) break
-
-                // Keep both the partial file and its confirmed URL when resuming.
-                if (target.length() == 0L && requestUrl in endpoints) {
-                    requestUrl = endpoints[attempts % endpoints.size]
+                if (target.length() == 0L) {
+                    requestUrl = shareUrl
+                    binaryDownloadUrl = null
                 }
+                if (attempts >= 7) break
                 try {
                     Thread.sleep((attempts * 900L).coerceAtMost(4_000L))
                 } catch (interrupted: InterruptedException) {
@@ -326,19 +323,22 @@ internal object TajweedMushafRepository {
         }
 
         throw IOException(
-            lastError?.message ?: "Could not download the Tajweed Mushaf from Google Drive.",
+            lastError?.message ?: "Could not download the Tajweed Mushaf from Dropbox.",
             lastError
         )
     }
 
-    private fun openDriveConnection(
+    private fun openDropboxConnection(
         startUrl: String,
-        cookies: MutableMap<String, String>,
         rangeStart: Long,
         rangeUrl: String?
     ): HttpURLConnection {
         var url = URL(startUrl)
         repeat(10) {
+            if (!url.protocol.equals("https", ignoreCase = true) || !isTrustedDropboxHost(url.host)) {
+                throw IOException("Dropbox redirected the download to an untrusted host.")
+            }
+
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 30_000
                 readTimeout = 90_000
@@ -348,37 +348,21 @@ internal object TajweedMushafRepository {
                     "User-Agent",
                     "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36"
                 )
-                setRequestProperty("Accept", "application/zip,application/octet-stream,text/html;q=0.9,*/*;q=0.8")
+                setRequestProperty("Accept", "application/zip,application/octet-stream,*/*;q=0.8")
                 setRequestProperty("Accept-Encoding", "identity")
-                if (cookies.isNotEmpty() && isGoogleDriveHost(url.host)) {
-                    setRequestProperty("Cookie", cookies.entries.joinToString("; ") { entry ->
-                        entry.key + "=" + entry.value
-                    })
-                }
                 if (rangeStart > 0L && rangeUrl != null && url.toString() == rangeUrl) {
                     setRequestProperty("Range", "bytes=" + rangeStart + "-")
                 }
             }
 
             val code = connection.responseCode
-            connection.headerFields.entries
-                .filter { it.key?.equals("Set-Cookie", ignoreCase = true) == true }
-                .flatMap { it.value.orEmpty() }
-                .forEach { header ->
-                    val pair = header.substringBefore(';').trim()
-                    val equals = pair.indexOf('=')
-                    if (equals > 0) {
-                        cookies[pair.substring(0, equals).trim()] = pair.substring(equals + 1).trim()
-                    }
-                }
-
-            if (code in 300..399) {
+            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                 val location = connection.getHeaderField("Location")
-                    ?: throw IOException("Google Drive redirected without a download location.")
+                    ?: throw IOException("Dropbox redirected without a download location.")
                 val next = URL(url, location)
-                if (!isGoogleDriveHost(next.host)) {
+                if (!next.protocol.equals("https", ignoreCase = true) || !isTrustedDropboxHost(next.host)) {
                     connection.disconnect()
-                    throw IOException("Google Drive redirected the download to an untrusted host.")
+                    throw IOException("Dropbox redirected the download to an untrusted host.")
                 }
                 connection.disconnect()
                 url = next
@@ -386,27 +370,19 @@ internal object TajweedMushafRepository {
                 return connection
             }
         }
-        throw IOException("Google Drive returned too many redirects.")
+        throw IOException("Dropbox returned too many download redirects.")
     }
 
-    private fun isGoogleDriveHost(host: String): Boolean {
-        val value = host.lowercase(Locale.ROOT)
-        return value == "google.com" ||
-            value.endsWith(".google.com") ||
-            value == "googleusercontent.com" ||
-            value.endsWith(".googleusercontent.com")
-    }
-
-    private fun readDriveHtml(connection: HttpURLConnection): String {
+    private fun readDropboxResponse(connection: HttpURLConnection): String {
         val stream = runCatching { connection.inputStream }.getOrNull()
             ?: connection.errorStream
             ?: return ""
         return stream.use { input ->
             val bytes = java.io.ByteArrayOutputStream()
-            val buffer = ByteArray(16 * 1024)
+            val buffer = ByteArray(8 * 1024)
             var total = 0
-            while (total < 2 * 1024 * 1024) {
-                val count = input.read(buffer, 0, minOf(buffer.size, 2 * 1024 * 1024 - total))
+            while (total < 64 * 1024) {
+                val count = input.read(buffer, 0, minOf(buffer.size, 64 * 1024 - total))
                 if (count < 0) break
                 bytes.write(buffer, 0, count)
                 total += count
@@ -415,116 +391,7 @@ internal object TajweedMushafRepository {
         }
     }
 
-    internal fun googleDriveConfirmationUrl(
-        html: String,
-        currentUrl: String,
-        cookies: Map<String, String>
-    ): String? {
-        if (html.isBlank()) return null
-        val cookieToken = cookies.entries.firstOrNull {
-            it.key.startsWith("download_warning", ignoreCase = true)
-        }?.value
-
-        val forms = Regex(
-            """<form\b([^>]*)>(.*?)</form>""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        )
-        val inputs = Regex(
-            """<input\b([^>]*)>""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        )
-        for (form in forms.findAll(html)) {
-            val attributes = parseHtmlAttributes(form.groupValues[1])
-            val parameters = linkedMapOf<String, String>()
-            for (input in inputs.findAll(form.groupValues[2])) {
-                val fields = parseHtmlAttributes(input.groupValues[1])
-                val name = fields["name"] ?: continue
-                val type = fields["type"].orEmpty()
-                if (type.equals("hidden", true) || name in setOf("id", "export", "confirm", "uuid", "authuser")) {
-                    parameters[name] = fields["value"].orEmpty()
-                }
-            }
-
-            if (parameters["confirm"].isNullOrBlank() && !cookieToken.isNullOrBlank()) {
-                parameters["confirm"] = cookieToken
-            }
-            if (parameters["confirm"].isNullOrBlank()) continue
-
-            parameters.putIfAbsent("id", DRIVE_FILE_ID)
-            parameters.putIfAbsent("export", "download")
-            val action = htmlUnescape(attributes["action"].orEmpty()).ifBlank { currentUrl }
-            val resolved = runCatching { URL(URL(currentUrl), action).toString() }.getOrNull() ?: continue
-            return appendGoogleQueryParameters(resolved, parameters)
-        }
-
-        // Some Drive warning pages provide a "Download anyway" link instead of a form.
-        val anchors = Regex(
-            """<a\b([^>]*)>""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        )
-        for (anchor in anchors.findAll(html)) {
-            val attributes = parseHtmlAttributes(anchor.groupValues[1])
-            val href = htmlUnescape(attributes["href"].orEmpty())
-            if (href.contains("confirm=", ignoreCase = true)) {
-                return runCatching { URL(URL(currentUrl), href).toString() }.getOrNull()
-            }
-        }
-
-        if (!cookieToken.isNullOrBlank()) {
-            return appendGoogleQueryParameters(
-                "https://drive.google.com/uc",
-                linkedMapOf("export" to "download", "id" to DRIVE_FILE_ID, "confirm" to cookieToken)
-            )
-        }
-        return null
-    }
-
-    private fun parseHtmlAttributes(source: String): Map<String, String> {
-        val pattern = Regex("""([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""")
-        return buildMap {
-            for (match in pattern.findAll(source)) {
-                val value = match.groups[2]?.value
-                    ?: match.groups[3]?.value
-                    ?: match.groups[4]?.value.orEmpty()
-                put(match.groupValues[1].lowercase(Locale.ROOT), htmlUnescape(value))
-            }
-        }
-    }
-
-    private fun htmlUnescape(value: String): String = value
-        .replace("&amp;", "&", ignoreCase = true)
-        .replace("&quot;", "\"", ignoreCase = true)
-        .replace("&#39;", "'", ignoreCase = true)
-        .replace("&#x27;", "'", ignoreCase = true)
-        .replace("&#61;", "=", ignoreCase = true)
-        .replace("&#x3d;", "=", ignoreCase = true)
-        .replace("\\u003d", "=", ignoreCase = true)
-        .replace("\\u0026", "&", ignoreCase = true)
-
-    private fun appendGoogleQueryParameters(url: String, updates: Map<String, String>): String {
-        val clean = url.substringBefore('#')
-        val fragment = url.substringAfter('#', "").takeIf { url.contains('#') }?.let { "#$it" }.orEmpty()
-        val path = clean.substringBefore('?')
-        val query = clean.substringAfter('?', "")
-        val values = linkedMapOf<String, String>()
-        if (query.isNotBlank()) {
-            query.split('&').filter { it.isNotBlank() }.forEach { part ->
-                val rawKey = part.substringBefore('=')
-                val rawValue = part.substringAfter('=', "")
-                val key = runCatching { java.net.URLDecoder.decode(rawKey, "UTF-8") }.getOrDefault(rawKey)
-                val value = runCatching { java.net.URLDecoder.decode(rawValue, "UTF-8") }.getOrDefault(rawValue)
-                values[key] = value
-            }
-        }
-        updates.forEach { (key, value) -> values[key] = value }
-        val encoded = values.entries.joinToString("&") { entry ->
-            java.net.URLEncoder.encode(entry.key, "UTF-8") + "=" +
-                java.net.URLEncoder.encode(entry.value, "UTF-8")
-        }
-        return "$path?$encoded$fragment"
-    }
-
-    private fun googleDriveFailureReason(html: String, response: Int): String {
+    private fun dropboxFailureReason(html: String, response: Int): String {
         val plain = html
             .replace(Regex("""(?is)<(script|style)\b.*?</\1>"""), " ")
             .replace(Regex("""(?is)<[^>]+>"""), " ")
@@ -533,13 +400,16 @@ internal object TajweedMushafRepository {
             .trim()
             .take(260)
         return when {
-            plain.contains("quota", ignoreCase = true) ->
-                "Google Drive temporarily limited downloads for this file. Please try again later."
-            plain.contains("sign in", ignoreCase = true) || plain.contains("access denied", ignoreCase = true) ->
-                "Google Drive requires file access. The shared link must allow anyone with the link to download it."
+            response == 429 || plain.contains("too many requests", ignoreCase = true) ->
+                "Dropbox temporarily limited downloads for this file. Please try again later."
+            response == 401 || response == 403 || plain.contains("sign in", ignoreCase = true) ||
+                plain.contains("access denied", ignoreCase = true) ->
+                "Dropbox denied access. The shared link must allow anyone with the link to download the file."
+            response == 404 || response == 410 ->
+                "The public Dropbox link is missing, expired or has been revoked."
             plain.isNotBlank() ->
-                "Google Drive returned a confirmation page that could not be completed: " + plain
-            else -> "Google Drive returned HTTP " + response + " without a usable download confirmation."
+                "Dropbox returned a page instead of the Tajweed Mushaf ZIP: " + plain
+            else -> "Dropbox returned HTTP " + response + " without the Tajweed Mushaf ZIP."
         }
     }
 
@@ -674,16 +544,24 @@ internal object TajweedMushafRepository {
     }
 }
 
-internal fun shouldUseDriveRange(
+internal fun shouldUseTajweedRange(
     requestUrl: String,
     verifiedBinaryUrl: String?,
     existingBytes: Long
 ): Boolean = existingBytes > 0L && verifiedBinaryUrl != null && requestUrl == verifiedBinaryUrl
 
-internal fun shouldRestartDriveDownloadAfter416(
+internal fun shouldRestartTajweedDownloadAfter416(
     existingBytes: Long,
     alreadyRestarted: Boolean
 ): Boolean = existingBytes > 0L && !alreadyRestarted
+
+internal fun isTrustedDropboxHost(host: String): Boolean {
+    val value = host.trim().trimEnd('.').lowercase(Locale.ROOT)
+    return value == "dropbox.com" ||
+        value.endsWith(".dropbox.com") ||
+        value == "dropboxusercontent.com" ||
+        value.endsWith(".dropboxusercontent.com")
+}
 
 internal data class TajweedMushafRenderedPage(
     val bitmap: Bitmap,
