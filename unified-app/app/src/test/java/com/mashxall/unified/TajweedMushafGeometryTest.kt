@@ -72,4 +72,13 @@ class TajweedMushafGeometryTest {
         assertEquals(2, geometry.size)
         assertEquals(listOf(6, 7), geometry.map { it.verse.ayah })
     }
+    @Test
+    fun tajweedPagesShowTheirArabicIndicPrintedPageNumber() {
+        assertEquals("١", tajweedPageNumberLabel(1))
+        assertEquals("٣", tajweedPageNumberLabel(3))
+        assertEquals("٦٠٤", tajweedPageNumberLabel(604))
+        assertEquals("", tajweedPageNumberLabel(0))
+        assertEquals("", tajweedPageNumberLabel(605))
+    }
+
 }
