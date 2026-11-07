@@ -47,6 +47,8 @@ internal object TajweedMushafRepository {
 
     private val pageEntryPattern = Regex("""^tajweed/width_1280/page([0-9]{3})\.png$""")
 
+    private class NonRetryableDriveDownloadException(message: String) : IOException(message)
+
     fun isInstalled(context: Context): Boolean {
         val root = File(context.filesDir, PACK_DIRECTORY)
         val marker = File(root, COMPLETE_MARKER)
@@ -211,7 +213,7 @@ internal object TajweedMushafRepository {
                         confirmations = 0
                         continue
                     }
-                    throw IOException(
+                    throw NonRetryableDriveDownloadException(
                         "Google Drive rejected a clean download request with HTTP 416. " +
                             "The shared Drive file or its download endpoint is not accepting this request."
                     )
@@ -302,6 +304,7 @@ internal object TajweedMushafRepository {
                         " bytes. The download will resume from this point."
                 )
             } catch (error: Exception) {
+                if (error is NonRetryableDriveDownloadException) throw error
                 lastError = error
                 attempts++
                 if (target.length() > EXPECTED_ARCHIVE_BYTES) target.delete()
