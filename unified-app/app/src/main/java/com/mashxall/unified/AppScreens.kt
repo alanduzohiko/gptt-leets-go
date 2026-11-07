@@ -1379,6 +1379,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var versesLoadFailed by remember { mutableStateOf(false) }
     var retryVerses by remember { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
+    var quranSearchResults by remember { mutableStateOf<List<Ayah>>(emptyList()) }
+    var quranSearchLoading by remember { mutableStateOf(false) }
     var surahOriginFilter by rememberSaveable { mutableStateOf("all") }
     var surahProgressFilter by rememberSaveable { mutableStateOf("all") }
     var readingProgressRevision by rememberSaveable { mutableIntStateOf(0) }
@@ -1404,12 +1406,41 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     val readingProgressSummary = remember(surahAyahTotals, progressBySurah) {
         quranReadingProgressSummary(surahAyahTotals, progressBySurah)
     }
+
     var translationKey by rememberSaveable {
         mutableStateOf(prefs.getString("quran_translation", null) ?: when (language) {
             AppLanguage.EN -> "sahih"
             AppLanguage.AR -> "none"
             AppLanguage.CKB -> "puxta"
         })
+    }
+
+    // Search the Quran text as well as the surah index. Debouncing avoids a
+    // database scan on every keypress while preserving offline search.
+    LaunchedEffect(query, translationKey, language, showSurahList) {
+        val term = query.trim()
+        if (!showSurahList || term.isBlank()) {
+            quranSearchResults = emptyList()
+            quranSearchLoading = false
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(280)
+        quranSearchLoading = true
+        try {
+            quranSearchResults = ContentRepository.searchAyahs(
+                context = context,
+                query = term,
+                language = language.key,
+                translationKey = translationKey
+            ).take(24)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w("MashxallQuranSearch", "Could not search Quran ayahs", error)
+            quranSearchResults = emptyList()
+        } finally {
+            quranSearchLoading = false
+        }
     }
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
@@ -2249,6 +2280,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 playbackVerse = inlinePlaybackActiveVerse,
                 coloredTajweed = coloredTajweed,
                 surahAyahCounts = surahAyahCounts,
+                surahNames = surahs.associate { it.number to if (language == AppLanguage.EN) it.englishName else it.arabicName },
                 tajweedRetryKey = retryTajweed,
                 onVerseClick = { surahNumber, ayahNumber ->
                     selected = surahNumber
@@ -2424,7 +2456,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         .apply()
                                 }
                             )
-                            SearchBox(language, query, { query = it }, tr(language, "choose_surah") + " / " + tr(language, "search"))
+                            SearchBox(
+                                language,
+                                query,
+                                { query = it },
+                                when (language) {
+                                    AppLanguage.EN -> "Search surahs or Quran verses"
+                                    AppLanguage.AR -> "ابحث عن سورة أو آية من القرآن"
+                                    AppLanguage.CKB -> "گەڕان بۆ سوورەت یان ئایەتێکی قورئان"
+                                }
+                            )
                             Spacer(Modifier.height(8.dp))
                             Row(
                                 Modifier.fillMaxWidth(),
@@ -2467,6 +2508,102 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             }
                         }
                     }
+                    if (query.isNotBlank() && (quranSearchLoading || quranSearchResults.isNotEmpty())) {
+                        item(key = "quran-ayah-search-heading") {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "MATCHING VERSES"
+                                    AppLanguage.AR -> "الآيات المطابقة"
+                                    AppLanguage.CKB -> "ئایەتە هاوتاکان"
+                                },
+                                color = Gold,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(start = 17.dp, top = 5.dp, bottom = 2.dp)
+                            )
+                        }
+                        if (quranSearchLoading) {
+                            item(key = "quran-ayah-search-loading") {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Searching Quran text…"
+                                        AppLanguage.AR -> "جارٍ البحث في نص القرآن…"
+                                        AppLanguage.CKB -> "گەڕان لە دەقی قورئاندا…"
+                                    },
+                                    color = foreground.copy(alpha = 0.62f),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 17.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                        items(
+                            items = quranSearchResults,
+                            key = { "ayah-search-${it.surah}-${it.number}" }
+                        ) { result ->
+                            val resultSurahName = surahs.firstOrNull { it.number == result.surah }?.let {
+                                if (language == AppLanguage.EN) it.englishName else it.arabicName
+                            } ?: result.surahNameArabic
+                            Card(
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(horizontal = 13.dp, vertical = 2.dp)
+                                    .premiumPress(pressedScale = quranReaderActionPressScale("ayah_search_result")) {
+                                        selected = result.surah
+                                        query = ""
+                                        selectedAyahForSheet = null
+                                        showSurahList = false
+                                        openingMushaf = false
+                                        mushafMode = false
+                                        onSurah(result.surah)
+                                        onOpenVerse(result.surah, result.number)
+                                        prefs.edit()
+                                            .putString("quran_reader_mode", "verse")
+                                            .putInt("last_surah", result.surah)
+                                            .putInt("last_ayah_number", result.number)
+                                            .putInt("quran_progress_ayah_${result.surah}", result.number)
+                                            .apply()
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = cardColor),
+                                shape = RoundedCornerShape(17.dp),
+                                border = BorderStroke(0.7.dp, Gold.copy(alpha = 0.17f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            resultSurahName.ifBlank { "${result.surah}" },
+                                            color = foreground,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            "${result.surah}:${result.number}",
+                                            color = Gold,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                    Spacer(Modifier.height(5.dp))
+                                    Text(
+                                        result.arabic,
+                                        color = foreground,
+                                        fontSize = 17.sp,
+                                        lineHeight = 29.sp,
+                                        maxLines = 2
+                                    )
+                                    if (result.translation.isNotBlank()) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            result.translation,
+                                            color = foreground.copy(alpha = 0.64f),
+                                            fontSize = 10.sp,
+                                            lineHeight = 16.sp,
+                                            maxLines = 2
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (surahs.isEmpty()) {
                         item(key = "quran-surah-index-empty") {
                             LoadingOrEmpty(
@@ -2482,7 +2619,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 onRetry = if (surahsLoadFailed) ({ retrySurahs++ }) else null
                             )
                         }
-                    } else if (filteredSurahs.isEmpty()) {
+                    } else if (filteredSurahs.isEmpty() && quranSearchResults.isEmpty() && !quranSearchLoading) {
                         item(key = "quran-surah-index-no-results") {
                             LoadingOrEmpty(false, language, foreground, tr(language, "not_found"))
                         }
@@ -4077,6 +4214,25 @@ internal fun mushafCurlDirectionForPageTransition(fromPage: Int, toPage: Int): F
 }
 
 /** Scale the swipe threshold with the viewport while keeping a safe minimum. */
+internal fun normalizeMushafPageInput(value: String): String = buildString {
+    value.forEach { character ->
+        character.digitToIntOrNull()?.let { append(it) }
+    }
+}.take(3)
+
+internal fun parseMushafPageNumber(value: String): Int? =
+    normalizeMushafPageInput(value).toIntOrNull()?.takeIf { it in 1..604 }
+
+internal fun mushafJuzForPage(page: Int): Int {
+    val starts = intArrayOf(
+        1, 22, 42, 62, 82, 102, 121, 142, 162, 182,
+        201, 222, 242, 262, 282, 302, 322, 342, 362, 382,
+        402, 422, 442, 462, 482, 502, 522, 542, 562, 582
+    )
+    if (page !in 1..604) return 0
+    return (starts.indexOfLast { it <= page } + 1).coerceIn(1, 30)
+}
+
 internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
     if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
     return maxOf(72f, viewportWidthPx * 0.16f)
@@ -4108,6 +4264,7 @@ private fun MushafPageViewer(
     playbackVerse: Pair<Int, Int>? = null,
     coloredTajweed: Boolean = false,
     surahAyahCounts: Map<Int, Int> = emptyMap(),
+    surahNames: Map<Int, String> = emptyMap(),
     tajweedRetryKey: Int = 0,
     onReadingPosition: (Int, Int) -> Unit = { _, _ -> }
 ) {
@@ -4274,7 +4431,9 @@ private fun MushafPageViewer(
             if (edition == "tajweed") {
                 val rendered = TajweedMushafRepository.loadRenderedPage(context, page)
                 pageVerseGeometry = rendered?.geometry.orEmpty()
-                pageVerses = pageVerseGeometry.map { it.verse }
+                pageVerses = pageVerseGeometry.map { it.verse }.ifEmpty {
+                    ContentRepository.loadMushafPageVerses(context, page)
+                }
                 pageVerses.firstOrNull()?.let { firstVerse ->
                     onReadingPosition(firstVerse.surah, firstVerse.ayah)
                 }
@@ -4384,10 +4543,34 @@ private fun MushafPageViewer(
                     } else tr(language, "mushaf_view"),
                     color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1
                 )
+                val pageStartVerse = pageVerses.firstOrNull()
+                val pageSurahName = pageStartVerse?.surah?.let { surahNames[it] }.orEmpty()
+                val pageJuz = mushafJuzForPage(page)
                 Text(
-                    tr(language, "page") + " " + page + " / 604",
+                    buildString {
+                        append(
+                            when (language) {
+                                AppLanguage.EN -> "Page "
+                                AppLanguage.AR -> "صفحة "
+                                AppLanguage.CKB -> "پەڕە "
+                            }
+                        )
+                        append(page)
+                        append(" / 604")
+                        if (pageSurahName.isNotBlank()) append(" • ").append(pageSurahName)
+                        append(" • ")
+                        append(
+                            when (language) {
+                                AppLanguage.EN -> "Juz "
+                                AppLanguage.AR -> "الجزء "
+                                AppLanguage.CKB -> "بەشی "
+                            }
+                        )
+                        append(pageJuz)
+                    },
                     color = PaleGold,
-                    fontSize = 10.sp
+                    fontSize = 8.sp,
+                    maxLines = 1
                 )
             }
             val toolbarVerse = selectedVerse ?: pageVerses.firstOrNull()
@@ -4465,9 +4648,9 @@ private fun MushafPageViewer(
             )
             OutlinedTextField(
                 value = pageInput,
-                onValueChange = { pageInput = it.filter(Char::isDigit).take(3) },
+                onValueChange = { pageInput = normalizeMushafPageInput(it) },
                 modifier = Modifier.weight(1f),
-                label = { Text(if (language == AppLanguage.EN) "Page" else if (language == AppLanguage.AR) "صفحة" else "پەڕە", fontSize = 10.sp) },
+                label = { Text(if (language == AppLanguage.EN) "Page 1–604" else if (language == AppLanguage.AR) "صفحة ١–٦٠٤" else "پەڕە ١–٦٠٤", fontSize = 10.sp) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
@@ -4477,9 +4660,9 @@ private fun MushafPageViewer(
                 accent = Gold,
                 foreground = if (darkMode) Color.White else DeepGreen,
                 leadingIcon = Icons.Outlined.Search,
-                enabled = pageInput.toIntOrNull()?.let { it in 1..604 } == true && pageInput.toIntOrNull() != page
+                enabled = parseMushafPageNumber(pageInput)?.let { it != page } == true
             ) {
-                pageInput.toIntOrNull()?.takeIf { it in 1..604 }?.let(onPageChange)
+                parseMushafPageNumber(pageInput)?.let(onPageChange)
             }
             ReaderActionIcon(
                 Icons.Outlined.ChevronRight,
@@ -4490,56 +4673,58 @@ private fun MushafPageViewer(
                 onClick = { onPageChange(page + 1) }
             )
         }
-        if (edition != "tajweed") {
-            val pageProgress by animateFloatAsState(
-                targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
-                animationSpec = if (motionAllowed) tween(380, easing = FastOutSlowInEasing) else snap(),
-                label = "Mushaf total page progress"
-            )
-            Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "READING PROGRESS"
-                            AppLanguage.AR -> "تقدم القراءة"
-                            AppLanguage.CKB -> "پێشکەوتنی خوێندنەوە"
-                        },
-                        color = if (darkMode) PaleGold.copy(alpha = 0.72f) else DeepGreen.copy(alpha = 0.66f),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        String.format(Locale.US, "%.1f%%", pageProgress * 100f),
-                        color = if (darkMode) PaleGold else DeepGreen,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                Box(
-                    Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
-                        .background(if (darkMode) Color.White.copy(alpha = 0.10f) else DeepGreen.copy(alpha = 0.10f))
-                ) {
-                    Box(
-                        Modifier.fillMaxWidth(pageProgress).fillMaxHeight().clip(CircleShape)
-                            .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), PaleGold, Gold)))
-                    )
-                }
+        val pageProgress by animateFloatAsState(
+            targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
+            animationSpec = if (motionAllowed) tween(380, easing = FastOutSlowInEasing) else snap(),
+            label = "Mushaf total page progress"
+        )
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = if (edition == "tajweed") 7.dp else 9.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "READING PROGRESS"
+                        AppLanguage.AR -> "تقدم القراءة"
+                        AppLanguage.CKB -> "پێشکەوتنی خوێندنەوە"
+                    },
+                    color = if (darkMode) PaleGold.copy(alpha = 0.72f) else DeepGreen.copy(alpha = 0.66f),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    String.format(Locale.US, "%.1f%%", pageProgress * 100f),
+                    color = if (darkMode) PaleGold else DeepGreen,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            PremiumPageScrubber(
-                currentPage = page,
-                pageCount = 604,
-                pageLabel = if (language == AppLanguage.EN) "Jump to page" else if (language == AppLanguage.AR) "انتقل إلى صفحة" else "بڕۆ بۆ پەڕە",
-                foreground = if (darkMode) Color.White.copy(alpha = 0.82f) else DeepGreen,
-                accent = Gold,
-                modifier = Modifier.padding(horizontal = 9.dp)
-            ) { selectedPage -> onPageChange(selectedPage) }
-            Spacer(Modifier.height(5.dp))
-        } else {
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(3.dp))
+            Box(
+                Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
+                    .background(if (darkMode) Color.White.copy(alpha = 0.10f) else DeepGreen.copy(alpha = 0.10f))
+            ) {
+                Box(
+                    Modifier.fillMaxWidth(pageProgress).fillMaxHeight().clip(CircleShape)
+                        .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.72f), PaleGold, Gold)))
+                )
+            }
         }
+        PremiumPageScrubber(
+            currentPage = page,
+            pageCount = 604,
+            pageLabel = when (language) {
+                AppLanguage.EN -> "Swipe to jump to page"
+                AppLanguage.AR -> "اسحب للانتقال إلى الصفحة"
+                AppLanguage.CKB -> "بۆ گۆڕینی پەڕەکە بیخزێنە"
+            },
+            foreground = if (darkMode) Color.White.copy(alpha = 0.82f) else DeepGreen,
+            accent = Gold,
+            modifier = Modifier.padding(horizontal = if (edition == "tajweed") 7.dp else 9.dp)
+        ) { selectedPage -> onPageChange(selectedPage) }
+        Spacer(Modifier.height(if (edition == "tajweed") 2.dp else 5.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
