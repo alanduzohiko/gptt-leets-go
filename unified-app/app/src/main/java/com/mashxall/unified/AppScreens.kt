@@ -1415,33 +1415,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         })
     }
 
-    // Search the Quran text as well as the surah index. Debouncing avoids a
-    // database scan on every keypress while preserving offline search.
-    LaunchedEffect(query, translationKey, language, showSurahList) {
-        val term = query.trim()
-        if (!showSurahList || term.isBlank()) {
-            quranSearchResults = emptyList()
-            quranSearchLoading = false
-            return@LaunchedEffect
-        }
-        kotlinx.coroutines.delay(280)
-        quranSearchLoading = true
-        try {
-            quranSearchResults = ContentRepository.searchAyahs(
-                context = context,
-                query = term,
-                language = language.key,
-                translationKey = translationKey
-            ).take(24)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            android.util.Log.w("MashxallQuranSearch", "Could not search Quran ayahs", error)
-            quranSearchResults = emptyList()
-        } finally {
-            quranSearchLoading = false
-        }
-    }
     var chooseTranslation by remember { mutableStateOf(false) }
     var chooseSurah by remember { mutableStateOf(false) }
     var mushafMode by rememberSaveable { mutableStateOf(false) }
@@ -1503,6 +1476,34 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var openingMushaf by remember { mutableStateOf(false) }
     var pendingMushafStartSurah by remember { mutableIntStateOf(0) }
     var showSurahList by rememberSaveable { mutableStateOf(true) }
+    // Search the Quran text as well as the surah index. Debouncing avoids a
+    // database scan on every keypress while preserving offline search.
+    LaunchedEffect(query, translationKey, language, showSurahList) {
+        val term = query.trim()
+        if (!showSurahList || term.isBlank()) {
+            quranSearchResults = emptyList()
+            quranSearchLoading = false
+            return@LaunchedEffect
+        }
+        quranSearchResults = emptyList()
+        kotlinx.coroutines.delay(280)
+        quranSearchLoading = true
+        try {
+            quranSearchResults = ContentRepository.searchAyahs(
+                context = context,
+                query = term,
+                language = language.key,
+                translationKey = translationKey
+            ).take(24)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w("MashxallQuranSearch", "Could not search Quran ayahs", error)
+            quranSearchResults = emptyList()
+        } finally {
+            quranSearchLoading = false
+        }
+    }
     var showUnvowelled by rememberSaveable { mutableStateOf(false) }
     // Tajweed now belongs to its own full-page Mushaf edition.
     var coloredTajweed by rememberSaveable { mutableStateOf(false) }
