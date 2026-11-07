@@ -4314,7 +4314,8 @@ private fun MushafPageViewer(
 
             if (nextPageBitmap == null) {
                 failed = true
-                bitmap = null
+                // Keep the last valid page visible on a transient render/decode failure.
+                bitmap = bitmap ?: turningPageBitmap
                 pendingPageBitmap = null
                 turningPageBitmap = null
                 lastLoadedPage = page
@@ -4337,7 +4338,8 @@ private fun MushafPageViewer(
         } catch (error: Exception) {
             android.util.Log.e("MashxallMushaf", "Could not load Mushaf page $page", error)
             pageVerses = emptyList()
-            bitmap = null
+            // Preserve the last rendered image rather than flashing an empty white page.
+            bitmap = bitmap ?: turningPageBitmap
             pendingPageBitmap = null
             turningPageBitmap = null
             lastLoadedPage = page
@@ -4639,9 +4641,12 @@ private fun MushafPageViewer(
                                                                 1f,
                                                                 animationSpec = tween(620, easing = FastOutSlowInEasing)
                                                             )
-                                                            turningPageBitmap = back
+                                                            // The finger-led curl has already revealed this adjacent page.
+                                                            // Keep that ready bitmap on screen while the full-resolution page
+                                                            // and verse hit regions finish loading; never clear the reader canvas.
+                                                            bitmap = back
+                                                            turningPageBitmap = null
                                                             lastLoadedPage = targetPage
-                                                            bitmap = null
                                                             pageTurnDirection = direction
                                                             pageCurlProgress.snapTo(1f)
                                                             curlPreviewVisible = false
