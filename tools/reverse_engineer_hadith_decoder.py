@@ -95,6 +95,10 @@ def main() -> int:
                 lines = source.splitlines()
                 if label == "hadith_row_mapper":
                     selected = [(0, min(len(lines), 340))]
+                elif label == "string_crypto_helper":
+                    # Preserve the complete narrowly-scoped Noor string helper so the
+                    # lexicon's own l.j(value, f10928d) transform can be reconstructed.
+                    selected = [(0, min(len(lines), 520))]
                 elif label == "string_decoder_key_map":
                     selected = [(0, min(len(lines), 360))]
                 elif label == "tajweed_mushaf_activity":

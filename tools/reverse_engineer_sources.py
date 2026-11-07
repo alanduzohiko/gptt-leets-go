@@ -37,6 +37,7 @@ PATTERNS = {
     "asset_loading": re.compile(r"getAssets\(|openFd\(|AssetManager|assets/tafsir|\.sqlite|quran\.db|pages\.bin|db_hadith_of_ayah", re.I),
     "quran_audio": re.compile(r"quranicaudio|everyayah|audiotype|q_order|download\.quran|\.mp3", re.I),
     "hadith_of_ayah": re.compile(r"hadith_on_ayah|db_hadith_of_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I),
+    "lexicon_dictionary": re.compile(r"db_words_lexicon|word_list|lexicon|dictionary|word.{0,30}(?:meaning|definition|explanation|root)|(?:meaning|definition|explanation|root).{0,30}word", re.I),
 }
 
 FOCUS_CONTEXT = re.compile(
@@ -137,6 +138,8 @@ def main() -> int:
             )
             book_url_signal = re.compile(r'''https?://[^\s"']{1,180}''', re.I)
             app_report["book_download_contexts"] = []
+            app_report["lexicon_source_contexts"] = []
+            lexicon_context_keys: set[tuple[str, int]] = set()
             context_rules = {
                 "hadith_of_ayah": (re.compile(r"db_hadith_of_ayah|hadith_on_ayah|verse_reference|hadith.{0,30}ayah|ayah.{0,30}hadith", re.I), 35),
                 "cryptography": (re.compile(r"Cipher|SecretKeySpec|IvParameterSpec|Base64\.decode|PBKDF2|AES|decrypt|encrypt|doFinal", re.I), 30),
@@ -154,6 +157,25 @@ def main() -> int:
                     stripped = " ".join(line.strip().split())
                     if not stripped:
                         continue
+                    # Inspect source database-backed dictionary payloads without altering bundled records.
+            # Capture original word_list/lexicon call sites with enough surrounding
+                    # source to identify the transformation applied before text reaches UI.
+                    if re.search(r"db_words_lexicon|word_list", stripped, re.I) and len(app_report["lexicon_source_contexts"]) < 100:
+                        context_key = (relative_file, line_no)
+                        if context_key not in lexicon_context_keys:
+                            lexicon_context_keys.add(context_key)
+                            context_start = max(0, line_no - 42)
+                            context_end = min(len(lines), line_no + 85)
+                            app_report["lexicon_source_contexts"].append({
+                                "file": relative_file,
+                                "match_line": line_no,
+                                "match": stripped[:320],
+                                "context_start_line": context_start + 1,
+                                "context": "\\n".join(
+                                    f"{idx + 1}: {item.rstrip()[:360]}"
+                                    for idx, item in enumerate(lines[context_start:context_end], context_start)
+                                ),
+                            })
                     # Keep book/PDF resolution research focused on app code. Third-party
                     # dependencies contain many irrelevant URLs and can overwhelm the log.
                     book_contexts = app_report["book_download_contexts"]
@@ -310,6 +332,12 @@ def main() -> int:
                                 print(f"TARGET {tag} lines={window['start_line']}-{window['end_line']}", flush=True)
                                 print(window["source"][:18000], flush=True)
                     print("FOCUSED_NOOR_DECODER_END", flush=True)
+                    if app_report["lexicon_source_contexts"]:
+                        print("FOCUSED_LEXICON_SOURCE_BEGIN", flush=True)
+                        for item in app_report["lexicon_source_contexts"][:40]:
+                            print(f"LEXICON_SOURCE file={item['file']} line={item['match_line']} match={item['match']}", flush=True)
+                            print(item["context"][:18000], flush=True)
+                        print("FOCUSED_LEXICON_SOURCE_END", flush=True)
                     print("FOCUSED_NOOR_BOOK_DOWNLOAD_BEGIN", flush=True)
                     prioritized_book_contexts = sorted(
                         app_report.get("book_download_contexts", []),
@@ -355,6 +383,12 @@ def main() -> int:
 
             app_report["code_context_counts"] = {key: len(value) for key, value in app_report["code_contexts"].items()}
             app_report["finding_counts"] = {key: len(value) for key, value in app_report["findings"].items()}
+            if os.environ.get("MASHXALL_RE_DUMP_FOCUSED") == "1" and app_report["lexicon_source_contexts"]:
+                print("LEXICON_APP_SOURCE_BEGIN " + meta["label"], flush=True)
+                for item in app_report["lexicon_source_contexts"][:60]:
+                    print(f"LEXICON_SOURCE file={item['file']} line={item['match_line']} match={item['match']}", flush=True)
+                    print(item["context"][:18000], flush=True)
+                print("LEXICON_APP_SOURCE_END " + meta["label"], flush=True)
             # Manifest/resources and binaries stay temporary; only metadata and snippets are emitted.
             shutil.rmtree(decompiled, ignore_errors=True)
             base_apk.unlink(missing_ok=True)

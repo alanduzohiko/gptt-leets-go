@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   push:
-    branches: ["main"]
+    branches: ["main", "redesign/**"]
     paths:
       - "unified-app/**"
       - "tools/extract_unified_content.py"
@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   build-unified-app:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/redesign/')))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -80,6 +80,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_audit_apk_assets.py'
 
       - name: Download JADX static analyzer
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_static_reverse_engineering) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[RE-FOCUSED]') || contains(github.event.head_commit.message, '[RE-ANALYSIS]')))
         shell: bash
         run: |
           set -euo pipefail
@@ -172,7 +173,6 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           python tools/audit_prayer_data.py \
-            --noor unified-app/app/src/main/assets/content/noor_tafsir_1.2.2/base/assets/prayertimes.db \
             --salawati unified-app/app/src/main/assets/content/salawati_3.1.3/base/assets/database/muslim_db_v2.5.1.db \
             --out dist/prayer-data-audit.json
 
@@ -180,6 +180,12 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Set up JDK 17 for Android Gradle Plugin
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -219,6 +225,15 @@ jobs:
           التنبيهات والأذان تحتاج أذونات المستخدم وإعدادات Android الملائمة.
           يجب إجراء اختبار فعلي على الجهاز قبل اعتبار الإصدار نهائيًا أو نشره.
           EOF
+
+      - name: Upload a clean APK-only package for phone installation
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-${{ github.run_number }}
+          path: dist/Mashxall-Unified-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
 
       - name: Upload APK, extracted content catalog and verification report
         uses: actions/upload-artifact@v4

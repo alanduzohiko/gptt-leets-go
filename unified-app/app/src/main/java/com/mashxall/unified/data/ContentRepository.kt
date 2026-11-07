@@ -1,10 +1,18 @@
 package com.mashxall.unified.data
 
 import android.content.Context
+import android.annotation.SuppressLint
+import android.graphics.RectF
+import android.util.Xml
+import androidx.core.graphics.PathParser
+import org.xmlpull.v1.XmlPullParser
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
+import java.util.Base64
 import android.text.Html
+import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -14,9 +22,12 @@ import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
 
@@ -110,6 +121,19 @@ data class AllahName(
     val extraText: String = ""
 )
 data class City(val name: String, val latitude: Double, val longitude: Double, val country: String = "")
+data class NearbySalawatiCity(val city: City, val distanceKm: Double)
+
+/** Select a named source location by exact geographic distance; this never supplies prayer times. */
+internal fun nearestSalawatiCityCandidate(
+    candidates: List<Pair<City, Double>>,
+    maxDistanceKm: Double
+): NearbySalawatiCity? {
+    if (!maxDistanceKm.isFinite() || maxDistanceKm <= 0.0) return null
+    return candidates.asSequence()
+        .filter { (_, distance) -> distance.isFinite() && distance >= 0.0 && distance <= maxDistanceKm }
+        .minByOrNull { it.second }
+        ?.let { (city, distance) -> NearbySalawatiCity(city, distance) }
+}
 data class PrayerRow(
     val city: String, val date: String, val fajr: String, val sunrise: String,
     val dhuhr: String, val asr: String, val maghrib: String, val isha: String,
@@ -148,9 +172,41 @@ data class WordItem(
 )
 private data class WordTypeInfo(val tag: String, val english: String, val arabic: String, val ckb: String, val color: String)
 data class AudioItem(val assetPath: String, val title: String, val group: String)
-data class Reciter(val id: Int, val nameArabic: String, val nameEnglish: String, val audioType: Int, val baseUrl: String, val order: Int)
+data class Reciter(
+    val id: Int,
+    val nameArabic: String,
+    val nameEnglish: String,
+    val audioType: Int,
+    val baseUrl: String,
+    val order: Int,
+    /** Number of surahs confirmed by this source edition; incomplete editions must not be played past this count. */
+    val surahTotal: Int = 114,
+    /** Original source's recitation/riwayah label, when supplied. */
+    val recitation: String = "",
+    /** Stable upstream identifier used for attribution and diagnostics. */
+    val sourceId: String = ""
+)
+data class OnlineAdhan(
+    val id: String,
+    val titleArabic: String,
+    val titleEnglish: String,
+    val category: String,
+    val sourceFilename: String,
+    val url: String,
+    val sizeBytes: Long
+)
+
+/** Remove source-database playback suffixes from the name shown to users. */
+internal fun reciterDisplayName(value: String): String = value
+    .replace(Regex("""\s*\((?:بێ بچڕان|gapless)\)""", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("""\s+"""), " ")
+    .trim()
 data class FarmudaItem(val id: Int, val title: String, val arabic: String, val sorani: String, val badiniTitle: String, val badini: String, val preferredTime: Int)
 data class ContentCounts(val databases: Int, val audioFiles: Int, val fonts: Int, val pdfs: Int, val assetFiles: Int)
+
+/** Stable daily rotation over the original Hadith database; returns a safe zero-based row offset. */
+internal fun dailyHadithOffset(date: LocalDate, totalHadiths: Int): Int =
+    if (totalHadiths <= 0) 0 else Math.floorMod(date.toEpochDay(), totalHadiths.toLong()).toInt()
 private data class SalawatiAzkarText(val ckb: String, val english: String, val reference: String)
 private data class KhairahPageMeta(
     val id: Int, val volume: String, val page: String, val offset: Int,
@@ -166,25 +222,404 @@ data class MushafPageRect(
     val maxY: Float
 )
 
+/** Bounds extracted from one tagged word in the exact SVG page displayed by the Mushaf. */
+internal data class MushafWordBounds(
+    val surah: Int,
+    val ayah: Int,
+    val lineNumber: Int,
+    val minX: Float,
+    val maxX: Float,
+    val minY: Float,
+    val maxY: Float
+)
+
+/** Tight per-word regions for one ayah in the currently displayed SVG page. */
+internal data class MushafPageVerseGeometry(
+    val verse: MushafPageVerse,
+    val rects: List<MushafPageRect>
+)
+
+/**
+ * Keep the paths for each tagged SVG word as its own tight region within the ayah.
+ * Different ayahs are never merged, even when they share a printed line.
+ */
+internal fun buildMushafPageVerseGeometry(words: List<MushafWordBounds>): List<MushafPageVerseGeometry> {
+    val validWords = words.filter { word ->
+        word.surah in 1..114 &&
+            word.ayah in 1..286 &&
+            word.lineNumber >= 0 &&
+            word.minX.isFinite() && word.maxX.isFinite() &&
+            word.minY.isFinite() && word.maxY.isFinite() &&
+            word.minX >= 0f && word.minY >= 0f &&
+            word.maxX <= 1148f && word.maxY <= 1641f &&
+            word.maxX > word.minX && word.maxY > word.minY &&
+            word.maxX - word.minX <= 1148f * 0.80f &&
+            word.maxY - word.minY <= 1641f * 0.06f
+    }
+
+    // Keep each source word as its own selectable/highlightable shape. Merging
+    // a whole printed line into one rectangle also paints the spaces between
+    // words, which made the old highlight look larger than the actual ayah.
+    return validWords.groupBy { MushafPageVerse(it.surah, it.ayah) }
+        .map { (verse, verseWords) ->
+            val wordRects = verseWords.map { word ->
+                MushafPageRect(
+                    glyphId = 0,
+                    lineNumber = word.lineNumber,
+                    minX = word.minX,
+                    maxX = word.maxX,
+                    minY = word.minY,
+                    maxY = word.maxY
+                )
+            }.sortedWith(
+                compareBy<MushafPageRect> { it.lineNumber }
+                    .thenBy { it.minX }
+                    .thenBy { it.minY }
+            )
+            MushafPageVerseGeometry(verse, wordRects)
+        }
+        .filter { it.rects.isNotEmpty() }
+        .sortedWith(compareBy<MushafPageVerseGeometry> { it.verse.surah }.thenBy { it.verse.ayah })
+}
+
+/**
+ * Resolve a tap against the displayed page's own vector-word bounds.
+ * A small finger-sized tolerance makes the text easy to hit without selecting a
+ * neighbouring verse or large blank areas around the printed text.
+ */
+internal fun findMushafPageVerseAtPoint(
+    regions: List<MushafPageVerseGeometry>,
+    x: Float,
+    y: Float,
+    tolerancePx: Float = 12f
+): MushafPageVerse? {
+    if (!x.isFinite() || !y.isFinite() || !tolerancePx.isFinite() || tolerancePx < 0f) return null
+
+    return regions.asSequence()
+        .flatMap { region -> region.rects.asSequence().map { rect -> region.verse to rect } }
+        .map { (verse, rect) ->
+            val dx = when {
+                x < rect.minX -> rect.minX - x
+                x > rect.maxX -> x - rect.maxX
+                else -> 0f
+            }
+            val dy = when {
+                y < rect.minY -> rect.minY - y
+                y > rect.maxY -> y - rect.maxY
+                else -> 0f
+            }
+            Triple(verse, rect, dx * dx + dy * dy)
+        }
+        .filter { (_, _, distanceSquared) -> distanceSquared <= tolerancePx * tolerancePx * 2f }
+        .minByOrNull { (_, rect, distanceSquared) ->
+            distanceSquared + (rect.maxX - rect.minX) * (rect.maxY - rect.minY) * 0.000001f
+        }
+        ?.first
+}
+
+/**
+ * Read verse hit regions from the exact page SVG used for display.
+ * The Noor page_data_line tables describe another page layout and are deliberately
+ * not used here: their stored rectangles do not line up with this 604-page SVG edition.
+ */
+@SuppressLint("RestrictedApi")
+internal fun parseMushafPageVerseGeometry(svgSource: String): List<MushafPageVerseGeometry> {
+    if (svgSource.isBlank()) return emptyList()
+
+    data class CapturedWord(
+        val depth: Int,
+        val surah: Int,
+        val ayah: Int,
+        val lineNumber: Int,
+        var minX: Float = Float.POSITIVE_INFINITY,
+        var maxX: Float = Float.NEGATIVE_INFINITY,
+        var minY: Float = Float.POSITIVE_INFINITY,
+        var maxY: Float = Float.NEGATIVE_INFINITY
+    )
+
+    return try {
+        val parser = Xml.newPullParser()
+        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+        parser.setInput(
+            ByteArrayInputStream(svgSource.removePrefix("\uFEFF").toByteArray(Charsets.UTF_8)),
+            "UTF-8"
+        )
+
+        var viewBoxLeft = 0f
+        var viewBoxTop = 0f
+        var viewBoxWidth = 382.68f
+        var viewBoxHeight = 547.09f
+        var scale = 1f
+        var offsetX = 0f
+        var offsetY = 0f
+        var capturedWord: CapturedWord? = null
+        val words = mutableListOf<MushafWordBounds>()
+
+        var event = parser.eventType
+        while (event != XmlPullParser.END_DOCUMENT) {
+            when (event) {
+                XmlPullParser.START_TAG -> when (parser.name) {
+                    "svg" -> {
+                        val viewBox = parser.getAttributeValue(null, "viewBox")
+                        val values = viewBox?.trim()?.split(Regex("[,\\s]+"))?.mapNotNull { it.toFloatOrNull() }
+                        if (values != null && values.size == 4 &&
+                            values[2].isFinite() && values[3].isFinite() &&
+                            values[2] > 0f && values[3] > 0f
+                        ) {
+                            viewBoxLeft = values[0]
+                            viewBoxTop = values[1]
+                            viewBoxWidth = values[2]
+                            viewBoxHeight = values[3]
+                        }
+                        scale = minOf(1148f / viewBoxWidth, 1641f / viewBoxHeight)
+                        offsetX = (1148f - viewBoxWidth * scale) * 0.5f
+                        offsetY = (1641f - viewBoxHeight * scale) * 0.5f
+                    }
+                    "g" -> {
+                        if (capturedWord == null && parser.getAttributeValue(null, "data-type") == "text") {
+                            val surah = parser.getAttributeValue(null, "data-surah")?.toIntOrNull()
+                            val ayah = parser.getAttributeValue(null, "data-aya")?.toIntOrNull()
+                            val line = parser.getAttributeValue(null, "data-line-number")?.toIntOrNull()
+                            if (surah != null && ayah != null && line != null) {
+                                capturedWord = CapturedWord(parser.depth, surah, ayah, line)
+                            }
+                        }
+                    }
+                    "path" -> {
+                        val word = capturedWord
+                        val pathData = parser.getAttributeValue(null, "d")
+                        if (word != null && !pathData.isNullOrBlank()) {
+                            try {
+                                val path = PathParser.createPathFromPathData(pathData)
+                                val bounds = RectF()
+                                path.computeBounds(bounds, true)
+                                if (!bounds.isEmpty && bounds.left.isFinite() && bounds.right.isFinite() &&
+                                    bounds.top.isFinite() && bounds.bottom.isFinite()
+                                ) {
+                                    val left = (bounds.left - viewBoxLeft) * scale + offsetX
+                                    val right = (bounds.right - viewBoxLeft) * scale + offsetX
+                                    val top = (bounds.top - viewBoxTop) * scale + offsetY
+                                    val bottom = (bounds.bottom - viewBoxTop) * scale + offsetY
+                                    word.minX = minOf(word.minX, left)
+                                    word.maxX = maxOf(word.maxX, right)
+                                    word.minY = minOf(word.minY, top)
+                                    word.maxY = maxOf(word.maxY, bottom)
+                                }
+                            } catch (pathError: Exception) {
+                                Log.w("MashxallMushaf", "Could not read one SVG word path", pathError)
+                            }
+                        }
+                    }
+                }
+                XmlPullParser.END_TAG -> {
+                    val word = capturedWord
+                    if (parser.name == "g" && word != null && parser.depth == word.depth) {
+                        if (word.minX.isFinite() && word.maxX.isFinite() &&
+                            word.minY.isFinite() && word.maxY.isFinite()
+                        ) {
+                            words += MushafWordBounds(
+                                surah = word.surah,
+                                ayah = word.ayah,
+                                lineNumber = word.lineNumber,
+                                minX = word.minX.coerceIn(0f, 1148f),
+                                maxX = word.maxX.coerceIn(0f, 1148f),
+                                minY = word.minY.coerceIn(0f, 1641f),
+                                maxY = word.maxY.coerceIn(0f, 1641f)
+                            )
+                        }
+                        capturedWord = null
+                    }
+                }
+            }
+            event = parser.next()
+        }
+        buildMushafPageVerseGeometry(words)
+    } catch (error: Exception) {
+        Log.e("MashxallMushaf", "Could not build verse regions from the displayed SVG page", error)
+        emptyList()
+    }
+}
+
 private data class MushafSvgMeta(
     val page: Int, val offset: Int, val compressedLength: Int,
     val uncompressedLength: Int, val sha256: String
 )
 
-private fun readableHadithText(value: String): String {
-    val withoutHighlightMarkers = value.replace("<rr>", "").replace("</rr>", "")
-    return Html.fromHtml(withoutHighlightMarkers, Html.FROM_HTML_MODE_LEGACY)
+/** Remove source-only letters and repair split source markup for display; never writes to SQLite. */
+internal fun stripHadithLatinSourceMarkers(value: String): String {
+    val repaired = value
+        // Noor occasionally splits the HTML non-breaking-space entity with marker tags.
+        .replace(Regex("""&n\s*<rr>b</rr>\s*<rr>s</rr>p;""", RegexOption.IGNORE_CASE), "&nbsp;")
+        .replace("\\n", "\n")
+        .replace(Regex("""<rr>\s*[A-Za-z]\s*</rr>""", RegexOption.IGNORE_CASE), "")
+        .replace("<rr>", "")
+        .replace("</rr>", "")
+    // These single Latin letters are source annotations, not part of the Arabic narration.
+    return repaired.replace(
+        Regex("""(?<=[\u0600-\u06FF])\s+[A-Za-z](?=\s*[\u0600-\u06FF:：،,.;!?؟»«–—-]|$)"""),
+        " "
+    )
+}
+
+/** Normalize the original Arabic Hadith field without mutating its source row. */
+internal fun cleanHadithArabicSourceText(value: String): String =
+    Html.fromHtml(stripHadithLatinSourceMarkers(value), Html.FROM_HTML_MODE_LEGACY)
         .toString()
         .replace('\u00a0', ' ')
+        .replace(Regex("""[ \t]+:"""), ":")
         .trim()
+
+/** The Noor dictionary uses the original app's AES key and AES/ECB/PKCS5Padding format. */
+internal object NoorLexiconCipher {
+    internal const val KEY = "X8VKYizrHWxnUkUfEMGjk214eXU2Tjaa"
+
+    fun decrypt(value: String): String {
+        if (value.isBlank()) return ""
+        if (!isLikelyEncryptedLexiconPayload(value)) return value
+        return try {
+            val cipher = Cipher.getInstance("AES")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(KEY.toByteArray(Charsets.UTF_8), "AES")
+            )
+            String(
+                cipher.doFinal(Base64.getDecoder().decode(value.filterNot(Char::isWhitespace))),
+                Charsets.UTF_8
+            )
+        } catch (_: Exception) {
+            // Match the original app: never show unreadable ciphertext as dictionary text.
+            ""
+        }
+    }
 }
+
+/** Detect the original Base64 ciphertext only; the underlying database value is left untouched. */
+internal fun isLikelyEncryptedLexiconPayload(value: String): Boolean {
+    val compact = value.trim()
+    if (compact.length < 64 || compact.length % 4 != 0 || compact.any(Char::isWhitespace)) return false
+    if (!Regex("""[A-Za-z0-9+/]+={0,2}""").matches(compact)) return false
+    val padding = compact.indexOf('=')
+    return padding < 0 || (padding >= compact.length - 2 && compact.substring(padding).all { it == '=' })
+}
+
+private fun readableHadithText(value: String): String = cleanHadithArabicSourceText(value)
 
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
 }
 
+
+private data class KurdistanCityAlias(
+    val names: List<String>,
+    val sourceTerms: List<String>,
+    val sorani: String,
+    val arabic: String,
+    val english: String
+)
+
+private fun normalizeKurdistanCityText(value: String): String = value
+    .lowercase(Locale.ROOT)
+    .replace("ـ", "")
+    .replace("\u200c", "")
+    .replace("\u200e", "")
+    .replace("\u200f", "")
+    .replace("أ", "ا")
+    .replace("إ", "ا")
+    .replace("آ", "ا")
+    .replace("ٱ", "ا")
+    .replace("ى", "ي")
+    .replace("ة", "ه")
+    .replace("ک", "ك")
+    .replace("ی", "ي")
+    .replace("ە", "ه")
+    .replace("ێ", "ي")
+    .replace("ۆ", "و")
+    .replace("ڕ", "ر")
+    .replace("ڵ", "ل")
+    .filter { it.isLetterOrDigit() }
+
+/** Search Sorani and Arabic spellings against the original Latin Salawati keys. */
+private val kurdistanCityAliases = listOf(
+    KurdistanCityAlias(listOf("Erbil", "Hawler", "Hewler", "هەولێر", "هولێر", "هولير", "أربيل", "اربيل", "اربیل"), listOf("erbil", "hawler", "hewler"), "هەولێر", "أربيل", "Erbil"),
+    KurdistanCityAlias(listOf("Sulaymaniyah", "Sulaimaniyah", "Sulaimani", "Slemani", "Silêmanî", "سلێمانی", "سليمانية", "السليمانية", "سليماني"), listOf("sulaymaniyah", "sulaimaniyah", "sulaimani", "slemani", "silemani"), "سلێمانی", "السليمانية", "Sulaymaniyah"),
+    KurdistanCityAlias(listOf("Duhok", "Dohuk", "دهۆک", "دهوك", "دهوک"), listOf("duhok", "dohuk"), "دهۆک", "دهوك", "Duhok"),
+    KurdistanCityAlias(listOf("Halabja", "Halabjah", "هەڵەبجە", "حلبجة", "حلبجه"), listOf("halabja", "halabjah"), "هەڵەبجە", "حلبجة", "Halabja"),
+    KurdistanCityAlias(listOf("Zakho", "Zaxo", "زاخۆ", "زاخو"), listOf("zakho", "zaxo"), "زاخۆ", "زاخو", "Zakho"),
+    KurdistanCityAlias(listOf("Ranya", "Rania", "ڕانیە", "رانية", "رانيه"), listOf("ranya", "rania"), "ڕانیە", "رانية", "Ranya"),
+    KurdistanCityAlias(listOf("Chamchamal", "چەمچەماڵ", "جمجمال"), listOf("chamchamal"), "چەمچەماڵ", "جمجمال", "Chamchamal"),
+    KurdistanCityAlias(listOf("Koya", "Koysinjaq", "کۆیە", "كويسنجق", "كوية"), listOf("koya", "koysinjaq"), "کۆیە", "كوية", "Koya"),
+    KurdistanCityAlias(listOf("Shaqlawa", "شەقڵاوە", "شقلاوة"), listOf("shaqlawa"), "شەقڵاوە", "شقلاوة", "Shaqlawa"),
+    KurdistanCityAlias(listOf("Soran", "سۆران", "سوران"), listOf("soran"), "سۆران", "سوران", "Soran"),
+    KurdistanCityAlias(listOf("Akre", "Aqra", "ئاکرێ", "عقرة"), listOf("akre", "aqra"), "ئاکرێ", "عقرة", "Akre"),
+    KurdistanCityAlias(listOf("Kirkuk", "کەرکووک", "كركوك"), listOf("kirkuk"), "کەرکووک", "كركوك", "Kirkuk"),
+    KurdistanCityAlias(listOf("Dukan", "دوکان", "دوكان"), listOf("dukan"), "دوکان", "دوكان", "Dukan"),
+    KurdistanCityAlias(listOf("Qaladiza", "Qaladze", "قلادزێ", "قلادزه", "قلعة دزة"), listOf("qaladiza", "qaladze"), "قلادزێ", "قلعة دزة", "Qaladiza"),
+    KurdistanCityAlias(listOf("Penjwen", "پێنجوێن", "بنجوين"), listOf("penjwen"), "پێنجوێن", "بنجوين", "Penjwen"),
+    KurdistanCityAlias(listOf("Darbandikhan", "دەربەندیخان", "دربنديخان"), listOf("darbandikhan"), "دەربەندیخان", "دربنديخان", "Darbandikhan"),
+    KurdistanCityAlias(listOf("Kalar", "کەلار", "كلار"), listOf("kalar"), "کەلار", "كلار", "Kalar"),
+    KurdistanCityAlias(listOf("Kifri", "کفری", "كفري"), listOf("kifri"), "کفری", "كفري", "Kifri"),
+    KurdistanCityAlias(listOf("Khanaqin", "خانەقین", "خانقين"), listOf("khanaqin"), "خانەقین", "خانقين", "Khanaqin"),
+    KurdistanCityAlias(listOf("Makhmur", "مەخمور", "مخمور"), listOf("makhmur"), "مەخمور", "مخمور", "Makhmur"),
+    KurdistanCityAlias(listOf("Bardarash", "بەردەڕەش", "بردرش"), listOf("bardarash"), "بەردەڕەش", "بردرش", "Bardarash"),
+    KurdistanCityAlias(listOf("Harir", "هەریر", "حرير"), listOf("harir"), "هەریر", "حرير", "Harir"),
+    KurdistanCityAlias(listOf("Barzan", "بارزان"), listOf("barzan"), "بارزان", "بارزان", "Barzan"),
+    KurdistanCityAlias(listOf("Mergasor", "میرگەسۆر", "ميركسور"), listOf("mergasor", "margasor"), "میرگەسۆر", "ميركسور", "Mergasor"),
+    KurdistanCityAlias(listOf("Sidakan", "سیدەکان", "سيدكان"), listOf("sidakan"), "سیدەکان", "سيدكان", "Sidakan"),
+    KurdistanCityAlias(listOf("Sharbazher", "شەربەژێر", "شهربازير"), listOf("sharbazher"), "شەربەژێر", "شهربازير", "Sharbazher")
+)
+
+private val kurdistanRegionSearchNames = setOf(
+    "کوردستان", "کوردستانی عێراق", "هەرێمی کوردستان", "هەرێمی کوردستانی عێراق",
+    "اقلیم کوردستان", "اقلیم کوردستان العراق", "إقليم كردستان", "اقليم كردستان",
+    "إقليم كردستان العراق", "اقليم كردستان العراق", "Kurdistan", "Kurdistan Region",
+    "Iraqi Kurdistan"
+).map(::normalizeKurdistanCityText).toSet()
+
+internal fun isKurdistanRegionSearchQuery(query: String): Boolean =
+    normalizeKurdistanCityText(query) in kurdistanRegionSearchNames
+
+internal fun expandKurdistanCitySearchTerms(query: String): List<String> {
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return emptyList()
+    val needle = normalizeKurdistanCityText(trimmed)
+    if (needle.length < 3) return listOf(trimmed)
+    val matches = kurdistanCityAliases.filter { alias ->
+        alias.names.any { name ->
+            val normalized = normalizeKurdistanCityText(name)
+            normalized == needle || normalized.startsWith(needle)
+        }
+    }
+    if (matches.isEmpty()) return listOf(trimmed)
+    return (listOf(trimmed) + matches.flatMap { it.sourceTerms }).distinct()
+}
+
+internal fun citySearchMatchesQuery(query: String, sourceCityName: String, countryName: String): Boolean {
+    if (query.isBlank() || isKurdistanRegionSearchQuery(query)) return true
+    val normalizedQuery = normalizeKurdistanCityText(query)
+    val terms = expandKurdistanCitySearchTerms(query)
+    return terms.any { term ->
+        sourceCityName.contains(term, ignoreCase = true) ||
+            countryName.contains(term, ignoreCase = true)
+    } || normalizeKurdistanCityText(sourceCityName).contains(normalizedQuery) ||
+        normalizeKurdistanCityText(countryName).contains(normalizedQuery)
+}
+
+internal fun localizedKurdistanCityName(sourceCityName: String, languageKey: String): String {
+    val normalized = normalizeKurdistanCityText(sourceCityName)
+    val alias = kurdistanCityAliases.firstOrNull { item ->
+        item.names.any { normalizeKurdistanCityText(it) == normalized } ||
+            item.sourceTerms.any { normalizeKurdistanCityText(it) == normalized }
+    } ?: return sourceCityName
+    return when (languageKey.lowercase(Locale.ROOT)) {
+        "ckb" -> alias.sorani
+        "ar" -> alias.arabic
+        else -> alias.english
+    }
+}
+
 object ContentRepository {
     const val QURAN_DB = "content/noor_tafsir_1.2.2/base/assets/quran.db"
+    // Used for Noor's worship/name source data, not as a prayer-times fallback.
     const val PRAYER_DB = "content/noor_tafsir_1.2.2/base/assets/prayertimes.db"
     const val HADITH_DB = "content/noor_tafsir_1.2.2/base/assets/db_hadith.db"
     const val HADITH_OF_AYAH_DB = "content/noor_tafsir_1.2.2/base/assets/db_hadith_of_ayah.db"
@@ -417,9 +852,27 @@ object ContentRepository {
     }
 
     /**
-     * Original Noor page geometry for a selected verse. This powers the same
-     * translucent verse highlight used by the source Mushaf reader. Coordinates
-     * are in the original page SVG coordinate space, not screen pixels.
+     * Resolve the printed Mushaf page for one playback verse using the original
+     * Quran database page column. Playback uses this to follow the recitation
+     * across page boundaries without scanning all 604 SVG pages.
+     */
+    suspend fun loadMushafPageForVerse(context: Context, surah: Int, ayah: Int): Int? = withContext(Dispatchers.IO) {
+        if (surah !in 1..114 || ayah !in 1..286) return@withContext null
+        val page = queryDb(context, QURAN_DB, 0) { db ->
+            db.rawQuery(
+                "SELECT page FROM quran WHERE surah_id=? AND verse_id=? LIMIT 1",
+                arrayOf(surah.toString(), ayah.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.int("page") else 0
+            }
+        }
+        page.takeIf { it in 1..604 }
+    }
+
+    /**
+     * Legacy Noor rectangles are retained for auditing only. The active Mushaf
+     * reader derives hit regions from the displayed SVG via parseMushafPageVerseGeometry,
+     * because these database rectangles belong to a different page layout.
      */
     suspend fun loadMushafVerseRects(
         context: Context,
@@ -465,8 +918,8 @@ object ContentRepository {
     }
 
     /**
-     * Resolve a page touch against the original Tajweed word bounds first;
-     * fall back to the source line bounds for gaps or legacy pages.
+     * Legacy database hit-testing retained for reference only. The active page
+     * reader must use findMushafPageVerseAtPoint on the displayed SVG geometry.
      */
     suspend fun findMushafVerseAtPoint(
         context: Context,
@@ -724,6 +1177,101 @@ object ContentRepository {
                 item.arabicWithoutHarakat.contains(term, true) ||
                 item.translation.contains(term, true) ||
                 item.number.toString() == term
+        }
+    }
+
+    /**
+     * Fetch the AlQuranCloud color-coded Tajweed text for a single surah.
+     * The full tagged dataset is deliberately not bundled in the APK. Once a
+     * surah is fetched successfully, its JSON is cached in app-private storage
+     * for subsequent offline reading.
+     */
+    suspend fun loadTajweedAyahs(
+        context: Context,
+        surah: Int,
+        expectedAyahCount: Int
+    ): Map<Int, String> = withContext(Dispatchers.IO) {
+        if (surah !in 1..114 || expectedAyahCount !in 1..286) return@withContext emptyMap()
+        val cacheFile = File(
+            File(context.filesDir, "tajweed-colored"),
+            "surah-%03d.json".format(Locale.US, surah)
+        )
+
+        fun decode(raw: String): Map<Int, String>? = runCatching {
+            val root = JSONObject(raw)
+            if (root.optInt("code", 200) != 200) return@runCatching null
+            val data = root.optJSONObject("data") ?: return@runCatching null
+            val rows = data.optJSONArray("ayahs") ?: return@runCatching null
+            val values = sortedMapOf<Int, String>()
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val number = row.optInt("numberInSurah", 0)
+                val taggedText = row.optString("text", "").trim()
+                if (number in 1..expectedAyahCount && taggedText.isNotBlank()) {
+                    values[number] = taggedText
+                }
+            }
+            if (values.size != expectedAyahCount ||
+                values.keys != (1..expectedAyahCount).toSet()
+            ) null else values
+        }.getOrNull()
+
+        val cached = runCatching {
+            if (cacheFile.isFile && cacheFile.length() in 32L..5L * 1024L * 1024L) {
+                decode(cacheFile.readText(Charsets.UTF_8))
+            } else null
+        }.getOrNull()
+        if (cached != null) return@withContext cached
+
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL("https://api.alquran.cloud/v1/surah/$surah/quran-tajweed")
+                .openConnection() as HttpURLConnection).apply {
+                connectTimeout = 12_000
+                readTimeout = 25_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "Mashxall Android")
+            }
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                Log.w("MashxallTajweed", "Tajweed API returned HTTP $responseCode for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            if (connection.contentLengthLong > 5L * 1024L * 1024L) {
+                Log.w("MashxallTajweed", "Tajweed response exceeded the 5 MiB limit for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            val raw = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            if (raw.toByteArray(Charsets.UTF_8).size > 5 * 1024 * 1024) {
+                Log.w("MashxallTajweed", "Tajweed response exceeded the 5 MiB limit for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            val decoded = decode(raw)
+            if (decoded == null) {
+                Log.w("MashxallTajweed", "Tajweed response was incomplete or malformed for surah $surah")
+                return@withContext cached ?: emptyMap()
+            }
+            runCatching {
+                cacheFile.parentFile?.mkdirs()
+                val temporary = File(cacheFile.parentFile, cacheFile.name + ".part")
+                temporary.writeText(raw, Charsets.UTF_8)
+                if (cacheFile.exists()) cacheFile.delete()
+                if (!temporary.renameTo(cacheFile)) {
+                    temporary.copyTo(cacheFile, overwrite = true)
+                    temporary.delete()
+                }
+            }.onFailure { error ->
+                Log.w("MashxallTajweed", "Could not cache Tajweed surah $surah", error)
+            }
+            decoded
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            Log.w("MashxallTajweed", "Could not load Tajweed surah $surah", error)
+            cached ?: emptyMap()
+        } finally {
+            connection?.disconnect()
         }
     }
 
@@ -1189,6 +1737,33 @@ object ContentRepository {
         }
     }
 
+
+    /**
+     * Select one source-backed Hadith for the local calendar day. Only records that
+     * include both Arabic and the database's original Sorani translation are shown;
+     * this never fabricates or machine-translates missing text.
+     */
+    suspend fun loadDailyHadith(context: Context, date: LocalDate): HadithItem? = withContext(Dispatchers.IO) {
+        val total = loadHadithCount(context)
+        if (total <= 0) return@withContext null
+
+        val offset = dailyHadithOffset(date, total)
+        val primary = loadHadiths(context, offset = offset, limit = 120)
+        fun readableCandidate(rows: List<HadithItem>): HadithItem? =
+            rows.firstNotNullOfOrNull { row ->
+                val arabic = cleanHadithArabicSourceText(row.arabic)
+                val sorani = cleanHadithArabicSourceText(row.sorani)
+                if (arabic.isBlank() || sorani.isBlank()) null
+                else row.copy(arabic = arabic, sorani = sorani)
+            }
+
+        readableCandidate(primary)?.let { return@withContext it }
+        if (offset == 0) return@withContext null
+
+        val wrapped = loadHadiths(context, offset = 0, limit = minOf(250, offset))
+        readableCandidate(wrapped)
+    }
+
     private const val SALAWATI_ID_OFFSET = 1_000_000
 
     private suspend fun loadSalawatiAzkarItems(context: Context, query: String): List<AzkarItem> =
@@ -1454,65 +2029,69 @@ object ContentRepository {
      * locations into Compose state. Results preserve the country so same-name
      * cities in different countries remain selectable.
      */
+    /**
+     * Search Salawati's full location catalogue. The prayer screen must use the
+     * same source the user requested; Noor's unrelated city list is not merged
+     * into prayer-location choices. Dependent locations are searchable too.
+     */
     suspend fun searchCities(context: Context, query: String = "", limit: Int = 220): List<City> = withContext(Dispatchers.IO) {
-        val term = query.trim()
+        val requestedTerm = query.trim()
+        // Searching for Kurdistan shows the curated local city list; Sorani and
+        // Arabic city names expand to the original source-database spellings.
+        val term = if (isKurdistanRegionSearchQuery(requestedTerm)) "" else requestedTerm
+        val searchTerms = expandKurdistanCitySearchTerms(term)
         val pageLimit = limit.coerceIn(20, 300)
         val pattern = "%$term%"
-        val noor = queryDb(context, PRAYER_DB, emptyList<City>()) { db ->
-            val sql = if (term.isBlank()) {
-                """
-                SELECT city,lat,lon
-                FROM cities
-                ORDER BY CASE
-                    WHEN lower(city) LIKE '%sulaymaniyah%' OR lower(city) LIKE '%sulaimani%' OR lower(city) LIKE '%halabja%' THEN 0
-                    WHEN lower(city) LIKE '%erbil%' OR lower(city) LIKE '%kirkuk%' OR lower(city) LIKE '%baghdad%' THEN 1
-                    WHEN lower(city) LIKE '%duhok%' OR lower(city) LIKE '%mosul%' THEN 2
-                    ELSE 3 END, city
-                LIMIT ?
-                """.trimIndent()
-            } else {
-                """
-                SELECT city,lat,lon FROM cities
-                WHERE city LIKE ?
-                ORDER BY CASE WHEN lower(city)=lower(?) THEN 0 WHEN lower(city) LIKE lower(?) THEN 1 ELSE 2 END,city
-                LIMIT ?
-                """.trimIndent()
-            }
-            val args = if (term.isBlank()) arrayOf(pageLimit.toString())
-                else arrayOf(pattern, term, "$term%", pageLimit.toString())
-            db.rawQuery(sql, args).use { c ->
-                buildList {
-                    while (c.moveToNext()) add(City(c.string("city"), c.double("lat"), c.double("lon"), ""))
-                }
-            }
-        }
-        val salawati = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
-            val where = if (term.isBlank()) {
-                """
-                (
-                    lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%'
-                    OR lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
+        val where = if (term.isBlank()) {
+            // First-open results deliberately prioritise Iraqi Kurdistan instead
+            // of filling the limited picker with unrelated Iraqi cities. Typing
+            // a search still searches the full Salawati location catalogue.
+            """
+            (
+                (lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%')
+                AND (
+                    lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%'
+                    OR lower(l.name) LIKE '%silêmanî%' OR lower(l.name) LIKE '%slêmanî%'
                     OR lower(l.name) LIKE '%halabja%' OR lower(l.name) LIKE '%erbil%'
-                    OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%kirkuk%'
-                    OR lower(l.name) LIKE '%baghdad%' OR lower(l.name) LIKE '%duhok%'
-                    OR lower(l.name) LIKE '%mosul%' OR lower(l.name) LIKE '%basra%'
-                    OR lower(l.name) LIKE '%najaf%' OR lower(l.name) LIKE '%karbala%'
+                    OR lower(l.name) LIKE '%hawler%' OR lower(l.name) LIKE '%duhok%'
+                    OR lower(l.name) LIKE '%dohuk%' OR lower(l.name) LIKE '%zaxo%'
+                    OR lower(l.name) LIKE '%zakho%' OR lower(l.name) LIKE '%rania%'
+                    OR lower(l.name) LIKE '%ranya%' OR lower(l.name) LIKE '%chamchamal%'
+                    OR lower(l.name) LIKE '%koya%' OR lower(l.name) LIKE '%koysinjaq%'
+                    OR lower(l.name) LIKE '%shaqlawa%' OR lower(l.name) LIKE '%soran%'
+                    OR lower(l.name) LIKE '%akre%' OR lower(l.name) LIKE '%aqra%'
+                    OR lower(l.name) LIKE '%qaradagh%' OR lower(l.name) LIKE '%karadagh%'
+                    OR lower(l.name) LIKE '%darbandikhan%' OR lower(l.name) LIKE '%penjwen%'
+                    OR lower(l.name) LIKE '%sidakan%' OR lower(l.name) LIKE '%kalak%'
+                    OR lower(l.name) LIKE '%dukan%' OR lower(l.name) LIKE '%qaladze%'
+                    OR lower(l.name) LIKE '%qaladiza%' OR lower(l.name) LIKE '%sharbazher%'
+                    OR lower(l.name) LIKE '%harir%' OR lower(l.name) LIKE '%barzan%'
+                    OR lower(l.name) LIKE '%barderash%' OR lower(l.name) LIKE '%kirkuk%'
                 )
-                """.trimIndent()
-            } else "(l.name LIKE ? OR country.name LIKE ?)"
+            )
+            """.trimIndent()
+        } else {
+            val cityClauses = searchTerms.joinToString(" OR ") { "lower(l.name) LIKE lower(?)" }
+            "($cityClauses OR lower(country.name) LIKE lower(?))"
+        }
+        queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
             val sql = """
-                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
+                SELECT l.name AS city,l.latitude AS lat,l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name
                 FROM location l
-                JOIN prayer_time pt ON pt.location_id=l._id
                 LEFT JOIN country ON country._id=l.country_id
                 WHERE $where
+                  AND EXISTS (
+                    SELECT 1 FROM prayer_time available
+                    WHERE available.location_id = CASE
+                        WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN l._id
+                        WHEN COALESCE(l.prayer_dependent_id,0)>0 THEN l.prayer_dependent_id
+                        ELSE l._id
+                    END
+                  )
                 GROUP BY l._id
                 ORDER BY
-                    CASE
-                        WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0
-                        WHEN lower(l.name) LIKE '%sulaymaniyah%' OR lower(l.name) LIKE '%sulaimani%' THEN 1
-                        ELSE 2
-                    END,
+                    CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
                     CASE WHEN lower(l.name)=lower(?) THEN 0 WHEN lower(l.name) LIKE lower(?) THEN 1 ELSE 2 END,
                     country_name,l.name
                 LIMIT ?
@@ -1520,161 +2099,161 @@ object ContentRepository {
             val args = if (term.isBlank()) {
                 arrayOf("", "", pageLimit.toString())
             } else {
-                arrayOf(pattern, pattern, term, "$term%", pageLimit.toString())
+                (searchTerms.map { "%$it%" } + listOf(pattern, term, "$term%", pageLimit.toString())).toTypedArray()
             }
-            db.rawQuery(sql, args).use { c ->
+            db.rawQuery(sql, args).use { cursor ->
                 buildList {
-                    while (c.moveToNext()) add(
-                        City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name"))
-                    )
+                    while (cursor.moveToNext()) {
+                        add(City(cursor.string("city"), cursor.double("lat"), cursor.double("lon"), cursor.string("country_name")))
+                    }
                 }
             }
         }
-        (noor + salawati)
-            .distinctBy { "${it.name.trim().lowercase(Locale.ROOT)}|${it.country.trim().lowercase(Locale.ROOT)}" }
-            .let { results ->
-                if (term.isBlank()) results
-                else results.sortedWith(
-                    compareBy<City> {
-                        when {
-                            it.name.equals(term, true) -> 0
-                            it.name.startsWith(term, true) -> 1
-                            it.country.equals(term, true) -> 2
-                            else -> 3
-                        }
-                    }.thenBy { it.country.lowercase(Locale.ROOT) }.thenBy { it.name.lowercase(Locale.ROOT) }
-                )
-            }
     }
 
     suspend fun findCityByName(context: Context, name: String, countryName: String = ""): City? = withContext(Dispatchers.IO) {
-        val noor = queryDb(context, PRAYER_DB, null as City?) { db ->
-            db.rawQuery(
-                "SELECT city,lat,lon FROM cities WHERE lower(city)=lower(?) LIMIT 1",
-                arrayOf(name)
-            ).use { c ->
-                if (c.moveToFirst()) City(c.string("city"), c.double("lat"), c.double("lon")) else null
-            }
-        }
-        if (noor != null && countryName.isBlank()) return@withContext noor
-        queryDb(context, SALAWATI_DB, noor) { db ->
-            val sql = if (countryName.isBlank()) {
-                """
-                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
-                FROM location l LEFT JOIN country ON country._id=l.country_id
+        queryDb(context, SALAWATI_DB, null as City?) { db ->
+            val sql = """
+                SELECT l.name AS city,l.latitude AS lat,l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name
+                FROM location l
+                LEFT JOIN country ON country._id=l.country_id
                 WHERE lower(l.name)=lower(?)
-                ORDER BY CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END
+                  AND (?='' OR lower(country.name)=lower(?))
+                  AND EXISTS (
+                    SELECT 1 FROM prayer_time available
+                    WHERE available.location_id = CASE
+                        WHEN COALESCE(l.has_fixed_prayer_time,0)=1 THEN l._id
+                        WHEN COALESCE(l.prayer_dependent_id,0)>0 THEN l.prayer_dependent_id
+                        ELSE l._id
+                    END
+                  )
+                ORDER BY
+                    CASE WHEN lower(country.name) LIKE '%iraq%' OR lower(country.name) LIKE '%العراق%' THEN 0 ELSE 1 END,
+                    l._id
                 LIMIT 1
-                """.trimIndent()
-            } else {
-                """
-                SELECT l.name,l.latitude,l.longitude,COALESCE(country.name,'') AS country_name
-                FROM location l LEFT JOIN country ON country._id=l.country_id
-                WHERE lower(l.name)=lower(?) AND lower(country.name)=lower(?)
-                LIMIT 1
-                """.trimIndent()
-            }
-            val args = if (countryName.isBlank()) arrayOf(name) else arrayOf(name, countryName)
-            db.rawQuery(sql, args).use { c ->
-                if (c.moveToFirst()) City(c.string("name"), c.double("latitude"), c.double("longitude"), c.string("country_name")) else noor
+            """.trimIndent()
+            db.rawQuery(sql, arrayOf(name, countryName, countryName)).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    City(cursor.string("city"), cursor.double("lat"), cursor.double("lon"), cursor.string("country_name"))
+                } else null
             }
         }
     }
 
-    /** Limited compatibility helper for callers that only need common city choices. */
+    /** Return the nearest named Salawati locality for display, even if no prayer schedule exists there. */
+    suspend fun findNearestSalawatiCityAtLocation(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        maxDistanceKm: Double = 30.0
+    ): NearbySalawatiCity? = withContext(Dispatchers.IO) {
+        if (!latitude.isFinite() || latitude !in -90.0..90.0 ||
+            !longitude.isFinite() || longitude !in -180.0..180.0 ||
+            !maxDistanceKm.isFinite() || maxDistanceKm <= 0.0
+        ) return@withContext null
+
+        val latDelta = maxDistanceKm / 110.6
+        val longitudeCos = kotlin.math.abs(kotlin.math.cos(Math.toRadians(latitude))).coerceAtLeast(0.15)
+        val lonDelta = maxDistanceKm / (111.32 * longitudeCos)
+        val minLat = (latitude - latDelta).coerceAtLeast(-90.0)
+        val maxLat = (latitude + latDelta).coerceAtMost(90.0)
+        val minLon = (longitude - lonDelta).coerceAtLeast(-180.0)
+        val maxLon = (longitude + lonDelta).coerceAtMost(180.0)
+
+        val candidates = queryDb(context, SALAWATI_DB, emptyList<City>()) { db ->
+            db.rawQuery(
+                """
+                SELECT l.name AS city,
+                       l.latitude AS lat,
+                       l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name
+                FROM location l
+                LEFT JOIN country ON country._id=l.country_id
+                WHERE l.latitude BETWEEN ? AND ?
+                  AND l.longitude BETWEEN ? AND ?
+                  AND l.name IS NOT NULL AND trim(l.name) <> ''
+                ORDER BY ((l.latitude-?)*(l.latitude-?)) + ((l.longitude-?)*(l.longitude-?))
+                LIMIT 1000
+                """.trimIndent(),
+                arrayOf(
+                    minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
+                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
+                )
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(City(
+                            name = cursor.string("city"),
+                            latitude = cursor.double("lat"),
+                            longitude = cursor.double("lon"),
+                            country = cursor.string("country_name")
+                        ))
+                    }
+                }
+            }
+        }
+
+        val measured = candidates.map { city ->
+            city to PrayerLocationMath.distanceKm(latitude, longitude, city.latitude, city.longitude)
+        }
+        nearestSalawatiCityCandidate(measured, maxDistanceKm)
+    }
+
+    /** Load the same Salawati-backed catalogue for non-search city pickers. */
     suspend fun loadCities(context: Context): List<City> = searchCities(context, "", limit = 250)
 
-    internal fun addMinutesToPrayerTime(value: String, offsetMinutes: Int): String {
-        if (offsetMinutes == 0) return value
-        val parts = value.trim().split(":")
-        val hour = parts.getOrNull(0)?.toIntOrNull() ?: return value
-        val minute = parts.getOrNull(1)?.take(2)?.toIntOrNull() ?: return value
-        if (hour !in 0..23 || minute !in 0..59) return value
-        val total = (hour * 60 + minute + offsetMinutes).mod(24 * 60)
-        return "%02d:%02d".format(Locale.US, total / 60, total % 60)
+
+    // Timetable resolution below is Salawati-only. Noor's database remains
+    // available for its non-timetable Quran/worship data elsewhere in the app.
+    /**
+     * Salawati locations do not all own a timetable. Fixed rows override dependency links;
+     * otherwise a dependent locality must inherit the exact source row its relation names.
+     * City lookup and GPS lookup must share this mapping.
+     */
+    internal fun prayerScheduleLocationId(locationId: Int, hasFixedPrayerTime: Boolean, dependentLocationId: Int): Int =
+        when {
+            hasFixedPrayerTime -> locationId
+            dependentLocationId > 0 -> dependentLocationId
+            else -> locationId
+        }
+
+    internal fun hasInheritedPrayerSchedule(hasFixedPrayerTime: Boolean, dependentLocationId: Int): Boolean =
+        !hasFixedPrayerTime && dependentLocationId > 0
+
+    internal fun prayerScheduleLocationSql(alias: String): String {
+        require(alias == "l" || alias == "requested") { "Unsupported Salawati SQL location alias." }
+        return """
+            CASE
+                WHEN COALESCE($alias.has_fixed_prayer_time,0)=1 THEN $alias._id
+                WHEN COALESCE($alias.prayer_dependent_id,0)>0 THEN $alias.prayer_dependent_id
+                ELSE $alias._id
+            END
+        """.trimIndent()
     }
+
+    private val prayerClockPattern = Regex("""^(?:[01]\d|2[0-3]):[0-5]\d$""")
+
+    internal fun hasValidPrayerTimes(row: PrayerRow?): Boolean =
+        row != null && listOf(row.fajr, row.sunrise, row.dhuhr, row.asr, row.maghrib, row.isha)
+            .all { prayerClockPattern.matches(it.trim()) }
+
+    /** The prayer feature accepts only a valid timetable from Salawati. */
+    internal fun salawatiOnlyPrayerTimes(row: PrayerRow?): PrayerRow? =
+        row?.takeIf { it.source.startsWith("salawati", ignoreCase = true) && hasValidPrayerTimes(it) }
+
 
     /**
-     * Noor's original extra table defines cities whose time comes from a
-     * reference city (c_base) plus six explicit minute offsets in prayer order:
-     * Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha. Used only when there is no
-     * direct timetable for the requested city in either source database.
+     * Select the closest original Salawati timetable first. When a directly
+     * scheduled locality and a dependent locality have the same coordinates,
+     * prefer the direct row so the dependent-city fallback cannot win by query order.
      */
-    private suspend fun loadNoorPrayerTimesWithCorrection(
-        context: Context,
-        requestedCity: String,
-        date: Date
-    ): PrayerRow? = withContext(Dispatchers.IO) {
-        val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
-        queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
-            val correction = db.rawQuery(
-                """
-                SELECT city,name,c_base,correction
-                FROM extra
-                WHERE lower(city)=lower(?) OR lower(name)=lower(?)
-                ORDER BY CASE WHEN lower(city)=lower(?) THEN 0 ELSE 1 END,c_order
-                LIMIT 1
-                """.trimIndent(),
-                arrayOf(requestedCity, requestedCity, requestedCity)
-            ).use { c ->
-                if (c.moveToFirst()) {
-                    arrayOf(c.string("city"), c.string("name"), c.string("c_base"), c.string("correction"))
-                } else null
-            } ?: return@queryDb null
-
-            val canonicalCity = correction[0].ifBlank { requestedCity }
-            val baseCity = correction[2].ifBlank { canonicalCity }
-            val minuteValues = correction[3]
-                .split(",")
-                .mapNotNull { it.trim().toIntOrNull() }
-                .take(6)
-            val minuteOffsets = List(6) { minuteValues.getOrElse(it) { 0 } }
-
-            val base = db.rawQuery(
-                """
-                SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha
-                FROM staticprayertimes
-                WHERE lower(city)=lower(?) AND date=?
-                LIMIT 1
-                """.trimIndent(),
-                arrayOf(baseCity, md)
-            ).use { c ->
-                if (c.moveToFirst()) PrayerRow(
-                    city = c.string("city"),
-                    date = c.string("date"),
-                    fajr = c.string("fajr"),
-                    sunrise = c.string("sunrise"),
-                    dhuhr = c.string("dhuhr"),
-                    asr = c.string("asr"),
-                    maghrib = c.string("maghrib"),
-                    isha = c.string("isha"),
-                    source = "noor-base:${c.string("city")}"
-                ) else null
-            } ?: return@queryDb null
-
-            base.copy(
-                city = canonicalCity,
-                fajr = addMinutesToPrayerTime(base.fajr, minuteOffsets[0]),
-                sunrise = addMinutesToPrayerTime(base.sunrise, minuteOffsets[1]),
-                dhuhr = addMinutesToPrayerTime(base.dhuhr, minuteOffsets[2]),
-                asr = addMinutesToPrayerTime(base.asr, minuteOffsets[3]),
-                maghrib = addMinutesToPrayerTime(base.maghrib, minuteOffsets[4]),
-                isha = addMinutesToPrayerTime(base.isha, minuteOffsets[5]),
-                source = buildString {
-                    append("noor-correction:")
-                    append(canonicalCity)
-                    append(" (")
-                    append(baseCity)
-                    if (minuteOffsets.any { it != 0 }) {
-                        append("; ")
-                        append(minuteOffsets.joinToString("/") { if (it > 0) "+$it" else it.toString() })
-                        append(" min")
-                    }
-                    append(")")
-                }
-            )
-        }
-    }
+    internal fun orderPrayerCandidates(candidates: List<Pair<PrayerRow, Double>>): List<Pair<PrayerRow, Double>> =
+        candidates.sortedWith(
+            compareBy<Pair<PrayerRow, Double>> { it.second }
+                .thenBy { if (it.first.source.startsWith("salawati-dependent", ignoreCase = true)) 1 else 0 }
+                .thenBy { it.first.city.lowercase(Locale.ROOT) }
+        )
 
     suspend fun loadPrayerTimes(
         context: Context,
@@ -1682,33 +2261,10 @@ object ContentRepository {
         date: Date = Date(),
         countryName: String = ""
     ): PrayerRow? = withContext(Dispatchers.IO) {
-        val md = SimpleDateFormat("MM-dd", Locale.US).format(date)
-        val country = countryName.trim()
-        val useNoorRegionalData = country.isBlank() ||
-            country.contains("iraq", ignoreCase = true) ||
-            country.contains("العراق", ignoreCase = true)
-
-        if (useNoorRegionalData) {
-            val noor = queryDb(context, PRAYER_DB, null as PrayerRow?) { db ->
-                db.rawQuery(
-                    "SELECT city,date,fajr,sunrise,dhuhr,asr,maghrib,isha FROM staticprayertimes WHERE lower(city)=lower(?) AND date=? LIMIT 1",
-                    arrayOf(city, md)
-                ).use { c ->
-                    if (c.moveToFirst()) PrayerRow(
-                        c.string("city"), c.string("date"), c.string("fajr"), c.string("sunrise"),
-                        c.string("dhuhr"), c.string("asr"), c.string("maghrib"), c.string("isha"),
-                        source = "noor:${c.string("city")}"
-                    ) else null
-                }
-            }
-            if (noor != null) return@withContext noor
-        }
-
-        val salawati = loadSalawatiPrayerTimesForCity(context, city, country, date)
-        if (salawati != null) return@withContext salawati
-        if (country.isNotBlank() && !useNoorRegionalData) return@withContext null
-
-        if (useNoorRegionalData) loadNoorPrayerTimesWithCorrection(context, city, date) else null
+        // Use only the selected city and dependent-city rules stored by Salawati.
+        salawatiOnlyPrayerTimes(
+            loadSalawatiPrayerTimesForCity(context, city, countryName.trim(), date)
+        )
     }
 
     /**
@@ -1737,12 +2293,8 @@ object ContentRepository {
                 JOIN country ON country._id=requested.country_id
                 LEFT JOIN location base ON base._id=requested.prayer_dependent_id
                 LEFT JOIN prayer_time pt
-                  ON pt.location_id = CASE
-                       WHEN COALESCE(requested.has_fixed_prayer_time,0)=1 THEN requested._id
-                       WHEN COALESCE(requested.prayer_dependent_id,0)>0 THEN requested.prayer_dependent_id
-                       ELSE requested._id
-                     END
-                 AND pt.date=?
+                   ON pt.location_id = ${prayerScheduleLocationSql("requested")}
+                  AND pt.date=?
                 WHERE lower(requested.name)=lower(?)
                   AND (?='' OR lower(country.name)=lower(?))
                 ORDER BY
@@ -1762,26 +2314,28 @@ object ContentRepository {
                 val asr = c.string("asr")
                 val maghrib = c.string("maghrib")
                 val isha = c.string("isha")
-                if (fajr.isBlank() || dhuhr.isBlank() || isha.isBlank()) return@use null
+                val hasFixedSchedule = c.int("has_fixed") == 1
                 val dependency = c.int("dependent_id")
                 val baseCity = c.string("base_city")
-                val source = if (dependency > 0 && baseCity.isNotBlank()) {
+                val source = if (hasInheritedPrayerSchedule(hasFixedSchedule, dependency) && baseCity.isNotBlank()) {
                     "salawati-dependent:${c.string("city")} → $baseCity, ${c.string("country")}"
                 } else {
                     "salawati:${c.string("city")}, ${c.string("country")}"
                 }
-                PrayerRow(
-                    city = c.string("city"),
-                    date = c.string("date"),
-                    fajr = fajr,
-                    sunrise = sunrise,
-                    dhuhr = dhuhr,
-                    asr = asr,
-                    maghrib = maghrib,
-                    isha = isha,
-                    source = source,
-                    latitude = c.double("lat"),
-                    longitude = c.double("lon")
+                salawatiOnlyPrayerTimes(
+                    PrayerRow(
+                        city = c.string("city"),
+                        date = c.string("date"),
+                        fajr = fajr,
+                        sunrise = sunrise,
+                        dhuhr = dhuhr,
+                        asr = asr,
+                        maghrib = maghrib,
+                        isha = isha,
+                        source = source,
+                        latitude = c.double("lat"),
+                        longitude = c.double("lon")
+                    )
                 )
             }
         }
@@ -1801,48 +2355,28 @@ object ContentRepository {
         val maxLat = (latitude + latDelta).coerceAtMost(90.0)
         val minLon = (longitude - lonDelta).coerceAtLeast(-180.0)
         val maxLon = (longitude + lonDelta).coerceAtMost(180.0)
-        val noorRows = queryDb(context, PRAYER_DB, emptyList<PrayerRow>()) { db ->
-            db.rawQuery(
-                """
-                SELECT c.city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,c.lat,c.lon
-                FROM staticprayertimes pt
-                JOIN cities c ON lower(c.city)=lower(pt.city)
-                WHERE pt.date=?
-                  AND c.lat BETWEEN ? AND ?
-                  AND c.lon BETWEEN ? AND ?
-                ORDER BY ((c.lat-?)*(c.lat-?)) + ((c.lon-?)*(c.lon-?))
-                LIMIT 120
-                """.trimIndent(),
-                arrayOf(
-                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
-                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
-                )
-            ).use { c ->
-                buildList {
-                    while (c.moveToNext()) add(
-                        PrayerRow(
-                            city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
-                            sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
-                            maghrib=c.string("maghrib"), isha=c.string("isha"),
-                            source="noor:${c.string("city")}", latitude=c.double("lat"), longitude=c.double("lon")
-                        )
-                    )
-                }
-            }
-        }
-        val salawatiRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
+
+        // Join each nearby locality to the prayer_time row it actually uses.
+        // A direct JOIN to l._id incorrectly returns a locality's own row even
+        // when Salawati says it inherits another city's timetable.
+        queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
             db.rawQuery(
                 """
                 SELECT l.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                       l.latitude AS lat,l.longitude AS lon,COALESCE(country.name,'') AS country_name
-                FROM prayer_time pt
-                JOIN location l ON l._id=pt.location_id
+                       l.latitude AS lat,l.longitude AS lon,
+                       COALESCE(country.name,'') AS country_name,
+                       COALESCE(l.has_fixed_prayer_time,0) AS has_fixed,
+                       COALESCE(l.prayer_dependent_id,0) AS dependent_id,
+                       COALESCE(base.name,'') AS base_city
+                FROM location l
+                JOIN prayer_time pt ON pt.location_id = ${prayerScheduleLocationSql("l")}
+                LEFT JOIN location base ON base._id=l.prayer_dependent_id
                 LEFT JOIN country ON country._id=l.country_id
                 WHERE pt.date=?
                   AND l.latitude BETWEEN ? AND ?
                   AND l.longitude BETWEEN ? AND ?
                 ORDER BY ((l.latitude-?)*(l.latitude-?)) + ((l.longitude-?)*(l.longitude-?))
-                LIMIT 120
+                LIMIT 600
                 """.trimIndent(),
                 arrayOf(
                     monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
@@ -1850,66 +2384,54 @@ object ContentRepository {
                 )
             ).use { c ->
                 buildList {
-                    while (c.moveToNext()) add(
-                        PrayerRow(
-                            city=c.string("city"), date=c.string("date"), fajr=c.string("fajr"),
-                            sunrise=c.string("sunrise"), dhuhr=c.string("dhuhr"), asr=c.string("asr"),
-                            maghrib=c.string("maghrib"), isha=c.string("isha"),
-                            source="salawati:${c.string("city")}, ${c.string("country_name")}",
-                            latitude=c.double("lat"), longitude=c.double("lon")
+                    while (c.moveToNext()) {
+                        val city = c.string("city")
+                        val countryName = c.string("country_name")
+                        val hasFixed = c.int("has_fixed") == 1
+                        val dependentId = c.int("dependent_id")
+                        val baseCity = c.string("base_city")
+                        val source = if (hasInheritedPrayerSchedule(hasFixed, dependentId)) {
+                            "salawati-dependent:$city → ${baseCity.ifBlank { "source location" }}, $countryName"
+                        } else {
+                            "salawati:$city, $countryName"
+                        }
+                        add(
+                            PrayerRow(
+                                city = city,
+                                date = c.string("date"),
+                                fajr = c.string("fajr"),
+                                sunrise = c.string("sunrise"),
+                                dhuhr = c.string("dhuhr"),
+                                asr = c.string("asr"),
+                                maghrib = c.string("maghrib"),
+                                isha = c.string("isha"),
+                                source = source,
+                                latitude = c.double("lat"),
+                                longitude = c.double("lon")
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
-        val dependentRows = queryDb(context, SALAWATI_DB, emptyList<PrayerRow>()) { db ->
-            db.rawQuery(
-                """
-                SELECT dep.name AS city,pt.date,pt.fajr,pt.sunrise,pt.dhuhr,pt.asr,pt.maghrib,pt.isha,
-                       dep.latitude AS lat,dep.longitude AS lon,
-                       COALESCE(country.name,'') AS country_name,
-                       COALESCE(base.name,'') AS base_city
-                FROM location dep
-                JOIN location base ON base._id=dep.prayer_dependent_id
-                JOIN prayer_time pt ON pt.location_id=base._id
-                LEFT JOIN country ON country._id=dep.country_id
-                WHERE pt.date=?
-                  AND dep.prayer_dependent_id IS NOT NULL
-                  AND COALESCE(dep.has_fixed_prayer_time,0)=0
-                  AND dep.latitude BETWEEN ? AND ?
-                  AND dep.longitude BETWEEN ? AND ?
-                  AND NOT EXISTS (
-                      SELECT 1 FROM prayer_time own_pt
-                      WHERE own_pt.location_id=dep._id AND own_pt.date=pt.date
-                  )
-                ORDER BY ((dep.latitude-?)*(dep.latitude-?)) + ((dep.longitude-?)*(dep.longitude-?))
-                LIMIT 120
-                """.trimIndent(),
-                arrayOf(
-                    monthDay, minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(),
-                    latitude.toString(), latitude.toString(), longitude.toString(), longitude.toString()
-                )
-            ).use { c ->
-                buildList {
-                    while (c.moveToNext()) add(
-                        PrayerRow(
-                            city = c.string("city"),
-                            date = c.string("date"),
-                            fajr = c.string("fajr"),
-                            sunrise = c.string("sunrise"),
-                            dhuhr = c.string("dhuhr"),
-                            asr = c.string("asr"),
-                            maghrib = c.string("maghrib"),
-                            isha = c.string("isha"),
-                            source = "salawati-dependent:${c.string("city")} → ${c.string("base_city")}, ${c.string("country_name")}",
-                            latitude = c.double("lat"),
-                            longitude = c.double("lon")
-                        )
-                    )
-                }
-            }
+    }
+
+    /**
+     * Prefer an original source timetable very close to the GPS fix. If none exists
+     * within 7 km, retry within 30 km and expose the selected source-city distance in
+     * the UI. No source times are recalculated or altered.
+     */
+    internal fun nearestValidSalawatiCandidate(
+        candidates: List<Pair<PrayerRow, Double>>,
+        maxDistanceKm: Double
+    ): Pair<PrayerRow, Double>? {
+        if (!maxDistanceKm.isFinite() || maxDistanceKm <= 0.0) return null
+        val valid = candidates.mapNotNull { (row, distance) ->
+            val validRow = salawatiOnlyPrayerTimes(row) ?: return@mapNotNull null
+            if (!distance.isFinite() || distance < 0.0 || distance > maxDistanceKm) return@mapNotNull null
+            validRow to distance
         }
-        noorRows + salawatiRows + dependentRows
+        return orderPrayerCandidates(valid).firstOrNull()
     }
 
     suspend fun loadPrayerTimesAtLocation(
@@ -1917,19 +2439,29 @@ object ContentRepository {
         latitude: Double,
         longitude: Double,
         date: Date = Date(),
-        method: PrayerCalculationMethod = PrayerCalculationMethod.MWL,
-        asrSchool: AsrCalculationSchool = AsrCalculationSchool.SHAFI,
-        staticRadiusKm: Double = 7.0
-    ): PrayerRow = withContext(Dispatchers.IO) {
-        val candidates = loadNearbyTimetableRows(context, latitude, longitude, date, staticRadiusKm)
-            .mapNotNull { row ->
-                val rowLat = row.latitude ?: return@mapNotNull null
-                val rowLon = row.longitude ?: return@mapNotNull null
-                val distance = PrayerTimeCalculator.distanceKm(latitude, longitude, rowLat, rowLon)
-                if (distance <= staticRadiusKm) row to distance else null
+        staticRadiusKm: Double = 7.0,
+        fallbackRadiusKm: Double = 30.0
+    ): PrayerRow? = withContext(Dispatchers.IO) {
+        if (!latitude.isFinite() || latitude !in -90.0..90.0 ||
+            !longitude.isFinite() || longitude !in -180.0..180.0 ||
+            !staticRadiusKm.isFinite() || staticRadiusKm <= 0.0
+        ) return@withContext null
+
+        suspend fun findCandidates(radiusKm: Double): List<Pair<PrayerRow, Double>> =
+            loadNearbyTimetableRows(context, latitude, longitude, date, radiusKm).mapNotNull { row ->
+                val validRow = salawatiOnlyPrayerTimes(row) ?: return@mapNotNull null
+                val rowLat = validRow.latitude ?: return@mapNotNull null
+                val rowLon = validRow.longitude ?: return@mapNotNull null
+                val distance = PrayerLocationMath.distanceKm(latitude, longitude, rowLat, rowLon)
+                if (distance.isFinite() && distance >= 0.0 && distance <= radiusKm) validRow to distance else null
             }
-            .sortedBy { it.second }
-        val nearest = candidates.firstOrNull()
+
+        val nearest = nearestValidSalawatiCandidate(
+            findCandidates(staticRadiusKm), staticRadiusKm
+        ) ?: if (fallbackRadiusKm.isFinite() && fallbackRadiusKm > staticRadiusKm) {
+            nearestValidSalawatiCandidate(findCandidates(fallbackRadiusKm), fallbackRadiusKm)
+        } else null
+
         if (nearest != null) {
             nearest.first.copy(
                 source = "${nearest.first.source} • ${"%.1f".format(Locale.US, nearest.second)}km",
@@ -1937,7 +2469,9 @@ object ContentRepository {
                 longitude = longitude
             )
         } else {
-            PrayerTimeCalculator.calculate(date, latitude, longitude, method, asrSchool)
+            // No valid source timetable exists within the fallback radius.
+            // Do not calculate prayer times or substitute another database's schedule.
+            null
         }
     }
 
@@ -2029,7 +2563,14 @@ object ContentRepository {
             ).use { c ->
                 buildList {
                     while (c.moveToNext()) {
-                        add(LexiconItem(c.string("title"), c.string("content"), c.string("reference_name"), c.string("root")))
+                        add(
+                            LexiconItem(
+                                c.string("title"),
+                                NoorLexiconCipher.decrypt(c.string("content")),
+                                c.string("reference_name"),
+                                c.string("root")
+                            )
+                        )
                     }
                 }
             }
@@ -2099,13 +2640,89 @@ object ContentRepository {
     }
 
     suspend fun loadReciters(context: Context): List<Reciter> = withContext(Dispatchers.IO) {
-        queryDb(context, QURAN_DB, emptyList()) { db ->
+        val originalReciters = queryDb(context, QURAN_DB, emptyList()) { db ->
             db.rawQuery("SELECT id,name,name_english,audiotype,url,q_order FROM audio ORDER BY q_order,name", null).use { c ->
                 buildList {
-                    while (c.moveToNext()) add(Reciter(c.int("id"), c.string("name"), c.string("name_english"), c.int("audiotype"), c.string("url"), c.int("q_order")))
+                    while (c.moveToNext()) add(
+                        Reciter(
+                            id = c.int("id"),
+                            nameArabic = reciterDisplayName(c.string("name")),
+                            nameEnglish = reciterDisplayName(c.string("name_english")),
+                            audioType = c.int("audiotype"),
+                            baseUrl = c.string("url"),
+                            order = c.int("q_order")
+                        )
+                    )
                 }
             }
         }
+        // The Quran database remains the source for verse-by-verse reciters.
+        // Add source-attributed MP3Quran full-surah/edition catalog entries without
+        // bundling third-party audio files in the APK. Numeric IDs are offset so
+        // they cannot collide with the source database's own IDs.
+        val catalogReciters = runCatching {
+            val rows = context.assets.open("mp3quran_reciters.json")
+                .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()).getJSONArray("records") }
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val sourceId = row.optString("source_id")
+                    val upstreamId = row.optInt(
+                        "numeric_id",
+                        sourceId.substringAfterLast('-').toIntOrNull() ?: (index + 1)
+                    )
+                    val baseUrl = row.optString("server").trim()
+                    val englishName = reciterDisplayName(row.optString("name"))
+                    if (upstreamId < 1 || englishName.isBlank() || !baseUrl.startsWith("https://")) continue
+                    add(
+                        Reciter(
+                            id = 1_000_000 + upstreamId,
+                            nameArabic = reciterDisplayName(row.optString("name_ar").ifBlank { englishName }),
+                            nameEnglish = englishName,
+                            audioType = 1,
+                            baseUrl = baseUrl.trimEnd('/') + "/",
+                            order = 10_000 + index,
+                            surahTotal = row.optInt("surah_total", 0).coerceIn(0, 114),
+                            recitation = row.optString("recitation"),
+                            sourceId = sourceId
+                        )
+                    )
+                }
+            }
+        }.onFailure { error ->
+            Log.w("MashxallAudio", "Could not load the attributed online reciter catalog", error)
+        }.getOrDefault(emptyList())
+        (originalReciters + catalogReciters)
+            .distinctBy { it.id }
+            .sortedWith(compareBy<Reciter> { it.order }.thenBy { it.nameEnglish.lowercase(Locale.ROOT) })
+    }
+
+    suspend fun loadOnlineAdhan(context: Context): List<OnlineAdhan> = withContext(Dispatchers.IO) {
+        runCatching {
+            val rows = context.assets.open("adhan_catalog.json")
+                .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()).getJSONArray("records") }
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val id = row.optString("id")
+                    val url = row.optString("url")
+                    if (id.isBlank() || !url.startsWith("https://")) continue
+                    add(
+                        OnlineAdhan(
+                            id = id,
+                            titleArabic = row.optString("title_ar"),
+                            titleEnglish = row.optString("title_en"),
+                            category = row.optString("category"),
+                            sourceFilename = row.optString("source_filename"),
+                            url = url,
+                            sizeBytes = row.optLong("size_bytes", 0L).coerceAtLeast(0L)
+                        )
+                    )
+                }
+            }
+        }.onFailure { error ->
+            Log.w("MashxallAudio", "Could not load the source-linked adhan catalog", error)
+        }.getOrDefault(emptyList())
     }
 
     fun reciterSampleUrl(reciter: Reciter, surah: Int, ayah: Int): String {

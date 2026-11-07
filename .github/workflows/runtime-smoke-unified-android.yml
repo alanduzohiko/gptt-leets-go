@@ -27,7 +27,7 @@ jobs:
       - name: Check out the runtime test harness
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Download the APK from a selected successful build
         env:

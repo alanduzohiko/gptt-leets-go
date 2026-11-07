@@ -46,6 +46,11 @@ REQUIRED_OTHER = (
     "assets/content_catalog.json",
 )
 
+REQUIRED_APP_CATALOGS = {
+    "adhan_catalog.json": ("id", "url"),
+    "mp3quran_reciters.json": ("source_id", "name", "server"),
+}
+
 
 def _catalog_assets(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
     declared: dict[str, dict[str, Any]] = {}
@@ -213,6 +218,49 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
             except (UnicodeDecodeError, json.JSONDecodeError, OSError, zipfile.BadZipFile) as exc:
                 problems.append({"kind": "mushaf_index_unreadable", "error": str(exc)})
 
+    app_catalog_checks: list[dict[str, Any]] = []
+    with zipfile.ZipFile(apk_path, "r") as archive:
+        for filename, required_fields in REQUIRED_APP_CATALOGS.items():
+            asset_path = "assets/" + filename
+            info = archive.getinfo(asset_path) if asset_path in archive.namelist() else None
+            if info is None:
+                problems.append({"kind": "missing_required_app_catalog", "asset_path": filename})
+                app_catalog_checks.append({"asset_path": filename, "passed": False, "reason": "missing"})
+                continue
+            try:
+                payload = json.loads(archive.read(info).decode("utf-8"))
+                records = payload.get("records") if isinstance(payload, dict) else None
+                valid_records = isinstance(records, list) and bool(records)
+                invalid_rows = []
+                if valid_records:
+                    for index, row in enumerate(records):
+                        if not isinstance(row, dict) or any(
+                            not isinstance(row.get(field), str) or not row.get(field, "").strip()
+                            for field in required_fields
+                        ) or not str(row.get(required_fields[-1], "")).startswith("https://") and filename == "mp3quran_reciters.json":
+                            invalid_rows.append(index)
+                if filename == "adhan_catalog.json" and valid_records:
+                    if any(
+                        not isinstance(row, dict) or not str(row.get("url", "")).startswith("https://")
+                        for row in records
+                    ):
+                        invalid_rows.extend(index for index, row in enumerate(records) if not isinstance(row, dict) or not str(row.get("url", "")).startswith("https://"))
+                expected_count = payload.get("record_count") if isinstance(payload, dict) else None
+                count_matches = not isinstance(expected_count, int) or expected_count == len(records or [])
+                passed = valid_records and not invalid_rows and count_matches
+                check = {
+                    "asset_path": filename,
+                    "passed": passed,
+                    "record_count": len(records) if isinstance(records, list) else 0,
+                    "invalid_record_indexes": sorted(set(invalid_rows))[:20],
+                }
+                app_catalog_checks.append(check)
+                if not passed:
+                    problems.append({"kind": "invalid_required_app_catalog", **check})
+            except (UnicodeDecodeError, json.JSONDecodeError, OSError, zipfile.BadZipFile) as exc:
+                app_catalog_checks.append({"asset_path": filename, "passed": False, "reason": str(exc)})
+                problems.append({"kind": "unreadable_required_app_catalog", "asset_path": filename, "error": str(exc)})
+
     return {
         "schema_version": 1,
         "ok": not problems,
@@ -231,6 +279,7 @@ def audit(apk_path: Path, catalog_path: Path) -> dict[str, Any]:
         "catalog_items_without_hashes": invalid_hash_catalog,
         "required_sqlite_header_checks": sqlite_checks,
         "random_access_storage_checks": stored_asset_checks,
+        "app_catalog_checks": app_catalog_checks,
         "problem_count": len(problems),
         "problems": problems,
     }

@@ -1,0 +1,2091 @@
+{
+  "schema_version": 1,
+  "collection_name": "International adhan and mosque audio catalog",
+  "source_repository": "https://github.com/Kiwifu/adhan-mp3",
+  "source_readme": "https://github.com/Kiwifu/adhan-mp3/blob/main/README.md",
+  "source_repository_description": "The public repository description says its collection is free for Islamic apps and personal use. No formal license file is present in the repository tree; recording-level terms are not independently verified here.",
+  "source_note": "Audio remains hosted at its source URLs and is downloaded only when the user explicitly taps Download. Do not describe this as an independently verified blanket license for every recording.",
+  "record_count": 231,
+  "total_source_bytes": 599000866,
+  "records": [
+    {
+      "id": "adhan-001",
+      "title_ar": "عبد الرزاق صالح - لبنان",
+      "title_en": "Abd Alrazaq Saleh - Lebanon",
+      "category": "muezzin",
+      "source_filename": "Abd_Alrazaq_Saleh_-_Lebanon_(عبد_الرزاق_صالح_-_لبنان).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abd_Alrazaq_Saleh_-_Lebanon_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B1%D8%B2%D8%A7%D9%82_%D8%B5%D8%A7%D9%84%D8%AD_-_%D9%84%D8%A8%D9%86%D8%A7%D9%86).mp3",
+      "size_bytes": 501720
+    },
+    {
+      "id": "adhan-002",
+      "title_ar": "عبد المنعم عبد المبدي",
+      "title_en": "Abdel Moneim Abdel Mobdi",
+      "category": "muezzin",
+      "source_filename": "Abdel_Moneim_Abdel_Mobdi_(عبد_المنعم_عبد_المبدي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdel_Moneim_Abdel_Mobdi_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D9%85%D9%86%D8%B9%D9%85_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D9%85%D8%A8%D8%AF%D9%8A).mp3",
+      "size_bytes": 712147
+    },
+    {
+      "id": "adhan-003",
+      "title_ar": "عبد الكريم جابري",
+      "title_en": "Abdu Al Karem Jabare",
+      "category": "muezzin",
+      "source_filename": "Abdu_Al_Karem_Jabare_(عبد_الكريم_جابري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdu_Al_Karem_Jabare_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D9%83%D8%B1%D9%8A%D9%85_%D8%AC%D8%A7%D8%A8%D8%B1%D9%8A).mp3",
+      "size_bytes": 1634867
+    },
+    {
+      "id": "adhan-004",
+      "title_ar": "عبدالمجيد السريحي",
+      "title_en": "Abdul Majid Al Surehi 1",
+      "category": "muezzin",
+      "source_filename": "Abdul_Majid_Al_Surehi_1_(عبدالمجيد_السريحي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Majid_Al_Surehi_1_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%85%D8%AC%D9%8A%D8%AF_%D8%A7%D9%84%D8%B3%D8%B1%D9%8A%D8%AD%D9%8A).mp3",
+      "size_bytes": 828962
+    },
+    {
+      "id": "adhan-005",
+      "title_ar": "عبدالمجيد السريحي",
+      "title_en": "Abdul Majid Al Surehi 2",
+      "category": "muezzin",
+      "source_filename": "Abdul_Majid_Al_Surehi_2_(عبدالمجيد_السريحي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Majid_Al_Surehi_2_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%85%D8%AC%D9%8A%D8%AF_%D8%A7%D9%84%D8%B3%D8%B1%D9%8A%D8%AD%D9%8A).mp3",
+      "size_bytes": 538407
+    },
+    {
+      "id": "adhan-006",
+      "title_ar": "عبدالمجيد السريحي",
+      "title_en": "Abdul Majid Al Surehi 3",
+      "category": "muezzin",
+      "source_filename": "Abdul_Majid_Al_Surehi_3_(عبدالمجيد_السريحي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Majid_Al_Surehi_3_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%85%D8%AC%D9%8A%D8%AF_%D8%A7%D9%84%D8%B3%D8%B1%D9%8A%D8%AD%D9%8A).mp3",
+      "size_bytes": 3372557
+    },
+    {
+      "id": "adhan-007",
+      "title_ar": "عبدالرحمن العراقي",
+      "title_en": "Abdul Rahman Al Arake 1",
+      "category": "muezzin",
+      "source_filename": "Abdul_Rahman_Al_Arake_1_(عبدالرحمن_العراقي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Rahman_Al_Arake_1_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D8%A7%D9%84%D8%B9%D8%B1%D8%A7%D9%82%D9%8A).mp3",
+      "size_bytes": 3331445
+    },
+    {
+      "id": "adhan-008",
+      "title_ar": "عبدالرحمن العراقي",
+      "title_en": "Abdul Rahman Al Arake 2",
+      "category": "muezzin",
+      "source_filename": "Abdul_Rahman_Al_Arake_2_(عبدالرحمن_العراقي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Rahman_Al_Arake_2_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D8%A7%D9%84%D8%B9%D8%B1%D8%A7%D9%82%D9%8A).mp3",
+      "size_bytes": 3834703
+    },
+    {
+      "id": "adhan-009",
+      "title_ar": "عبدالرحمن العراقي",
+      "title_en": "Abdul Rahman Al Arake 3",
+      "category": "muezzin",
+      "source_filename": "Abdul_Rahman_Al_Arake_3_(عبدالرحمن_العراقي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Rahman_Al_Arake_3_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D8%A7%D9%84%D8%B9%D8%B1%D8%A7%D9%82%D9%8A).mp3",
+      "size_bytes": 4518049
+    },
+    {
+      "id": "adhan-010",
+      "title_ar": "عبدالرحمن كساب",
+      "title_en": "Abdul Rahman Kassab 1",
+      "category": "muezzin",
+      "source_filename": "Abdul_Rahman_Kassab_1_(عبدالرحمن_كساب).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Rahman_Kassab_1_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D9%83%D8%B3%D8%A7%D8%A8).mp3",
+      "size_bytes": 2348776
+    },
+    {
+      "id": "adhan-011",
+      "title_ar": "عبدالرحمن كساب",
+      "title_en": "Abdul Rahman Kassab 2",
+      "category": "muezzin",
+      "source_filename": "Abdul_Rahman_Kassab_2_(عبدالرحمن_كساب).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Rahman_Kassab_2_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D9%83%D8%B3%D8%A7%D8%A8).mp3",
+      "size_bytes": 6632093
+    },
+    {
+      "id": "adhan-012",
+      "title_ar": "عبدالرحمن ماجد",
+      "title_en": "Abdul Rahman Majde",
+      "category": "muezzin",
+      "source_filename": "Abdul_Rahman_Majde_(عبدالرحمن_ماجد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Rahman_Majde_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D9%85%D8%A7%D8%AC%D8%AF).mp3",
+      "size_bytes": 6566058
+    },
+    {
+      "id": "adhan-013",
+      "title_ar": "عبدالولي الأركاني",
+      "title_en": "Abdul Wali Al Arkani",
+      "category": "muezzin",
+      "source_filename": "Abdul_Wali_Al_Arkani_(عبدالولي_الأركاني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdul_Wali_Al_Arkani_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%88%D9%84%D9%8A_%D8%A7%D9%84%D8%A3%D8%B1%D9%83%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 2539982
+    },
+    {
+      "id": "adhan-014",
+      "title_ar": "عبدالله الذهبي - مصر",
+      "title_en": "Abdulah Al Dahbe - Egypt",
+      "category": "muezzin",
+      "source_filename": "Abdulah_Al_Dahbe_-_Egypt_(عبدالله_الذهبي_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulah_Al_Dahbe_-_Egypt_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%84%D9%87_%D8%A7%D9%84%D8%B0%D9%87%D8%A8%D9%8A_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 4352156
+    },
+    {
+      "id": "adhan-015",
+      "title_ar": "عبدالله المكناوي",
+      "title_en": "Abdulah Al Maknawe",
+      "category": "muezzin",
+      "source_filename": "Abdulah_Al_Maknawe_(عبدالله_المكناوي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulah_Al_Maknawe_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%84%D9%87_%D8%A7%D9%84%D9%85%D9%83%D9%86%D8%A7%D9%88%D9%8A).mp3",
+      "size_bytes": 5569239
+    },
+    {
+      "id": "adhan-016",
+      "title_ar": "عبدالله الصباوي",
+      "title_en": "Abdulah Al Sabaawe",
+      "category": "muezzin",
+      "source_filename": "Abdulah_Al_Sabaawe_(عبدالله_الصباوي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulah_Al_Sabaawe_(%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%84%D9%87_%D8%A7%D9%84%D8%B5%D8%A8%D8%A7%D9%88%D9%8A).mp3",
+      "size_bytes": 2994542
+    },
+    {
+      "id": "adhan-017",
+      "title_ar": "عبد الباسط عبد الصمد - مصر",
+      "title_en": "Abdulbasit Abdusamad 1 - Egypt",
+      "category": "muezzin",
+      "source_filename": "Abdulbasit_Abdusamad_1_-_Egypt_(عبد_الباسط_عبد_الصمد_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_1_-_Egypt_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 489872
+    },
+    {
+      "id": "adhan-018",
+      "title_ar": "عبد الباسط عبد الصمد - مصر",
+      "title_en": "Abdulbasit Abdusamad 2 - Egypt",
+      "category": "muezzin",
+      "source_filename": "Abdulbasit_Abdusamad_2_-_Egypt_(عبد_الباسط_عبد_الصمد_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_2_-_Egypt_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 494336
+    },
+    {
+      "id": "adhan-019",
+      "title_ar": "عبد الباسط عبد الصمد - مصر",
+      "title_en": "Abdulbasit Abdusamad 3 - Egypt",
+      "category": "muezzin",
+      "source_filename": "Abdulbasit_Abdusamad_3_-_Egypt_(عبد_الباسط_عبد_الصمد_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_3_-_Egypt_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 4495998
+    },
+    {
+      "id": "adhan-020",
+      "title_ar": "عبد الباسط عبد الصمد - مصر",
+      "title_en": "Abdulbasit Abdusamad 4 - Egypt",
+      "category": "muezzin",
+      "source_filename": "Abdulbasit_Abdusamad_4_-_Egypt_(عبد_الباسط_عبد_الصمد_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_4_-_Egypt_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 4539857
+    },
+    {
+      "id": "adhan-021",
+      "title_ar": "عبد الباسط عبد الصمد - القاهرة",
+      "title_en": "Abdulbasit Abdusamad 5 - Cairo",
+      "category": "muezzin",
+      "source_filename": "Abdulbasit_Abdusamad_5_-_Cairo_(عبد_الباسط_عبد_الصمد_-_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_5_-_Cairo_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 405582
+    },
+    {
+      "id": "adhan-022",
+      "title_ar": "عبد الباسط عبد الصمد - فجر مصر",
+      "title_en": "Abdulbasit Abdusamad 6 - Fajr Egypt",
+      "category": "mosque",
+      "source_filename": "Abdulbasit_Abdusamad_6_-_Fajr_Egypt_(عبد_الباسط_عبد_الصمد_-_فجر_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_6_-_Fajr_Egypt_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%81%D8%AC%D8%B1_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 11744593
+    },
+    {
+      "id": "adhan-023",
+      "title_ar": "عبد الباسط عبد الصمد - فجر مصر",
+      "title_en": "Abdulbasit Abdusamad 7 - Fajr Egypt",
+      "category": "mosque",
+      "source_filename": "Abdulbasit_Abdusamad_7_-_Fajr_Egypt_(عبد_الباسط_عبد_الصمد_-_فجر_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_7_-_Fajr_Egypt_(%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%81%D8%AC%D8%B1_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 3095800
+    },
+    {
+      "id": "adhan-024",
+      "title_ar": "أبو العينين شعيشع - القاهرة",
+      "title_en": "Abul Ainain Shuaisha - Cairo",
+      "category": "muezzin",
+      "source_filename": "Abul_Ainain_Shuaisha_-_Cairo_(أبو_العينين_شعيشع_-_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abul_Ainain_Shuaisha_-_Cairo_(%D8%A3%D8%A8%D9%88_%D8%A7%D9%84%D8%B9%D9%8A%D9%86%D9%8A%D9%86_%D8%B4%D8%B9%D9%8A%D8%B4%D8%B9_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 477002
+    },
+    {
+      "id": "adhan-025",
+      "title_ar": "أبو ياسر الجزائري",
+      "title_en": "Aby Yasser Al Jazaire",
+      "category": "muezzin",
+      "source_filename": "Aby_Yasser_Al_Jazaire_(أبو_ياسر_الجزائري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Aby_Yasser_Al_Jazaire_(%D8%A3%D8%A8%D9%88_%D9%8A%D8%A7%D8%B3%D8%B1_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A).mp3",
+      "size_bytes": 2123971
+    },
+    {
+      "id": "adhan-026",
+      "title_ar": "عادل مالك عبدالله المصري",
+      "title_en": "Adal Malek Abdulah Al Massre",
+      "category": "muezzin",
+      "source_filename": "Adal_Malek_Abdulah_Al_Massre_(عادل_مالك_عبدالله_المصري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adal_Malek_Abdulah_Al_Massre_(%D8%B9%D8%A7%D8%AF%D9%84_%D9%85%D8%A7%D9%84%D9%83_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%84%D9%87_%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A).mp3",
+      "size_bytes": 3869426
+    },
+    {
+      "id": "adhan-027",
+      "title_ar": "آدم أبو سخرة",
+      "title_en": "Adam Abu Sakhra",
+      "category": "muezzin",
+      "source_filename": "Adam_Abu_Sakhra_(آدم_أبو_سخرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adam_Abu_Sakhra_(%D8%A2%D8%AF%D9%85_%D8%A3%D8%A8%D9%88_%D8%B3%D8%AE%D8%B1%D8%A9).mp3",
+      "size_bytes": 1736363
+    },
+    {
+      "id": "adhan-028",
+      "title_ar": "أدهم الشرقاوي",
+      "title_en": "Adham Al Sharqawe",
+      "category": "muezzin",
+      "source_filename": "Adham_Al_Sharqawe_(أدهم_الشرقاوي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adham_Al_Sharqawe_(%D8%A3%D8%AF%D9%87%D9%85_%D8%A7%D9%84%D8%B4%D8%B1%D9%82%D8%A7%D9%88%D9%8A).mp3",
+      "size_bytes": 6157422
+    },
+    {
+      "id": "adhan-029",
+      "title_ar": "أذان عجمان الإمارات",
+      "title_en": "Adhan Ajman UAE",
+      "category": "mosque",
+      "source_filename": "Adhan_Ajman_UAE_(أذان_عجمان_الإمارات).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Ajman_UAE_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%B9%D8%AC%D9%85%D8%A7%D9%86_%D8%A7%D9%84%D8%A5%D9%85%D8%A7%D8%B1%D8%A7%D8%AA).mp3",
+      "size_bytes": 283676
+    },
+    {
+      "id": "adhan-030",
+      "title_ar": "أذان المسجد الأقصى - القدس",
+      "title_en": "Adhan Al Aqsa - Jerusalem",
+      "category": "mosque",
+      "source_filename": "Adhan_Al_Aqsa_-_Jerusalem_(أذان_المسجد_الأقصى_-_القدس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Al_Aqsa_-_Jerusalem_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%A3%D9%82%D8%B5%D9%89_-_%D8%A7%D9%84%D9%82%D8%AF%D8%B3).mp3",
+      "size_bytes": 307298
+    },
+    {
+      "id": "adhan-031",
+      "title_ar": "أذان الحرم المدني - المدينة المنورة",
+      "title_en": "Adhan Al Haram Al Madani - Al Madinah 1",
+      "category": "mosque",
+      "source_filename": "Adhan_Al_Haram_Al_Madani_-_Al_Madinah_1_(أذان_الحرم_المدني_-_المدينة_المنورة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Al_Haram_Al_Madani_-_Al_Madinah_1_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D8%AF%D9%86%D9%8A_-_%D8%A7%D9%84%D9%85%D8%AF%D9%8A%D9%86%D8%A9_%D8%A7%D9%84%D9%85%D9%86%D9%88%D8%B1%D8%A9).mp3",
+      "size_bytes": 379784
+    },
+    {
+      "id": "adhan-032",
+      "title_ar": "أذان الحرم المدني - المدينة المنورة",
+      "title_en": "Adhan Al Haram Al Madani - Al Madinah 2",
+      "category": "mosque",
+      "source_filename": "Adhan_Al_Haram_Al_Madani_-_Al_Madinah_2_(أذان_الحرم_المدني_-_المدينة_المنورة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Al_Haram_Al_Madani_-_Al_Madinah_2_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D8%AF%D9%86%D9%8A_-_%D8%A7%D9%84%D9%85%D8%AF%D9%8A%D9%86%D8%A9_%D8%A7%D9%84%D9%85%D9%86%D9%88%D8%B1%D8%A9).mp3",
+      "size_bytes": 475556
+    },
+    {
+      "id": "adhan-033",
+      "title_ar": "أذان بروناي",
+      "title_en": "Adhan Brunei 1",
+      "category": "mosque",
+      "source_filename": "Adhan_Brunei_1_(أذان_بروناي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Brunei_1_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A8%D8%B1%D9%88%D9%86%D8%A7%D9%8A).mp3",
+      "size_bytes": 415958
+    },
+    {
+      "id": "adhan-034",
+      "title_ar": "أذان بروناي",
+      "title_en": "Adhan Brunei 2",
+      "category": "mosque",
+      "source_filename": "Adhan_Brunei_2_(أذان_بروناي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Brunei_2_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A8%D8%B1%D9%88%D9%86%D8%A7%D9%8A).mp3",
+      "size_bytes": 380678
+    },
+    {
+      "id": "adhan-035",
+      "title_ar": "أذان بروناي",
+      "title_en": "Adhan Brunei 3",
+      "category": "mosque",
+      "source_filename": "Adhan_Brunei_3_(أذان_بروناي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Brunei_3_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A8%D8%B1%D9%88%D9%86%D8%A7%D9%8A).mp3",
+      "size_bytes": 421358
+    },
+    {
+      "id": "adhan-036",
+      "title_ar": "أذان دبي الإمارات",
+      "title_en": "Adhan Dubai UAE",
+      "category": "mosque",
+      "source_filename": "Adhan_Dubai_UAE_(أذان_دبي_الإمارات).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Dubai_UAE_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%AF%D8%A8%D9%8A_%D8%A7%D9%84%D8%A5%D9%85%D8%A7%D8%B1%D8%A7%D8%AA).mp3",
+      "size_bytes": 475184
+    },
+    {
+      "id": "adhan-037",
+      "title_ar": "أذان الفجر الحرم المدني",
+      "title_en": "Adhan Fajr Al Haram Al Madani",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Al_Haram_Al_Madani_(أذان_الفجر_الحرم_المدني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Al_Haram_Al_Madani_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D8%AF%D9%86%D9%8A).mp3",
+      "size_bytes": 561776
+    },
+    {
+      "id": "adhan-038",
+      "title_ar": "أذان الفجر الحرم المكي",
+      "title_en": "Adhan Fajr Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Al_Haram_Al_Maki_(أذان_الفجر_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Al_Haram_Al_Maki_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 450002
+    },
+    {
+      "id": "adhan-039",
+      "title_ar": "أذان الفجر الجزائر",
+      "title_en": "Adhan Fajr Algeria",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Algeria_(أذان_الفجر_الجزائر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Algeria_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1).mp3",
+      "size_bytes": 358472
+    },
+    {
+      "id": "adhan-040",
+      "title_ar": "أذان الفجر القاهرة مصر",
+      "title_en": "Adhan Fajr Cairo Egypt",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Cairo_Egypt_(أذان_الفجر_القاهرة_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Cairo_Egypt_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 495158
+    },
+    {
+      "id": "adhan-041",
+      "title_ar": "أذان الفجر الكويت",
+      "title_en": "Adhan Fajr Kuwait 1",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Kuwait_1_(أذان_الفجر_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Kuwait_1_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 423698
+    },
+    {
+      "id": "adhan-042",
+      "title_ar": "أذان الفجر الكويت",
+      "title_en": "Adhan Fajr Kuwait 2",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Kuwait_2_(أذان_الفجر_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Kuwait_2_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 379202
+    },
+    {
+      "id": "adhan-043",
+      "title_ar": "أذان الفجر أم القيوين",
+      "title_en": "Adhan Fajr Umm Al Quwain",
+      "category": "mosque",
+      "source_filename": "Adhan_Fajr_Umm_Al_Quwain_(أذان_الفجر_أم_القيوين).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Fajr_Umm_Al_Quwain_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A3%D9%85_%D8%A7%D9%84%D9%82%D9%8A%D9%88%D9%8A%D9%86).mp3",
+      "size_bytes": 384686
+    },
+    {
+      "id": "adhan-044",
+      "title_ar": "أذان جورجيا",
+      "title_en": "Adhan Georgia",
+      "category": "mosque",
+      "source_filename": "Adhan_Georgia_(أذان_جورجيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Georgia_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%AC%D9%88%D8%B1%D8%AC%D9%8A%D8%A7).mp3",
+      "size_bytes": 5044181
+    },
+    {
+      "id": "adhan-045",
+      "title_ar": "أذان الهند",
+      "title_en": "Adhan India",
+      "category": "mosque",
+      "source_filename": "Adhan_India_(أذان_الهند).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_India_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%87%D9%86%D8%AF).mp3",
+      "size_bytes": 220904
+    },
+    {
+      "id": "adhan-046",
+      "title_ar": "أذان إندونيسيا",
+      "title_en": "Adhan Indonesia",
+      "category": "mosque",
+      "source_filename": "Adhan_Indonesia_(أذان_إندونيسيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Indonesia_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A5%D9%86%D8%AF%D9%88%D9%86%D9%8A%D8%B3%D9%8A%D8%A7).mp3",
+      "size_bytes": 399128
+    },
+    {
+      "id": "adhan-047",
+      "title_ar": "أذان كينيا",
+      "title_en": "Adhan Kenya",
+      "category": "mosque",
+      "source_filename": "Adhan_Kenya_(أذان_كينيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Kenya_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%83%D9%8A%D9%86%D9%8A%D8%A7).mp3",
+      "size_bytes": 3366832
+    },
+    {
+      "id": "adhan-048",
+      "title_ar": "أذان الكويت",
+      "title_en": "Adhan Kuwait",
+      "category": "mosque",
+      "source_filename": "Adhan_Kuwait_(أذان_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Kuwait_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 288590
+    },
+    {
+      "id": "adhan-049",
+      "title_ar": "أذان ماليزيا",
+      "title_en": "Adhan Malaysia 1",
+      "category": "mosque",
+      "source_filename": "Adhan_Malaysia_1_(أذان_ماليزيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Malaysia_1_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%85%D8%A7%D9%84%D9%8A%D8%B2%D9%8A%D8%A7).mp3",
+      "size_bytes": 400340
+    },
+    {
+      "id": "adhan-050",
+      "title_ar": "أذان ماليزيا",
+      "title_en": "Adhan Malaysia 2",
+      "category": "mosque",
+      "source_filename": "Adhan_Malaysia_2_(أذان_ماليزيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Malaysia_2_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%85%D8%A7%D9%84%D9%8A%D8%B2%D9%8A%D8%A7).mp3",
+      "size_bytes": 401132
+    },
+    {
+      "id": "adhan-051",
+      "title_ar": "أذان جزر المالديف",
+      "title_en": "Adhan Maldives",
+      "category": "mosque",
+      "source_filename": "Adhan_Maldives_(أذان_جزر_المالديف).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Maldives_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%AC%D8%B2%D8%B1_%D8%A7%D9%84%D9%85%D8%A7%D9%84%D8%AF%D9%8A%D9%81).mp3",
+      "size_bytes": 375818
+    },
+    {
+      "id": "adhan-052",
+      "title_ar": "أذان مسجد الراجحي السعودية",
+      "title_en": "Adhan Masjid Al Rajehe Saudi Arabia 1",
+      "category": "mosque",
+      "source_filename": "Adhan_Masjid_Al_Rajehe_Saudi_Arabia_1_(أذان_مسجد_الراجحي_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Masjid_Al_Rajehe_Saudi_Arabia_1_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%B1%D8%A7%D8%AC%D8%AD%D9%8A_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 494336
+    },
+    {
+      "id": "adhan-053",
+      "title_ar": "أذان مسجد الراجحي السعودية",
+      "title_en": "Adhan Masjid Al Rajehe Saudi Arabia 2",
+      "category": "mosque",
+      "source_filename": "Adhan_Masjid_Al_Rajehe_Saudi_Arabia_2_(أذان_مسجد_الراجحي_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Masjid_Al_Rajehe_Saudi_Arabia_2_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%B1%D8%A7%D8%AC%D8%AD%D9%8A_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 289280
+    },
+    {
+      "id": "adhan-054",
+      "title_ar": "أذان مسجد الراجحي السعودية",
+      "title_en": "Adhan Masjid Al Rajehe Saudi Arabia 3",
+      "category": "mosque",
+      "source_filename": "Adhan_Masjid_Al_Rajehe_Saudi_Arabia_3_(أذان_مسجد_الراجحي_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Masjid_Al_Rajehe_Saudi_Arabia_3_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%B1%D8%A7%D8%AC%D8%AD%D9%8A_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 298136
+    },
+    {
+      "id": "adhan-055",
+      "title_ar": "أذان مسقط عُمان",
+      "title_en": "Adhan Muscat Oman",
+      "category": "mosque",
+      "source_filename": "Adhan_Muscat_Oman_(أذان_مسقط_عُمان).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Muscat_Oman_(%D8%A3%D8%B0%D8%A7%D9%86_%D9%85%D8%B3%D9%82%D8%B7_%D8%B9%D9%8F%D9%85%D8%A7%D9%86).mp3",
+      "size_bytes": 307190
+    },
+    {
+      "id": "adhan-056",
+      "title_ar": "أذان باكستان",
+      "title_en": "Adhan Pakistan",
+      "category": "mosque",
+      "source_filename": "Adhan_Pakistan_(أذان_باكستان).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Pakistan_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A8%D8%A7%D9%83%D8%B3%D8%AA%D8%A7%D9%86).mp3",
+      "size_bytes": 369236
+    },
+    {
+      "id": "adhan-057",
+      "title_ar": "أذان الرياض السعودية",
+      "title_en": "Adhan Riyadh Saudi Arabia",
+      "category": "mosque",
+      "source_filename": "Adhan_Riyadh_Saudi_Arabia_(أذان_الرياض_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Riyadh_Saudi_Arabia_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 2938812
+    },
+    {
+      "id": "adhan-058",
+      "title_ar": "أذان سوريا",
+      "title_en": "Adhan Syria",
+      "category": "mosque",
+      "source_filename": "Adhan_Syria_(أذان_سوريا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Syria_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%B3%D9%88%D8%B1%D9%8A%D8%A7).mp3",
+      "size_bytes": 446624
+    },
+    {
+      "id": "adhan-059",
+      "title_ar": "أذان تونس",
+      "title_en": "Adhan Tunisia",
+      "category": "mosque",
+      "source_filename": "Adhan_Tunisia_(أذان_تونس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Tunisia_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%AA%D9%88%D9%86%D8%B3).mp3",
+      "size_bytes": 291746
+    },
+    {
+      "id": "adhan-060",
+      "title_ar": "أذان تركيا",
+      "title_en": "Adhan Turkey 1",
+      "category": "mosque",
+      "source_filename": "Adhan_Turkey_1_(أذان_تركيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Turkey_1_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%AA%D8%B1%D9%83%D9%8A%D8%A7).mp3",
+      "size_bytes": 360584
+    },
+    {
+      "id": "adhan-061",
+      "title_ar": "أذان تركيا",
+      "title_en": "Adhan Turkey 2",
+      "category": "mosque",
+      "source_filename": "Adhan_Turkey_2_(أذان_تركيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Adhan_Turkey_2_(%D8%A3%D8%B0%D8%A7%D9%86_%D8%AA%D8%B1%D9%83%D9%8A%D8%A7).mp3",
+      "size_bytes": 98792
+    },
+    {
+      "id": "adhan-062",
+      "title_ar": "أحمد عامر محمد",
+      "title_en": "Ahmad Aamer Muhammad",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Aamer_Muhammad_(أحمد_عامر_محمد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Aamer_Muhammad_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%B9%D8%A7%D9%85%D8%B1_%D9%85%D8%AD%D9%85%D8%AF).mp3",
+      "size_bytes": 2868342
+    },
+    {
+      "id": "adhan-063",
+      "title_ar": "أحمد العاني",
+      "title_en": "Ahmad Al Aane",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Al_Aane_(أحمد_العاني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Al_Aane_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B9%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 4240918
+    },
+    {
+      "id": "adhan-064",
+      "title_ar": "أحمد العمادي - قطر",
+      "title_en": "Ahmad Al Amade 1 - Qatar",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Al_Amade_1_-_Qatar_(أحمد_العمادي_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Al_Amade_1_-_Qatar_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B9%D9%85%D8%A7%D8%AF%D9%8A_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 381080
+    },
+    {
+      "id": "adhan-065",
+      "title_ar": "أحمد العمادي - قطر",
+      "title_en": "Ahmad Al Amade 2 - Qatar",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Al_Amade_2_-_Qatar_(أحمد_العمادي_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Al_Amade_2_-_Qatar_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B9%D9%85%D8%A7%D8%AF%D9%8A_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 7230102
+    },
+    {
+      "id": "adhan-066",
+      "title_ar": "أحمد البطل",
+      "title_en": "Ahmad Al Batal",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Al_Batal_(أحمد_البطل).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Al_Batal_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%A8%D8%B7%D9%84).mp3",
+      "size_bytes": 1199539
+    },
+    {
+      "id": "adhan-067",
+      "title_ar": "أحمد الحراسيس",
+      "title_en": "Ahmad Al Harasses",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Al_Harasses_(أحمد_الحراسيس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Al_Harasses_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%AD%D8%B1%D8%A7%D8%B3%D9%8A%D8%B3).mp3",
+      "size_bytes": 5866437
+    },
+    {
+      "id": "adhan-068",
+      "title_ar": "أحمد النفيس",
+      "title_en": "Ahmad Al Nafees",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Al_Nafees_(أحمد_النفيس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Al_Nafees_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%86%D9%81%D9%8A%D8%B3).mp3",
+      "size_bytes": 3409337
+    },
+    {
+      "id": "adhan-069",
+      "title_ar": "أحمد علي",
+      "title_en": "Ahmad Ali 1",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Ali_1_(أحمد_علي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Ali_1_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%B9%D9%84%D9%8A).mp3",
+      "size_bytes": 1589801
+    },
+    {
+      "id": "adhan-070",
+      "title_ar": "أحمد علي - مصر",
+      "title_en": "Ahmad Ali 2 - Egypt",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Ali_2_-_Egypt_(أحمد_علي_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Ali_2_-_Egypt_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%B9%D9%84%D9%8A_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 3370652
+    },
+    {
+      "id": "adhan-071",
+      "title_ar": "أحمد علي مرتضى",
+      "title_en": "Ahmad Ali Murtada",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Ali_Murtada_(أحمد_علي_مرتضى).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Ali_Murtada_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%B9%D9%84%D9%8A_%D9%85%D8%B1%D8%AA%D8%B6%D9%89).mp3",
+      "size_bytes": 1504130
+    },
+    {
+      "id": "adhan-072",
+      "title_ar": "أحمد فخرو - قطر",
+      "title_en": "Ahmad Fakhru - Qatar",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Fakhru_-_Qatar_(أحمد_فخرو_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Fakhru_-_Qatar_(%D8%A3%D8%AD%D9%85%D8%AF_%D9%81%D8%AE%D8%B1%D9%88_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 6237325
+    },
+    {
+      "id": "adhan-073",
+      "title_ar": "أحمد نواف المجلد",
+      "title_en": "Ahmad Nawaf Al Mejlad 1",
+      "category": "muezzin",
+      "source_filename": "Ahmad_Nawaf_Al_Mejlad_1_(أحمد_نواف_المجلد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Nawaf_Al_Mejlad_1_(%D8%A3%D8%AD%D9%85%D8%AF_%D9%86%D9%88%D8%A7%D9%81_%D8%A7%D9%84%D9%85%D8%AC%D9%84%D8%AF).mp3",
+      "size_bytes": 1378902
+    },
+    {
+      "id": "adhan-074",
+      "title_ar": "أحمد نواف المجلد - الفجر",
+      "title_en": "Ahmad Nawaf Al Mejlad 2 - Fajr",
+      "category": "mosque",
+      "source_filename": "Ahmad_Nawaf_Al_Mejlad_2_-_Fajr_(أحمد_نواف_المجلد_-_الفجر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmad_Nawaf_Al_Mejlad_2_-_Fajr_(%D8%A3%D8%AD%D9%85%D8%AF_%D9%86%D9%88%D8%A7%D9%81_%D8%A7%D9%84%D9%85%D8%AC%D9%84%D8%AF_-_%D8%A7%D9%84%D9%81%D8%AC%D8%B1).mp3",
+      "size_bytes": 1557417
+    },
+    {
+      "id": "adhan-075",
+      "title_ar": "أحمد الطرابلسي - فجر الكويت",
+      "title_en": "Ahmd At-Trablsy - Fajr Kuwait",
+      "category": "mosque",
+      "source_filename": "Ahmd_At-Trablsy_-_Fajr_Kuwait_(أحمد_الطرابلسي_-_فجر_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmd_At-Trablsy_-_Fajr_Kuwait_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B7%D8%B1%D8%A7%D8%A8%D9%84%D8%B3%D9%8A_-_%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 1038532
+    },
+    {
+      "id": "adhan-076",
+      "title_ar": "أحمد الطرابلسي",
+      "title_en": "Ahmd At-Trablsy 1",
+      "category": "muezzin",
+      "source_filename": "Ahmd_At-Trablsy_1_(أحمد_الطرابلسي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmd_At-Trablsy_1_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B7%D8%B1%D8%A7%D8%A8%D9%84%D8%B3%D9%8A).mp3",
+      "size_bytes": 5702213
+    },
+    {
+      "id": "adhan-077",
+      "title_ar": "أحمد الطرابلسي",
+      "title_en": "Ahmd At-Trablsy 2",
+      "category": "muezzin",
+      "source_filename": "Ahmd_At-Trablsy_2_(أحمد_الطرابلسي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmd_At-Trablsy_2_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B7%D8%B1%D8%A7%D8%A8%D9%84%D8%B3%D9%8A).mp3",
+      "size_bytes": 7779102
+    },
+    {
+      "id": "adhan-078",
+      "title_ar": "أحمد الطرابلسي",
+      "title_en": "Ahmd At-Trablsy 3",
+      "category": "muezzin",
+      "source_filename": "Ahmd_At-Trablsy_3_(أحمد_الطرابلسي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmd_At-Trablsy_3_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B7%D8%B1%D8%A7%D8%A8%D9%84%D8%B3%D9%8A).mp3",
+      "size_bytes": 6352398
+    },
+    {
+      "id": "adhan-079",
+      "title_ar": "أحمد الطرابلسي",
+      "title_en": "Ahmd At-Trablsy 4",
+      "category": "muezzin",
+      "source_filename": "Ahmd_At-Trablsy_4_(أحمد_الطرابلسي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmd_At-Trablsy_4_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B7%D8%B1%D8%A7%D8%A8%D9%84%D8%B3%D9%8A).mp3",
+      "size_bytes": 4109008
+    },
+    {
+      "id": "adhan-080",
+      "title_ar": "أحمد الطرابلسي",
+      "title_en": "Ahmd At-Trablsy 5",
+      "category": "muezzin",
+      "source_filename": "Ahmd_At-Trablsy_5_(أحمد_الطرابلسي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmd_At-Trablsy_5_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B7%D8%B1%D8%A7%D8%A8%D9%84%D8%B3%D9%8A).mp3",
+      "size_bytes": 1038532
+    },
+    {
+      "id": "adhan-081",
+      "title_ar": "أحمد الحداد",
+      "title_en": "Ahmed Al-Haddad",
+      "category": "muezzin",
+      "source_filename": "Ahmed_Al-Haddad_(أحمد_الحداد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmed_Al-Haddad_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%AD%D8%AF%D8%A7%D8%AF).mp3",
+      "size_bytes": 2477560
+    },
+    {
+      "id": "adhan-082",
+      "title_ar": "أحمد الكردي",
+      "title_en": "Ahmed El Kourdi",
+      "category": "muezzin",
+      "source_filename": "Ahmed_El_Kourdi_(أحمد_الكردي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmed_El_Kourdi_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%83%D8%B1%D8%AF%D9%8A).mp3",
+      "size_bytes": 3164421
+    },
+    {
+      "id": "adhan-083",
+      "title_ar": "أحمد نعينع - مصر",
+      "title_en": "Ahmed Nuinaa 1 - Egypt",
+      "category": "muezzin",
+      "source_filename": "Ahmed_Nuinaa_1_-_Egypt_(أحمد_نعينع_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmed_Nuinaa_1_-_Egypt_(%D8%A3%D8%AD%D9%85%D8%AF_%D9%86%D8%B9%D9%8A%D9%86%D8%B9_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 409592
+    },
+    {
+      "id": "adhan-084",
+      "title_ar": "أحمد نعينع - القاهرة",
+      "title_en": "Ahmed Nuinaa 2 - Cairo",
+      "category": "muezzin",
+      "source_filename": "Ahmed_Nuinaa_2_-_Cairo_(أحمد_نعينع_-_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmed_Nuinaa_2_-_Cairo_(%D8%A3%D8%AD%D9%85%D8%AF_%D9%86%D8%B9%D9%8A%D9%86%D8%B9_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 424140
+    },
+    {
+      "id": "adhan-085",
+      "title_ar": "أخدام بن المداني",
+      "title_en": "Akhdam Bnu Al Madane",
+      "category": "muezzin",
+      "source_filename": "Akhdam_Bnu_Al_Madane_(أخدام_بن_المداني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Akhdam_Bnu_Al_Madane_(%D8%A3%D8%AE%D8%AF%D8%A7%D9%85_%D8%A8%D9%86_%D8%A7%D9%84%D9%85%D8%AF%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 7133527
+    },
+    {
+      "id": "adhan-086",
+      "title_ar": "الأمين محمد قانيوح",
+      "title_en": "Al Ameen Muhammad Qanyouh",
+      "category": "muezzin",
+      "source_filename": "Al_Ameen_Muhammad_Qanyouh_(الأمين_محمد_قانيوح).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Al_Ameen_Muhammad_Qanyouh_(%D8%A7%D9%84%D8%A3%D9%85%D9%8A%D9%86_%D9%85%D8%AD%D9%85%D8%AF_%D9%82%D8%A7%D9%86%D9%8A%D9%88%D8%AD).mp3",
+      "size_bytes": 3173849
+    },
+    {
+      "id": "adhan-087",
+      "title_ar": "البهلول أبو عرقوب",
+      "title_en": "Al Bahlul Abu Arqub 1",
+      "category": "muezzin",
+      "source_filename": "Al_Bahlul_Abu_Arqub_1_(البهلول_أبو_عرقوب).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Al_Bahlul_Abu_Arqub_1_(%D8%A7%D9%84%D8%A8%D9%87%D9%84%D9%88%D9%84_%D8%A3%D8%A8%D9%88_%D8%B9%D8%B1%D9%82%D9%88%D8%A8).mp3",
+      "size_bytes": 1672056
+    },
+    {
+      "id": "adhan-088",
+      "title_ar": "البهلول أبو عرقوب",
+      "title_en": "Al Bahlul Abu Arqub 2",
+      "category": "muezzin",
+      "source_filename": "Al_Bahlul_Abu_Arqub_2_(البهلول_أبو_عرقوب).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Al_Bahlul_Abu_Arqub_2_(%D8%A7%D9%84%D8%A8%D9%87%D9%84%D9%88%D9%84_%D8%A3%D8%A8%D9%88_%D8%B9%D8%B1%D9%82%D9%88%D8%A8).mp3",
+      "size_bytes": 1801428
+    },
+    {
+      "id": "adhan-089",
+      "title_ar": "الدقالي محمد العلام",
+      "title_en": "Al Duqale Muhammad Al Alam",
+      "category": "muezzin",
+      "source_filename": "Al_Duqale_Muhammad_Al_Alam_(الدقالي_محمد_العلام).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Al_Duqale_Muhammad_Al_Alam_(%D8%A7%D9%84%D8%AF%D9%82%D8%A7%D9%84%D9%8A_%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B9%D9%84%D8%A7%D9%85).mp3",
+      "size_bytes": 1044857
+    },
+    {
+      "id": "adhan-090",
+      "title_ar": "السيد متولي الآل",
+      "title_en": "Al Saed Metwale AL Aal",
+      "category": "muezzin",
+      "source_filename": "Al_Saed_Metwale_AL_Aal_(السيد_متولي_الآل).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Al_Saed_Metwale_AL_Aal_(%D8%A7%D9%84%D8%B3%D9%8A%D8%AF_%D9%85%D8%AA%D9%88%D9%84%D9%8A_%D8%A7%D9%84%D8%A2%D9%84).mp3",
+      "size_bytes": 342244
+    },
+    {
+      "id": "adhan-091",
+      "title_ar": "السيد مسلم",
+      "title_en": "Al Sayed Muslim",
+      "category": "muezzin",
+      "source_filename": "Al_Sayed_Muslim_(السيد_مسلم).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Al_Sayed_Muslim_(%D8%A7%D9%84%D8%B3%D9%8A%D8%AF_%D9%85%D8%B3%D9%84%D9%85).mp3",
+      "size_bytes": 5180032
+    },
+    {
+      "id": "adhan-092",
+      "title_ar": "علي حسن عبد الخالق - قطر",
+      "title_en": "Ali Hassan Abd Al Khaliq - Qatar",
+      "category": "muezzin",
+      "source_filename": "Ali_Hassan_Abd_Al_Khaliq_-_Qatar_(علي_حسن_عبد_الخالق_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Hassan_Abd_Al_Khaliq_-_Qatar_(%D8%B9%D9%84%D9%8A_%D8%AD%D8%B3%D9%86_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%AE%D8%A7%D9%84%D9%82_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 5379519
+    },
+    {
+      "id": "adhan-093",
+      "title_ar": "علي بن أحمد ملا",
+      "title_en": "Ali Ibn Ahmad Mala - HQ",
+      "category": "muezzin",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_-_HQ_(علي_بن_أحمد_ملا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_-_HQ_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7).mp3",
+      "size_bytes": 3914232
+    },
+    {
+      "id": "adhan-094",
+      "title_ar": "علي بن أحمد ملا - الحرم المكي",
+      "title_en": "Ali Ibn Ahmad Mala 1 - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_1_-_Al_Haram_Al_Maki_(علي_بن_أحمد_ملا_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_1_-_Al_Haram_Al_Maki_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 492824
+    },
+    {
+      "id": "adhan-095",
+      "title_ar": "علي بن أحمد ملا - الحرم المكي",
+      "title_en": "Ali Ibn Ahmad Mala 2 - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_2_-_Al_Haram_Al_Maki_(علي_بن_أحمد_ملا_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_2_-_Al_Haram_Al_Maki_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 429968
+    },
+    {
+      "id": "adhan-096",
+      "title_ar": "علي بن أحمد ملا - الحرم المكي",
+      "title_en": "Ali Ibn Ahmad Mala 3 - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_3_-_Al_Haram_Al_Maki_(علي_بن_أحمد_ملا_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_3_-_Al_Haram_Al_Maki_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 409088
+    },
+    {
+      "id": "adhan-097",
+      "title_ar": "علي بن أحمد ملا - الحرم المكي",
+      "title_en": "Ali Ibn Ahmad Mala 4 - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_4_-_Al_Haram_Al_Maki_(علي_بن_أحمد_ملا_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_4_-_Al_Haram_Al_Maki_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 317576
+    },
+    {
+      "id": "adhan-098",
+      "title_ar": "علي بن أحمد ملا - الحرم المكي",
+      "title_en": "Ali Ibn Ahmad Mala 5 - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_5_-_Al_Haram_Al_Maki_(علي_بن_أحمد_ملا_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_5_-_Al_Haram_Al_Maki_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 409092
+    },
+    {
+      "id": "adhan-099",
+      "title_ar": "علي بن أحمد ملا - الحرم المكي",
+      "title_en": "Ali Ibn Ahmad Mala 6 - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_6_-_Al_Haram_Al_Maki_(علي_بن_أحمد_ملا_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_6_-_Al_Haram_Al_Maki_(%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 354804
+    },
+    {
+      "id": "adhan-100",
+      "title_ar": "Ali Ibn Ahmad Mala HQ",
+      "title_en": "Ali Ibn Ahmad Mala HQ",
+      "category": "muezzin",
+      "source_filename": "Ali_Ibn_Ahmad_Mala_HQ.mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_HQ.mp3",
+      "size_bytes": 3171055
+    },
+    {
+      "id": "adhan-101",
+      "title_ar": "أنوار دومان - تركيا",
+      "title_en": "Anuar Duman - Turkey",
+      "category": "muezzin",
+      "source_filename": "Anuar_Duman_-_Turkey_(أنوار_دومان_-_تركيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Anuar_Duman_-_Turkey_(%D8%A3%D9%86%D9%88%D8%A7%D8%B1_%D8%AF%D9%88%D9%85%D8%A7%D9%86_-_%D8%AA%D8%B1%D9%83%D9%8A%D8%A7).mp3",
+      "size_bytes": 4716557
+    },
+    {
+      "id": "adhan-102",
+      "title_ar": "عاصم بخراري - الحرم المكي",
+      "title_en": "Assem Bukhrare - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Assem_Bukhrare_-_Al_Haram_Al_Maki_(عاصم_بخراري_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Assem_Bukhrare_-_Al_Haram_Al_Maki_(%D8%B9%D8%A7%D8%B5%D9%85_%D8%A8%D8%AE%D8%B1%D8%A7%D8%B1%D9%8A_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 563672
+    },
+    {
+      "id": "adhan-103",
+      "title_ar": "Azan nakshabandi",
+      "title_en": "Azan nakshabandi",
+      "category": "muezzin",
+      "source_filename": "Azan_nakshabandi.mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Azan_nakshabandi.mp3",
+      "size_bytes": 2305043
+    },
+    {
+      "id": "adhan-104",
+      "title_ar": "بديع جادو",
+      "title_en": "Badee Jadu 1",
+      "category": "muezzin",
+      "source_filename": "Badee_Jadu_1_(بديع_جادو).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Badee_Jadu_1_(%D8%A8%D8%AF%D9%8A%D8%B9_%D8%AC%D8%A7%D8%AF%D9%88).mp3",
+      "size_bytes": 3308288
+    },
+    {
+      "id": "adhan-105",
+      "title_ar": "بديع جادو",
+      "title_en": "Badee Jadu 2",
+      "category": "muezzin",
+      "source_filename": "Badee_Jadu_2_(بديع_جادو).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Badee_Jadu_2_(%D8%A8%D8%AF%D9%8A%D8%B9_%D8%AC%D8%A7%D8%AF%D9%88).mp3",
+      "size_bytes": 3706189
+    },
+    {
+      "id": "adhan-106",
+      "title_ar": "بديع جادو",
+      "title_en": "Badee Jadu 3",
+      "category": "muezzin",
+      "source_filename": "Badee_Jadu_3_(بديع_جادو).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Badee_Jadu_3_(%D8%A8%D8%AF%D9%8A%D8%B9_%D8%AC%D8%A7%D8%AF%D9%88).mp3",
+      "size_bytes": 3122718
+    },
+    {
+      "id": "adhan-107",
+      "title_ar": "بلباشر عبد القادر",
+      "title_en": "BalBaSher Abdel Qadir",
+      "category": "muezzin",
+      "source_filename": "BalBaSher_Abdel_Qadir_(بلباشر_عبد_القادر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/BalBaSher_Abdel_Qadir_(%D8%A8%D9%84%D8%A8%D8%A7%D8%B4%D8%B1_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D9%82%D8%A7%D8%AF%D8%B1).mp3",
+      "size_bytes": 1871462
+    },
+    {
+      "id": "adhan-108",
+      "title_ar": "بن سوانة",
+      "title_en": "Bnu Sawana 1",
+      "category": "muezzin",
+      "source_filename": "Bnu_Sawana_1_(بن_سوانة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Bnu_Sawana_1_(%D8%A8%D9%86_%D8%B3%D9%88%D8%A7%D9%86%D8%A9).mp3",
+      "size_bytes": 3572596
+    },
+    {
+      "id": "adhan-109",
+      "title_ar": "بن سوانة",
+      "title_en": "Bnu Sawana 2",
+      "category": "muezzin",
+      "source_filename": "Bnu_Sawana_2_(بن_سوانة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Bnu_Sawana_2_(%D8%A8%D9%86_%D8%B3%D9%88%D8%A7%D9%86%D8%A9).mp3",
+      "size_bytes": 3489224
+    },
+    {
+      "id": "adhan-110",
+      "title_ar": "عز الدين عمارنة",
+      "title_en": "Ezzedine Amarna",
+      "category": "muezzin",
+      "source_filename": "Ezzedine_Amarna_(عز_الدين_عمارنة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ezzedine_Amarna_(%D8%B9%D8%B2_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%B9%D9%85%D8%A7%D8%B1%D9%86%D8%A9).mp3",
+      "size_bytes": 2429885
+    },
+    {
+      "id": "adhan-111",
+      "title_ar": "اذان الفجر بصوت نصر الدين طوبار",
+      "title_en": "Fajr Adhan by Nasreddine Toubar",
+      "category": "mosque",
+      "source_filename": "Fajr_Adhan_by_Nasreddine_Toubar_(اذان_الفجر_بصوت_نصر_الدين_طوبار).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Fajr_Adhan_by_Nasreddine_Toubar_(%D8%A7%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A8%D8%B5%D9%88%D8%AA_%D9%86%D8%B5%D8%B1_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%B7%D9%88%D8%A8%D8%A7%D8%B1).mp3",
+      "size_bytes": 4653465
+    },
+    {
+      "id": "adhan-112",
+      "title_ar": "فارس عبد الغني",
+      "title_en": "Fares Abdul Ghane",
+      "category": "muezzin",
+      "source_filename": "Fares_Abdul_Ghane_(فارس_عبد_الغني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Fares_Abdul_Ghane_(%D9%81%D8%A7%D8%B1%D8%B3_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%BA%D9%86%D9%8A).mp3",
+      "size_bytes": 4164823
+    },
+    {
+      "id": "adhan-113",
+      "title_ar": "فاروق عبدالرحمن حضراوي - الحرم المكي",
+      "title_en": "Faruq Abdul Rahman Hadrawe - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Faruq_Abdul_Rahman_Hadrawe_-_Al_Haram_Al_Maki_(فاروق_عبدالرحمن_حضراوي_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Faruq_Abdul_Rahman_Hadrawe_-_Al_Haram_Al_Maki_(%D9%81%D8%A7%D8%B1%D9%88%D9%82_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D8%B1%D8%AD%D9%85%D9%86_%D8%AD%D8%B6%D8%B1%D8%A7%D9%88%D9%8A_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 559496
+    },
+    {
+      "id": "adhan-114",
+      "title_ar": "فواز فرحان الدماني",
+      "title_en": "Fawaz Farhan Al Dumane",
+      "category": "muezzin",
+      "source_filename": "Fawaz_Farhan_Al_Dumane_(فواز_فرحان_الدماني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Fawaz_Farhan_Al_Dumane_(%D9%81%D9%88%D8%A7%D8%B2_%D9%81%D8%B1%D8%AD%D8%A7%D9%86_%D8%A7%D9%84%D8%AF%D9%85%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 2378528
+    },
+    {
+      "id": "adhan-115",
+      "title_ar": "فايز عبد السلام",
+      "title_en": "Fayz Abd Al Salam",
+      "category": "muezzin",
+      "source_filename": "Fayz_Abd_Al_Salam_(فايز_عبد_السلام).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Fayz_Abd_Al_Salam_(%D9%81%D8%A7%D9%8A%D8%B2_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85).mp3",
+      "size_bytes": 2123088
+    },
+    {
+      "id": "adhan-116",
+      "title_ar": "غرم البيشي",
+      "title_en": "Gharm Al Bishi",
+      "category": "muezzin",
+      "source_filename": "Gharm_Al_Bishi_(غرم_البيشي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Gharm_Al_Bishi_(%D8%BA%D8%B1%D9%85_%D8%A7%D9%84%D8%A8%D9%8A%D8%B4%D9%8A).mp3",
+      "size_bytes": 2950836
+    },
+    {
+      "id": "adhan-117",
+      "title_ar": "غازي السعدون",
+      "title_en": "Ghazi Al Saadoun",
+      "category": "muezzin",
+      "source_filename": "Ghazi_Al_Saadoun_(غازي_السعدون).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ghazi_Al_Saadoun_(%D8%BA%D8%A7%D8%B2%D9%8A_%D8%A7%D9%84%D8%B3%D8%B9%D8%AF%D9%88%D9%86).mp3",
+      "size_bytes": 3486242
+    },
+    {
+      "id": "adhan-118",
+      "title_ar": "حافظ حسين عرق",
+      "title_en": "Hafed Hessen Erq",
+      "category": "muezzin",
+      "source_filename": "Hafed_Hessen_Erq_(حافظ_حسين_عرق).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hafed_Hessen_Erq_(%D8%AD%D8%A7%D9%81%D8%B8_%D8%AD%D8%B3%D9%8A%D9%86_%D8%B9%D8%B1%D9%82).mp3",
+      "size_bytes": 225914
+    },
+    {
+      "id": "adhan-119",
+      "title_ar": "حاج سليمان مختار - الجزائر",
+      "title_en": "Haj Sulaiman Mukhtar - Algeria",
+      "category": "muezzin",
+      "source_filename": "Haj_Sulaiman_Mukhtar_-_Algeria_(حاج_سليمان_مختار_-_الجزائر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Haj_Sulaiman_Mukhtar_-_Algeria_(%D8%AD%D8%A7%D8%AC_%D8%B3%D9%84%D9%8A%D9%85%D8%A7%D9%86_%D9%85%D8%AE%D8%AA%D8%A7%D8%B1_-_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1).mp3",
+      "size_bytes": 1368557
+    },
+    {
+      "id": "adhan-120",
+      "title_ar": "حمد الدغريري",
+      "title_en": "Hamad Al Daghriri - HQ",
+      "category": "muezzin",
+      "source_filename": "Hamad_Al_Daghriri_-_HQ_(حمد_الدغريري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hamad_Al_Daghriri_-_HQ_(%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%AF%D8%BA%D8%B1%D9%8A%D8%B1%D9%8A).mp3",
+      "size_bytes": 619042
+    },
+    {
+      "id": "adhan-121",
+      "title_ar": "حمد الدغريري",
+      "title_en": "Hamad Al Daghriri",
+      "category": "muezzin",
+      "source_filename": "Hamad_Al_Daghriri_(حمد_الدغريري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hamad_Al_Daghriri_(%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%AF%D8%BA%D8%B1%D9%8A%D8%B1%D9%8A).mp3",
+      "size_bytes": 3078763
+    },
+    {
+      "id": "adhan-122",
+      "title_ar": "حمدان الملكي - نجران السعودية",
+      "title_en": "Hamdan Al Maleke - Najran Saudi Arabia",
+      "category": "muezzin",
+      "source_filename": "Hamdan_Al_Maleke_-_Najran_Saudi_Arabia_(حمدان_الملكي_-_نجران_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hamdan_Al_Maleke_-_Najran_Saudi_Arabia_(%D8%AD%D9%85%D8%AF%D8%A7%D9%86_%D8%A7%D9%84%D9%85%D9%84%D9%83%D9%8A_-_%D9%86%D8%AC%D8%B1%D8%A7%D9%86_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 4271573
+    },
+    {
+      "id": "adhan-123",
+      "title_ar": "حمزة الحلبي",
+      "title_en": "Hamza Al Halabea",
+      "category": "muezzin",
+      "source_filename": "Hamza_Al_Halabea_(حمزة_الحلبي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hamza_Al_Halabea_(%D8%AD%D9%85%D8%B2%D8%A9_%D8%A7%D9%84%D8%AD%D9%84%D8%A8%D9%8A).mp3",
+      "size_bytes": 969110
+    },
+    {
+      "id": "adhan-124",
+      "title_ar": "حمزة المجالي",
+      "title_en": "Hamza Al Majale",
+      "category": "muezzin",
+      "source_filename": "Hamza_Al_Majale_(حمزة_المجالي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hamza_Al_Majale_(%D8%AD%D9%85%D8%B2%D8%A9_%D8%A7%D9%84%D9%85%D8%AC%D8%A7%D9%84%D9%8A).mp3",
+      "size_bytes": 5587265
+    },
+    {
+      "id": "adhan-125",
+      "title_ar": "حسن خلفان - قطر",
+      "title_en": "Hassan Khalfan - Qatar",
+      "category": "muezzin",
+      "source_filename": "Hassan_Khalfan_-_Qatar_(حسن_خلفان_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hassan_Khalfan_-_Qatar_(%D8%AD%D8%B3%D9%86_%D8%AE%D9%84%D9%81%D8%A7%D9%86_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 2867044
+    },
+    {
+      "id": "adhan-126",
+      "title_ar": "حسن محمود باره",
+      "title_en": "Hassan Mahmud Bare",
+      "category": "muezzin",
+      "source_filename": "Hassan_Mahmud_Bare_(حسن_محمود_باره).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hassan_Mahmud_Bare_(%D8%AD%D8%B3%D9%86_%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%A8%D8%A7%D8%B1%D9%87).mp3",
+      "size_bytes": 6570850
+    },
+    {
+      "id": "adhan-127",
+      "title_ar": "حسن صالح بعلول",
+      "title_en": "Hassan Salah Baalul",
+      "category": "muezzin",
+      "source_filename": "Hassan_Salah_Baalul_(حسن_صالح_بعلول).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hassan_Salah_Baalul_(%D8%AD%D8%B3%D9%86_%D8%B5%D8%A7%D9%84%D8%AD_%D8%A8%D8%B9%D9%84%D9%88%D9%84).mp3",
+      "size_bytes": 2975109
+    },
+    {
+      "id": "adhan-128",
+      "title_ar": "هشام خليل",
+      "title_en": "Hecham Khalel",
+      "category": "muezzin",
+      "source_filename": "Hecham_Khalel_(هشام_خليل).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hecham_Khalel_(%D9%87%D8%B4%D8%A7%D9%85_%D8%AE%D9%84%D9%8A%D9%84).mp3",
+      "size_bytes": 3121511
+    },
+    {
+      "id": "adhan-129",
+      "title_ar": "حسين عفيفي",
+      "title_en": "Hussain Afifi",
+      "category": "muezzin",
+      "source_filename": "Hussain_Afifi_(حسين_عفيفي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hussain_Afifi_(%D8%AD%D8%B3%D9%8A%D9%86_%D8%B9%D9%81%D9%8A%D9%81%D9%8A).mp3",
+      "size_bytes": 3574161
+    },
+    {
+      "id": "adhan-130",
+      "title_ar": "حسام الدين عبادة",
+      "title_en": "Hussam Al Deen Obade",
+      "category": "muezzin",
+      "source_filename": "Hussam_Al_Deen_Obade_(حسام_الدين_عبادة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Hussam_Al_Deen_Obade_(%D8%AD%D8%B3%D8%A7%D9%85_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%B9%D8%A8%D8%A7%D8%AF%D8%A9).mp3",
+      "size_bytes": 3503245
+    },
+    {
+      "id": "adhan-131",
+      "title_ar": "إبراهيم الجميل",
+      "title_en": "Ibraheem Al Jumayle",
+      "category": "muezzin",
+      "source_filename": "Ibraheem_Al_Jumayle_(إبراهيم_الجميل).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ibraheem_Al_Jumayle_(%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85_%D8%A7%D9%84%D8%AC%D9%85%D9%8A%D9%84).mp3",
+      "size_bytes": 2462513
+    },
+    {
+      "id": "adhan-132",
+      "title_ar": "إبراهيم جابر",
+      "title_en": "Ibraheem Jabar 1",
+      "category": "muezzin",
+      "source_filename": "Ibraheem_Jabar_1_(إبراهيم_جابر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ibraheem_Jabar_1_(%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85_%D8%AC%D8%A7%D8%A8%D8%B1).mp3",
+      "size_bytes": 1697041
+    },
+    {
+      "id": "adhan-133",
+      "title_ar": "إبراهيم جابر",
+      "title_en": "Ibraheem Jabar 2",
+      "category": "muezzin",
+      "source_filename": "Ibraheem_Jabar_2_(إبراهيم_جابر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ibraheem_Jabar_2_(%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85_%D8%AC%D8%A7%D8%A8%D8%B1).mp3",
+      "size_bytes": 1753442
+    },
+    {
+      "id": "adhan-134",
+      "title_ar": "إبراهيم جبر أبو رحيق - الفجر",
+      "title_en": "Ibraheem Jabr Abu Raheq - Fajr",
+      "category": "mosque",
+      "source_filename": "Ibraheem_Jabr_Abu_Raheq_-_Fajr_(إبراهيم_جبر_أبو_رحيق_-_الفجر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ibraheem_Jabr_Abu_Raheq_-_Fajr_(%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85_%D8%AC%D8%A8%D8%B1_%D8%A3%D8%A8%D9%88_%D8%B1%D8%AD%D9%8A%D9%82_-_%D8%A7%D9%84%D9%81%D8%AC%D8%B1).mp3",
+      "size_bytes": 2341317
+    },
+    {
+      "id": "adhan-135",
+      "title_ar": "إبراهيم جبر أبو رحيق",
+      "title_en": "Ibraheem Jabr Abu Raheq",
+      "category": "muezzin",
+      "source_filename": "Ibraheem_Jabr_Abu_Raheq_(إبراهيم_جبر_أبو_رحيق).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ibraheem_Jabr_Abu_Raheq_(%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85_%D8%AC%D8%A8%D8%B1_%D8%A3%D8%A8%D9%88_%D8%B1%D8%AD%D9%8A%D9%82).mp3",
+      "size_bytes": 4708955
+    },
+    {
+      "id": "adhan-136",
+      "title_ar": "إحسان حامد الدليمي",
+      "title_en": "Ihssan Hamed Al Dulayme",
+      "category": "muezzin",
+      "source_filename": "Ihssan_Hamed_Al_Dulayme_(إحسان_حامد_الدليمي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ihssan_Hamed_Al_Dulayme_(%D8%A5%D8%AD%D8%B3%D8%A7%D9%86_%D8%AD%D8%A7%D9%85%D8%AF_%D8%A7%D9%84%D8%AF%D9%84%D9%8A%D9%85%D9%8A).mp3",
+      "size_bytes": 3416533
+    },
+    {
+      "id": "adhan-137",
+      "title_ar": "إسلام ياسين",
+      "title_en": "Islam Yassen",
+      "category": "muezzin",
+      "source_filename": "Islam_Yassen_(إسلام_ياسين).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Islam_Yassen_(%D8%A5%D8%B3%D9%84%D8%A7%D9%85_%D9%8A%D8%A7%D8%B3%D9%8A%D9%86).mp3",
+      "size_bytes": 1856766
+    },
+    {
+      "id": "adhan-138",
+      "title_ar": "إسماعيل الشيخ",
+      "title_en": "Ismail Al Sheikh",
+      "category": "muezzin",
+      "source_filename": "Ismail_Al_Sheikh_(إسماعيل_الشيخ).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ismail_Al_Sheikh_(%D8%A5%D8%B3%D9%85%D8%A7%D8%B9%D9%8A%D9%84_%D8%A7%D9%84%D8%B4%D9%8A%D8%AE).mp3",
+      "size_bytes": 1609060
+    },
+    {
+      "id": "adhan-139",
+      "title_ar": "عيسى الهجلاوي",
+      "title_en": "Issa Al Hajlawe",
+      "category": "muezzin",
+      "source_filename": "Issa_Al_Hajlawe_(عيسى_الهجلاوي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Issa_Al_Hajlawe_(%D8%B9%D9%8A%D8%B3%D9%89_%D8%A7%D9%84%D9%87%D8%AC%D9%84%D8%A7%D9%88%D9%8A).mp3",
+      "size_bytes": 2300307
+    },
+    {
+      "id": "adhan-140",
+      "title_ar": "جمال أبو الحامد الجعفري",
+      "title_en": "Jamal Abu Al Hamed Al Jaafare",
+      "category": "muezzin",
+      "source_filename": "Jamal_Abu_Al_Hamed_Al_Jaafare_(جمال_أبو_الحامد_الجعفري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Jamal_Abu_Al_Hamed_Al_Jaafare_(%D8%AC%D9%85%D8%A7%D9%84_%D8%A3%D8%A8%D9%88_%D8%A7%D9%84%D8%AD%D8%A7%D9%85%D8%AF_%D8%A7%D9%84%D8%AC%D8%B9%D9%81%D8%B1%D9%8A).mp3",
+      "size_bytes": 2616215
+    },
+    {
+      "id": "adhan-141",
+      "title_ar": "كمال محمد المرعوش",
+      "title_en": "Kamal Muhammad Al Marush 1",
+      "category": "muezzin",
+      "source_filename": "Kamal_Muhammad_Al_Marush_1_(كمال_محمد_المرعوش).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Kamal_Muhammad_Al_Marush_1_(%D9%83%D9%85%D8%A7%D9%84_%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%85%D8%B1%D8%B9%D9%88%D8%B4).mp3",
+      "size_bytes": 5088335
+    },
+    {
+      "id": "adhan-142",
+      "title_ar": "كمال محمد المرعوش - المغرب",
+      "title_en": "Kamal Muhammad Al Marush 2 - Morocco",
+      "category": "muezzin",
+      "source_filename": "Kamal_Muhammad_Al_Marush_2_-_Morocco_(كمال_محمد_المرعوش_-_المغرب).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Kamal_Muhammad_Al_Marush_2_-_Morocco_(%D9%83%D9%85%D8%A7%D9%84_%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%85%D8%B1%D8%B9%D9%88%D8%B4_-_%D8%A7%D9%84%D9%85%D8%BA%D8%B1%D8%A8).mp3",
+      "size_bytes": 3354741
+    },
+    {
+      "id": "adhan-143",
+      "title_ar": "لافي العوني",
+      "title_en": "Lafi Al Awni",
+      "category": "muezzin",
+      "source_filename": "Lafi_Al_Awni_(لافي_العوني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Lafi_Al_Awni_(%D9%84%D8%A7%D9%81%D9%8A_%D8%A7%D9%84%D8%B9%D9%88%D9%86%D9%8A).mp3",
+      "size_bytes": 2241429
+    },
+    {
+      "id": "adhan-144",
+      "title_ar": "مهدي البشي",
+      "title_en": "Mahde Al Bechee",
+      "category": "muezzin",
+      "source_filename": "Mahde_Al_Bechee_(مهدي_البشي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahde_Al_Bechee_(%D9%85%D9%87%D8%AF%D9%8A_%D8%A7%D9%84%D8%A8%D8%B4%D9%8A).mp3",
+      "size_bytes": 442496
+    },
+    {
+      "id": "adhan-145",
+      "title_ar": "محمود الفوازي",
+      "title_en": "Mahmoud Al Fawazi",
+      "category": "muezzin",
+      "source_filename": "Mahmoud_Al_Fawazi_(محمود_الفوازي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmoud_Al_Fawazi_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%A7%D9%84%D9%81%D9%88%D8%A7%D8%B2%D9%8A).mp3",
+      "size_bytes": 5944936
+    },
+    {
+      "id": "adhan-146",
+      "title_ar": "محمود علي البنا - القاهرة",
+      "title_en": "Mahmoud Ali Al Banna - Cairo",
+      "category": "muezzin",
+      "source_filename": "Mahmoud_Ali_Al_Banna_-_Cairo_(محمود_علي_البنا_-_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmoud_Ali_Al_Banna_-_Cairo_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%B9%D9%84%D9%8A_%D8%A7%D9%84%D8%A8%D9%86%D8%A7_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 335954
+    },
+    {
+      "id": "adhan-147",
+      "title_ar": "محمود حجازي",
+      "title_en": "Mahmoud Hijazi",
+      "category": "muezzin",
+      "source_filename": "Mahmoud_Hijazi_(محمود_حجازي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmoud_Hijazi_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%AD%D8%AC%D8%A7%D8%B2%D9%8A).mp3",
+      "size_bytes": 3434415
+    },
+    {
+      "id": "adhan-148",
+      "title_ar": "محمود خليل الحصري - القاهرة",
+      "title_en": "Mahmoud Khalil Al Hussary - Cairo",
+      "category": "muezzin",
+      "source_filename": "Mahmoud_Khalil_Al_Hussary_-_Cairo_(محمود_خليل_الحصري_-_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmoud_Khalil_Al_Hussary_-_Cairo_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%AE%D9%84%D9%8A%D9%84_%D8%A7%D9%84%D8%AD%D8%B5%D8%B1%D9%8A_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 258926
+    },
+    {
+      "id": "adhan-149",
+      "title_ar": "محمود الطواخ",
+      "title_en": "Mahmud Al Tawakh 1",
+      "category": "muezzin",
+      "source_filename": "Mahmud_Al_Tawakh_1_(محمود_الطواخ).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmud_Al_Tawakh_1_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%A7%D9%84%D8%B7%D9%88%D8%A7%D8%AE).mp3",
+      "size_bytes": 2653025
+    },
+    {
+      "id": "adhan-150",
+      "title_ar": "محمود الطواخ - مسجد الرفاعي القاهرة",
+      "title_en": "Mahmud Al Tawakh 2 - Masjid Al Rifai Cairo",
+      "category": "mosque",
+      "source_filename": "Mahmud_Al_Tawakh_2_-_Masjid_Al_Rifai_Cairo_(محمود_الطواخ_-_مسجد_الرفاعي_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmud_Al_Tawakh_2_-_Masjid_Al_Rifai_Cairo_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%A7%D9%84%D8%B7%D9%88%D8%A7%D8%AE_-_%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%B1%D9%81%D8%A7%D8%B9%D9%8A_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 3174554
+    },
+    {
+      "id": "adhan-151",
+      "title_ar": "محمود مصطفى النجار",
+      "title_en": "Mahmud Mustafa Al Najar",
+      "category": "muezzin",
+      "source_filename": "Mahmud_Mustafa_Al_Najar_(محمود_مصطفى_النجار).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmud_Mustafa_Al_Najar_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D9%85%D8%B5%D8%B7%D9%81%D9%89_%D8%A7%D9%84%D9%86%D8%AC%D8%A7%D8%B1).mp3",
+      "size_bytes": 2439950
+    },
+    {
+      "id": "adhan-152",
+      "title_ar": "ماجد الزامل",
+      "title_en": "Majid Al Zamel",
+      "category": "muezzin",
+      "source_filename": "Majid_Al_Zamel_(ماجد_الزامل).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Majid_Al_Zamel_(%D9%85%D8%A7%D8%AC%D8%AF_%D8%A7%D9%84%D8%B2%D8%A7%D9%85%D9%84).mp3",
+      "size_bytes": 2774457
+    },
+    {
+      "id": "adhan-153",
+      "title_ar": "منصور الزهراني",
+      "title_en": "Mansur Al Zahrane - HQ",
+      "category": "muezzin",
+      "source_filename": "Mansur_Al_Zahrane_-_HQ_(منصور_الزهراني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mansur_Al_Zahrane_-_HQ_(%D9%85%D9%86%D8%B5%D9%88%D8%B1_%D8%A7%D9%84%D8%B2%D9%87%D8%B1%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 763133
+    },
+    {
+      "id": "adhan-154",
+      "title_ar": "منصور الزهراني",
+      "title_en": "Mansur Al Zahrane",
+      "category": "muezzin",
+      "source_filename": "Mansur_Al_Zahrane_(منصور_الزهراني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mansur_Al_Zahrane_(%D9%85%D9%86%D8%B5%D9%88%D8%B1_%D8%A7%D9%84%D8%B2%D9%87%D8%B1%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 2959028
+    },
+    {
+      "id": "adhan-155",
+      "title_ar": "مشاري العفاسي",
+      "title_en": "Mishary Al Afasy - HQ",
+      "category": "muezzin",
+      "source_filename": "Mishary_Al_Afasy_-_HQ_(مشاري_العفاسي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mishary_Al_Afasy_-_HQ_(%D9%85%D8%B4%D8%A7%D8%B1%D9%8A_%D8%A7%D9%84%D8%B9%D9%81%D8%A7%D8%B3%D9%8A).mp3",
+      "size_bytes": 621967
+    },
+    {
+      "id": "adhan-156",
+      "title_ar": "مشاري راشد العفاسي - الكويت",
+      "title_en": "Mishary Rashid Alafasy 1 - Kuwait",
+      "category": "muezzin",
+      "source_filename": "Mishary_Rashid_Alafasy_1_-_Kuwait_(مشاري_راشد_العفاسي_-_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mishary_Rashid_Alafasy_1_-_Kuwait_(%D9%85%D8%B4%D8%A7%D8%B1%D9%8A_%D8%B1%D8%A7%D8%B4%D8%AF_%D8%A7%D9%84%D8%B9%D9%81%D8%A7%D8%B3%D9%8A_-_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 1931082
+    },
+    {
+      "id": "adhan-157",
+      "title_ar": "مشاري راشد العفاسي - الكويت",
+      "title_en": "Mishary Rashid Alafasy 2 - Kuwait",
+      "category": "muezzin",
+      "source_filename": "Mishary_Rashid_Alafasy_2_-_Kuwait_(مشاري_راشد_العفاسي_-_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mishary_Rashid_Alafasy_2_-_Kuwait_(%D9%85%D8%B4%D8%A7%D8%B1%D9%8A_%D8%B1%D8%A7%D8%B4%D8%AF_%D8%A7%D9%84%D8%B9%D9%81%D8%A7%D8%B3%D9%8A_-_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 2062113
+    },
+    {
+      "id": "adhan-158",
+      "title_ar": "مشاري راشد العفاسي - فجر الكويت",
+      "title_en": "Mishary Rashid Alafasy 3 - Fajr Kuwait",
+      "category": "mosque",
+      "source_filename": "Mishary_Rashid_Alafasy_3_-_Fajr_Kuwait_(مشاري_راشد_العفاسي_-_فجر_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mishary_Rashid_Alafasy_3_-_Fajr_Kuwait_(%D9%85%D8%B4%D8%A7%D8%B1%D9%8A_%D8%B1%D8%A7%D8%B4%D8%AF_%D8%A7%D9%84%D8%B9%D9%81%D8%A7%D8%B3%D9%8A_-_%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 1503337
+    },
+    {
+      "id": "adhan-159",
+      "title_ar": "مشاري راشد العفاسي - فجر الكويت",
+      "title_en": "Mishary Rashid Alafasy 4 - Fajr Kuwait",
+      "category": "mosque",
+      "source_filename": "Mishary_Rashid_Alafasy_4_-_Fajr_Kuwait_(مشاري_راشد_العفاسي_-_فجر_الكويت).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mishary_Rashid_Alafasy_4_-_Fajr_Kuwait_(%D9%85%D8%B4%D8%A7%D8%B1%D9%8A_%D8%B1%D8%A7%D8%B4%D8%AF_%D8%A7%D9%84%D8%B9%D9%81%D8%A7%D8%B3%D9%8A_-_%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D9%83%D9%88%D9%8A%D8%AA).mp3",
+      "size_bytes": 2312715
+    },
+    {
+      "id": "adhan-160",
+      "title_ar": "محمد صديق المنشاوي - أفغانستان",
+      "title_en": "Mohamed Siddiq El-Minshawi - Afghanistan",
+      "category": "muezzin",
+      "source_filename": "Mohamed_Siddiq_El-Minshawi_-_Afghanistan_(محمد_صديق_المنشاوي_-_أفغانستان).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mohamed_Siddiq_El-Minshawi_-_Afghanistan_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B5%D8%AF%D9%8A%D9%82_%D8%A7%D9%84%D9%85%D9%86%D8%B4%D8%A7%D9%88%D9%8A_-_%D8%A3%D9%81%D8%BA%D8%A7%D9%86%D8%B3%D8%AA%D8%A7%D9%86).mp3",
+      "size_bytes": 2619286
+    },
+    {
+      "id": "adhan-161",
+      "title_ar": "محمد صديق المنشاوي - مصر",
+      "title_en": "Mohamed Siddiq El-Minshawi - Egypt 1",
+      "category": "muezzin",
+      "source_filename": "Mohamed_Siddiq_El-Minshawi_-_Egypt_1_(محمد_صديق_المنشاوي_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mohamed_Siddiq_El-Minshawi_-_Egypt_1_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B5%D8%AF%D9%8A%D9%82_%D8%A7%D9%84%D9%85%D9%86%D8%B4%D8%A7%D9%88%D9%8A_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 503264
+    },
+    {
+      "id": "adhan-162",
+      "title_ar": "محمد صديق المنشاوي - مصر",
+      "title_en": "Mohamed Siddiq El-Minshawi - Egypt 2",
+      "category": "muezzin",
+      "source_filename": "Mohamed_Siddiq_El-Minshawi_-_Egypt_2_(محمد_صديق_المنشاوي_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mohamed_Siddiq_El-Minshawi_-_Egypt_2_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B5%D8%AF%D9%8A%D9%82_%D8%A7%D9%84%D9%85%D9%86%D8%B4%D8%A7%D9%88%D9%8A_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 3955074
+    },
+    {
+      "id": "adhan-163",
+      "title_ar": "Mohamed Tarek Reciting Azan",
+      "title_en": "Mohamed Tarek Reciting Azan",
+      "category": "muezzin",
+      "source_filename": "Mohamed_Tarek_Reciting_Azan.mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mohamed_Tarek_Reciting_Azan.mp3",
+      "size_bytes": 2403264
+    },
+    {
+      "id": "adhan-164",
+      "title_ar": "محمد صلاح الدين كبارة",
+      "title_en": "Mohammed Salahuddin Kabbara 1",
+      "category": "muezzin",
+      "source_filename": "Mohammed_Salahuddin_Kabbara_1_(محمد_صلاح_الدين_كبارة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mohammed_Salahuddin_Kabbara_1_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B5%D9%84%D8%A7%D8%AD_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D9%83%D8%A8%D8%A7%D8%B1%D8%A9).mp3",
+      "size_bytes": 6204909
+    },
+    {
+      "id": "adhan-165",
+      "title_ar": "محمد صلاح الدين كبارة",
+      "title_en": "Mohammed Salahuddin Kabbara 2",
+      "category": "muezzin",
+      "source_filename": "Mohammed_Salahuddin_Kabbara_2_(محمد_صلاح_الدين_كبارة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mohammed_Salahuddin_Kabbara_2_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B5%D9%84%D8%A7%D8%AD_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D9%83%D8%A8%D8%A7%D8%B1%D8%A9).mp3",
+      "size_bytes": 5816207
+    },
+    {
+      "id": "adhan-166",
+      "title_ar": "معاذ القاسمي - قطر",
+      "title_en": "Muad Al Qaseme - Qatar",
+      "category": "muezzin",
+      "source_filename": "Muad_Al_Qaseme_-_Qatar_(معاذ_القاسمي_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muad_Al_Qaseme_-_Qatar_(%D9%85%D8%B9%D8%A7%D8%B0_%D8%A7%D9%84%D9%82%D8%A7%D8%B3%D9%85%D9%8A_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 9108675
+    },
+    {
+      "id": "adhan-167",
+      "title_ar": "محمد عبد الحكم",
+      "title_en": "Muhammad Abd Al Hakem",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Abd_Al_Hakem_(محمد_عبد_الحكم).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Abd_Al_Hakem_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%AD%D9%83%D9%85).mp3",
+      "size_bytes": 2167043
+    },
+    {
+      "id": "adhan-168",
+      "title_ar": "محمد أبو المقارم",
+      "title_en": "Muhammad Abu Al Maqarem",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Abu_Al_Maqarem_(محمد_أبو_المقارم).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Abu_Al_Maqarem_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A3%D8%A8%D9%88_%D8%A7%D9%84%D9%85%D9%82%D8%A7%D8%B1%D9%85).mp3",
+      "size_bytes": 1265080
+    },
+    {
+      "id": "adhan-169",
+      "title_ar": "محمد عادل",
+      "title_en": "Muhammad Adel",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Adel_(محمد_عادل).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Adel_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B9%D8%A7%D8%AF%D9%84).mp3",
+      "size_bytes": 1746800
+    },
+    {
+      "id": "adhan-170",
+      "title_ar": "محمد الدمرداش",
+      "title_en": "Muhammad Al Damradash",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Al_Damradash_(محمد_الدمرداش).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Al_Damradash_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%AF%D9%85%D8%B1%D8%AF%D8%A7%D8%B4).mp3",
+      "size_bytes": 2820682
+    },
+    {
+      "id": "adhan-171",
+      "title_ar": "محمد القرين الملوكي",
+      "title_en": "Muhammad Al Kurayne Al Maluke 1",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Al_Kurayne_Al_Maluke_1_(محمد_القرين_الملوكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Al_Kurayne_Al_Maluke_1_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%82%D8%B1%D9%8A%D9%86_%D8%A7%D9%84%D9%85%D9%84%D9%88%D9%83%D9%8A).mp3",
+      "size_bytes": 8280719
+    },
+    {
+      "id": "adhan-172",
+      "title_ar": "محمد القرين الملوكي",
+      "title_en": "Muhammad Al Kurayne Al Maluke 2",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Al_Kurayne_Al_Maluke_2_(محمد_القرين_الملوكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Al_Kurayne_Al_Maluke_2_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%82%D8%B1%D9%8A%D9%86_%D8%A7%D9%84%D9%85%D9%84%D9%88%D9%83%D9%8A).mp3",
+      "size_bytes": 5011441
+    },
+    {
+      "id": "adhan-173",
+      "title_ar": "محمد السيد ماهر",
+      "title_en": "Muhammad Al Saed Maher",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Al_Saed_Maher_(محمد_السيد_ماهر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Al_Saed_Maher_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B3%D9%8A%D8%AF_%D9%85%D8%A7%D9%87%D8%B1).mp3",
+      "size_bytes": 1516957
+    },
+    {
+      "id": "adhan-174",
+      "title_ar": "محمد الزاهد",
+      "title_en": "Muhammad Al Zahid",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Al_Zahid_(محمد_الزاهد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Al_Zahid_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D8%B2%D8%A7%D9%87%D8%AF).mp3",
+      "size_bytes": 3882467
+    },
+    {
+      "id": "adhan-175",
+      "title_ar": "محمد أشرف عوض",
+      "title_en": "Muhammad Ashraf Aawad",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Ashraf_Aawad_(محمد_أشرف_عوض).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Ashraf_Aawad_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A3%D8%B4%D8%B1%D9%81_%D8%B9%D9%88%D8%B6).mp3",
+      "size_bytes": 2894643
+    },
+    {
+      "id": "adhan-176",
+      "title_ar": "محمد بن موسى",
+      "title_en": "Muhammad Ben Mussa",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Ben_Mussa_(محمد_بن_موسى).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Ben_Mussa_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A8%D9%86_%D9%85%D9%88%D8%B3%D9%89).mp3",
+      "size_bytes": 1306236
+    },
+    {
+      "id": "adhan-177",
+      "title_ar": "محمد فتحي حنتور",
+      "title_en": "Muhammad Fathe Hantur",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Fathe_Hantur_(محمد_فتحي_حنتور).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Fathe_Hantur_(%D9%85%D8%AD%D9%85%D8%AF_%D9%81%D8%AA%D8%AD%D9%8A_%D8%AD%D9%86%D8%AA%D9%88%D8%B1).mp3",
+      "size_bytes": 3113105
+    },
+    {
+      "id": "adhan-178",
+      "title_ar": "محمد حمود - كولومبيا",
+      "title_en": "Muhammad Hamud - Colombia",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Hamud_-_Colombia_(محمد_حمود_-_كولومبيا).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Hamud_-_Colombia_(%D9%85%D8%AD%D9%85%D8%AF_%D8%AD%D9%85%D9%88%D8%AF_-_%D9%83%D9%88%D9%84%D9%88%D9%85%D8%A8%D9%8A%D8%A7).mp3",
+      "size_bytes": 2788240
+    },
+    {
+      "id": "adhan-179",
+      "title_ar": "محمد حمود",
+      "title_en": "Muhammad Hamud",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Hamud_(محمد_حمود).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Hamud_(%D9%85%D8%AD%D9%85%D8%AF_%D8%AD%D9%85%D9%88%D8%AF).mp3",
+      "size_bytes": 3466898
+    },
+    {
+      "id": "adhan-180",
+      "title_ar": "محمد حسن الشهاوي",
+      "title_en": "Muhammad Hessen Al Shahawe",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Hessen_Al_Shahawe_(محمد_حسن_الشهاوي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Hessen_Al_Shahawe_(%D9%85%D8%AD%D9%85%D8%AF_%D8%AD%D8%B3%D9%86_%D8%A7%D9%84%D8%B4%D9%87%D8%A7%D9%88%D9%8A).mp3",
+      "size_bytes": 2541089
+    },
+    {
+      "id": "adhan-181",
+      "title_ar": "محمد خليل رمل - الحرم المكي",
+      "title_en": "Muhammad Khaleel Raml - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Muhammad_Khaleel_Raml_-_Al_Haram_Al_Maki_(محمد_خليل_رمل_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Khaleel_Raml_-_Al_Haram_Al_Maki_(%D9%85%D8%AD%D9%85%D8%AF_%D8%AE%D9%84%D9%8A%D9%84_%D8%B1%D9%85%D9%84_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 383744
+    },
+    {
+      "id": "adhan-182",
+      "title_ar": "محمد ناجي",
+      "title_en": "Muhammad Najee 1",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Najee_1_(محمد_ناجي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Najee_1_(%D9%85%D8%AD%D9%85%D8%AF_%D9%86%D8%A7%D8%AC%D9%8A).mp3",
+      "size_bytes": 1690531
+    },
+    {
+      "id": "adhan-183",
+      "title_ar": "محمد ناجي",
+      "title_en": "Muhammad Najee 2",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Najee_2_(محمد_ناجي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Najee_2_(%D9%85%D8%AD%D9%85%D8%AF_%D9%86%D8%A7%D8%AC%D9%8A).mp3",
+      "size_bytes": 3524964
+    },
+    {
+      "id": "adhan-184",
+      "title_ar": "محمد ناجي",
+      "title_en": "Muhammad Najee 3",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Najee_3_(محمد_ناجي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Najee_3_(%D9%85%D8%AD%D9%85%D8%AF_%D9%86%D8%A7%D8%AC%D9%8A).mp3",
+      "size_bytes": 3277322
+    },
+    {
+      "id": "adhan-185",
+      "title_ar": "محمد ناصر الدين الألباني - الأردن",
+      "title_en": "Muhammad Nasser Al Dine Al Albane - Jordan",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Nasser_Al_Dine_Al_Albane_-_Jordan_(محمد_ناصر_الدين_الألباني_-_الأردن).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Nasser_Al_Dine_Al_Albane_-_Jordan_(%D9%85%D8%AD%D9%85%D8%AF_%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%A7%D9%84%D8%A3%D9%84%D8%A8%D8%A7%D9%86%D9%8A_-_%D8%A7%D9%84%D8%A3%D8%B1%D8%AF%D9%86).mp3",
+      "size_bytes": 1276793
+    },
+    {
+      "id": "adhan-186",
+      "title_ar": "محمد رمضان سعد - الحرم المكي",
+      "title_en": "Muhammad Ramadan Saad - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Muhammad_Ramadan_Saad_-_Al_Haram_Al_Maki_(محمد_رمضان_سعد_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Ramadan_Saad_-_Al_Haram_Al_Maki_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B1%D9%85%D8%B6%D8%A7%D9%86_%D8%B3%D8%B9%D8%AF_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 3515711
+    },
+    {
+      "id": "adhan-187",
+      "title_ar": "محمد رفعت - القاهرة",
+      "title_en": "Muhammad Refaat - Cairo",
+      "category": "muezzin",
+      "source_filename": "Muhammad_Refaat_-_Cairo_(محمد_رفعت_-_القاهرة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammad_Refaat_-_Cairo_(%D9%85%D8%AD%D9%85%D8%AF_%D8%B1%D9%81%D8%B9%D8%AA_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3",
+      "size_bytes": 411318
+    },
+    {
+      "id": "adhan-188",
+      "title_ar": "محمد إبراهيم إسماعيل عبدالله",
+      "title_en": "Muhammed Ibrahem Ismael Abd Allah",
+      "category": "muezzin",
+      "source_filename": "Muhammed_Ibrahem_Ismael_Abd_Allah_(محمد_إبراهيم_إسماعيل_عبدالله).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Muhammed_Ibrahem_Ismael_Abd_Allah_(%D9%85%D8%AD%D9%85%D8%AF_%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85_%D8%A5%D8%B3%D9%85%D8%A7%D8%B9%D9%8A%D9%84_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%84%D9%87).mp3",
+      "size_bytes": 2911433
+    },
+    {
+      "id": "adhan-189",
+      "title_ar": "مختار عبد الحميد حافظ",
+      "title_en": "Mukhtar Abelhamed Hafed",
+      "category": "muezzin",
+      "source_filename": "Mukhtar_Abelhamed_Hafed_(مختار_عبد_الحميد_حافظ).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mukhtar_Abelhamed_Hafed_(%D9%85%D8%AE%D8%AA%D8%A7%D8%B1_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%AD%D9%85%D9%8A%D8%AF_%D8%AD%D8%A7%D9%81%D8%B8).mp3",
+      "size_bytes": 2987997
+    },
+    {
+      "id": "adhan-190",
+      "title_ar": "مصطفى إسماعيل - مصر",
+      "title_en": "Mustafa Ismail - Egypt",
+      "category": "muezzin",
+      "source_filename": "Mustafa_Ismail_-_Egypt_(مصطفى_إسماعيل_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mustafa_Ismail_-_Egypt_(%D9%85%D8%B5%D8%B7%D9%81%D9%89_%D8%A5%D8%B3%D9%85%D8%A7%D8%B9%D9%8A%D9%84_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 739896
+    },
+    {
+      "id": "adhan-191",
+      "title_ar": "مصطفى وليد",
+      "title_en": "Mustafa Waled",
+      "category": "muezzin",
+      "source_filename": "Mustafa_Waled_(مصطفى_وليد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mustafa_Waled_(%D9%85%D8%B5%D8%B7%D9%81%D9%89_%D9%88%D9%84%D9%8A%D8%AF).mp3",
+      "size_bytes": 8273830
+    },
+    {
+      "id": "adhan-192",
+      "title_ar": "ناجي قزاز - المسجد الأقصى القدس",
+      "title_en": "Najee Qazaz - Al Aqsa Jerusalem",
+      "category": "mosque",
+      "source_filename": "Najee_Qazaz_-_Al_Aqsa_Jerusalem_(ناجي_قزاز_-_المسجد_الأقصى_القدس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Najee_Qazaz_-_Al_Aqsa_Jerusalem_(%D9%86%D8%A7%D8%AC%D9%8A_%D9%82%D8%B2%D8%A7%D8%B2_-_%D8%A7%D9%84%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%A3%D9%82%D8%B5%D9%89_%D8%A7%D9%84%D9%82%D8%AF%D8%B3).mp3",
+      "size_bytes": 452864
+    },
+    {
+      "id": "adhan-193",
+      "title_ar": "نصر الدين طوبار",
+      "title_en": "Nasreddine Toubar",
+      "category": "muezzin",
+      "source_filename": "Nasreddine_Toubar_(نصر_الدين_طوبار).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasreddine_Toubar_(%D9%86%D8%B5%D8%B1_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%B7%D9%88%D8%A8%D8%A7%D8%B1).mp3",
+      "size_bytes": 4231673
+    },
+    {
+      "id": "adhan-194",
+      "title_ar": "ناصر عبد الجبار - قطر",
+      "title_en": "Nasser Al Abd Al Jabar - Qatar",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Abd_Al_Jabar_-_Qatar_(ناصر_عبد_الجبار_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Abd_Al_Jabar_-_Qatar_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%AC%D8%A8%D8%A7%D8%B1_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 6865607
+    },
+    {
+      "id": "adhan-195",
+      "title_ar": "ناصر العبيد",
+      "title_en": "Nasser Al Obaid 1",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Obaid_1_(ناصر_العبيد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Obaid_1_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D8%B9%D8%A8%D9%8A%D8%AF).mp3",
+      "size_bytes": 4810608
+    },
+    {
+      "id": "adhan-196",
+      "title_ar": "ناصر العبيد",
+      "title_en": "Nasser Al Obaid 2",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Obaid_2_(ناصر_العبيد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Obaid_2_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D8%B9%D8%A8%D9%8A%D8%AF).mp3",
+      "size_bytes": 2593990
+    },
+    {
+      "id": "adhan-197",
+      "title_ar": "ناصر العبيد",
+      "title_en": "Nasser Al Obaid 3",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Obaid_3_(ناصر_العبيد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Obaid_3_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D8%B9%D8%A8%D9%8A%D8%AF).mp3",
+      "size_bytes": 3518117
+    },
+    {
+      "id": "adhan-198",
+      "title_ar": "ناصر القطامي",
+      "title_en": "Nasser Al Qatami - HQ",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Qatami_-_HQ_(ناصر_القطامي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Qatami_-_HQ_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D9%82%D8%B7%D8%A7%D9%85%D9%8A).mp3",
+      "size_bytes": 530748
+    },
+    {
+      "id": "adhan-199",
+      "title_ar": "ناصر القطامي - المملكة العربية السعودية",
+      "title_en": "Nasser Al Qatami 1 - Saudi Arabia",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Qatami_1_-_Saudi_Arabia_(ناصر_القطامي_-_المملكة_العربية_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Qatami_1_-_Saudi_Arabia_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D9%82%D8%B7%D8%A7%D9%85%D9%8A_-_%D8%A7%D9%84%D9%85%D9%85%D9%84%D9%83%D8%A9_%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 2117341
+    },
+    {
+      "id": "adhan-200",
+      "title_ar": "ناصر القطامي - الرياض",
+      "title_en": "Nasser Al Qatami 2 - Riyadh",
+      "category": "muezzin",
+      "source_filename": "Nasser_Al_Qatami_2_-_Riyadh_(ناصر_القطامي_-_الرياض).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasser_Al_Qatami_2_-_Riyadh_(%D9%86%D8%A7%D8%B5%D8%B1_%D8%A7%D9%84%D9%82%D8%B7%D8%A7%D9%85%D9%8A_-_%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6).mp3",
+      "size_bytes": 2176705
+    },
+    {
+      "id": "adhan-201",
+      "title_ar": "نايف فداح - الحرم المكي",
+      "title_en": "Nayf Fedah - Al Haram Al Maki",
+      "category": "mosque",
+      "source_filename": "Nayf_Fedah_-_Al_Haram_Al_Maki_(نايف_فداح_-_الحرم_المكي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nayf_Fedah_-_Al_Haram_Al_Maki_(%D9%86%D8%A7%D9%8A%D9%81_%D9%81%D8%AF%D8%A7%D8%AD_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A).mp3",
+      "size_bytes": 421256
+    },
+    {
+      "id": "adhan-202",
+      "title_ar": "نور الدين حمزة المغربي - المسجد الأقصى القدس",
+      "title_en": "NurDin Hamza Al Maghriby - Al Aqsa Jerusalem",
+      "category": "mosque",
+      "source_filename": "NurDin_Hamza_Al_Maghriby_-_Al_Aqsa_Jerusalem_(نور_الدين_حمزة_المغربي_-_المسجد_الأقصى_القدس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/NurDin_Hamza_Al_Maghriby_-_Al_Aqsa_Jerusalem_(%D9%86%D9%88%D8%B1_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%AD%D9%85%D8%B2%D8%A9_%D8%A7%D9%84%D9%85%D8%BA%D8%B1%D8%A8%D9%8A_-_%D8%A7%D9%84%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%A3%D9%82%D8%B5%D9%89_%D8%A7%D9%84%D9%82%D8%AF%D8%B3).mp3",
+      "size_bytes": 370280
+    },
+    {
+      "id": "adhan-203",
+      "title_ar": "عمر القزابري",
+      "title_en": "Omar Al Kazabri",
+      "category": "muezzin",
+      "source_filename": "Omar_Al_Kazabri_(عمر_القزابري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Omar_Al_Kazabri_(%D8%B9%D9%85%D8%B1_%D8%A7%D9%84%D9%82%D8%B2%D8%A7%D8%A8%D8%B1%D9%8A).mp3",
+      "size_bytes": 1897034
+    },
+    {
+      "id": "adhan-204",
+      "title_ar": "عمر العمير",
+      "title_en": "Omar Al Omayr",
+      "category": "muezzin",
+      "source_filename": "Omar_Al_Omayr_(عمر_العمير).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Omar_Al_Omayr_(%D8%B9%D9%85%D8%B1_%D8%A7%D9%84%D8%B9%D9%85%D9%8A%D8%B1).mp3",
+      "size_bytes": 611101
+    },
+    {
+      "id": "adhan-205",
+      "title_ar": "عمران منصور - مصر",
+      "title_en": "Omran Mansur - Egypt",
+      "category": "muezzin",
+      "source_filename": "Omran_Mansur_-_Egypt_(عمران_منصور_-_مصر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Omran_Mansur_-_Egypt_(%D8%B9%D9%85%D8%B1%D8%A7%D9%86_%D9%85%D9%86%D8%B5%D9%88%D8%B1_-_%D9%85%D8%B5%D8%B1).mp3",
+      "size_bytes": 654560
+    },
+    {
+      "id": "adhan-206",
+      "title_ar": "عمرو صبحي",
+      "title_en": "Omru Sobhe",
+      "category": "muezzin",
+      "source_filename": "Omru_Sobhe_(عمرو_صبحي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Omru_Sobhe_(%D8%B9%D9%85%D8%B1%D9%88_%D8%B5%D8%A8%D8%AD%D9%8A).mp3",
+      "size_bytes": 3314680
+    },
+    {
+      "id": "adhan-207",
+      "title_ar": "عثمان المسعمي",
+      "title_en": "Othman Al Masseme",
+      "category": "muezzin",
+      "source_filename": "Othman_Al_Masseme_(عثمان_المسعمي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Othman_Al_Masseme_(%D8%B9%D8%AB%D9%85%D8%A7%D9%86_%D8%A7%D9%84%D9%85%D8%B3%D8%B9%D9%85%D9%8A).mp3",
+      "size_bytes": 2810994
+    },
+    {
+      "id": "adhan-208",
+      "title_ar": "ربيع عبد الرحيم عيسى",
+      "title_en": "Rabee Abdul Raheem Essa",
+      "category": "muezzin",
+      "source_filename": "Rabee_Abdul_Raheem_Essa_(ربيع_عبد_الرحيم_عيسى).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Rabee_Abdul_Raheem_Essa_(%D8%B1%D8%A8%D9%8A%D8%B9_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B1%D8%AD%D9%8A%D9%85_%D8%B9%D9%8A%D8%B3%D9%89).mp3",
+      "size_bytes": 3659977
+    },
+    {
+      "id": "adhan-209",
+      "title_ar": "رابح بن دراح الجزائري",
+      "title_en": "Rabeh Ibn Darah Al Jazairi",
+      "category": "muezzin",
+      "source_filename": "Rabeh_Ibn_Darah_Al_Jazairi_(رابح_بن_دراح_الجزائري).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Rabeh_Ibn_Darah_Al_Jazairi_(%D8%B1%D8%A7%D8%A8%D8%AD_%D8%A8%D9%86_%D8%AF%D8%B1%D8%A7%D8%AD_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A).mp3",
+      "size_bytes": 4174784
+    },
+    {
+      "id": "adhan-210",
+      "title_ar": "رياض الجزائري - الجزائر",
+      "title_en": "Riad Al Djazairi - Algeria",
+      "category": "muezzin",
+      "source_filename": "Riad_Al_Djazairi_-_Algeria_(رياض_الجزائري_-_الجزائر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Riad_Al_Djazairi_-_Algeria_(%D8%B1%D9%8A%D8%A7%D8%B6_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A_-_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1).mp3",
+      "size_bytes": 2885125
+    },
+    {
+      "id": "adhan-211",
+      "title_ar": "صاحب هاني خطاب - فلسطين",
+      "title_en": "Saheb Hane Khatab - Palestine",
+      "category": "muezzin",
+      "source_filename": "Saheb_Hane_Khatab_-_Palestine_(صاحب_هاني_خطاب_-_فلسطين).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Saheb_Hane_Khatab_-_Palestine_(%D8%B5%D8%A7%D8%AD%D8%A8_%D9%87%D8%A7%D9%86%D9%8A_%D8%AE%D8%B7%D8%A7%D8%A8_-_%D9%81%D9%84%D8%B3%D8%B7%D9%8A%D9%86).mp3",
+      "size_bytes": 736254
+    },
+    {
+      "id": "adhan-212",
+      "title_ar": "صالح النابت - قطر",
+      "title_en": "Saleh Al Nabet - Qatar",
+      "category": "muezzin",
+      "source_filename": "Saleh_Al_Nabet_-_Qatar_(صالح_النابت_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Saleh_Al_Nabet_-_Qatar_(%D8%B5%D8%A7%D9%84%D8%AD_%D8%A7%D9%84%D9%86%D8%A7%D8%A8%D8%AA_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 7652293
+    },
+    {
+      "id": "adhan-213",
+      "title_ar": "سالم حمدة",
+      "title_en": "Salem Hamde",
+      "category": "muezzin",
+      "source_filename": "Salem_Hamde_(سالم_حمدة).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Salem_Hamde_(%D8%B3%D8%A7%D9%84%D9%85_%D8%AD%D9%85%D8%AF%D8%A9).mp3",
+      "size_bytes": 1049247
+    },
+    {
+      "id": "adhan-214",
+      "title_ar": "سامر الصغير",
+      "title_en": "Samer Al Sagher",
+      "category": "muezzin",
+      "source_filename": "Samer_Al_Sagher_(سامر_الصغير).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Samer_Al_Sagher_(%D8%B3%D8%A7%D9%85%D8%B1_%D8%A7%D9%84%D8%B5%D8%BA%D9%8A%D8%B1).mp3",
+      "size_bytes": 3040091
+    },
+    {
+      "id": "adhan-215",
+      "title_ar": "الشيخ النقشبندى",
+      "title_en": "Sheikh Al Naqshbandi",
+      "category": "muezzin",
+      "source_filename": "Sheikh_Al_Naqshbandi_(الشيخ_النقشبندى).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Sheikh_Al_Naqshbandi_(%D8%A7%D9%84%D8%B4%D9%8A%D8%AE_%D8%A7%D9%84%D9%86%D9%82%D8%B4%D8%A8%D9%86%D8%AF%D9%89).mp3",
+      "size_bytes": 2219550
+    },
+    {
+      "id": "adhan-216",
+      "title_ar": "الشيخ طارق محمد",
+      "title_en": "Sheikh Tariq Muhammad",
+      "category": "muezzin",
+      "source_filename": "Sheikh_Tariq_Muhammad_(الشيخ_طارق_محمد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Sheikh_Tariq_Muhammad_(%D8%A7%D9%84%D8%B4%D9%8A%D8%AE_%D8%B7%D8%A7%D8%B1%D9%82_%D9%85%D8%AD%D9%85%D8%AF).mp3",
+      "size_bytes": 10402822
+    },
+    {
+      "id": "adhan-217",
+      "title_ar": "طه الجنيد",
+      "title_en": "Taha Al Junayd",
+      "category": "muezzin",
+      "source_filename": "Taha_Al_Junayd_(طه_الجنيد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Taha_Al_Junayd_(%D8%B7%D9%87_%D8%A7%D9%84%D8%AC%D9%86%D9%8A%D8%AF).mp3",
+      "size_bytes": 3639215
+    },
+    {
+      "id": "adhan-218",
+      "title_ar": "طالب القنوبي",
+      "title_en": "Taleb Al Qanube",
+      "category": "muezzin",
+      "source_filename": "Taleb_Al_Qanube_(طالب_القنوبي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Taleb_Al_Qanube_(%D8%B7%D8%A7%D9%84%D8%A8_%D8%A7%D9%84%D9%82%D9%86%D9%88%D8%A8%D9%8A).mp3",
+      "size_bytes": 3015877
+    },
+    {
+      "id": "adhan-219",
+      "title_ar": "تامر إسلام",
+      "title_en": "Tamer Islam",
+      "category": "muezzin",
+      "source_filename": "Tamer_Islam_(تامر_إسلام).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Tamer_Islam_(%D8%AA%D8%A7%D9%85%D8%B1_%D8%A5%D8%B3%D9%84%D8%A7%D9%85).mp3",
+      "size_bytes": 4385073
+    },
+    {
+      "id": "adhan-220",
+      "title_ar": "طارق فتح أحمد",
+      "title_en": "Tareq Fathe Ahmad",
+      "category": "muezzin",
+      "source_filename": "Tareq_Fathe_Ahmad_(طارق_فتح_أحمد).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Tareq_Fathe_Ahmad_(%D8%B7%D8%A7%D8%B1%D9%82_%D9%81%D8%AA%D8%AD_%D8%A3%D8%AD%D9%85%D8%AF).mp3",
+      "size_bytes": 2629435
+    },
+    {
+      "id": "adhan-221",
+      "title_ar": "وديع اليمني",
+      "title_en": "Wadi Al Yamani",
+      "category": "muezzin",
+      "source_filename": "Wadi_Al_Yamani_(وديع_اليمني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Wadi_Al_Yamani_(%D9%88%D8%AF%D9%8A%D8%B9_%D8%A7%D9%84%D9%8A%D9%85%D9%86%D9%8A).mp3",
+      "size_bytes": 3203702
+    },
+    {
+      "id": "adhan-222",
+      "title_ar": "وادي حمد اليماني",
+      "title_en": "Wadi Hamad Al-Yamani",
+      "category": "muezzin",
+      "source_filename": "Wadi_Hamad_Al-Yamani_(وادي_حمد_اليماني).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Wadi_Hamad_Al-Yamani_(%D9%88%D8%A7%D8%AF%D9%8A_%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%8A%D9%85%D8%A7%D9%86%D9%8A).mp3",
+      "size_bytes": 3206036
+    },
+    {
+      "id": "adhan-223",
+      "title_ar": "وليد محساس",
+      "title_en": "Waled Mahsas 1",
+      "category": "muezzin",
+      "source_filename": "Waled_Mahsas_1_(وليد_محساس).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Waled_Mahsas_1_(%D9%88%D9%84%D9%8A%D8%AF_%D9%85%D8%AD%D8%B3%D8%A7%D8%B3).mp3",
+      "size_bytes": 8662123
+    },
+    {
+      "id": "adhan-224",
+      "title_ar": "وليد محساس - الجزائر",
+      "title_en": "Waled Mahsas 2 - Algeria",
+      "category": "muezzin",
+      "source_filename": "Waled_Mahsas_2_-_Algeria_(وليد_محساس_-_الجزائر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Waled_Mahsas_2_-_Algeria_(%D9%88%D9%84%D9%8A%D8%AF_%D9%85%D8%AD%D8%B3%D8%A7%D8%B3_-_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1).mp3",
+      "size_bytes": 1854437
+    },
+    {
+      "id": "adhan-225",
+      "title_ar": "ياسين الأسف",
+      "title_en": "Yaseen Al Aassaf 1",
+      "category": "muezzin",
+      "source_filename": "Yaseen_Al_Aassaf_1_(ياسين_الأسف).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Yaseen_Al_Aassaf_1_(%D9%8A%D8%A7%D8%B3%D9%8A%D9%86_%D8%A7%D9%84%D8%A3%D8%B3%D9%81).mp3",
+      "size_bytes": 1382675
+    },
+    {
+      "id": "adhan-226",
+      "title_ar": "ياسين الأسف - فجر العراق",
+      "title_en": "Yaseen Al Aassaf 2 - Fajr Iraq",
+      "category": "mosque",
+      "source_filename": "Yaseen_Al_Aassaf_2_-_Fajr_Iraq_(ياسين_الأسف_-_فجر_العراق).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Yaseen_Al_Aassaf_2_-_Fajr_Iraq_(%D9%8A%D8%A7%D8%B3%D9%8A%D9%86_%D8%A7%D9%84%D8%A3%D8%B3%D9%81_-_%D9%81%D8%AC%D8%B1_%D8%A7%D9%84%D8%B9%D8%B1%D8%A7%D9%82).mp3",
+      "size_bytes": 5165716
+    },
+    {
+      "id": "adhan-227",
+      "title_ar": "ياسر عبدالله الهوري - قطر",
+      "title_en": "Yasser Abdu Allah Al Hawre - Qatar",
+      "category": "muezzin",
+      "source_filename": "Yasser_Abdu_Allah_Al_Hawre_-_Qatar_(ياسر_عبدالله_الهوري_-_قطر).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Yasser_Abdu_Allah_Al_Hawre_-_Qatar_(%D9%8A%D8%A7%D8%B3%D8%B1_%D8%B9%D8%A8%D8%AF%D8%A7%D9%84%D9%84%D9%87_%D8%A7%D9%84%D9%87%D9%88%D8%B1%D9%8A_-_%D9%82%D8%B7%D8%B1).mp3",
+      "size_bytes": 3882513
+    },
+    {
+      "id": "adhan-228",
+      "title_ar": "ياسر الفيلكاوي",
+      "title_en": "Yasser Al Filkawi",
+      "category": "muezzin",
+      "source_filename": "Yasser_Al_Filkawi_(ياسر_الفيلكاوي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Yasser_Al_Filkawi_(%D9%8A%D8%A7%D8%B3%D8%B1_%D8%A7%D9%84%D9%81%D9%8A%D9%84%D9%83%D8%A7%D9%88%D9%8A).mp3",
+      "size_bytes": 863966
+    },
+    {
+      "id": "adhan-229",
+      "title_ar": "ياسر الدوسري - المملكة العربية السعودية",
+      "title_en": "Yasser Al-Dosari - Saudi Arabia",
+      "category": "muezzin",
+      "source_filename": "Yasser_Al-Dosari_-_Saudi_Arabia_(ياسر_الدوسري_-_المملكة_العربية_السعودية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Yasser_Al-Dosari_-_Saudi_Arabia_(%D9%8A%D8%A7%D8%B3%D8%B1_%D8%A7%D9%84%D8%AF%D9%88%D8%B3%D8%B1%D9%8A_-_%D8%A7%D9%84%D9%85%D9%85%D9%84%D9%83%D8%A9_%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9_%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9).mp3",
+      "size_bytes": 1462921
+    },
+    {
+      "id": "adhan-230",
+      "title_ar": "زاهر محمد طريش",
+      "title_en": "Zaher Muhammad Taresh",
+      "category": "muezzin",
+      "source_filename": "Zaher_Muhammad_Taresh_(زاهر_محمد_طريش).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Zaher_Muhammad_Taresh_(%D8%B2%D8%A7%D9%87%D8%B1_%D9%85%D8%AD%D9%85%D8%AF_%D8%B7%D8%B1%D9%8A%D8%B4).mp3",
+      "size_bytes": 369560
+    },
+    {
+      "id": "adhan-231",
+      "title_ar": "زيد العاطية",
+      "title_en": "Zayd Al Aatya",
+      "category": "muezzin",
+      "source_filename": "Zayd_Al_Aatya_(زيد_العاطية).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Zayd_Al_Aatya_(%D8%B2%D9%8A%D8%AF_%D8%A7%D9%84%D8%B9%D8%A7%D8%B7%D9%8A%D8%A9).mp3",
+      "size_bytes": 1435597
+    }
+  ]
+}
