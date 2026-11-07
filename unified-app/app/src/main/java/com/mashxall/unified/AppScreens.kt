@@ -4548,18 +4548,18 @@ private fun MushafPageViewer(
                 val pageSurahName = pageStartVerse?.surah?.let { surahNames[it] }.orEmpty()
                 val pageJuz = mushafJuzForPage(page)
                 Text(
+                    when (language) {
+                        AppLanguage.EN -> "Page $page / 604"
+                        AppLanguage.AR -> "صفحة $page / 604"
+                        AppLanguage.CKB -> "پەڕە $page / 604"
+                    },
+                    color = PaleGold,
+                    fontSize = 9.sp,
+                    maxLines = 1
+                )
+                Text(
                     buildString {
-                        append(
-                            when (language) {
-                                AppLanguage.EN -> "Page "
-                                AppLanguage.AR -> "صفحة "
-                                AppLanguage.CKB -> "پەڕە "
-                            }
-                        )
-                        append(page)
-                        append(" / 604")
-                        if (pageSurahName.isNotBlank()) append(" • ").append(pageSurahName)
-                        append(" • ")
+                        if (pageSurahName.isNotBlank()) append(pageSurahName).append(" • ")
                         append(
                             when (language) {
                                 AppLanguage.EN -> "Juz "
@@ -4569,7 +4569,7 @@ private fun MushafPageViewer(
                         )
                         append(pageJuz)
                     },
-                    color = PaleGold,
+                    color = PaleGold.copy(alpha = 0.82f),
                     fontSize = 8.sp,
                     maxLines = 1
                 )
