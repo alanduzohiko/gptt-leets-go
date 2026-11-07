@@ -51,8 +51,9 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
     }
 
     private suspend fun updateOne(context: Context, manager: AppWidgetManager, widgetId: Int) {
-        val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-            .getString("language", "ckb") ?: "ckb"
+        val prefs = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+        val language = prefs.getString("language", "ckb") ?: "ckb"
+        val use24Hour = prefs.getBoolean("time_format_24h", false)
         val loaded = runCatching { loadTodayAndTomorrow(context) }
             .onFailure { android.util.Log.w("MashxallPrayerWidget", "Could not refresh prayer widget data", it) }
             .getOrNull() ?: return
@@ -73,11 +74,7 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
                 widgetId,
                 row,
                 loaded.locationLabel,
-                loaded.nextPrayerLabel(
-                language,
-                context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-                    .getBoolean("time_format_24h", false)
-            )
+                loaded.nextPrayerLabel(language, use24Hour)
             )
         )
     }
