@@ -53,12 +53,12 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
             .getString("language", "ckb") ?: "ckb"
         val loaded = runCatching { loadTodayAndTomorrow(context) }
             .onFailure { android.util.Log.w("MashxallPrayerWidget", "Could not refresh prayer widget data", it) }
-            .getOrNull()
+            .getOrNull() ?: return
 
         // Keep the last good widget visible during transient database/location failures.
         // Replacing it with six placeholders here made the widget appear empty even
         // while the full Prayer screen still had a valid Salawati timetable.
-        val row = loaded?.today
+        val row = loaded.today
         if (!isCompleteWidgetPrayerRow(row)) {
             android.util.Log.w("MashxallPrayerWidget", "No complete source timetable is available for this widget refresh")
             return
