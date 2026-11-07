@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.Build
 import android.widget.RemoteViews
 import com.mashxall.unified.MainActivity
+import com.mashxall.unified.AppLanguage
+import com.mashxall.unified.formatPrayerTime
 import com.mashxall.unified.R
 import com.mashxall.unified.resolvePrayerLocationMode
 import com.mashxall.unified.data.ContentRepository
@@ -71,14 +73,24 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
                 widgetId,
                 row,
                 loaded.locationLabel,
-                loaded.nextPrayerLabel(language)
+                loaded.nextPrayerLabel(
+                language,
+                context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+                    .getBoolean("time_format_24h", false)
+            )
             )
         )
     }
 
     private fun render(context: Context, widgetId: Int, row: PrayerRow?, locationLabel: String, nextPrayer: String): RemoteViews {
-        val language = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-            .getString("language", "ckb") ?: "ckb"
+        val prefs = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+        val language = prefs.getString("language", "ckb") ?: "ckb"
+        val appLanguage = when (language) {
+            "en" -> AppLanguage.EN
+            "ar" -> AppLanguage.AR
+            else -> AppLanguage.CKB
+        }
+        val use24Hour = prefs.getBoolean("time_format_24h", false)
         val views = RemoteViews(context.packageName, R.layout.widget_prayer_times)
         views.setTextViewText(
             R.id.widget_prayer_title,
@@ -111,7 +123,10 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         )
         entries.forEach { cell ->
             views.setTextViewText(cell.labelViewId, cell.label)
-            views.setTextViewText(cell.valueViewId, widgetPrayerTimeValue(cell.time))
+            views.setTextViewText(
+                cell.valueViewId,
+                widgetPrayerTimeValue(cell.time, appLanguage, use24Hour)
+            )
         }
         val openPrayer = Intent(context, MainActivity::class.java).putExtra(
             MainActivity.EXTRA_OPEN_SCREEN, "prayer"
@@ -190,7 +205,7 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
         val tomorrow: PrayerRow?,
         val locationLabel: String
     ) {
-        fun nextPrayerLabel(language: String): String {
+        fun nextPrayerLabel(language: String, use24Hour: Boolean): String {
             val prayers = listOf(
                 "fajr" to today.fajr,
                 "dhuhr" to today.dhuhr,
@@ -215,7 +230,13 @@ class PrayerTimesWidgetProvider : AppWidgetProvider() {
                     else -> "داهاتوو"
                 }
             }
-            return "$whenText: $name • ${chosen.second}"
+            val appLanguage = when (language) {
+                "en" -> AppLanguage.EN
+                "ar" -> AppLanguage.AR
+                else -> AppLanguage.CKB
+            }
+            val displayTime = widgetPrayerTimeValue(chosen.second, appLanguage, use24Hour)
+            return "$whenText: $name • $displayTime"
         }
     }
 
@@ -271,8 +292,12 @@ private data class WidgetPrayerCellIds(
     val time: String?
 )
 
-internal fun widgetPrayerTimeValue(value: String?): String =
-    value?.trim()?.takeIf { it.isNotEmpty() } ?: "--:--"
+internal fun widgetPrayerTimeValue(
+    value: String?,
+    language: AppLanguage,
+    use24Hour: Boolean
+): String = value?.trim()?.takeIf { it.isNotEmpty() }
+    ?.let { formatPrayerTime(it, language, use24Hour) } ?: "--:--"
 
 internal fun isCompleteWidgetPrayerRow(row: PrayerRow?): Boolean =
     row != null && listOf(row.fajr, row.sunrise, row.dhuhr, row.asr, row.maghrib, row.isha)
