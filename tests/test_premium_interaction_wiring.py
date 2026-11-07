@@ -135,7 +135,7 @@ class PremiumInteractionWiringTests(unittest.TestCase):
     def test_settings_expose_about_share_and_direct_email_contact(self):
         main_path = ROOT / "unified-app/app/src/main/java/com/mashxall/unified/MainActivity.kt"
         main = main_path.read_text(encoding="utf-8")
-        self.assertIn('"about_app" -> AboutMashxallScreen', main)
+        self.assertIn('"about_app", "about_data" -> AboutMashxallScreen', main)
         self.assertIn("onShareApp = { shareMashxallApp(context, language) }", main)
         self.assertIn("aland.mashxall@gmail.com", main)
         self.assertIn("Intent.ACTION_SENDTO", main)
