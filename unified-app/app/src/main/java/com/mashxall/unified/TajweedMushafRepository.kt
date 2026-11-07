@@ -187,15 +187,35 @@ internal object TajweedMushafRepository {
         var lastError: Exception? = null
         var attempts = 0
         var confirmations = 0
+        var binaryDownloadUrl: String? = null
+        var restartedAfter416 = false
 
         while (attempts < 7) {
             var connection: HttpURLConnection? = null
             try {
                 val existing = target.takeIf { it.isFile }?.length() ?: 0L
-                connection = openDriveConnection(requestUrl, cookies, existing)
+                val rangeStart = if (shouldUseDriveRange(requestUrl, binaryDownloadUrl, existing)) existing else 0L
+                connection = openDriveConnection(requestUrl, cookies, rangeStart, binaryDownloadUrl)
                 val response = connection.responseCode
 
-                if (response == 416 && existing == EXPECTED_ARCHIVE_BYTES) return
+                if (response == 416) {
+                    if (existing == EXPECTED_ARCHIVE_BYTES) return
+                    if (shouldRestartDriveDownloadAfter416(existing, restartedAfter416)) {
+                        // A stale/unsupported Range request must never be repeated.
+                        // Restart the Google Drive confirmation handshake from byte zero.
+                        target.delete()
+                        restartedAfter416 = true
+                        binaryDownloadUrl = null
+                        requestUrl = endpoints.first()
+                        cookies.clear()
+                        confirmations = 0
+                        continue
+                    }
+                    throw IOException(
+                        "Google Drive rejected a clean download request with HTTP 416. " +
+                            "The shared Drive file or its download endpoint is not accepting this request."
+                    )
+                }
 
                 val contentType = connection.contentType.orEmpty().lowercase(Locale.ROOT)
                 if (contentType.contains("text/html") || response !in 200..299) {
@@ -204,15 +224,22 @@ internal object TajweedMushafRepository {
                     if (confirmation != null && confirmations < 5) {
                         confirmations++
                         requestUrl = confirmation
+                        // Confirmation pages are handshake requests, never byte-range targets.
+                        binaryDownloadUrl = null
                         continue
                     }
                     throw IOException(googleDriveFailureReason(html, response))
                 }
 
-                val append = response == HttpURLConnection.HTTP_PARTIAL && existing > 0L
+                val append = response == HttpURLConnection.HTTP_PARTIAL && rangeStart > 0L
                 if (response != HttpURLConnection.HTTP_OK && response != HttpURLConnection.HTTP_PARTIAL) {
                     throw IOException("Google Drive returned HTTP " + response + ".")
                 }
+                // Save the final URL that actually returned the ZIP. Only this URL may
+                // receive a Range header on a later retry; redirects and confirmation
+                // forms are always requested from byte zero.
+                binaryDownloadUrl = connection.url.toString()
+                requestUrl = binaryDownloadUrl.orEmpty()
                 if (append) {
                     val start = Regex("""^bytes\s+(\d+)-""", RegexOption.IGNORE_CASE)
                         .find(connection.getHeaderField("Content-Range").orEmpty())
@@ -304,7 +331,8 @@ internal object TajweedMushafRepository {
     private fun openDriveConnection(
         startUrl: String,
         cookies: MutableMap<String, String>,
-        rangeStart: Long
+        rangeStart: Long,
+        rangeUrl: String?
     ): HttpURLConnection {
         var url = URL(startUrl)
         repeat(10) {
@@ -324,7 +352,9 @@ internal object TajweedMushafRepository {
                         entry.key + "=" + entry.value
                     })
                 }
-                if (rangeStart > 0L) setRequestProperty("Range", "bytes=" + rangeStart + "-")
+                if (rangeStart > 0L && rangeUrl != null && url.toString() == rangeUrl) {
+                    setRequestProperty("Range", "bytes=" + rangeStart + "-")
+                }
             }
 
             val code = connection.responseCode
@@ -640,6 +670,17 @@ internal object TajweedMushafRepository {
         return target
     }
 }
+
+internal fun shouldUseDriveRange(
+    requestUrl: String,
+    verifiedBinaryUrl: String?,
+    existingBytes: Long
+): Boolean = existingBytes > 0L && verifiedBinaryUrl != null && requestUrl == verifiedBinaryUrl
+
+internal fun shouldRestartDriveDownloadAfter416(
+    existingBytes: Long,
+    alreadyRestarted: Boolean
+): Boolean = existingBytes > 0L && !alreadyRestarted
 
 internal data class TajweedMushafRenderedPage(
     val bitmap: Bitmap,
