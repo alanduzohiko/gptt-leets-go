@@ -2138,6 +2138,7 @@ private fun HomeScreen(
         gpsLatitude,
         gpsLongitude,
         language,
+        use24Hour,
         prefs.getString("selected_city_country", "")
     ) {
         com.mashxall.unified.widgets.PrayerTimesWidgetProvider.requestRefresh(context)
