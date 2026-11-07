@@ -40,7 +40,7 @@ class PrayerTimesWidgetTest {
 
     @Test
     fun emptyTimeUsesVisiblePlaceholderRatherThanAnEmptyCell() {
-        assertEquals("05:03", widgetPrayerTimeValue("05:03", AppLanguage.EN, false))
+        assertEquals("5:03 AM", widgetPrayerTimeValue("05:03", AppLanguage.EN, false))
         assertEquals("--:--", widgetPrayerTimeValue(null, AppLanguage.EN, false))
         assertEquals("--:--", widgetPrayerTimeValue("", AppLanguage.EN, false))
         assertEquals("--:--", widgetPrayerTimeValue("  ", AppLanguage.EN, false))
