@@ -56,7 +56,7 @@ class PrayerAlarmScheduleStatusTest {
             PrayerAlarmScheduleResult(sourceTimetableAvailable = true, scheduledCount = 0),
             AppLanguage.AR
         )
-        assertTrue(message.contains("لم يُجدول أي تنبيه"))
+        assertTrue(message.contains("لم تُجدول تنبيهات قادمة"))
     }
 
     @Test
