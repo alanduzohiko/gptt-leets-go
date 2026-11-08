@@ -1,10 +1,45 @@
 package com.mashxall.unified.notifications
 
 import com.mashxall.unified.AppLanguage
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PrayerAlarmScheduleStatusTest {
+    @Test
+    fun eachPrayerCanBeEnabledIndependentlyAndJumuahReplacesDhuhrOnlyOnFriday() {
+        val enabled = setOf("fajr", "dhuhr", "asr", "jumuah")
+        assertEquals(
+            listOf("fajr", "jumuah", "asr"),
+            PrayerAlarmScheduler.prayerAlertCodesForDay(enabled, isFriday = true)
+        )
+        assertEquals(
+            listOf("fajr", "dhuhr", "asr"),
+            PrayerAlarmScheduler.prayerAlertCodesForDay(enabled, isFriday = false)
+        )
+    }
+
+    @Test
+    fun FridayJumuahCanBeEnabledWithoutEnablingDhuhr() {
+        assertEquals(
+            listOf("jumuah"),
+            PrayerAlarmScheduler.prayerAlertCodesForDay(setOf("jumuah"), isFriday = true)
+        )
+        assertEquals(emptyList<String>(), PrayerAlarmScheduler.prayerAlertCodesForDay(setOf("jumuah"), isFriday = false))
+    }
+
+    @Test
+    fun allSixAlarmCodesHaveDistinctPreferenceKeys() {
+        assertEquals(
+            PrayerAlarmScheduler.ALERT_CODES.size,
+            PrayerAlarmScheduler.ALERT_CODES.map(PrayerAlarmScheduler::enabledPreferenceKey).distinct().size
+        )
+        assertEquals(
+            PrayerAlarmScheduler.ALERT_CODES.size,
+            PrayerAlarmScheduler.ALERT_CODES.map(PrayerAlarmScheduler::audioPreferenceKey).distinct().size
+        )
+    }
+
     @Test
     fun missingSourceTimetableExplainsThatCityOrGpsMustBeCorrected() {
         val message = prayerAlarmScheduleMessage(

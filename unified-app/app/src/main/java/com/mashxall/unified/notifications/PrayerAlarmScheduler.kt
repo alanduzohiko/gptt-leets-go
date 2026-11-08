@@ -63,11 +63,28 @@ object PrayerAlarmScheduler {
     const val KEY_AUDIO = "adhan_audio_asset"
     private const val ACTION_ALARM = "com.mashxall.unified.PRAYER_ALARM"
     private const val BASE_REQUEST_CODE = 7400
-    private val PRAYERS = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
+    val PRAYER_CODES = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
+    val ALERT_CODES = PRAYER_CODES + "jumuah"
+    private const val JUMUAH_CODE = "jumuah"
+
+    fun enabledPreferenceKey(code: String): String = "adhan_enabled_$code"
+    fun audioPreferenceKey(code: String): String = "adhan_audio_asset_$code"
+
+    fun isPrayerAlertEnabled(prefs: android.content.SharedPreferences, code: String): Boolean =
+        code in ALERT_CODES && prefs.getBoolean(enabledPreferenceKey(code), code != JUMUAH_CODE)
+
+    internal fun prayerAlertCodesForDay(enabledCodes: Set<String>, isFriday: Boolean): List<String> = buildList {
+        if ("fajr" in enabledCodes) add("fajr")
+        if (isFriday && JUMUAH_CODE in enabledCodes) add(JUMUAH_CODE)
+        else if ("dhuhr" in enabledCodes) add("dhuhr")
+        if ("asr" in enabledCodes) add("asr")
+        if ("maghrib" in enabledCodes) add("maghrib")
+        if ("isha" in enabledCodes) add("isha")
+    }
 
     fun cancelAll(context: Context) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        PRAYERS.forEach { code ->
+        ALERT_CODES.forEach { code ->
             val pending = pendingIntent(context, code)
             manager.cancel(pending)
             pending.cancel()
@@ -84,6 +101,11 @@ object PrayerAlarmScheduler {
         // a fresh set. If the new city has no valid timetable, old-city alarms
         // must not remain armed.
         cancelAll(context)
+        val enabledCodes = ALERT_CODES.filter { isPrayerAlertEnabled(prefs, it) }.toSet()
+        if (enabledCodes.isEmpty()) {
+            cancelAll(context)
+            return PrayerAlarmScheduleResult(sourceTimetableAvailable = true, scheduledCount = 0)
+        }
         val today = startOfDay(Date(), 0)
         val tomorrow = startOfDay(Date(), 1)
         val todayTimes = resolveTimes(context, prefs, today)
@@ -93,29 +115,46 @@ object PrayerAlarmScheduler {
         }
         val now = System.currentTimeMillis()
         var scheduledCount = 0
-        PRAYERS.forEach { code ->
-            val todayTrigger = todayTimes?.let { triggerAt(today, prayerTime(it, code)) }
-            if (todayTrigger != null && todayTrigger > now + 3000L) {
-                schedule(context, code, todayTrigger)
-                scheduledCount++
-            } else {
-                val tomorrowTrigger = tomorrowTimes?.let { triggerAt(tomorrow, prayerTime(it, code)) }
-                if (tomorrowTrigger != null && tomorrowTrigger > now) {
-                    schedule(context, code, tomorrowTrigger)
+
+        fun scheduleDate(date: Date, row: PrayerRow?) {
+            if (row == null) return
+            prayerAlertCodesForDay(enabledCodes, isFriday(date)).forEach { code ->
+                val trigger = triggerAt(date, prayerTime(row, code))
+                if (trigger != null && trigger > now + 3000L) {
+                    schedule(context, code, trigger)
                     scheduledCount++
                 }
             }
         }
-        return PrayerAlarmScheduleResult(sourceTimetableAvailable = todayTimes != null || tomorrowTimes != null, scheduledCount = scheduledCount)
+        scheduleDate(today, todayTimes)
+        scheduleDate(tomorrow, tomorrowTimes)
+
+        if (JUMUAH_CODE in enabledCodes) {
+            val nextFriday = nextFridayStart(Date())
+            val fridayTimes = resolveTimes(context, prefs, nextFriday)
+            if (fridayTimes != null) {
+                val trigger = triggerAt(nextFriday, fridayTimes.dhuhr)
+                if (trigger != null && trigger > now + 3000L) {
+                    schedule(context, JUMUAH_CODE, trigger)
+                    scheduledCount++
+                }
+            }
+        }
+        return PrayerAlarmScheduleResult(
+            sourceTimetableAvailable = todayTimes != null || tomorrowTimes != null,
+            scheduledCount = scheduledCount
+        )
     }
 
     suspend fun scheduleNextDayForPrayer(context: Context, prayerCode: String) {
-        if (prayerCode !in PRAYERS) return
+        if (prayerCode !in ALERT_CODES) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_ENABLED, false)) return
-        val tomorrow = startOfDay(Date(), 1)
-        val row = resolveTimes(context, prefs, tomorrow) ?: return
-        triggerAt(tomorrow, prayerTime(row, prayerCode))?.let { schedule(context, prayerCode, it) }
+        if (!prefs.getBoolean(KEY_ENABLED, false) || !isPrayerAlertEnabled(prefs, prayerCode)) return
+
+        val targetDay = if (prayerCode == JUMUAH_CODE) nextFridayStart(Date()) else startOfDay(Date(), 1)
+        if (prayerCode == "dhuhr" && isFriday(targetDay) && isPrayerAlertEnabled(prefs, JUMUAH_CODE)) return
+        val row = resolveTimes(context, prefs, targetDay) ?: return
+        triggerAt(targetDay, prayerTime(row, prayerCode))?.let { schedule(context, prayerCode, it) }
     }
 
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
@@ -183,7 +222,7 @@ object PrayerAlarmScheduler {
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-        return PendingIntent.getBroadcast(context, BASE_REQUEST_CODE + PRAYERS.indexOf(code), intent, flags)
+        return PendingIntent.getBroadcast(context, BASE_REQUEST_CODE + ALERT_CODES.indexOf(code), intent, flags)
     }
 
     private fun startOfDay(date: Date, addDays: Int): Date =
@@ -195,6 +234,23 @@ object PrayerAlarmScheduler {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.time
+
+    private fun isFriday(date: Date): Boolean =
+        Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_WEEK) == Calendar.FRIDAY
+
+    private fun nextFridayStart(from: Date): Date {
+        val calendar = Calendar.getInstance().apply {
+            time = from
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
+        val offset = ((Calendar.FRIDAY - currentDay + 7) % 7).let { if (it == 0) 7 else it }
+        calendar.add(Calendar.DAY_OF_YEAR, offset)
+        return calendar.time
+    }
 
     private fun triggerAt(day: Date, time: String): Long? {
         val pieces = time.split(":")
@@ -215,6 +271,7 @@ object PrayerAlarmScheduler {
         "dhuhr" -> row.dhuhr
         "asr" -> row.asr
         "maghrib" -> row.maghrib
+        "jumuah" -> row.dhuhr
         else -> row.isha
     }
 }
