@@ -1819,6 +1819,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             onResumeMushafHandled()
         }
     }
+    // Never expose the legacy verse-by-verse surface in this app.
+    LaunchedEffect(showSurahList, openingMushaf, mushafMode) {
+        if (!showSurahList && !openingMushaf && !mushafMode) {
+            mushafMode = true
+            prefs.edit()
+                .putString("quran_reader_mode", "mushaf")
+                .putInt("last_mushaf_page", mushafPage)
+                .apply()
+        }
+    }
     LaunchedEffect(selected, language, query, translationKey, mushafMode, showSurahList, openingMushaf, retryVerses) {
         if (mushafMode || showSurahList || openingMushaf) {
             loading = false
@@ -2154,33 +2164,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Gold, modifier = Modifier.size(19.dp))
             }
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                ReaderModeSegment(
-                    modifier = Modifier.weight(1f),
-                    label = tr(language, "verse_view"),
-                    selected = !mushafMode,
-                    icon = Icons.Outlined.MenuBook,
-                    foreground = foreground
-                ) {
-                    mushafMode = false
-                    prefs.edit().putString("quran_reader_mode", "verse").apply()
-                }
-                ReaderModeSegment(
-                    modifier = Modifier.weight(1f),
-                    label = tr(language, "mushaf_view"),
-                    selected = mushafMode,
-                    icon = Icons.Outlined.AutoStories,
-                    foreground = foreground
-                ) {
-                    query = ""
-                    mushafMode = true
-                    prefs.edit()
-                        .putString("quran_reader_mode", "mushaf")
-                        .putInt("last_mushaf_page", mushafPage)
-                        .putInt("last_surah", selected)
-                        .putInt("last_ayah_number", initialAyah)
-                        .apply()
-                }
+            ReaderModeSegment(
+                modifier = Modifier.fillMaxWidth(),
+                label = tr(language, "mushaf_view"),
+                selected = true,
+                icon = Icons.Outlined.AutoStories,
+                foreground = foreground
+            ) {
+                query = ""
+                mushafMode = true
+                prefs.edit()
+                    .putString("quran_reader_mode", "mushaf")
+                    .putInt("last_mushaf_page", mushafPage)
+                    .putInt("last_surah", selected)
+                    .putInt("last_ayah_number", initialAyah)
+                    .apply()
             }
             if (!mushafMode) {
                 Spacer(Modifier.height(5.dp))
@@ -4149,8 +4147,9 @@ internal fun resolveQuranResumeTarget(
     openMushaf = !hasReadingHistory || shouldRestorePageMushaf(savedReaderMode, hasSavedPage)
 )
 
-internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boolean): Boolean =
-    hasSavedPage || savedReaderMode.equals("verse", ignoreCase = true) || savedReaderMode.isNullOrBlank()
+/** The graphic Mushaf is the only Quran reading surface; ignore all legacy text-reader flags. */
+@Suppress("UNUSED_PARAMETER")
+internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boolean): Boolean = true
 
 /** In Arabic/Sorani reading order, a physical left swipe advances to the next surah. */
 internal fun resolveSurahStartPage(verses: List<Ayah>, selectedSurah: Int): Int? {

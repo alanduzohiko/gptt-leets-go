@@ -18,12 +18,12 @@ class QuranSurahSwipeTest {
     }
 
     @Test
-    fun resumesTheLastReaderModeInsteadOfAlwaysForcingPageMushaf() {
+    fun alwaysResumesTheGraphicMushafRegardlessOfLegacyReaderPreference() {
         assertEquals(true, shouldRestorePageMushaf(null, true))
         assertEquals(true, shouldRestorePageMushaf("mushaf", true))
-        assertEquals(false, shouldRestorePageMushaf("verse", true))
-        assertEquals(false, shouldRestorePageMushaf("verse", false))
-        assertEquals(false, shouldRestorePageMushaf("mushaf", false))
+        assertEquals(true, shouldRestorePageMushaf("verse", true))
+        assertEquals(true, shouldRestorePageMushaf("verse", false))
+        assertEquals(true, shouldRestorePageMushaf("mushaf", false))
     }
 
     @Test

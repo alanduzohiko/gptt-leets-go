@@ -1,7 +1,6 @@
 package com.mashxall.unified
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,7 +51,7 @@ class QuranResumeTargetTest {
     }
 
     @Test
-    fun doesNotRestoreADeletedMushafPage() {
+    fun missingSavedPageStillOpensGraphicMushafAtSafeDefaultPage() {
         val target = resolveQuranResumeTarget(
             savedSurah = 1,
             savedAyah = 1,
@@ -60,7 +59,8 @@ class QuranResumeTargetTest {
             savedReaderMode = "mushaf",
             hasSavedPage = false
         )
-        assertFalse(target.openMushaf)
+        assertTrue(target.openMushaf)
+        assertEquals(1, target.mushafPage)
     }
 
     @Test
