@@ -65,7 +65,7 @@ class PrayerAlarmScheduleStatusTest {
         val arabic = prayerAlarmScheduleMessage(PrayerAlarmScheduleResult(true, 5), AppLanguage.AR)
         val sorani = prayerAlarmScheduleMessage(PrayerAlarmScheduleResult(true, 3), AppLanguage.CKB)
         assertTrue(english.contains("5"))
-        assertTrue(arabic.contains("خمسة"))
+        assertTrue(arabic.contains("5"))
         assertTrue(sorani.contains("3"))
     }
 

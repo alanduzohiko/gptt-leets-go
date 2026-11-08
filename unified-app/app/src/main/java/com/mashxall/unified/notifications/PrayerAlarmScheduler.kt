@@ -26,19 +26,14 @@ internal fun prayerAlarmScheduleMessage(result: PrayerAlarmScheduleResult, langu
         AppLanguage.CKB -> "خشتەیەکی دروستی صەڵەواتی بۆ ئەم شوێنە نەدۆزرایەوە؛ شارێک هەڵبژێرە یان GPS نوێ بکەرەوە، پاشان ئاگادارکردنەوەی بانگ چالاک بکەوە."
     }
     result.scheduledCount == 0 -> when (language) {
-        AppLanguage.EN -> "The timetable loaded, but no future adhan alarm could be scheduled. Check today's and tomorrow's source rows."
-        AppLanguage.AR -> "تم تحميل الجدول، لكن لم يُجدول أي تنبيه أذان قادم. تحقّق من سجلي اليوم والغد في المصدر."
-        AppLanguage.CKB -> "خشتەکە بارکرا، بەڵام هیچ ئاگادارکردنەوەیەکی بانگی داهاتوو دانەنرا؛ خشتەی ئەمڕۆ و سبەی لە سەرچاوەکە بپشکنە."
-    }
-    result.scheduledCount < 5 -> when (language) {
-        AppLanguage.EN -> "Only ${result.scheduledCount} of 5 upcoming prayer alerts could be scheduled from the source timetable."
-        AppLanguage.AR -> "تمت جدولة ${result.scheduledCount} فقط من أصل 5 تنبيهات صلاة قادمة من جدول المصدر."
-        AppLanguage.CKB -> "تەنها ${result.scheduledCount} لە ٥ ئاگادارکردنەوەی نوێژی داهاتوو لە خشتەی سەرچاوەکە دانرا."
+        AppLanguage.EN -> "The timetable loaded, but no enabled upcoming prayer alarm was scheduled. Check the prayer toggles and source times."
+        AppLanguage.AR -> "تم تحميل الجدول، لكن لم تُجدول تنبيهات قادمة. تحقّق من مفاتيح الصلوات ومواقيت المصدر."
+        AppLanguage.CKB -> "خشتەکە بارکرا، بەڵام هیچ ئاگادارکردنەوەیەکی چالاکی داهاتوو دانەنرا؛ کلیلەکانی نوێژ و کاتەکانی سەرچاوە بپشکنە."
     }
     else -> when (language) {
-        AppLanguage.EN -> "The next 5 prayer alerts were scheduled from the verified Salawati timetable."
-        AppLanguage.AR -> "جرت جدولة تنبيهات الصلوات الخمسة القادمة من جدول صلواتي المتحقق منه."
-        AppLanguage.CKB -> "٥ ئاگادارکردنەوەی نوێژی داهاتوو لە خشتەی پشتڕاستکراوی صەڵەواتی دانران."
+        AppLanguage.EN -> "${result.scheduledCount} enabled prayer alerts were scheduled from the verified Salawati timetable."
+        AppLanguage.AR -> "تمت جدولة ${result.scheduledCount} من تنبيهات الصلاة المفعّلة من جدول صلواتي الموثوق."
+        AppLanguage.CKB -> "${result.scheduledCount} ئاگادارکردنەوەی چالاککراوی نوێژ لە خشتەی پشتڕاستکراوی صەڵەواتی دانرا."
     }
 }
 
@@ -129,7 +124,7 @@ object PrayerAlarmScheduler {
         scheduleDate(today, todayTimes)
         scheduleDate(tomorrow, tomorrowTimes)
 
-        if (JUMUAH_CODE in enabledCodes) {
+        if (JUMUAH_CODE in enabledCodes && !isFriday(tomorrow)) {
             val nextFriday = nextFridayStart(Date())
             val fridayTimes = resolveTimes(context, prefs, nextFriday)
             if (fridayTimes != null) {

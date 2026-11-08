@@ -10796,6 +10796,21 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     var selectedAdhanAsset by rememberSaveable {
         mutableStateOf(prefs.getString("adhan_audio_asset", "") ?: "")
     }
+    var prayerAlertSelections by remember {
+        mutableStateOf(
+            PrayerAlarmScheduler.ALERT_CODES.associateWith { code ->
+                prefs.getBoolean(PrayerAlarmScheduler.enabledPreferenceKey(code), code != "jumuah")
+            }
+        )
+    }
+    var prayerAudioSelections by remember {
+        mutableStateOf(
+            PrayerAlarmScheduler.ALERT_CODES.associateWith { code ->
+                prefs.getString(PrayerAlarmScheduler.audioPreferenceKey(code), null) ?: selectedAdhanAsset
+            }
+        )
+    }
+    var activeAdhanPrayerCode by rememberSaveable { mutableStateOf("all") }
     var adhanSoundQuery by rememberSaveable { mutableStateOf("") }
     var previewingAdhan by remember { mutableStateOf("") }
     var chooseAdhanSound by remember { mutableStateOf(false) }
@@ -10805,6 +10820,20 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         else cities.filter { city ->
             citySearchMatchesQuery(citySearch.trim(), city.name, city.country)
         }
+    }
+
+    fun assignAdhanSound(assetPath: String) {
+        selectedAdhanAsset = assetPath
+        if (activeAdhanPrayerCode == "all") {
+            prayerAudioSelections = PrayerAlarmScheduler.ALERT_CODES.associateWith { assetPath }
+            PrayerAlarmScheduler.ALERT_CODES.forEach { code ->
+                prefs.edit().putString(PrayerAlarmScheduler.audioPreferenceKey(code), assetPath).apply()
+            }
+        } else {
+            prayerAudioSelections = prayerAudioSelections + (activeAdhanPrayerCode to assetPath)
+            prefs.edit().putString(PrayerAlarmScheduler.audioPreferenceKey(activeAdhanPrayerCode), assetPath).apply()
+        }
+        prefs.edit().putString("adhan_audio_asset", assetPath).apply()
     }
 
     val onFix: (Location) -> Unit = { fix ->
@@ -11095,7 +11124,15 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
         }
     }
-    LaunchedEffect(adhanEnabled, selectedAdhanAsset, adhanAssets, adhanAssetsLoaded, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
+    LaunchedEffect(adhanEnabled, selectedAdhanAsset, prayerAlertSelections, prayerAudioSelections, adhanAssets, adhanAssetsLoaded, locationMode, gpsLatitude, gpsLongitude, manualLatitude, manualLongitude, manualCountry, selectedCity, language) {
+        prayerAlertSelections.forEach { (code, enabled) ->
+            prefs.edit().putBoolean(PrayerAlarmScheduler.enabledPreferenceKey(code), enabled).apply()
+        }
+        prayerAudioSelections.forEach { (code, asset) ->
+            if (asset.isNotBlank() && hasSelectableAdhanAsset(asset, adhanAssets)) {
+                prefs.edit().putString(PrayerAlarmScheduler.audioPreferenceKey(code), asset).apply()
+            }
+        }
         if (adhanEnabled) {
             if (!adhanAssetsLoaded) return@LaunchedEffect
             val selectedSourceIsValid = hasSelectableAdhanAsset(selectedAdhanAsset, adhanAssets)
@@ -11722,9 +11759,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         ?: selectedAdhanAsset.substringAfterLast('/')
                     PremiumActionButton(
                         label = when (language) {
-                            AppLanguage.EN -> "Adhan sound: $soundLabel"
-                            AppLanguage.AR -> "صوت الأذان: $soundLabel"
-                            AppLanguage.CKB -> "دەنگی بانگ: $soundLabel"
+                            AppLanguage.EN -> "Default sound for all prayers: $soundLabel"
+                            AppLanguage.AR -> "الصوت الافتراضي لجميع الصلوات: $soundLabel"
+                            AppLanguage.CKB -> "دەنگی بنەڕەت بۆ هەموو نوێژەکان: $soundLabel"
                         },
                         icon = Icons.Outlined.VolumeUp,
                         accent = Gold,
@@ -11732,6 +11769,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         pressedScale = premiumActionButtonPressScale("choose_adhan_sound"),
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        activeAdhanPrayerCode = "all"
                         adhanSoundQuery = ""
                         chooseAdhanSound = true
                     }
@@ -11765,6 +11803,104 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                         AppLanguage.CKB -> "مۆڵەتی کاتژمێری ورد لە ڕێکخستنەکانی ئەندرۆید بکەرەوە."
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Choose a separate Muezzin for each prayer"
+                        AppLanguage.AR -> "اختر مؤذنًا مستقلاً لكل صلاة"
+                        AppLanguage.CKB -> "بۆ هەر نوێژێک موئەزینێکی جیاواز هەڵبژێرە"
+                    },
+                    color = foreground,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Friday prayer replaces the Dhuhr alert on Fridays when enabled."
+                        AppLanguage.AR -> "يحل تنبيه الجمعة محل تنبيه الظهر يوم الجمعة عند تفعيله."
+                        AppLanguage.CKB -> "ئەگەر چالاک بکرێت، ئاگادارکردنەوەی هەینی جێگەی نیوەڕۆ دەگرێتەوە."
+                    },
+                    color = foreground.copy(alpha = 0.58f),
+                    fontSize = 10.sp,
+                    lineHeight = 15.sp
+                )
+                PrayerAlarmScheduler.ALERT_CODES.forEach { code ->
+                    val enabledForPrayer = prayerAlertSelections[code] == true
+                    val rawAudioPath = prayerAudioSelections[code].orEmpty()
+                    val audioPath = rawAudioPath.takeIf { hasSelectableAdhanAsset(it, adhanAssets) } ?: selectedAdhanAsset
+                    val audioLabel = adhanAssets.firstOrNull { it.assetPath == audioPath }?.title
+                        ?: when (language) {
+                            AppLanguage.EN -> "Choose a recording"
+                            AppLanguage.AR -> "اختر تسجيلاً"
+                            AppLanguage.CKB -> "تۆمارێک هەڵبژێرە"
+                        }
+                    val prayerTimeText = when (code) {
+                        "fajr" -> times?.fajr
+                        "dhuhr", "jumuah" -> times?.dhuhr
+                        "asr" -> times?.asr
+                        "maghrib" -> times?.maghrib
+                        else -> times?.isha
+                    }?.let { formatPrayerTime(it, language, use24Hour) } ?: "—"
+                    val prayerName = when (code) {
+                        "fajr" -> when (language) { AppLanguage.EN -> "Fajr"; AppLanguage.AR -> "الفجر"; AppLanguage.CKB -> "بەیانی" }
+                        "dhuhr" -> when (language) { AppLanguage.EN -> "Dhuhr"; AppLanguage.AR -> "الظهر"; AppLanguage.CKB -> "نیوەڕۆ" }
+                        "asr" -> when (language) { AppLanguage.EN -> "Asr"; AppLanguage.AR -> "العصر"; AppLanguage.CKB -> "عەسر" }
+                        "maghrib" -> when (language) { AppLanguage.EN -> "Maghrib"; AppLanguage.AR -> "المغرب"; AppLanguage.CKB -> "مەغریب" }
+                        "isha" -> when (language) { AppLanguage.EN -> "Isha"; AppLanguage.AR -> "العشاء"; AppLanguage.CKB -> "عیشا" }
+                        else -> when (language) { AppLanguage.EN -> "Friday prayer"; AppLanguage.AR -> "صلاة الجمعة"; AppLanguage.CKB -> "نوێژی هەینی" }
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                        colors = CardDefaults.cardColors(containerColor = foreground.copy(alpha = 0.035f)),
+                        shape = RoundedCornerShape(15.dp),
+                        border = BorderStroke(
+                            0.8.dp,
+                            if (enabledForPrayer) Gold.copy(alpha = 0.34f) else foreground.copy(alpha = 0.09f)
+                        )
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(prayerName, color = foreground, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(prayerTimeText, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp)
+                                }
+                                Switch(
+                                    checked = enabledForPrayer,
+                                    onCheckedChange = { enabled ->
+                                        prayerAlertSelections = prayerAlertSelections + (code to enabled)
+                                        prefs.edit().putBoolean(PrayerAlarmScheduler.enabledPreferenceKey(code), enabled).apply()
+                                    }
+                                )
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                    .background(Gold.copy(alpha = 0.07f))
+                                    .clickable {
+                                        activeAdhanPrayerCode = code
+                                        adhanSoundQuery = ""
+                                        chooseAdhanSound = true
+                                    }
+                                    .padding(horizontal = 9.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Outlined.VolumeUp, null, tint = Gold, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(7.dp))
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Muezzin: $audioLabel"
+                                        AppLanguage.AR -> "المؤذن: $audioLabel"
+                                        AppLanguage.CKB -> "موئەزین: $audioLabel"
+                                    },
+                                    color = Gold,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(Icons.Outlined.ChevronRight, null, tint = Gold, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -11942,8 +12078,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         Modifier.fillMaxWidth().premiumClickable {
                             AudioController.stop()
                             previewingAdhan = ""
-                            selectedAdhanAsset = sound.assetPath
-                            prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
+                            assignAdhanSound(sound.assetPath)
                             adhanMessage = ""
                             chooseAdhanSound = false
                         }.padding(vertical = 10.dp),
@@ -11954,12 +12089,15 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             contentDescription = if (language == AppLanguage.EN) "Select this Adhan" else if (language == AppLanguage.AR) "اختيار هذا الأذان" else "ئەم بانگە هەڵبژێرە",
                             accent = Gold,
                             size = 29.dp,
-                            selected = selectedAdhanAsset == sound.assetPath
+                            selected = if (activeAdhanPrayerCode == "all") {
+                                selectedAdhanAsset == sound.assetPath
+                            } else {
+                                prayerAudioSelections[activeAdhanPrayerCode] == sound.assetPath
+                            }
                         ) {
                             AudioController.stop()
                             previewingAdhan = ""
-                            selectedAdhanAsset = sound.assetPath
-                            prefs.edit().putString("adhan_audio_asset", sound.assetPath).apply()
+                            assignAdhanSound(sound.assetPath)
                             adhanMessage = ""
                             chooseAdhanSound = false
                         }

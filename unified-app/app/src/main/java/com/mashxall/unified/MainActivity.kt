@@ -46,6 +46,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -140,6 +141,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -477,9 +480,372 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+private fun MashxallStartupScreen(onFinished: () -> Unit) {
+    val motion = rememberInfiniteTransition(label = "Mashxall logo light")
+    val glow by motion.animateFloat(
+        initialValue = 0.18f,
+        targetValue = 0.58f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1250, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "Logo gold glow"
+    )
+    var entered by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.78f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "Logo entrance"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(850, easing = FastOutSlowInEasing),
+        label = "Logo fade in"
+    )
+    LaunchedEffect(Unit) {
+        entered = true
+        delay(3_700L)
+        onFinished()
+    }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier.fillMaxWidth(0.86f).aspectRatio(1f)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(Gold.copy(alpha = glow * 0.22f), Color.Transparent)
+                    )
+                )
+        )
+        Image(
+            painter = painterResource(R.drawable.mashxall_welcome_logo),
+            contentDescription = "Mashxall",
+            modifier = Modifier.fillMaxWidth(0.84f).graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+            }
+        )
+    }
+}
+
+@Composable
+private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var locationBusy by remember { mutableStateOf(false) }
+    var locationSaved by rememberSaveable { mutableStateOf(false) }
+    var locationMessage by rememberSaveable { mutableStateOf("") }
+    var permissionRequested by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        prefs.edit().putBoolean("first_run_setup_started", true).apply()
+    }
+
+    fun saveLocation(fix: Location) {
+        prefs.edit()
+            .putString("prayer_location_mode", "gps")
+            .putString("gps_latitude", fix.latitude.toString())
+            .putString("gps_longitude", fix.longitude.toString())
+            .putLong("gps_location_timestamp", fix.time)
+            .putString("gps_accuracy", if (fix.hasAccuracy()) fix.accuracy.toString() else "")
+            .putBoolean("prayer_location_prompted", true)
+            .remove("manual_city_latitude")
+            .remove("manual_city_longitude")
+            .apply()
+        locationSaved = true
+        locationBusy = false
+        locationMessage = when (language) {
+            AppLanguage.EN -> "Your location is saved. Verified Salawati prayer times will use this place."
+            AppLanguage.AR -> "تم حفظ موقعك. ستُستخدم مواقيت صلواتي الموثوقة لهذا المكان."
+            AppLanguage.CKB -> "شوێنەکەت پاشەکەوت کرا؛ کاتە پەسەندکراوەکانی صەڵەواتی بۆ ئەم شوێنە بەکاردێن."
+        }
+    }
+
+    fun showLocationError(error: String) {
+        locationBusy = false
+        if (locationSaved) return
+        locationMessage = when (language) {
+            AppLanguage.EN -> when (error) {
+                "LOCATION_PERMISSION_DENIED" -> "Location permission was not granted. You can allow it later in Android settings."
+                "LOCATION_SERVICES_OFF", "LOCATION_SETTINGS_OPENED" -> "Turn on Location in Android settings, return here and try again."
+                else -> "A current location could not be obtained. You can continue and set it later."
+            }
+            AppLanguage.AR -> when (error) {
+                "LOCATION_PERMISSION_DENIED" -> "لم يُمنح إذن الموقع. يمكنك السماح به لاحقًا من إعدادات Android."
+                "LOCATION_SERVICES_OFF", "LOCATION_SETTINGS_OPENED" -> "فعّل الموقع من إعدادات Android ثم ارجع إلى هنا وأعد المحاولة."
+                else -> "تعذّر الحصول على موقع حالي. يمكنك المتابعة وتحديده لاحقًا."
+            }
+            AppLanguage.CKB -> when (error) {
+                "LOCATION_PERMISSION_DENIED" -> "مۆڵەتی شوێن نەدرا؛ دەتوانیت دواتر لە ڕێکخستنەکانی ئەندرۆید مۆڵەت بدەیت."
+                "LOCATION_SERVICES_OFF", "LOCATION_SETTINGS_OPENED" -> "شوێن لە ڕێکخستنەکانی ئەندرۆید چالاک بکە، بگەڕێوە و دووبارە هەوڵ بدەوە."
+                else -> "نەتوانرا شوێنی ئێستا وەربگیرێت؛ دەتوانیت دواتر دیاری بکەیت."
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (allowed) {
+            prefs.edit()
+                .putString("prayer_location_mode", "gps")
+                .putBoolean("prayer_location_prompted", true)
+                .apply()
+            locationBusy = true
+            locationMessage = ""
+            requestCurrentLocation(context, ::saveLocation, ::showLocationError)
+        } else {
+            prefs.edit().putBoolean("prayer_location_prompted", true).apply()
+            showLocationError("LOCATION_PERMISSION_DENIED")
+        }
+    }
+
+    fun requestLocation() {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        prefs.edit()
+            .putString("prayer_location_mode", "gps")
+            .putBoolean("prayer_location_prompted", true)
+            .apply()
+        if (fine || coarse) {
+            locationBusy = true
+            locationMessage = ""
+            requestCurrentLocation(context, ::saveLocation, ::showLocationError)
+        } else {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
+    }
+
+    fun finishSetup() {
+        val editor = prefs.edit()
+            .putString("language", language.key)
+            .putBoolean("first_run_setup_complete", true)
+            .putBoolean("first_run_setup_started", true)
+            .putBoolean("prayer_location_prompted", true)
+        val hasSavedLocation = prefs.getString("gps_latitude", null) != null ||
+            prefs.getString("manual_city_latitude", null) != null
+        if (!hasSavedLocation) editor.putString("prayer_location_mode", "gps")
+        editor.apply()
+        onComplete()
+    }
+
+    LaunchedEffect(step) {
+        if (step == 2 && !permissionRequested && !locationSaved) {
+            permissionRequested = true
+            requestLocation()
+        }
+    }
+
+    val titles = when (language) {
+        AppLanguage.EN -> listOf("Choose your language", "Welcome to Mashxall", "Set your prayer location")
+        AppLanguage.AR -> listOf("اختر لغتك", "مرحبًا بك في مەشخەڵ", "حدّد موقع الصلاة")
+        AppLanguage.CKB -> listOf("زمانەکەت هەڵبژێرە", "بەخێربێیت بۆ مەشخەڵ", "شوێنی نوێژەکەت دیاری بکە")
+    }
+    val subtitles = when (language) {
+        AppLanguage.EN -> listOf(
+            "Your chosen language will be used throughout the app.",
+            "Your complete Islamic companion, with the original Mushaf and verified prayer times.",
+            "Allow location once. Your coordinates are saved on this device and reused on future launches."
+        )
+        AppLanguage.AR -> listOf(
+            "ستُستخدم اللغة التي تختارها في واجهة التطبيق.",
+            "رفيقك الإسلامي المتكامل، بالمصحف الأصلي ومواقيت الصلاة الموثوقة.",
+            "اسمح بالموقع مرة واحدة. تُحفظ إحداثياتك على الجهاز وتُستخدم في مرات الفتح القادمة."
+        )
+        AppLanguage.CKB -> listOf(
+            "ئەو زمانەی هەڵیدەبژێریت لە هەموو بەشەکانی ئەپەکەدا بەکاردێت.",
+            "هاوەڵی ئایینی تەواوت، بە مصحەفی ڕەسەن و کاتەکانی نوێژی پشتڕاستکراو.",
+            "تەنها جارێک مۆڵەتی شوێن بدە؛ کۆئۆردیناتەکانت لەم ئامێرەدا پاشەکەوت دەکرێن و دواتر دووبارە بەکاردێن."
+        )
+    }
+    CompositionLocalProvider(
+        LocalLayoutDirection provides if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
+    ) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(listOf(Color(0xFF061A16), Color(0xFF0D3027), Color(0xFF061A16)))
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 26.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.mashxall_welcome_logo),
+                    contentDescription = "Mashxall logo",
+                    modifier = Modifier.fillMaxWidth(0.72f)
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(titles[step], color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(8.dp))
+                Text(subtitles[step], color = Color(0xFFD4DFD8), fontSize = 12.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(24.dp))
+                when (step) {
+                    0 -> listOf(AppLanguage.CKB, AppLanguage.AR, AppLanguage.EN).forEach { option ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp).clickable { language = option },
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (language == option) Color(0xFF1D4A3C) else Color(0xFF102B25)
+                            ),
+                            border = BorderStroke(1.dp, if (language == option) Gold else Color.White.copy(alpha = 0.12f))
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(option.label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.weight(1f))
+                                if (language == option) Icon(Icons.Outlined.CheckCircle, null, tint = Gold)
+                            }
+                        }
+                    }
+                    1 -> Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.34f))
+                    ) {
+                        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Outlined.AutoStories, null, tint = Gold, modifier = Modifier.size(34.dp))
+                            Spacer(Modifier.height(9.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Read, learn and worship"
+                                    AppLanguage.AR -> "اقرأ وتعلّم وتعبّد"
+                                    AppLanguage.CKB -> "بخوێنە، فێربە و عیبادەت بکە"
+                                },
+                                color = PaleGold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(7.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "Your language is saved. Next, we will set up the location used for your local prayer timetable."
+                                    AppLanguage.AR -> "تم حفظ لغتك. سنضبط الآن الموقع الذي ستُستخدم إحداثياته لمواقيت الصلاة المحلية."
+                                    AppLanguage.CKB -> "زمانەکەت پاشەکەوت کرا؛ ئێستا شوێنی بەکارهاتوو بۆ خشتەی نوێژی ناوخۆیی ڕێکدەخەین."
+                                },
+                                color = Color(0xFFD4DFD8), textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 19.sp
+                            )
+                        }
+                    }
+                    else -> Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.30f))
+                    ) {
+                        Column(Modifier.padding(17.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                if (locationSaved) Icons.Outlined.CheckCircle else Icons.Outlined.GpsFixed,
+                                null, tint = if (locationSaved) Color(0xFF86D7A8) else Gold, modifier = Modifier.size(35.dp)
+                            )
+                            Spacer(Modifier.height(9.dp))
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> if (locationSaved) "Location saved" else "Find my location"
+                                    AppLanguage.AR -> if (locationSaved) "تم حفظ الموقع" else "تحديد موقعي"
+                                    AppLanguage.CKB -> if (locationSaved) "شوێن پاشەکەوت کرا" else "شوێنی خۆم دیاری بکە"
+                                },
+                                color = if (locationSaved) Color(0xFF86D7A8) else PaleGold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(7.dp))
+                            Text(
+                                locationMessage.ifBlank {
+                                    when (language) {
+                                        AppLanguage.EN -> "No prayer time is guessed. The app uses its original Salawati source data."
+                                        AppLanguage.AR -> "لا يتم تخمين المواقيت؛ يعتمد التطبيق على بيانات صلواتي الأصلية."
+                                        AppLanguage.CKB -> "کاتەکان ناخرێنە خەیاڵەوە؛ ئەپەکە داتای ڕەسەنی صەڵەواتی بەکاردێنێت."
+                                    }
+                                },
+                                color = Color(0xFFD4DFD8), fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center
+                            )
+                            if (!locationSaved) {
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> if (locationBusy) "Finding your current location…" else "Try location again"
+                                        AppLanguage.AR -> if (locationBusy) "جارٍ تحديد موقعك…" else "إعادة تحديد موقعي"
+                                        AppLanguage.CKB -> if (locationBusy) "شوێنت دیاری دەکرێت…" else "دووبارە شوێن دیاری بکە"
+                                    },
+                                    color = Gold, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable(enabled = !locationBusy) { requestLocation() }.padding(8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+                val buttonLabel = when (step) {
+                    0 -> when (language) { AppLanguage.EN -> "Continue"; AppLanguage.AR -> "متابعة"; AppLanguage.CKB -> "بەردەوام بە" }
+                    1 -> when (language) { AppLanguage.EN -> "Set up location"; AppLanguage.AR -> "إعداد الموقع"; AppLanguage.CKB -> "ڕێکخستنی شوێن" }
+                    else -> when (language) {
+                        AppLanguage.EN -> if (locationSaved) "Enter Mashxall" else "Continue without location"
+                        AppLanguage.AR -> if (locationSaved) "الدخول إلى مەشخەڵ" else "المتابعة دون تحديد الموقع"
+                        AppLanguage.CKB -> if (locationSaved) "چوونە ژوورەوەی مەشخەڵ" else "بەردەوام بەبێ شوێن"
+                    }
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        when (step) {
+                            0 -> {
+                                prefs.edit().putString("language", language.key).apply()
+                                step = 1
+                            }
+                            1 -> step = 2
+                            else -> finishSetup()
+                        }
+                    },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Gold)
+                ) {
+                    Text(buttonLabel, color = Color(0xFF071E1A), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp))
+                }
+                if (step > 0) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        when (language) { AppLanguage.EN -> "Your choices stay on this device"; AppLanguage.AR -> "تُحفظ اختياراتك على هذا الجهاز"; AppLanguage.CKB -> "هەڵبژاردەکانت لەم ئامێرەدا دەمێننەوە" },
+                        color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    var startupFinished by rememberSaveable { mutableStateOf(false) }
+    var setupFinished by rememberSaveable {
+        mutableStateOf(
+            prefs.getBoolean(
+                "first_run_setup_complete",
+                !prefs.getBoolean("first_run_setup_started", false) &&
+                    (prefs.contains("language") || prefs.contains("last_surah") ||
+                        prefs.contains("last_mushaf_page") || prefs.contains("accent_palette") ||
+                        prefs.contains("dark_mode") || prefs.contains("gps_latitude") ||
+                        prefs.contains("manual_city_latitude"))
+            )
+        )
+    }
+    if (!startupFinished) {
+        MashxallStartupScreen { startupFinished = true }
+        return
+    }
+    if (!setupFinished) {
+        MashxallFirstRunSetupScreen { setupFinished = true }
+        return
+    }
     var reduceMotion by rememberSaveable { mutableStateOf(prefs.getBoolean("reduce_motion", false)) }
     var hapticsEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
     SideEffect {
@@ -1982,6 +2348,7 @@ private fun HomeScreen(
         systemAllowsDecorativeMotion(context)
     }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
+    var homeAdhanEnabled by remember { mutableStateOf(prefs.getBoolean("adhan_enabled", false)) }
     var prayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var tomorrowPrayerTimes by remember { mutableStateOf<PrayerRow?>(null) }
     var upcomingPrayerKey by remember { mutableStateOf<String?>(null) }
@@ -2043,6 +2410,7 @@ private fun HomeScreen(
 
     LaunchedEffect(isActive) {
         if (!isActive) return@LaunchedEffect
+        homeAdhanEnabled = prefs.getBoolean("adhan_enabled", false)
         hasSavedQuranReading = prefs.contains("last_surah") ||
             prefs.contains("last_ayah_number") || prefs.contains("last_mushaf_page")
         savedQuranSurah = prefs.getInt("last_surah", 1).coerceIn(1, 114)
@@ -2624,6 +2992,64 @@ private fun HomeScreen(
             }
         }
 
+        Spacer(Modifier.height(12.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth().premiumClickable(
+                role = Role.Button,
+                pressedScale = 0.978f
+            ) { onOpen(AppScreen.PRAYER) },
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(21.dp),
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.24f))
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(42.dp).clip(RoundedCornerShape(14.dp))
+                        .background(Gold.copy(alpha = 0.13f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.NotificationsActive, null, tint = Gold, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Adhan alerts"
+                            AppLanguage.AR -> "تنبيهات الأذان"
+                            AppLanguage.CKB -> "ئاگادارکردنەوەی بانگ"
+                        },
+                        color = foreground,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "Open prayer-by-prayer controls"
+                            AppLanguage.AR -> "افتح إعدادات مستقلة لكل صلاة"
+                            AppLanguage.CKB -> "ڕێکخستنە جیاوازەکانی هەر نوێژێک بکەرەوە"
+                        },
+                        color = foreground.copy(alpha = 0.58f),
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> if (homeAdhanEnabled) "ON" else "OFF"
+                        AppLanguage.AR -> if (homeAdhanEnabled) "مفعّل" else "متوقف"
+                        AppLanguage.CKB -> if (homeAdhanEnabled) "چالاک" else "ناچالاک"
+                    },
+                    color = if (homeAdhanEnabled) Color(0xFF83D1A7) else foreground.copy(alpha = 0.5f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(Modifier.width(7.dp))
+                Icon(Icons.Outlined.ChevronRight, null, tint = Gold.copy(alpha = 0.82f))
+            }
+        }
         Spacer(Modifier.height(15.dp))
         IslamicOccasionsHomeCard(
             language = language,
