@@ -22,7 +22,7 @@ class QuranResumeTargetTest {
     }
 
     @Test
-    fun preservesVerseReaderModeEvenWhenAnOlderMushafPageExists() {
+    fun legacyVerseReaderPreferenceStillRestoresTheGraphicMushafPage() {
         val target = resolveQuranResumeTarget(
             savedSurah = 2,
             savedAyah = 255,
@@ -33,7 +33,7 @@ class QuranResumeTargetTest {
         assertEquals(2, target.surah)
         assertEquals(255, target.ayah)
         assertEquals(42, target.mushafPage)
-        assertFalse(target.openMushaf)
+        assertTrue(target.openMushaf)
     }
 
     @Test
@@ -80,7 +80,7 @@ class QuranResumeTargetTest {
     }
 
     @Test
-    fun existingVerseHistoryWithoutReaderModeDoesNotJumpToMushaf() {
+    fun existingVerseHistoryWithoutReaderModeOpensTheGraphicMushaf() {
         val target = resolveQuranResumeTarget(
             savedSurah = 7,
             savedAyah = 24,
@@ -91,7 +91,7 @@ class QuranResumeTargetTest {
         )
         assertEquals(7, target.surah)
         assertEquals(24, target.ayah)
-        assertFalse(target.openMushaf)
+        assertTrue(target.openMushaf)
     }
 
     @Test

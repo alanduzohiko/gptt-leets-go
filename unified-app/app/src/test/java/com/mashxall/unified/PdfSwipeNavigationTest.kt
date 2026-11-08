@@ -23,6 +23,14 @@ class PdfSwipeNavigationTest {
     }
 
     @Test
+    fun quickPageNavigationKeepsCurlOnlyForAdjacentPages() {
+        assertEquals(true, mushafShouldAnimatePageTurn(99, 100))
+        assertEquals(false, mushafShouldAnimatePageTurn(1, 100))
+        assertEquals(false, mushafShouldAnimatePageTurn(0, 1))
+        assertEquals(false, mushafShouldAnimatePageTurn(604, 605))
+    }
+
+    @Test
     fun invalidInputsAreIgnored() {
         assertEquals(null, pdfSwipeTarget(pageIndex = -1, pageCount = 10, horizontalDragPx = -150f))
         assertEquals(null, pdfSwipeTarget(pageIndex = 0, pageCount = 0, horizontalDragPx = -150f))

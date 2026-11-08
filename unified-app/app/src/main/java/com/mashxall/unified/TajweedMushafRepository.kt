@@ -41,6 +41,7 @@ internal object TajweedMushafRepository {
     private const val PAGE_COUNT = 604
     private const val TARGET_WIDTH = 1148
     private const val TARGET_HEIGHT = 1641
+    internal const val PAGE_ARTWORK_SCALE = 0.70f
     private const val PACK_DIRECTORY = "tajweed-mushaf"
     private const val STAGING_DIRECTORY = "tajweed-mushaf.installing"
     private const val DATABASE_NAME = "ayahinfo_1280.db"
@@ -493,7 +494,7 @@ internal object TajweedMushafRepository {
         if (page !in 1..PAGE_COUNT || !isInstalled(context)) return emptyList()
         val databaseFile = File(context.filesDir, "$PACK_DIRECTORY/$DATABASE_NAME")
         val database = SQLiteDatabase.openDatabase(databaseFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-        val scale = minOf(TARGET_WIDTH.toFloat() / EXPECTED_IMAGE_WIDTH, TARGET_HEIGHT.toFloat() / EXPECTED_IMAGE_HEIGHT)
+        val scale = minOf(TARGET_WIDTH.toFloat() / EXPECTED_IMAGE_WIDTH, TARGET_HEIGHT.toFloat() / EXPECTED_IMAGE_HEIGHT) * PAGE_ARTWORK_SCALE
         val offsetX = (TARGET_WIDTH - EXPECTED_IMAGE_WIDTH * scale) * 0.5f
         val offsetY = (TARGET_HEIGHT - EXPECTED_IMAGE_HEIGHT * scale) * 0.5f
         val words = mutableListOf<MushafWordBounds>()
@@ -528,7 +529,7 @@ internal object TajweedMushafRepository {
 
     private fun renderIntoPageViewport(source: Bitmap, width: Int, height: Int, page: Int): Bitmap {
         val target = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val scale = minOf(width.toFloat() / source.width, height.toFloat() / source.height)
+        val scale = minOf(width.toFloat() / source.width, height.toFloat() / source.height) * PAGE_ARTWORK_SCALE
         val targetWidth = source.width * scale
         val targetHeight = source.height * scale
         val destination = RectF(
@@ -553,8 +554,20 @@ internal object TajweedMushafRepository {
             drawText(
                 tajweedPageNumberLabel(page),
                 width * 0.5f,
-                height * 0.92f,
+                height * 0.935f,
                 numberPaint
+            )
+            val juzPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+                color = Color.BLACK
+                textAlign = Paint.Align.RIGHT
+                textSize = 23f * (height.toFloat() / TARGET_HEIGHT).coerceAtLeast(0.5f)
+                typeface = Typeface.create("serif", Typeface.BOLD)
+            }
+            drawText(
+                "الجزء ${tajweedPageNumberLabel(mushafJuzForPage(page))}",
+                width * 0.84f,
+                height * 0.935f,
+                juzPaint
             )
         }
         return target
@@ -601,9 +614,9 @@ internal fun tajweedGlyphBoundsToPageSpace(
     maxX: Float,
     minY: Float,
     maxY: Float,
-    scale: Float = minOf(1148f / 1340f, 1641f / 1890f),
-    offsetX: Float = (1148f - 1340f * minOf(1148f / 1340f, 1641f / 1890f)) * 0.5f,
-    offsetY: Float = (1641f - 1890f * minOf(1148f / 1340f, 1641f / 1890f)) * 0.5f
+    scale: Float = minOf(1148f / 1340f, 1641f / 1890f) * TajweedMushafRepository.PAGE_ARTWORK_SCALE,
+    offsetX: Float = (1148f - 1340f * minOf(1148f / 1340f, 1641f / 1890f) * TajweedMushafRepository.PAGE_ARTWORK_SCALE) * 0.5f,
+    offsetY: Float = (1641f - 1890f * minOf(1148f / 1340f, 1641f / 1890f) * TajweedMushafRepository.PAGE_ARTWORK_SCALE) * 0.5f
 ): MushafWordBounds = MushafWordBounds(
     surah = surah,
     ayah = ayah,

@@ -62,6 +62,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -132,6 +134,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
@@ -139,6 +142,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -1587,6 +1592,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var sheetAudioPlaying by remember { mutableStateOf(false) }
 
     var mushafPage by rememberSaveable { mutableIntStateOf(prefs.getInt("last_mushaf_page", 1).coerceIn(1, 604)) }
+    var pendingMushafFocusVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     // The Mushaf owns its audio session. Starting a verse never navigates away
     // from the page; the active ayah is driven by the segment that actually starts.
@@ -1786,23 +1792,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             mushafMode = true
             haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
         } else {
-            // Preserve the real verse reader as an explicit fallback if source page metadata is absent.
-            selected = requestedSurah
             pendingMushafStartSurah = 0
             openingMushaf = false
             mushafMode = false
-            showSurahList = false
-            prefs.edit()
-                .putString("quran_reader_mode", "verse")
-                .putInt("last_surah", requestedSurah)
-                .putInt("last_ayah_number", 1)
-                .apply()
+            showSurahList = true
             Toast.makeText(
                 context,
                 when (language) {
-                    AppLanguage.EN -> "The original Mushaf page for this surah is unavailable; opening verse text instead."
-                    AppLanguage.AR -> "صفحة المصحف الأصلية لهذه السورة غير متاحة؛ سيُفتح نص الآيات بدلًا منها."
-                    AppLanguage.CKB -> "پەڕەی ڕەسەنی مصحەف بۆ ئەم سوورەتە بەردەست نییە؛ دەقی ئایەتەکان دەکرێتەوە."
+                    AppLanguage.EN -> "The printed Mushaf page for this surah is unavailable. The text reader was not opened."
+                    AppLanguage.AR -> "صفحة المصحف المصوّر لهذه السورة غير متاحة؛ لم يتم فتح قارئ النص."
+                    AppLanguage.CKB -> "پەڕەی چاپکراوی مصحەف بۆ ئەم سوورەتە بەردەست نییە؛ خوێنەری دەق نەکرایەوە."
                 },
                 Toast.LENGTH_LONG
             ).show()
@@ -1816,10 +1815,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             query = ""
             showSurahList = false
             openingMushaf = false
-            mushafMode = shouldRestorePageMushaf(
-                prefs.getString("quran_reader_mode", null),
-                prefs.contains("last_mushaf_page")
-            )
+            mushafMode = true
             onResumeMushafHandled()
         }
     }
@@ -2278,6 +2274,20 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 onBookmarkVerse = { surahNumber, ayahNumber ->
                     toggleBookmark(surahNumber, ayahNumber)
                 },
+                focusVerse = pendingMushafFocusVerse,
+                onFocusVerseApplied = { surahNumber, ayahNumber ->
+                    selected = surahNumber
+                    onSurah(surahNumber)
+                    onOpenVerse(surahNumber, ayahNumber)
+                    prefs.edit()
+                        .putString("quran_reader_mode", "mushaf")
+                        .putInt("last_mushaf_page", mushafPage)
+                        .putInt("last_surah", surahNumber)
+                        .putInt("last_ayah_number", ayahNumber)
+                        .putInt("quran_progress_ayah_$surahNumber", ayahNumber)
+                        .apply()
+                    pendingMushafFocusVerse = null
+                },
                 playbackVerse = inlinePlaybackActiveVerse,
                 coloredTajweed = coloredTajweed,
                 surahAyahCounts = surahAyahCounts,
@@ -2551,17 +2561,55 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         selected = result.surah
                                         query = ""
                                         selectedAyahForSheet = null
+                                        pendingMushafFocusVerse = null
                                         showSurahList = false
-                                        openingMushaf = false
+                                        openingMushaf = true
                                         mushafMode = false
-                                        onSurah(result.surah)
-                                        onOpenVerse(result.surah, result.number)
-                                        prefs.edit()
-                                            .putString("quran_reader_mode", "verse")
-                                            .putInt("last_surah", result.surah)
-                                            .putInt("last_ayah_number", result.number)
-                                            .putInt("quran_progress_ayah_${result.surah}", result.number)
-                                            .apply()
+                                        scope.launch {
+                                            val sourcePage = runCatching {
+                                                ContentRepository.loadMushafPageForVerse(
+                                                    context, result.surah, result.number
+                                                )
+                                            }.getOrNull()
+                                            val tajweedPage = if (mushafEdition == "tajweed") {
+                                                runCatching {
+                                                    TajweedMushafRepository.loadPageForVerse(
+                                                        context, result.surah, result.number
+                                                    )
+                                                }.getOrNull()
+                                            } else null
+                                            val targetPage = (tajweedPage ?: sourcePage ?: result.page)
+                                                ?.takeIf { it in 1..604 }
+                                            if (targetPage != null) {
+                                                selected = result.surah
+                                                mushafPage = targetPage
+                                                pendingMushafFocusVerse = result.surah to result.number
+                                                onSurah(result.surah)
+                                                onOpenVerse(result.surah, result.number)
+                                                prefs.edit()
+                                                    .putString("quran_reader_mode", "mushaf")
+                                                    .putInt("last_mushaf_page", targetPage)
+                                                    .putInt("last_surah", result.surah)
+                                                    .putInt("last_ayah_number", result.number)
+                                                    .putInt("quran_progress_ayah_${result.surah}", result.number)
+                                                    .apply()
+                                                openingMushaf = false
+                                                mushafMode = true
+                                                haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
+                                            } else {
+                                                openingMushaf = false
+                                                showSurahList = true
+                                                Toast.makeText(
+                                                    context,
+                                                    when (language) {
+                                                        AppLanguage.EN -> "The printed Mushaf page for this verse could not be found. The text reader was not opened."
+                                                        AppLanguage.AR -> "تعذّر العثور على صفحة المصحف المصوّر لهذه الآية؛ لم يتم فتح قارئ النص."
+                                                        AppLanguage.CKB -> "نەتوانرا پەڕەی مصحەفی چاپکراوی ئەم ئایەتە بدۆزرێتەوە؛ خوێنەری دەق نەکرایەوە."
+                                                    },
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
                                     },
                                 colors = CardDefaults.cardColors(containerColor = cardColor),
                                 shape = RoundedCornerShape(17.dp),
@@ -4102,7 +4150,7 @@ internal fun resolveQuranResumeTarget(
 )
 
 internal fun shouldRestorePageMushaf(savedReaderMode: String?, hasSavedPage: Boolean): Boolean =
-    hasSavedPage && !savedReaderMode.equals("verse", ignoreCase = true)
+    hasSavedPage || savedReaderMode.equals("verse", ignoreCase = true) || savedReaderMode.isNullOrBlank()
 
 /** In Arabic/Sorani reading order, a physical left swipe advances to the next surah. */
 internal fun resolveSurahStartPage(verses: List<Ayah>, selectedSurah: Int): Int? {
@@ -4246,6 +4294,9 @@ internal fun mushafCurlAdjacentPage(page: Int, forward: Boolean): Int? {
     return target.takeIf { it in 1..604 }
 }
 
+internal fun mushafShouldAnimatePageTurn(fromPage: Int, toPage: Int): Boolean =
+    fromPage in 1..604 && toPage in 1..604 && kotlin.math.abs(toPage - fromPage) == 1
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MushafPageViewer(
@@ -4262,6 +4313,8 @@ private fun MushafPageViewer(
     onPlaySurah: (Int, Int) -> Unit,
     onBookmarkVerse: (Int, Int) -> Boolean,
     onVerseClick: (Int, Int) -> Unit,
+    focusVerse: Pair<Int, Int>? = null,
+    onFocusVerseApplied: (Int, Int) -> Unit = { _, _ -> },
     playbackVerse: Pair<Int, Int>? = null,
     coloredTajweed: Boolean = false,
     surahAyahCounts: Map<Int, Int> = emptyMap(),
@@ -4272,6 +4325,7 @@ private fun MushafPageViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val bookmarkPrefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var bookmarkedVerses by remember {
         mutableStateOf(bookmarkPrefs.getStringSet("bookmarks", emptySet()).orEmpty().toSet())
@@ -4305,6 +4359,12 @@ private fun MushafPageViewer(
     var failed by remember(page, edition) { mutableStateOf(false) }
     var retryPageLoad by remember(page) { mutableIntStateOf(0) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    fun jumpToEnteredPage() {
+        val target = parseMushafPageNumber(pageInput) ?: return
+        pageInput = target.toString()
+        keyboardController?.hide()
+        onPageChange(target)
+    }
     var scale by remember(page) { mutableFloatStateOf(1f) }
     var offsetX by remember(page) { mutableFloatStateOf(0f) }
     var offsetY by remember(page) { mutableFloatStateOf(0f) }
@@ -4331,13 +4391,13 @@ private fun MushafPageViewer(
         suspend fun renderPreview(targetPage: Int): Bitmap? {
             if (targetPage !in 1..604) return null
             if (edition == "tajweed") {
-                return TajweedMushafRepository.renderPageBitmap(context, targetPage, 900, 1287)
+                return TajweedMushafRepository.renderPageBitmap(context, targetPage, 600, 857)
             }
             val source = ContentRepository.loadMushafPageSvg(context, targetPage) ?: return null
             return withContext(Dispatchers.Default) {
                 try {
                     val svg = SVG.getFromString(source)
-                    Bitmap.createBitmap(900, 1287, Bitmap.Config.ARGB_8888).also { image ->
+                    Bitmap.createBitmap(600, 857, Bitmap.Config.ARGB_8888).also { image ->
                         image.eraseColor(AndroidColor.WHITE)
                         svg.renderToCanvas(Canvas(image))
                     }
@@ -4407,16 +4467,17 @@ private fun MushafPageViewer(
     LaunchedEffect(page, edition, retryPageLoad) {
         val previousPageBitmap = bitmap ?: turningPageBitmap
         val isPageTurn = previousPageBitmap != null && lastLoadedPage != page
+        val shouldAnimateTurn = isPageTurn && mushafShouldAnimatePageTurn(lastLoadedPage, page) && motionAllowed
         pendingPageBitmap = null
 
-        if (isPageTurn) {
+        if (shouldAnimateTurn) {
             // Keep the already displayed page as the stable base image until the
             // destination bitmap is ready and its curl animation has completed.
             bitmap = previousPageBitmap
             turningPageBitmap = previousPageBitmap
             pageTurnDirection = mushafCurlDirectionForPageTransition(lastLoadedPage, page)
             pageCurlProgress.snapTo(0f)
-        } else if (lastLoadedPage == page) {
+        } else {
             turningPageBitmap = null
             pageCurlProgress.snapTo(1f)
         }
@@ -4485,7 +4546,7 @@ private fun MushafPageViewer(
                     // The curl uses the new leaf as its reverse while the normal
                     // Image remains on the old leaf underneath; no white frame leaks.
                     pendingPageBitmap = nextPageBitmap
-                    pageCurlProgress.animateTo(1f, animationSpec = tween(540, easing = FastOutSlowInEasing))
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(240, easing = FastOutSlowInEasing))
                 }
                 bitmap = nextPageBitmap
                 pendingPageBitmap = null
@@ -4511,6 +4572,14 @@ private fun MushafPageViewer(
     }
     val visiblePageBitmap = bitmap ?: turningPageBitmap
     val displayedPageBitmap = if (curlPreviewVisible) curlUnderlayBitmap ?: visiblePageBitmap else visiblePageBitmap
+    LaunchedEffect(page, focusVerse, pageVerseGeometry) {
+        val target = focusVerse ?: return@LaunchedEffect
+        val match = pageVerseGeometry.firstOrNull {
+            it.verse.surah == target.first && it.verse.ayah == target.second
+        } ?: return@LaunchedEffect
+        selectedVerse = match.verse
+        onFocusVerseApplied(target.first, target.second)
+    }
     LaunchedEffect(page, selectedVerse, pageVerseGeometry) {
         val selected = selectedVerse
         verseRects = if (selected == null) {
@@ -4643,7 +4712,7 @@ private fun MushafPageViewer(
             ReaderActionIcon(
                 Icons.Outlined.ChevronRight,
                 tr(language, "previous"),
-                enabled = page > 1 && !loading,
+                enabled = page > 1,
                 pressedScale = quranReaderActionPressScale("previous_page"),
                 onClick = { onPageChange(page - 1) }
             )
@@ -4653,7 +4722,9 @@ private fun MushafPageViewer(
                 modifier = Modifier.weight(1f),
                 label = { Text(if (language == AppLanguage.EN) "Page 1–604" else if (language == AppLanguage.AR) "صفحة ١–٦٠٤" else "پەڕە ١–٦٠٤", fontSize = 10.sp) },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { jumpToEnteredPage() })
             )
             PremiumChoicePill(
                 label = if (language == AppLanguage.EN) "Go" else if (language == AppLanguage.AR) "اذهب" else "بڕۆ",
@@ -4663,12 +4734,12 @@ private fun MushafPageViewer(
                 leadingIcon = Icons.Outlined.Search,
                 enabled = parseMushafPageNumber(pageInput)?.let { it != page } == true
             ) {
-                parseMushafPageNumber(pageInput)?.let(onPageChange)
+                jumpToEnteredPage()
             }
             ReaderActionIcon(
                 Icons.Outlined.ChevronRight,
                 tr(language, "next"),
-                enabled = page < 604 && !loading,
+                enabled = page < 604,
                 rotationDegrees = 180f,
                 pressedScale = quranReaderActionPressScale("next_page"),
                 onClick = { onPageChange(page + 1) }
@@ -4754,9 +4825,9 @@ private fun MushafPageViewer(
                             .then(
                                 if (scale <= 1.01f) {
                                     Modifier.pointerInput(
-                                        page, scale, loading, bitmap
+                                        page, scale, bitmap
                                     ) {
-                                        if (loading || bitmap == null) return@pointerInput
+                                        if (bitmap == null) return@pointerInput
                                         var dragTotal = 0f
 
                                         suspend fun returnCurlToRest(startProgress: Float) {
@@ -4825,7 +4896,7 @@ private fun MushafPageViewer(
                                                             fingerDragActive = false
                                                             pageCurlProgress.animateTo(
                                                                 1f,
-                                                                animationSpec = tween(620, easing = FastOutSlowInEasing)
+                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
                                                             )
                                                             // The finger-led curl has already revealed this adjacent page.
                                                             // Keep that ready bitmap on screen while the full-resolution page

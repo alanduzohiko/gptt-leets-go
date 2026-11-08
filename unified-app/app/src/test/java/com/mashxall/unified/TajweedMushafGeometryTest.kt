@@ -9,6 +9,11 @@ import org.junit.Test
 
 class TajweedMushafGeometryTest {
     @Test
+    fun tajweedPageArtworkUsesNaturalMushafScale() {
+        assertEquals(0.70f, TajweedMushafRepository.PAGE_ARTWORK_SCALE, 0.0001f)
+    }
+
+    @Test
     fun sourceGlyphCoordinatesAreScaledIntoTheDisplayedPage() {
         val firstLineWord = tajweedGlyphBoundsToPageSpace(
             surah = 2,
@@ -20,8 +25,9 @@ class TajweedMushafGeometryTest {
             maxY = 121f
         )
 
-        assertEquals(42f * (1148f / 1340f), firstLineWord.minX, 0.1f)
-        assertEquals(121f * (1148f / 1340f) + (1641f - 1890f * (1148f / 1340f)) / 2f, firstLineWord.maxY, 0.2f)
+        val pageScale = (1148f / 1340f) * TajweedMushafRepository.PAGE_ARTWORK_SCALE
+        assertEquals(42f * pageScale + (1148f - 1340f * pageScale) / 2f, firstLineWord.minX, 0.1f)
+        assertEquals(121f * pageScale + (1641f - 1890f * pageScale) / 2f, firstLineWord.maxY, 0.2f)
     }
 
     @Test
@@ -84,6 +90,7 @@ class TajweedMushafGeometryTest {
     @Test
     fun directMushafPageEntryAcceptsArabicAndAsciiDigitsOnlyWithinBounds() {
         assertEquals(1, parseMushafPageNumber("1"))
+        assertEquals(100, parseMushafPageNumber("100"))
         assertEquals(604, parseMushafPageNumber("٦٠٤"))
         assertEquals(22, parseMushafPageNumber(" ٢٢ "))
         assertNull(parseMushafPageNumber("0"))
