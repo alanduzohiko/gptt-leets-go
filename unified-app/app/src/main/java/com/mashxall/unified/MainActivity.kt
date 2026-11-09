@@ -1079,9 +1079,9 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                                 )
                                                 Text(
                                                     when (option) {
-                                                        AppLanguage.CKB -> "Kurdish Sorani"
-                                                        AppLanguage.AR -> "اللغة العربية"
-                                                        AppLanguage.EN -> "English language"
+                                                        AppLanguage.CKB -> "کوردیی سۆرانی"
+                                                        AppLanguage.AR -> "زمانی عەرەبی"
+                                                        AppLanguage.EN -> "زمانی ئینگلیزی"
                                                     },
                                                     color = if (selected) Color.White.copy(alpha = 0.70f) else setupMuted,
                                                     fontSize = 9.sp
@@ -1136,39 +1136,16 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                     Spacer(Modifier.height(7.dp))
-                                    Text(
-                                        locationMessage.ifBlank {
-                                            when (language) {
-                                                AppLanguage.EN -> "The app uses original Salawati source data. Prayer times are never guessed."
-                                                AppLanguage.AR -> "يعتمد التطبيق على بيانات صلواتي الأصلية، ولا يخمّن مواقيت الصلاة."
-                                                AppLanguage.CKB -> "ئەپەکە داتای ڕەسەنی صەڵەواتی بەکاردێنێت و کاتی نوێژ لە خۆوە دانانێت."
-                                            }
-                                        },
-                                        color = setupMuted,
-                                        fontSize = 10.sp,
-                                        lineHeight = 17.sp,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    if (locationSaved) {
-                                        Spacer(Modifier.height(12.dp))
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            Icon(Icons.Outlined.CheckCircle, null, tint = Color(0xFF69C995), modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(
-                                                when (language) {
-                                                    AppLanguage.EN -> "Ready for your first visit"
-                                                    AppLanguage.AR -> "أصبح التطبيق جاهزًا"
-                                                    AppLanguage.CKB -> "ئێستا ئەپەکە ئامادەیە"
-                                                },
-                                                color = Color(0xFF69C995),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    } else {
+                                    if (locationMessage.isNotBlank()) {
+                                        Text(
+                                            locationMessage,
+                                            color = setupMuted,
+                                            fontSize = 10.sp,
+                                            lineHeight = 17.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                    if (!locationSaved) {
                                         Spacer(Modifier.height(13.dp))
                                         Row(
                                             Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
