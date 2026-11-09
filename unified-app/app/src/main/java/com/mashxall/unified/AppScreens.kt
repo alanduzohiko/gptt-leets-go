@@ -4584,7 +4584,9 @@ private fun MushafPageViewer(
         verseRects = if (selected == null) {
             emptyList()
         } else {
-            pageVerseGeometry.firstOrNull { it.verse == selected }?.rects.orEmpty()
+            buildMushafVerseHighlightRects(
+                pageVerseGeometry.firstOrNull { it.verse == selected }?.rects.orEmpty()
+            )
         }
     }
     LaunchedEffect(page, playbackVerse, pageVerseGeometry) {
@@ -8334,37 +8336,174 @@ fun AudioScreen(
                         colors = CardDefaults.cardColors(containerColor = cardColor),
                         shape = RoundedCornerShape(17.dp)
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(22.dp))
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, maxLines = 1)
-                                if (reciter.recitation.isNotBlank()) {
-                                    Text(reciter.recitation, color = foreground.copy(alpha = 0.5f), fontSize = 8.sp, maxLines = 2, lineHeight = 11.sp)
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(DeepGreen),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(20.dp))
                                 }
-                                Text(
+                                Spacer(Modifier.width(9.dp))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text(
+                                        reciter.nameArabic,
+                                        color = foreground,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        reciter.nameEnglish,
+                                        color = foreground.copy(alpha = 0.58f),
+                                        fontSize = 10.sp,
+                                        maxLines = 1
+                                    )
+                                    if (reciter.recitation.isNotBlank()) {
+                                        Text(
+                                            reciter.recitation,
+                                            color = foreground.copy(alpha = 0.48f),
+                                            fontSize = 8.sp,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(7.dp))
+                                PremiumIconActionSurface(
+                                    contentDescription = playLabel,
+                                    accent = Gold,
+                                    size = 38.dp,
+                                    enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
+                                    selected = playing == playKey,
+                                    onClick = {
+                                        if (playing == playKey) {
+                                            AudioController.stop()
+                                            playing = ""
+                                        } else {
+                                            preferredReciterId = reciter.id
+                                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                            playing = playKey
+                                            autoPlayKey = playKey
+                                            AudioController.playSequence(context, sources) { state ->
+                                                audioPaused = false
+                                                if (!state) playing = ""
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    AnimatedContent(
+                                        targetState = playing == playKey,
+                                        transitionSpec = {
+                                            if (motionAllowed) {
+                                                (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
+                                                    (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
+                                            } else {
+                                                fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                            }
+                                        },
+                                        label = "Reciter active audio waveform transition"
+                                    ) { active ->
+                                        if (active) {
+                                            PremiumAudioWaveform(active = true, accent = Gold, contentDescription = playLabel)
+                                        } else {
+                                            Icon(
+                                                Icons.Outlined.PlayCircle,
+                                                contentDescription = playLabel,
+                                                tint = Gold,
+                                                modifier = Modifier.size(25.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.width(5.dp))
+                                PremiumIconActionSurface(
+                                    contentDescription = if (language == AppLanguage.EN) "Download full surah" else if (language == AppLanguage.AR) "تنزيل السورة كاملة" else "داگرتنی تەواوی سوورەت",
+                                    accent = if (localComplete) Color(0xFF62C995) else Gold,
+                                    size = 38.dp,
+                                    enabled = downloadProgress == null && surahAyahCount > 0 && surahNumber <= reciter.surahTotal,
+                                    selected = localComplete,
+                                    onClick = {
+                                        if (localComplete) {
+                                            audioNotice = if (language == AppLanguage.EN) "This surah is already saved for offline playback."
+                                                else if (language == AppLanguage.AR) "هذه السورة محفوظة بالفعل للتشغيل دون إنترنت."
+                                                else "ئەم سوورەتە پێشتر بۆ لێدانی بەبێ ئینتەرنێت پارێزراوە."
+                                        } else {
+                                            audioNotice = ""
+                                            downloadingTracks = downloadingTracks + (downloadKey to "0")
+                                            scope.launch {
+                                                try {
+                                                    downloadReciterSurah(context, reciter, surahNumber, surahAyahCount) { done, total ->
+                                                        downloadingTracks = downloadingTracks + (downloadKey to "$done/$total")
+                                                    }
+                                                    offlineRevision++
+                                                    audioNotice = if (language == AppLanguage.EN) "${reciter.nameEnglish}: surah ${surahNumber} is saved for offline playback."
+                                                        else if (language == AppLanguage.AR) "تم حفظ السورة ${surahNumber} من ${reciter.nameArabic} للتشغيل دون إنترنت."
+                                                        else "سوورەتی ${surahNumber} بە دەنگی ${reciter.nameArabic} بۆ لێدانی بەبێ ئینتەرنێت پارێزرا."
+                                                } catch (_: Exception) {
+                                                    audioNotice = if (language == AppLanguage.EN) "Download failed or the source does not provide every audio file. Check the connection and try again."
+                                                        else if (language == AppLanguage.AR) "تعذّر التنزيل أو أن المصدر لا يوفر كل المقاطع. تحقّق من الاتصال ثم حاول مجددًا."
+                                                        else "داگرتن سەرکەوتوو نەبوو یان هەموو فایلەکان لە سەرچاوەکەدا نیین؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
+                                                } finally {
+                                                    downloadingTracks = downloadingTracks - downloadKey
+                                                }
+                                            }
+                                        }
+                                    }
+                                ) {
                                     when {
-                                        surahNumber > reciter.surahTotal && language == AppLanguage.EN -> "This edition contains only ${reciter.surahTotal} surahs; this one is unavailable."
-                                        surahNumber > reciter.surahTotal && language == AppLanguage.AR -> "هذه الطبعة تضم ${reciter.surahTotal} سورة فقط؛ السورة المختارة غير متاحة."
-                                        surahNumber > reciter.surahTotal -> "ئەم وەشانە تەنها ${reciter.surahTotal} سوورەتی هەیە؛ ئەم سوورەتە بەردەست نییە."
-                                        reciter.sourceId.isNotBlank() && language == AppLanguage.EN -> "MP3Quran.net • ${reciter.surahTotal}/114 surahs"
-                                        reciter.sourceId.isNotBlank() && language == AppLanguage.AR -> "MP3Quran.net • ${reciter.surahTotal}/114 سورة"
-                                        reciter.sourceId.isNotBlank() -> "MP3Quran.net • ${reciter.surahTotal}/114 سوورەت"
-                                        playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.EN -> "Full surah • sequential ayah playback"
-                                        playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.AR -> "السورة كاملة • تشغيل الآيات بالتتابع"
-                                        playbackMode == "full" && reciter.audioType == 0 -> "سوورەتی تەواو • لێدانی یەک لە دوای یەکی ئایەتەکان"
-                                        playbackMode == "verse" && language == AppLanguage.EN -> "Verse-by-verse • starts at selected ayah"
-                                        playbackMode == "verse" && language == AppLanguage.AR -> "آية بآية • يبدأ من الآية المحددة"
-                                        playbackMode == "verse" -> "ئایەت بە ئایەت • دەستپێک لە ئایەتی هەڵبژێردراو"
-                                        language == AppLanguage.EN -> "Full-surah recording"
-                                        language == AppLanguage.AR -> "تسجيل السورة كاملة"
-                                        else -> "تۆماری تەواوی سوورەت"
-                                    },
-                                    color = Gold.copy(alpha = 0.85f), fontSize = 9.sp
-                                )
+                                        downloadProgress != null -> PremiumLoadingIndicator(modifier = Modifier.size(19.dp), color = Gold, strokeWidth = 2.dp)
+                                        localComplete -> Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF62C995), modifier = Modifier.size(21.dp))
+                                        else -> Icon(Icons.Outlined.Download, contentDescription = null, tint = Gold, modifier = Modifier.size(21.dp))
+                                    }
+                                }
+                            }
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text(
+                                        when {
+                                            surahNumber > reciter.surahTotal && language == AppLanguage.EN -> "This edition contains only ${reciter.surahTotal} surahs; this one is unavailable."
+                                            surahNumber > reciter.surahTotal && language == AppLanguage.AR -> "هذه الطبعة تضم ${reciter.surahTotal} سورة فقط؛ السورة المختارة غير متاحة."
+                                            surahNumber > reciter.surahTotal -> "ئەم وەشانە تەنها ${reciter.surahTotal} سوورەتی هەیە؛ ئەم سوورەتە بەردەست نییە."
+                                            reciter.sourceId.isNotBlank() && language == AppLanguage.EN -> "MP3Quran.net • ${reciter.surahTotal}/114 surahs"
+                                            reciter.sourceId.isNotBlank() && language == AppLanguage.AR -> "MP3Quran.net • ${reciter.surahTotal}/114 سورة"
+                                            reciter.sourceId.isNotBlank() -> "MP3Quran.net • ${reciter.surahTotal}/114 سوورەت"
+                                            playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.EN -> "Full surah • sequential ayah playback"
+                                            playbackMode == "full" && reciter.audioType == 0 && language == AppLanguage.AR -> "السورة كاملة • تشغيل الآيات بالتتابع"
+                                            playbackMode == "full" && reciter.audioType == 0 -> "سوورەتی تەواو • لێدانی یەک لە دوای یەکی ئایەتەکان"
+                                            playbackMode == "verse" && language == AppLanguage.EN -> "Verse-by-verse • starts at selected ayah"
+                                            playbackMode == "verse" && language == AppLanguage.AR -> "آية بآية • يبدأ من الآية المحددة"
+                                            playbackMode == "verse" -> "ئایەت بە ئایەت • دەستپێک لە ئایەتی هەڵبژێردراو"
+                                            language == AppLanguage.EN -> "Full-surah recording"
+                                            language == AppLanguage.AR -> "تسجيل السورة كاملة"
+                                            else -> "تۆماری تەواوی سوورەت"
+                                        },
+                                        color = Gold.copy(alpha = 0.82f),
+                                        fontSize = 8.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        when {
+                                            downloadProgress != null -> if (language == AppLanguage.EN) "Downloading audio $downloadProgress" else if (language == AppLanguage.AR) "جارٍ تنزيل الصوت $downloadProgress" else "دەنگ دادەگیرێت $downloadProgress"
+                                            localComplete -> if (language == AppLanguage.EN) "Saved offline • full surah" else if (language == AppLanguage.AR) "محفوظ دون اتصال • السورة كاملة" else "بەبێ ئینتەرنێت پارێزراوە • سوورەتی تەواو"
+                                            else -> if (language == AppLanguage.EN) "Ready to stream or download" else if (language == AppLanguage.AR) "جاهز للاستماع أو التنزيل" else "ئامادەی گوێگرتن یان داگرتن"
+                                        },
+                                        color = if (downloadProgress != null || localComplete) Gold else foreground.copy(alpha = 0.48f),
+                                        fontSize = 8.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(Modifier.width(7.dp))
                                 PremiumChoicePill(
                                     label = if (preferredReciterId == reciter.id) {
                                         if (language == AppLanguage.EN) "Preferred" else if (language == AppLanguage.AR) "المفضّل" else "دڵخواز"
@@ -8377,101 +8516,6 @@ fun AudioScreen(
                                 ) {
                                     preferredReciterId = reciter.id
                                     prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
-                                }
-                                Text(
-                                    when {
-                                        downloadProgress != null -> if (language == AppLanguage.EN) "Downloading audio $downloadProgress" else if (language == AppLanguage.AR) "جارٍ تنزيل الصوت $downloadProgress" else "دەنگ دادەگیرێت $downloadProgress"
-                                        localComplete -> if (language == AppLanguage.EN) "Saved offline • full surah" else if (language == AppLanguage.AR) "محفوظ دون اتصال • السورة كاملة" else "بەبێ ئینتەرنێت پارێزراوە • سوورەتی تەواو"
-                                        else -> if (language == AppLanguage.EN) "Download for offline playback" else if (language == AppLanguage.AR) "تنزيل للتشغيل دون إنترنت" else "داگرتن بۆ لێدان بەبێ ئینتەرنێت"
-                                    },
-                                    color = if (downloadProgress != null || localComplete) Gold else foreground.copy(alpha = 0.55f),
-                                    fontSize = 9.sp, maxLines = 2
-                                )
-                            }
-                            PremiumIconActionSurface(
-                                contentDescription = playLabel,
-                                accent = Gold,
-                                size = 40.dp,
-                                enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
-                                selected = playing == playKey,
-                                onClick = {
-                                    if (playing == playKey) {
-                                        AudioController.stop()
-                                        playing = ""
-                                    } else {
-                                        preferredReciterId = reciter.id
-                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
-                                        playing = playKey
-                                        autoPlayKey = playKey
-                                        AudioController.playSequence(context, sources) { state ->
-                                            audioPaused = false
-                                            if (!state) playing = ""
-                                        }
-                                    }
-                                }
-                            ) {
-                                AnimatedContent(
-                                    targetState = playing == playKey,
-                                    transitionSpec = {
-                                        if (motionAllowed) {
-                                            (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(130))) togetherWith
-                                                (scaleOut(targetScale = 0.65f, animationSpec = tween(100)) + fadeOut(tween(100)))
-                                        } else {
-                                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                                        }
-                                    },
-                                    label = "Reciter active audio waveform transition"
-                                ) { active ->
-                                    if (active) {
-                                        PremiumAudioWaveform(active = true, accent = Gold, contentDescription = playLabel)
-                                    } else {
-                                        Icon(
-                                            Icons.Outlined.PlayCircle,
-                                            contentDescription = playLabel,
-                                            tint = Gold,
-                                            modifier = Modifier.size(27.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            PremiumIconActionSurface(
-                                contentDescription = if (language == AppLanguage.EN) "Download full surah" else if (language == AppLanguage.AR) "تنزيل السورة كاملة" else "داگرتنی تەواوی سوورەت",
-                                accent = if (localComplete) Color(0xFF62C995) else Gold,
-                                size = 40.dp,
-                                enabled = downloadProgress == null && surahAyahCount > 0 && surahNumber <= reciter.surahTotal,
-                                selected = localComplete,
-                                onClick = {
-                                    if (localComplete) {
-                                        audioNotice = if (language == AppLanguage.EN) "This surah is already saved for offline playback."
-                                            else if (language == AppLanguage.AR) "هذه السورة محفوظة بالفعل للتشغيل دون إنترنت."
-                                            else "ئەم سوورەتە پێشتر بۆ لێدانی بەبێ ئینتەرنێت پارێزراوە."
-                                    } else {
-                                        audioNotice = ""
-                                        downloadingTracks = downloadingTracks + (downloadKey to "0")
-                                        scope.launch {
-                                            try {
-                                                downloadReciterSurah(context, reciter, surahNumber, surahAyahCount) { done, total ->
-                                                    downloadingTracks = downloadingTracks + (downloadKey to "$done/$total")
-                                                }
-                                                offlineRevision++
-                                                audioNotice = if (language == AppLanguage.EN) "${reciter.nameEnglish}: surah ${surahNumber} is saved for offline playback."
-                                                    else if (language == AppLanguage.AR) "تم حفظ السورة ${surahNumber} من ${reciter.nameArabic} للتشغيل دون إنترنت."
-                                                    else "سوورەتی ${surahNumber} بە دەنگی ${reciter.nameArabic} بۆ لێدانی بەبێ ئینتەرنێت پارێزرا."
-                                            } catch (_: Exception) {
-                                                audioNotice = if (language == AppLanguage.EN) "Download failed or the source does not provide every audio file. Check the connection and try again."
-                                                    else if (language == AppLanguage.AR) "تعذّر التنزيل أو أن المصدر لا يوفر كل المقاطع. تحقّق من الاتصال ثم حاول مجددًا."
-                                                    else "داگرتن سەرکەوتوو نەبوو یان هەموو فایلەکان لە سەرچاوەکەدا نیین؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
-                                            } finally {
-                                                downloadingTracks = downloadingTracks - downloadKey
-                                            }
-                                        }
-                                    }
-                                }
-                            ) {
-                                when {
-                                    downloadProgress != null -> PremiumLoadingIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
-                                    localComplete -> Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF62C995), modifier = Modifier.size(23.dp))
-                                    else -> Icon(Icons.Outlined.Download, contentDescription = null, tint = Gold, modifier = Modifier.size(23.dp))
                                 }
                             }
                         }
