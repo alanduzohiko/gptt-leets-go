@@ -8,7 +8,9 @@ import android.os.Bundle
 import android.content.Intent
 import android.content.Context
 import android.net.Uri
-import android.widget.VideoView
+import android.media.MediaPlayer
+import android.view.Surface
+import android.view.TextureView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -487,62 +489,204 @@ class MainActivity : ComponentActivity() {
 private fun MashxallStartupScreen(onFinished: () -> Unit) {
     val context = LocalContext.current
     val latestOnFinished by rememberUpdatedState(onFinished)
+    var firstFrameVisible by remember { mutableStateOf(false) }
+    var playbackFailed by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
-    var fallback by remember { mutableStateOf(false) }
 
-    // Play the supplied 3.875-second Mashxall logo animation as a bundled,
-    // offline video. The source is optimized to 1080x1920 H.264 for Android.
-    val introVideo = remember(context) {
-        VideoView(context).apply {
-            setBackgroundColor(android.graphics.Color.BLACK)
-            setVideoURI(Uri.parse("android.resource://${context.packageName}/${R.raw.mashxall_intro}"))
-            setOnPreparedListener { player ->
-                player.isLooping = false
-                player.setVolume(0f, 0f)
-                start()
-            }
-            setOnCompletionListener {
+    // Keep the real logo visible while the local decoder initializes. The
+    // TextureView below is transparent until its first decoded frame.
+    val introView = remember(context) {
+        MashxallIntroTextureView(
+            context = context,
+            onFirstFrame = { firstFrameVisible = true },
+            onCompleted = {
                 if (!finished) {
                     finished = true
                     latestOnFinished()
                 }
-            }
-            setOnErrorListener { _, _, _ ->
-                fallback = true
-                true
-            }
-        }
+            },
+            onFailed = { playbackFailed = true }
+        )
     }
 
-    DisposableEffect(introVideo) {
-        onDispose { introVideo.stopPlayback() }
+    DisposableEffect(introView) {
+        onDispose { introView.releasePlayback() }
     }
 
-    if (fallback) {
-        // Keep startup recoverable on devices whose video decoder rejects the
-        // resource: show the corrected original mark, then enter the app.
-        LaunchedEffect(Unit) {
-            delay(900L)
+    // Some vendor decoders can stall without reporting an error. Never leave a
+    // black splash: fall back to the original logo and continue gracefully.
+    LaunchedEffect(Unit) {
+        delay(7_000L)
+        if (!firstFrameVisible && !finished) playbackFailed = true
+    }
+    LaunchedEffect(playbackFailed) {
+        if (playbackFailed && !finished) {
+            delay(1_800L)
             if (!finished) {
                 finished = true
                 latestOnFinished()
             }
         }
-        Box(
-            Modifier.fillMaxSize().background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(R.drawable.mashxall_welcome_logo),
-                contentDescription = "Mashxall",
-                modifier = Modifier.fillMaxWidth(0.80f).aspectRatio(1f)
+    }
+
+    val logoScale by animateFloatAsState(
+        targetValue = if (firstFrameVisible) 0.94f else 1f,
+        animationSpec = tween(650, easing = FastOutSlowInEasing),
+        label = "Mashxall startup logo scale"
+    )
+    val logoAlpha by animateFloatAsState(
+        targetValue = if (firstFrameVisible && !playbackFailed) 0f else 1f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "Mashxall startup logo crossfade"
+    )
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(R.drawable.mashxall_welcome_logo),
+            contentDescription = "Mashxall",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .aspectRatio(1f)
+                .graphicsLayer {
+                    scaleX = logoScale
+                    scaleY = logoScale
+                    alpha = logoAlpha
+                }
+        )
+        if (!playbackFailed) {
+            AndroidView(
+                factory = { introView },
+                modifier = Modifier.fillMaxSize()
             )
         }
-    } else {
-        AndroidView(
-            factory = { introVideo },
-            modifier = Modifier.fillMaxSize()
-        )
+    }
+}
+
+/**
+ * Uses a TextureView-backed MediaPlayer instead of VideoView/SurfaceView.
+ * A TextureView participates in Compose's normal view composition, avoiding
+ * the black SurfaceView layer seen on some Android/Compose combinations.
+ */
+private class MashxallIntroTextureView(
+    context: Context,
+    private val onFirstFrame: () -> Unit,
+    private val onCompleted: () -> Unit,
+    private val onFailed: () -> Unit
+) : TextureView(context), TextureView.SurfaceTextureListener {
+
+    private var player: MediaPlayer? = null
+    private var outputSurface: Surface? = null
+    private var firstFrameReported = false
+    private var completionReported = false
+    private var released = false
+
+    init {
+        isOpaque = false
+        surfaceTextureListener = this
+    }
+
+    override fun onSurfaceTextureAvailable(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {
+        startPlayback(surfaceTexture)
+    }
+
+    private fun startPlayback(surfaceTexture: android.graphics.SurfaceTexture) {
+        if (released || player != null) return
+        try {
+            val media = MediaPlayer()
+            player = media
+            val surface = Surface(surfaceTexture)
+            outputSurface = surface
+            media.setSurface(surface)
+            media.setVolume(0f, 0f)
+            media.setDataSource(
+                context,
+                Uri.parse("android.resource://${context.packageName}/${R.raw.mashxall_intro}")
+            )
+            media.setOnPreparedListener { ready ->
+                if (released || player !== ready) return@setOnPreparedListener
+                try {
+                    ready.isLooping = false
+                    ready.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                    ready.start()
+                } catch (_: Exception) {
+                    failPlayback()
+                }
+            }
+            media.setOnInfoListener { _, what, _ ->
+                if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) reportFirstFrame()
+                false
+            }
+            media.setOnCompletionListener {
+                if (!completionReported && !released) {
+                    completionReported = true
+                    onCompleted()
+                }
+            }
+            media.setOnErrorListener { _, _, _ ->
+                failPlayback()
+                true
+            }
+            media.prepareAsync()
+        } catch (_: Exception) {
+            failPlayback()
+        }
+    }
+
+    private fun reportFirstFrame() {
+        if (!firstFrameReported && !released) {
+            firstFrameReported = true
+            onFirstFrame()
+        }
+    }
+
+    override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {
+        // A rendered texture frame is an additional signal for devices that
+        // do not dispatch MEDIA_INFO_VIDEO_RENDERING_START consistently.
+        reportFirstFrame()
+    }
+
+    override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) = Unit
+
+    override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
+        releasePlayback()
+        return true
+    }
+
+    private fun failPlayback() {
+        if (!released) {
+            releasePlayback()
+            onFailed()
+        }
+    }
+
+    fun releasePlayback() {
+        if (released) return
+        released = true
+        try {
+            player?.setOnPreparedListener(null)
+            player?.setOnInfoListener(null)
+            player?.setOnCompletionListener(null)
+            player?.setOnErrorListener(null)
+            player?.stop()
+        } catch (_: Exception) {
+            // The media pipeline may already be stopped by the platform.
+        }
+        try {
+            player?.release()
+        } catch (_: Exception) {
+            // Release is best-effort on vendor MediaPlayer implementations.
+        }
+        player = null
+        try {
+            outputSurface?.release()
+        } catch (_: Exception) {
+            // The Surface may already have been released with its texture.
+        }
+        outputSurface = null
     }
 }
 
