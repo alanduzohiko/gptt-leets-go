@@ -27,7 +27,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -274,7 +273,7 @@ internal fun Modifier.premiumClickable(
     if (onLongClick != null) {
         touchTarget.combinedClickable(
             interactionSource = interactionSource,
-            indication = LocalIndication.current,
+            indication = null,
             enabled = enabled,
             onClickLabel = onClickLabel,
             onLongClickLabel = onLongClickLabel,
@@ -291,7 +290,7 @@ internal fun Modifier.premiumClickable(
     } else {
         touchTarget.clickable(
             interactionSource = interactionSource,
-            indication = LocalIndication.current,
+            indication = null,
             enabled = enabled,
             onClickLabel = onClickLabel,
             role = role
