@@ -6,6 +6,14 @@ import org.junit.Test
 
 class PremiumMotionPolicyTest {
     @Test
+    fun returningColdStartSkipsStaggeredEntrancesButNavigationCanAnimate() {
+        assertEquals(false, shouldAnimateStaggeredEntrance(true, true, true))
+        assertEquals(true, shouldAnimateStaggeredEntrance(true, true, false))
+        assertEquals(false, shouldAnimateStaggeredEntrance(false, true, false))
+        assertEquals(false, shouldAnimateStaggeredEntrance(true, false, false))
+    }
+
+    @Test
     fun decorativeMotionRequiresBothSystemAndAppPermission() {
         assertEquals(true, shouldAllowMashxallMotion(true, 1f, false))
         assertEquals(false, shouldAllowMashxallMotion(true, 1f, true))

@@ -6,6 +6,22 @@ import org.junit.Test
 
 class MashxallStartupAnimationPolicyTest {
     @Test
+    fun completedOrLegacyInstallSkipsColdStartEntranceButFirstRunDoesNot() {
+        assertTrue(shouldSuppressMashxallColdStartEntrance(
+            firstRunSetupComplete = true,
+            legacyUserState = false
+        ))
+        assertTrue(shouldSuppressMashxallColdStartEntrance(
+            firstRunSetupComplete = false,
+            legacyUserState = true
+        ))
+        assertFalse(shouldSuppressMashxallColdStartEntrance(
+            firstRunSetupComplete = false,
+            legacyUserState = false
+        ))
+    }
+
+    @Test
     fun brandNewInstallPlaysTheIntroOnce() {
         assertTrue(
             shouldPlayMashxallStartupAnimation(

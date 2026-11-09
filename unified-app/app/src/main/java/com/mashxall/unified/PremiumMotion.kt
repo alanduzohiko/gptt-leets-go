@@ -122,6 +122,11 @@ internal object MashxallMotionPreferences {
     var hapticsEnabled: Boolean
         get() = hapticsEnabledState.value
         set(value) { hapticsEnabledState.value = value }
+
+    private val skipColdStartEntranceState = mutableStateOf(false)
+    var skipColdStartEntrance: Boolean
+        get() = skipColdStartEntranceState.value
+        set(value) { skipColdStartEntranceState.value = value }
 }
 
 /** Decorative motion is allowed only when both Android and the user allow it. */
@@ -792,6 +797,16 @@ internal fun ambientMotionDurationMillis(baseMillis: Int, speed: Float): Int =
         .coerceIn(1_000, 120_000)
 
 /**
+ * Returning users skip only the first cold-start entrance cascade. The flag is
+ * cleared by deliberate navigation, so screen-to-screen transitions remain lively.
+ */
+internal fun shouldAnimateStaggeredEntrance(
+    motionAllowed: Boolean,
+    enabled: Boolean,
+    skipColdStartEntrance: Boolean
+): Boolean = motionAllowed && enabled && !skipColdStartEntrance
+
+/**
  * Entrance motion for real content rows: fade, a restrained upward settle and
  * a small spring scale. Stable keys make the animation follow the item rather
  * than its position when search results are reordered.
@@ -804,12 +819,17 @@ internal fun Modifier.staggeredEntrance(
 ): Modifier {
     val context = LocalContext.current
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
+    val animateEntrance = shouldAnimateStaggeredEntrance(
+        motionAllowed = motionAllowed,
+        enabled = enabled,
+        skipColdStartEntrance = MashxallMotionPreferences.skipColdStartEntrance
+    )
     val progress = remember(itemKey) {
-        Animatable(if (motionAllowed && enabled) 0f else 1f)
+        Animatable(if (animateEntrance) 0f else 1f)
     }
 
-    LaunchedEffect(itemKey, index, motionAllowed, enabled) {
-        if (!motionAllowed || !enabled) {
+    LaunchedEffect(itemKey, index, animateEntrance) {
+        if (!animateEntrance) {
             progress.snapTo(1f)
         } else {
             progress.snapTo(0f)

@@ -391,10 +391,15 @@ internal fun prayerTilePressScale(key: String): Float = when (key) {
 
 @Composable
 private fun HomeModuleIcon(module: HomeModule, index: Int, size: androidx.compose.ui.unit.Dp) {
-    var entered by rememberSaveable(module.screen.key) { mutableStateOf(false) }
-    LaunchedEffect(module.screen.key) {
-        delay(staggerDelayMillis(index))
-        entered = true
+    val skipColdStartEntrance = MashxallMotionPreferences.skipColdStartEntrance
+    var entered by rememberSaveable(module.screen.key) { mutableStateOf(skipColdStartEntrance) }
+    LaunchedEffect(module.screen.key, skipColdStartEntrance) {
+        if (skipColdStartEntrance) {
+            entered = true
+        } else {
+            delay(staggerDelayMillis(index))
+            entered = true
+        }
     }
     val restingRotation = homeModuleIconRestingRotation(module.screen.key)
     val arrivalRotation = restingRotation + if (index % 2 == 0) -19f else 19f
@@ -474,8 +479,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = android.graphics.Color.rgb(7, 30, 26)
-        window.navigationBarColor = android.graphics.Color.rgb(7, 30, 26)
+        val launchPrefs = getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+        val legacyUserState = !launchPrefs.getBoolean("first_run_setup_started", false) &&
+            (launchPrefs.contains("language") || launchPrefs.contains("last_surah") ||
+                launchPrefs.contains("last_mushaf_page") || launchPrefs.contains("accent_palette") ||
+                launchPrefs.contains("dark_mode") || launchPrefs.contains("gps_latitude") ||
+                launchPrefs.contains("manual_city_latitude"))
+        MashxallMotionPreferences.skipColdStartEntrance = shouldSuppressMashxallColdStartEntrance(
+            firstRunSetupComplete = launchPrefs.getBoolean("first_run_setup_complete", false),
+            legacyUserState = legacyUserState
+        )
+        // Android paints this branded drawable while the native Compose tree is starting.
+        // Returning users therefore see the app identity immediately, never a black frame.
+        window.setBackgroundDrawableResource(R.drawable.mashxall_launch_background)
+        window.statusBarColor = android.graphics.Color.rgb(6, 23, 17)
+        window.navigationBarColor = android.graphics.Color.rgb(6, 23, 17)
         setContent { MashxallApp(startScreen = intent.getStringExtra(EXTRA_OPEN_SCREEN)) }
     }
 
@@ -492,6 +510,12 @@ internal fun shouldPlayMashxallStartupAnimation(
     firstRunSetupComplete: Boolean,
     legacyUserState: Boolean
 ): Boolean = !startupPlayed && !startupStarted && !firstRunSetupComplete && !legacyUserState
+
+/** Existing installs skip decorative entrance cascades on cold start; navigation still animates. */
+internal fun shouldSuppressMashxallColdStartEntrance(
+    firstRunSetupComplete: Boolean,
+    legacyUserState: Boolean
+): Boolean = firstRunSetupComplete || legacyUserState
 
 @Composable
 private fun MashxallStartupScreen(onFinished: () -> Unit) {
@@ -839,37 +863,78 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
     }
     val subtitles = when (language) {
         AppLanguage.EN -> listOf(
-            "Your chosen language will be used throughout the app.",
-            "Your complete Islamic companion, with the original Mushaf and verified prayer times.",
-            "Allow location once. Your coordinates are saved on this device and reused on future launches."
+            "Choose the language that feels most natural. You can change it any time in Settings.",
+            "A beautiful home for the Noble Quran, trusted prayer times, remembrance and knowledge.",
+            "Save your location once to find the closest supported Salawati timetable. You can also do this later."
         )
         AppLanguage.AR -> listOf(
-            "ستُستخدم اللغة التي تختارها في واجهة التطبيق.",
-            "رفيقك الإسلامي المتكامل، بالمصحف الأصلي ومواقيت الصلاة الموثوقة.",
-            "اسمح بالموقع مرة واحدة. تُحفظ إحداثياتك على الجهاز وتُستخدم في مرات الفتح القادمة."
+            "اختر اللغة الأقرب إليك. ويمكنك تغييرها لاحقًا من إعدادات التطبيق.",
+            "رفيق إسلامي متكامل يجمع المصحف الكريم ومواقيت الصلاة والأذكار والعلم في تجربة واحدة.",
+            "احفظ موقعك مرة واحدة للعثور على أقرب جدول موثوق من صلواتي، ويمكنك فعل ذلك لاحقًا."
         )
         AppLanguage.CKB -> listOf(
-            "ئەو زمانەی هەڵیدەبژێریت لە هەموو بەشەکانی ئەپەکەدا بەکاردێت.",
-            "",
-            "تەنها جارێک مۆڵەتی شوێن بدە؛ کۆئۆردیناتەکانت لەم ئامێرەدا پاشەکەوت دەکرێن و دواتر دووبارە بەکاردێن."
+            "ئەو زمانە هەڵبژێرە کە بۆت ئاسانترە؛ هەر کاتێک دەتوانیت لە ڕێکخستنەکان بیگۆڕیت.",
+            "شوێنێکی جوان بۆ قورئانی پیرۆز، کاتە پەسەندکراوەکانی نوێژ، زیکر و زانیارییە ئیسلامییەکان.",
+            "شوێنەکەت پاشەکەوت بکە بۆ دۆزینەوەی نزیکترین خشتەی ڕەسەنی صەڵەواتی؛ دواتریش دەتوانیت ئەمە بکەیت."
         )
     }
-    val setupGlowTransition = rememberInfiniteTransition(label = "Mashxall onboarding gold glow")
-    val setupGlow by setupGlowTransition.animateFloat(
-        initialValue = 0.20f,
+
+    val setupDark = prefs.getBoolean("dark_mode", true)
+    val setupMotionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) {
+        systemAllowsDecorativeMotion(context)
+    }
+    val setupSurface = if (setupDark) Color(0xFF102B25) else Color(0xFFFFFCF5)
+    val setupText = if (setupDark) Color(0xFFFFF7E5) else Color(0xFF12372C)
+    val setupMuted = if (setupDark) Color(0xFFB9CEC3) else Color(0xFF66766D)
+    val setupLine = if (setupDark) Color.White.copy(alpha = 0.14f) else DeepGreen.copy(alpha = 0.13f)
+    val setupGlowTransition = rememberInfiniteTransition(label = "Mashxall premium first-run glow")
+    val animatedSetupGlow by setupGlowTransition.animateFloat(
+        initialValue = 0.18f,
         targetValue = 0.42f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
+            animation = tween(2600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "Onboarding ambient glow"
+        label = "First-run ambient glow"
     )
-    val minimalSoraniWelcome = language == AppLanguage.CKB && step == 1
-    val setupDark = prefs.getBoolean("dark_mode", false)
-    val setupSurface = if (setupDark) Color(0xFF10271F) else Color(0xFFFFFEFA)
-    val setupText = if (setupDark) Color(0xFFFFF8E9) else Color(0xFF12372C)
-    val setupMuted = if (setupDark) Color(0xFFD8E5DC) else Color(0xFF65756D)
-    val setupLine = if (setupDark) Color.White.copy(alpha = 0.14f) else DeepGreen.copy(alpha = 0.13f)
+    val animatedRingRotation by setupGlowTransition.animateFloat(
+        initialValue = -7f,
+        targetValue = 7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "First-run emblem rotation"
+    )
+    val animatedRingScale by setupGlowTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "First-run emblem breathing"
+    )
+    val setupGlow = if (setupMotionAllowed) animatedSetupGlow else 0.24f
+    val setupRingRotation = if (setupMotionAllowed) animatedRingRotation else 0f
+    val setupRingScale = if (setupMotionAllowed) animatedRingScale else 1f
+    val features = when (language) {
+        AppLanguage.EN -> listOf(
+            Triple(Icons.Outlined.MenuBook, "The Noble Quran", "The original 604-page Mushaf, verse reading, search, tafsir and recitation."),
+            Triple(Icons.Outlined.Schedule, "Prayer times", "Location-aware timetables from the original Salawati source."),
+            Triple(Icons.Outlined.Spa, "A life of remembrance", "Adhkar, Hadith, the Names of Allah, Qibla and more.")
+        )
+        AppLanguage.AR -> listOf(
+            Triple(Icons.Outlined.MenuBook, "القرآن الكريم", "المصحف الأصلي ذو 604 صفحات، وقراءة الآيات والبحث والتفسير والتلاوة."),
+            Triple(Icons.Outlined.Schedule, "مواقيت الصلاة", "مواقيت مرتبطة بموقعك من بيانات صلواتي الأصلية."),
+            Triple(Icons.Outlined.Spa, "الذكر والمعرفة", "الأذكار والأحاديث وأسماء الله الحسنى والقبلة والمزيد.")
+        )
+        AppLanguage.CKB -> listOf(
+            Triple(Icons.Outlined.MenuBook, "قورئانی پیرۆز", "مصحەفی ڕەسەنی ٦٠٤ پەڕە، خوێندنەوەی ئایەت، گەڕان، تەفسیر و تلاوەت."),
+            Triple(Icons.Outlined.Schedule, "کاتەکانی نوێژ", "کاتەکان بە پێی شوێنت و لە داتای ڕەسەنی صەڵەواتی."),
+            Triple(Icons.Outlined.Spa, "زیکر و زانیاری", "زیکر، فەرموودە، ناوە پیرۆزەکان، قیبلە و زۆر شتی تر.")
+        )
+    }
 
     CompositionLocalProvider(
         LocalLayoutDirection provides if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -878,31 +943,28 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
                     if (setupDark) {
-                        listOf(Color(0xFF030F0C), Color(0xFF0A241D), Color(0xFF10382D), Color(0xFF061711))
+                        listOf(Color(0xFF041610), Color(0xFF0A2A20), Color(0xFF103B2D), Color(0xFF061711))
                     } else {
-                        listOf(Color(0xFFF8F5ED), Color(0xFFEFE8D8), Color(0xFFF7F3E9), Color(0xFFE9E1CF))
+                        listOf(Color(0xFFF5F1E6), Color(0xFFEAE4D5), Color(0xFFF8F5EC), Color(0xFFEDE6D6))
                     }
                 )
             )
         ) {
             Box(
-                Modifier.align(Alignment.TopCenter)
-                    .offset(y = (-178).dp)
-                    .size(460.dp)
+                Modifier.align(Alignment.TopEnd).offset(x = 110.dp, y = (-120).dp).size(330.dp)
+                    .graphicsLayer { scaleX = 0.92f + setupGlow * 0.18f; scaleY = 0.92f + setupGlow * 0.18f }
                     .background(
                         Brush.radialGradient(
-                            listOf(Gold.copy(alpha = setupGlow * 0.30f), DeepGreen.copy(alpha = if (setupDark) 0.09f else 0.045f), Color.Transparent)
+                            listOf(Gold.copy(alpha = setupGlow * 0.36f), Color(0xFF398C68).copy(alpha = 0.10f), Color.Transparent)
                         ),
                         CircleShape
                     )
             )
             Box(
-                Modifier.align(Alignment.BottomCenter)
-                    .offset(y = 195.dp)
-                    .size(420.dp)
+                Modifier.align(Alignment.BottomStart).offset(x = (-130).dp, y = 145.dp).size(360.dp)
                     .background(
                         Brush.radialGradient(
-                            listOf(Gold.copy(alpha = setupGlow * (if (setupDark) 0.11f else 0.16f)), Color.Transparent)
+                            listOf(Color(0xFF5AB58A).copy(alpha = if (setupDark) 0.13f else 0.12f), Color.Transparent)
                         ),
                         CircleShape
                     )
@@ -911,233 +973,434 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
             Column(
                 Modifier.fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 22.dp, vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 3.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "MASHXALL"
-                            AppLanguage.AR -> "مَشْخەڵ"
-                            AppLanguage.CKB -> "مەشخەڵ"
-                        },
-                        color = if (setupDark) PaleGold else DeepGreen,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.2.sp
-                    )
+                    if (step > 0) {
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape)
+                                .background(if (setupDark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.78f))
+                                .border(1.dp, setupLine, CircleShape)
+                                .premiumPress(pressedScale = 0.92f) { step = (step - 1).coerceAtLeast(0) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.ArrowBack, contentDescription = null, tint = setupText, modifier = Modifier.size(19.dp))
+                        }
+                    } else {
+                        Box(
+                            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp))
+                                .background(Gold.copy(alpha = 0.13f))
+                                .border(1.dp, Gold.copy(alpha = 0.28f), RoundedCornerShape(13.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.AutoStories, contentDescription = null, tint = Gold, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(11.dp))
+                    Column {
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "MASHXALL"
+                                AppLanguage.AR -> "مَشْخەڵ"
+                                AppLanguage.CKB -> "مەشخەڵ"
+                            },
+                            color = if (setupDark) PaleGold else DeepGreen,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.8.sp
+                        )
+                        Text(
+                            when (language) {
+                                AppLanguage.EN -> "YOUR ISLAMIC COMPANION"
+                                AppLanguage.AR -> "رفيقك الإسلامي"
+                                AppLanguage.CKB -> "هاوڕێی ئیسلامی تۆ"
+                            },
+                            color = setupMuted.copy(alpha = 0.82f),
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     Text(
-                        "0${step + 1} / 03",
-                        color = setupMuted.copy(alpha = 0.82f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        "0" + (step + 1) + " / 03",
+                        color = setupMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 1.sp
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+
+                Spacer(Modifier.height(16.dp))
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     repeat(3) { index ->
                         Box(
-                            Modifier.weight(1f).height(3.dp).clip(CircleShape)
-                                .background(
-                                    if (index <= step) Gold
-                                    else setupLine
-                                )
+                            Modifier.weight(1f).height(4.dp).clip(CircleShape)
+                                .background(if (index <= step) Gold else setupLine)
                         )
                     }
                 }
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(19.dp))
 
                 Box(
-                    Modifier.fillMaxWidth(0.78f).aspectRatio(1f)
-                        .clip(RoundedCornerShape(30.dp))
-                        .background(
-                            Brush.radialGradient(
-                                if (setupDark) {
-                                 listOf(Color(0xFF214A38).copy(alpha = 0.76f), Color(0xFF0C211B).copy(alpha = 0.92f), Color.Transparent)
-                             } else {
-                                 listOf(Color.White.copy(alpha = 0.96f), Color(0xFFECE4D2).copy(alpha = 0.86f), Color.Transparent)
-                             }
-                            )
-                        )
-                        .border(1.dp, Gold.copy(alpha = 0.32f), RoundedCornerShape(30.dp)),
-                    contentAlignment = Alignment.Center
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(29.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFF205941), Color(0xFF103A2D), Color(0xFF09251D))))
+                        .border(1.dp, Gold.copy(alpha = 0.48f), RoundedCornerShape(29.dp))
+                        .padding(horizontal = 18.dp, vertical = 18.dp)
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.mashxall_welcome_logo),
-                        contentDescription = "Mashxall logo",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxWidth(0.92f).aspectRatio(1f)
+                    Box(
+                        Modifier.align(Alignment.TopEnd).offset(x = 60.dp, y = (-74).dp).size(190.dp)
+                            .background(
+                                Brush.radialGradient(listOf(Gold.copy(alpha = setupGlow * 0.34f), Color.Transparent)),
+                                CircleShape
+                            )
                     )
-                }
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    titles[step],
-                    color = setupText,
-                    fontSize = if (minimalSoraniWelcome) 25.sp else 23.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 34.sp
-                )
-                if (subtitles[step].isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        subtitles[step],
-                        color = setupMuted,
-                        fontSize = 12.sp,
-                        lineHeight = 20.sp,
-                        textAlign = TextAlign.Center
+                    Box(
+                        Modifier.align(Alignment.BottomStart).offset(x = (-76).dp, y = 78.dp).size(160.dp)
+                            .background(
+                                Brush.radialGradient(listOf(Color(0xFF68C59A).copy(alpha = 0.18f), Color.Transparent)),
+                                CircleShape
+                            )
                     )
-                }
-                Spacer(Modifier.height(if (minimalSoraniWelcome) 22.dp else 20.dp))
-
-                when (step) {
-                    0 -> listOf(AppLanguage.CKB, AppLanguage.AR, AppLanguage.EN).forEach { option ->
-                        val selected = language == option
-                        Box(
-                            Modifier.fillMaxWidth().padding(vertical = 5.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(
-                                    if (selected) Brush.horizontalGradient(
-                                        listOf(Color(0xFF285741), Color(0xFF163B30))
-                                    ) else Brush.horizontalGradient(
-                                        listOf(setupSurface, setupSurface.copy(alpha = 0.94f))
-                                    )
-                                )
-                                .border(
-                                    1.dp,
-                                    if (selected) Gold.copy(alpha = 0.92f) else setupLine,
-                                    RoundedCornerShape(18.dp)
-                                )
-                                .clickable { language = option }
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 15.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
-                                        .background(Gold.copy(alpha = if (selected) 0.18f else 0.08f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        when (option) {
-                                            AppLanguage.CKB -> "ک"
-                                            AppLanguage.AR -> "ع"
-                                            AppLanguage.EN -> "A"
-                                        },
-                                        color = if (selected) PaleGold else Gold,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Text(option.label, color = if (selected) Color.White else setupText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.weight(1f))
-                                if (selected) Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(22.dp))
-                            }
-                        }
-                    }
-
-                    1 -> if (language != AppLanguage.CKB) Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = setupSurface),
-                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.30f))
-                    ) {
-                        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Outlined.AutoStories, null, tint = Gold, modifier = Modifier.size(32.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "A NEW KIND OF ISLAMIC EXPERIENCE"
+                                    AppLanguage.AR -> "تجربة إسلامية متكاملة"
+                                    AppLanguage.CKB -> "ئەزموونێکی تەواوی ئیسلامی"
+                                },
+                                color = PaleGold.copy(alpha = 0.86f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.65.sp
+                            )
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 when (language) {
-                                    AppLanguage.EN -> "Read, learn and worship"
-                                    AppLanguage.AR -> "اقرأ وتعلّم وتعبّد"
-                                    AppLanguage.CKB -> ""
+                                    AppLanguage.EN -> "A brighter beginning."
+                                    AppLanguage.AR -> "بداية أكثر إشراقًا."
+                                    AppLanguage.CKB -> "دەستپێکێکی ڕووناکتر."
                                 },
-                                color = setupText, fontSize = 15.sp, fontWeight = FontWeight.Bold
+                                color = Color(0xFFFFF8E8),
+                                fontSize = 20.sp,
+                                lineHeight = 27.sp,
+                                fontWeight = FontWeight.ExtraBold
                             )
-                            Spacer(Modifier.height(7.dp))
+                            Spacer(Modifier.height(5.dp))
                             Text(
                                 when (language) {
-                                    AppLanguage.EN -> "Your language is saved. Next, we will set up the location used for your local prayer timetable."
-                                    AppLanguage.AR -> "تم حفظ لغتك. سنضبط الآن الموقع الذي ستُستخدم إحداثياته لمواقيت الصلاة المحلية."
-                                    AppLanguage.CKB -> ""
+                                    AppLanguage.EN -> "Everything you need for your daily journey, thoughtfully brought together."
+                                    AppLanguage.AR -> "كل ما تحتاجه في رحلتك اليومية، في مكان واحد بعناية وجمال."
+                                    AppLanguage.CKB -> "هەموو ئەو شتانەی لە ڕۆژانەدا پێویستن، بە جوانی لە یەک شوێندا کۆکراونەتەوە."
                                 },
-                                color = setupMuted, textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 19.sp
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 10.sp,
+                                lineHeight = 16.sp
                             )
                         }
-                    } else Spacer(Modifier.height(3.dp))
-
-                    else -> Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = setupSurface),
-                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.28f))
-                    ) {
-                        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(Modifier.width(10.dp))
+                        Box(
+                            Modifier.size(91.dp).graphicsLayer {
+                                rotationZ = setupRingRotation
+                                scaleX = setupRingScale
+                                scaleY = setupRingScale
+                            }.clip(CircleShape)
+                                .background(Brush.radialGradient(listOf(Color(0xFF347B58), Color(0xFF102F24))))
+                                .border(1.4.dp, Gold.copy(alpha = 0.70f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Box(
-                                Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
-                                    .background(Gold.copy(alpha = 0.10f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    if (locationSaved) Icons.Outlined.CheckCircle else Icons.Outlined.GpsFixed,
-                                    null,
-                                    tint = if (locationSaved) Color(0xFF86D7A8) else Gold,
-                                    modifier = Modifier.size(27.dp)
-                                )
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> if (locationSaved) "Location saved" else "Find my location"
-                                    AppLanguage.AR -> if (locationSaved) "تم حفظ الموقع" else "تحديد موقعي"
-                                    AppLanguage.CKB -> if (locationSaved) "شوێن پاشەکەوت کرا" else "شوێنی خۆم دیاری بکە"
-                                },
-                                color = if (locationSaved) Color(0xFF3B9B6F) else setupText,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                Modifier.size(77.dp).border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
                             )
-                            Spacer(Modifier.height(7.dp))
-                            Text(
-                                locationMessage.ifBlank {
-                                    when (language) {
-                                        AppLanguage.EN -> "No prayer time is guessed. The app uses its original Salawati source data."
-                                        AppLanguage.AR -> "لا يتم تخمين المواقيت؛ يعتمد التطبيق على بيانات صلواتي الأصلية."
-                                        AppLanguage.CKB -> "کاتەکان ناخرێنە خەیاڵەوە؛ ئەپەکە داتای ڕەسەنی صەڵەواتی بەکاردێنێت."
+                            Image(
+                                painter = painterResource(R.drawable.mashxall_welcome_logo),
+                                contentDescription = "Mashxall",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(73.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(19.dp))
+                AnimatedContent(
+                    targetState = step,
+                    modifier = Modifier.fillMaxWidth(),
+                    transitionSpec = {
+                        if (setupMotionAllowed) {
+                            (fadeIn(tween(260)) + slideInVertically(tween(300)) { it / 9 } +
+                                scaleIn(initialScale = 0.965f, animationSpec = tween(300))) togetherWith
+                                (fadeOut(tween(150)) + slideOutVertically(tween(170)) { -it / 12 } +
+                                    scaleOut(targetScale = 0.975f, animationSpec = tween(170)))
+                        } else {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        }
+                    },
+                    label = "Mashxall first-run step transition"
+                ) { visibleStep ->
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            titles[visibleStep],
+                            color = setupText,
+                            fontSize = if (visibleStep == 1) 24.sp else 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 32.sp
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            subtitles[visibleStep],
+                            color = setupMuted,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.height(15.dp))
+
+                        when (visibleStep) {
+                            0 -> {
+                                listOf(AppLanguage.CKB, AppLanguage.AR, AppLanguage.EN).forEachIndexed { index, option ->
+                                    val selected = language == option
+                                    Box(
+                                        Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                            .staggeredEntrance(
+                                                itemKey = "first-run-language-" + option.key,
+                                                index = index,
+                                                enabled = setupMotionAllowed
+                                            )
+                                            .clip(RoundedCornerShape(21.dp))
+                                            .background(
+                                                if (selected) Brush.linearGradient(listOf(Color(0xFF28634A), Color(0xFF123A2D)))
+                                                else Brush.horizontalGradient(listOf(setupSurface, setupSurface.copy(alpha = 0.94f)))
+                                            )
+                                            .border(
+                                                if (selected) 1.5.dp else 1.dp,
+                                                if (selected) Gold.copy(alpha = 0.95f) else setupLine,
+                                                RoundedCornerShape(21.dp)
+                                            )
+                                            .premiumPress(pressedScale = 0.955f) { language = option }
+                                            .padding(horizontal = 15.dp, vertical = 14.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp))
+                                                    .background(Gold.copy(alpha = if (selected) 0.20f else 0.10f))
+                                                    .border(1.dp, Gold.copy(alpha = 0.24f), RoundedCornerShape(14.dp)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    when (option) {
+                                                        AppLanguage.CKB -> "ک"
+                                                        AppLanguage.AR -> "ع"
+                                                        AppLanguage.EN -> "A"
+                                                    },
+                                                    color = if (selected) PaleGold else Gold,
+                                                    fontSize = 20.sp,
+                                                    fontWeight = FontWeight.Black
+                                                )
+                                            }
+                                            Spacer(Modifier.width(13.dp))
+                                            Column {
+                                                Text(
+                                                    option.label,
+                                                    color = if (selected) Color.White else setupText,
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    when (option) {
+                                                        AppLanguage.CKB -> "Kurdish Sorani"
+                                                        AppLanguage.AR -> "اللغة العربية"
+                                                        AppLanguage.EN -> "English language"
+                                                    },
+                                                    color = if (selected) Color.White.copy(alpha = 0.70f) else setupMuted,
+                                                    fontSize = 9.sp
+                                                )
+                                            }
+                                            Spacer(Modifier.weight(1f))
+                                            if (selected) {
+                                                Icon(Icons.Outlined.CheckCircle, null, tint = PaleGold, modifier = Modifier.size(23.dp))
+                                            } else {
+                                                Box(Modifier.size(21.dp).border(1.dp, setupLine, CircleShape))
+                                            }
+                                        }
                                     }
-                                },
-                                color = setupMuted,
-                                fontSize = 11.sp,
-                                lineHeight = 17.sp,
-                                textAlign = TextAlign.Center
-                            )
-                            if (!locationSaved) {
-                                Spacer(Modifier.height(12.dp))
+                                }
+                            }
+
+                            1 -> {
+                                Column(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(23.dp))
+                                        .background(setupSurface.copy(alpha = if (setupDark) 0.88f else 0.94f))
+                                        .border(1.dp, Gold.copy(alpha = 0.25f), RoundedCornerShape(23.dp))
+                                        .padding(13.dp),
+                                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                                ) {
+                                    features.forEachIndexed { index, item ->
+                                        Row(
+                                            Modifier.fillMaxWidth()
+                                                .staggeredEntrance(
+                                                    itemKey = "first-run-feature-" + index,
+                                                    index = index,
+                                                    enabled = setupMotionAllowed
+                                                )
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(if (setupDark) Color.White.copy(alpha = 0.045f) else Color(0xFFF4F0E5))
+                                                .padding(horizontal = 11.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                Modifier.size(43.dp).clip(RoundedCornerShape(14.dp))
+                                                    .background(Gold.copy(alpha = 0.12f))
+                                                    .border(1.dp, Gold.copy(alpha = 0.22f), RoundedCornerShape(14.dp)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(item.first, null, tint = Gold, modifier = Modifier.size(23.dp))
+                                            }
+                                            Spacer(Modifier.width(11.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(item.second, color = setupText, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                                                Spacer(Modifier.height(3.dp))
+                                                Text(item.third, color = setupMuted, fontSize = 9.sp, lineHeight = 14.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
                                 Text(
                                     when (language) {
-                                        AppLanguage.EN -> if (locationBusy) "Finding your current location…" else "Try location again"
-                                        AppLanguage.AR -> if (locationBusy) "جارٍ تحديد موقعك…" else "إعادة تحديد موقعي"
-                                        AppLanguage.CKB -> if (locationBusy) "شوێنت دیاری دەکرێت…" else "دووبارە شوێن دیاری بکە"
+                                        AppLanguage.EN -> "Made to feel calm, clear and beautiful every day."
+                                        AppLanguage.AR -> "صُمّم ليكون رفيقك الهادئ والجميل كل يوم."
+                                        AppLanguage.CKB -> "بۆ ئەوە دروستکراوە هەموو ڕۆژێک ئارام و جوان و ئاسان بێت."
                                     },
                                     color = Gold,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable(enabled = !locationBusy) { requestLocation() }.padding(8.dp)
+                                    textAlign = TextAlign.Center
                                 )
+                            }
+
+                            else -> {
+                                Column(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                                        .background(setupSurface.copy(alpha = if (setupDark) 0.92f else 0.96f))
+                                        .border(1.dp, Gold.copy(alpha = 0.32f), RoundedCornerShape(24.dp))
+                                        .padding(18.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        Modifier.size(67.dp).clip(RoundedCornerShape(22.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    if (locationSaved) listOf(Color(0xFF277D59), Color(0xFF154B37))
+                                                    else listOf(Color(0xFFB78D38), Color(0xFF806026))
+                                                )
+                                            )
+                                            .border(1.dp, Gold.copy(alpha = 0.45f), RoundedCornerShape(22.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            if (locationSaved) Icons.Outlined.CheckCircle else Icons.Outlined.GpsFixed,
+                                            null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.height(12.dp))
+                                    Text(
+                                        when (language) {
+                                            AppLanguage.EN -> if (locationSaved) "Your location is ready" else "Find your location"
+                                            AppLanguage.AR -> if (locationSaved) "تم حفظ موقعك بنجاح" else "حدّد موقعك"
+                                            AppLanguage.CKB -> if (locationSaved) "شوێنەکەت پاشەکەوت کرا" else "شوێنی خۆت دیاری بکە"
+                                        },
+                                        color = setupText,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Spacer(Modifier.height(7.dp))
+                                    Text(
+                                        locationMessage.ifBlank {
+                                            when (language) {
+                                                AppLanguage.EN -> "The app uses original Salawati source data. Prayer times are never guessed."
+                                                AppLanguage.AR -> "يعتمد التطبيق على بيانات صلواتي الأصلية، ولا يخمّن مواقيت الصلاة."
+                                                AppLanguage.CKB -> "ئەپەکە داتای ڕەسەنی صەڵەواتی بەکاردێنێت و کاتی نوێژ لە خۆوە دانانێت."
+                                            }
+                                        },
+                                        color = setupMuted,
+                                        fontSize = 10.sp,
+                                        lineHeight = 17.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    if (locationSaved) {
+                                        Spacer(Modifier.height(12.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Outlined.CheckCircle, null, tint = Color(0xFF69C995), modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                when (language) {
+                                                    AppLanguage.EN -> "Ready for your first visit"
+                                                    AppLanguage.AR -> "أصبح التطبيق جاهزًا"
+                                                    AppLanguage.CKB -> "ئێستا ئەپەکە ئامادەیە"
+                                                },
+                                                color = Color(0xFF69C995),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(Modifier.height(13.dp))
+                                        Row(
+                                            Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+                                                .background(Brush.horizontalGradient(listOf(Color(0xFF28634A), Color(0xFF123A2D))))
+                                                .border(1.dp, Gold.copy(alpha = 0.38f), RoundedCornerShape(15.dp))
+                                                .premiumPress(pressedScale = 0.96f) { if (!locationBusy) requestLocation() }
+                                                .padding(horizontal = 13.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            if (locationBusy) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(17.dp),
+                                                    color = PaleGold,
+                                                    strokeWidth = 2.dp
+                                                )
+                                            } else {
+                                                Icon(Icons.Outlined.GpsFixed, null, tint = PaleGold, modifier = Modifier.size(18.dp))
+                                            }
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                when (language) {
+                                                    AppLanguage.EN -> if (locationBusy) "Finding your location…" else "Try location again"
+                                                    AppLanguage.AR -> if (locationBusy) "جارٍ تحديد موقعك…" else "إعادة تحديد موقعي"
+                                                    AppLanguage.CKB -> if (locationBusy) "شوێنت دیاری دەکرێت…" else "دووبارە شوێن دیاری بکە"
+                                                },
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(16.dp))
                 val buttonLabel = when (step) {
                     0 -> when (language) {
                         AppLanguage.EN -> "Continue"
@@ -1145,9 +1408,9 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                         AppLanguage.CKB -> "بەردەوام بە"
                     }
                     1 -> when (language) {
-                        AppLanguage.EN -> "Set up location"
-                        AppLanguage.AR -> "إعداد الموقع"
-                        AppLanguage.CKB -> "ڕێکخستنی شوێن"
+                        AppLanguage.EN -> "Set up prayer times"
+                        AppLanguage.AR -> "إعداد مواقيت الصلاة"
+                        AppLanguage.CKB -> "ڕێکخستنی کاتەکانی نوێژ"
                     }
                     else -> when (language) {
                         AppLanguage.EN -> if (locationSaved) "Enter Mashxall" else "Continue without location"
@@ -1155,12 +1418,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                         AppLanguage.CKB -> if (locationSaved) "چوونە ژوورەوەی مەشخەڵ" else "بەردەوام بەبێ شوێن"
                     }
                 }
-                Box(
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
                         .background(Brush.horizontalGradient(listOf(Color(0xFFFFE9A8), Gold, Color(0xFFC18E32))))
-                        .border(1.dp, Color(0xFFFFE8A1).copy(alpha = 0.76f), RoundedCornerShape(18.dp))
-                        .clickable {
+                        .border(1.dp, Color(0xFFFFE8A8).copy(alpha = 0.78f), RoundedCornerShape(19.dp))
+                        .premiumPress(pressedScale = 0.955f) {
                             when (step) {
                                 0 -> {
                                     prefs.edit().putString("language", language.key).apply()
@@ -1171,27 +1433,24 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                             }
                         }
                         .padding(horizontal = 18.dp, vertical = 16.dp),
-                    contentAlignment = Alignment.Center
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                        Text(buttonLabel, color = Color(0xFF10251C), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-                        Spacer(Modifier.width(8.dp))
-                        Icon(Icons.Outlined.ChevronRight, null, tint = Color(0xFF10251C), modifier = Modifier.size(19.dp))
-                    }
+                    Text(buttonLabel, color = Color(0xFF10251C), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.width(9.dp))
+                    Icon(Icons.Outlined.ChevronRight, null, tint = Color(0xFF10251C), modifier = Modifier.size(20.dp))
                 }
-                if (step > 0 && !minimalSoraniWelcome) {
-                    Spacer(Modifier.height(11.dp))
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "Your choices stay on this device"
-                            AppLanguage.AR -> "تُحفظ اختياراتك على هذا الجهاز"
-                            AppLanguage.CKB -> "هەڵبژاردەکانت لەم ئامێرەدا دەمێننەوە"
-                        },
-                        color = setupMuted.copy(alpha = 0.74f),
-                        fontSize = 10.sp
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(9.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Your language and choices stay safely on this device."
+                        AppLanguage.AR -> "تُحفظ لغتك واختياراتك بأمان على هذا الجهاز."
+                        AppLanguage.CKB -> "زمان و هەڵبژاردەکانت بە سەلامەتی لەم ئامێرەدا دەمێننەوە."
+                    },
+                    color = setupMuted.copy(alpha = 0.82f),
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -1328,6 +1587,7 @@ fun MashxallApp(startScreen: String? = null) {
 
     fun navigateTo(target: String) {
         if (target == screen) return
+        MashxallMotionPreferences.skipColdStartEntrance = false
         navigationDirection = 1
         navigationStack = if (target in rootScreens) {
             emptyList()
@@ -1338,6 +1598,7 @@ fun MashxallApp(startScreen: String? = null) {
     }
 
     fun navigateBack() {
+        MashxallMotionPreferences.skipColdStartEntrance = false
         navigationDirection = -1
         if (navigationStack.isNotEmpty()) {
             screen = navigationStack.last()
@@ -1401,6 +1662,7 @@ fun MashxallApp(startScreen: String? = null) {
                     contentWindowInsets = if (immersiveMushaf) WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) else WindowInsets.statusBars,
                     bottomBar = {
                         if (isRoot && !immersiveMushaf) BottomNavigationBar(screen, language, cardColor, foreground) { target ->
+                            MashxallMotionPreferences.skipColdStartEntrance = false
                             navigationDirection = rootNavigationDirection(screen, target)
                             navigationStack = emptyList()
                             screen = target
