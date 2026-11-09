@@ -2567,8 +2567,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                                     )
                                                 }.getOrNull()
                                             } else null
-                                            val targetPage = (tajweedPage ?: sourcePage ?: result.page)
-                                                ?.takeIf { it in 1..604 }
+                                            val targetPage = resolveQuranSearchMushafPage(
+                                                tajweedPage = tajweedPage,
+                                                sourcePage = sourcePage,
+                                                resultPage = result.page
+                                            )
                                             if (targetPage != null) {
                                                 selected = result.surah
                                                 mushafPage = targetPage
@@ -7338,6 +7341,19 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     }
 }
 
+
+/**
+ * Quran search navigation must land on a real printed Mushaf page. Prefer the
+ * active Tajweed edition's mapping, then the canonical Quran DB page and lastly
+ * the page embedded in the search result. Invalid or missing pages never fall
+ * through to the removed text-reader destination.
+ */
+internal fun resolveQuranSearchMushafPage(
+    tajweedPage: Int?,
+    sourcePage: Int?,
+    resultPage: Int?
+): Int? = listOfNotNull(tajweedPage, sourcePage, resultPage)
+    .firstOrNull { it in 1..604 }
 
 private fun reciterOfflineFile(context: Context, reciter: Reciter, surah: Int, ayah: Int = 1): File {
     val reciterDir = File(File(context.filesDir, "reciter-audio"), reciter.id.toString())
