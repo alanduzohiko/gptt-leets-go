@@ -489,9 +489,8 @@ class MainActivity : ComponentActivity() {
             firstRunSetupComplete = launchPrefs.getBoolean("first_run_setup_complete", false),
             legacyUserState = legacyUserState
         )
-        // Android paints this branded drawable while the native Compose tree is starting.
-        // Returning users therefore see the app identity immediately, never a black frame.
-        window.setBackgroundDrawableResource(R.drawable.mashxall_launch_background)
+        // Do not add a second Android logo splash. First-run video is rendered by Compose;
+        // returning installs go straight to the app without a launch preview.
         window.statusBarColor = android.graphics.Color.rgb(6, 23, 17)
         window.navigationBarColor = android.graphics.Color.rgb(6, 23, 17)
         setContent { MashxallApp(startScreen = intent.getStringExtra(EXTRA_OPEN_SCREEN)) }
@@ -525,8 +524,8 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
     var playbackFailed by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
 
-    // Keep the real logo visible while the local decoder initializes. The
-    // TextureView below is transparent until its first decoded frame.
+    // The supplied intro video is the only visual shown for the first launch.
+    // No static logo or additional splash artwork is placed in front of it.
     val introView = remember(context) {
         MashxallIntroTextureView(
             context = context,
@@ -545,8 +544,8 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
         onDispose { introView.releasePlayback() }
     }
 
-    // Some vendor decoders can stall without reporting an error. Never leave a
-    // black splash: fall back to the original logo and continue gracefully.
+    // Some Android 11 vendor decoders can stall without returning an error.
+    // Continue to setup rather than leaving the first launch on a blank surface.
     LaunchedEffect(Unit) {
         delay(2_200L)
         if (!firstFrameVisible && !finished) playbackFailed = true
@@ -561,54 +560,9 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
         }
     }
 
-    val logoScale by animateFloatAsState(
-        targetValue = if (firstFrameVisible) 0.94f else 1f,
-        animationSpec = tween(650, easing = FastOutSlowInEasing),
-        label = "Mashxall startup logo scale"
-    )
-    val logoAlpha by animateFloatAsState(
-        targetValue = if (firstFrameVisible && !playbackFailed) 0f else 1f,
-        animationSpec = tween(380, easing = FastOutSlowInEasing),
-        label = "Mashxall startup logo crossfade"
-    )
-
     Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(
-                listOf(Color(0xFF061A16), Color(0xFF0D3027), Color(0xFF061A16))
-            )
-        ),
-        contentAlignment = Alignment.Center
+        Modifier.fillMaxSize().background(Color(0xFF061A16))
     ) {
-        Box(
-            Modifier.align(Alignment.TopCenter).offset(y = (-180).dp).size(430.dp)
-                .background(
-                    Brush.radialGradient(
-                        listOf(Gold.copy(alpha = 0.17f), Color(0xFF2B7656).copy(alpha = 0.08f), Color.Transparent)
-                    ),
-                    CircleShape
-                )
-        )
-        Box(
-            Modifier.align(Alignment.BottomCenter).offset(y = 185.dp).size(360.dp)
-                .background(
-                    Brush.radialGradient(listOf(Gold.copy(alpha = 0.08f), Color.Transparent)),
-                    CircleShape
-                )
-        )
-        Image(
-            painter = painterResource(R.drawable.mashxall_welcome_logo),
-            contentDescription = "Mashxall",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxWidth(0.82f)
-                .aspectRatio(1f)
-                .graphicsLayer {
-                    scaleX = logoScale
-                    scaleY = logoScale
-                    alpha = logoAlpha
-                }
-        )
         if (!playbackFailed) {
             AndroidView(
                 factory = { introView },

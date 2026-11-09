@@ -7,6 +7,7 @@
         <item name="android:navigationBarColor">#071E1A</item>
         <item name="android:statusBarColor">#071E1A</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">@drawable/mashxall_launch_background</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowDisablePreview">true</item>
     </style>
 </resources>
