@@ -4585,7 +4585,9 @@ private fun MushafPageViewer(
             emptyList()
         } else {
             buildMushafVerseHighlightRects(
+                buildMushafVerseHighlightRects(
                 pageVerseGeometry.firstOrNull { it.verse == selected }?.rects.orEmpty()
+            )
             )
         }
     }
