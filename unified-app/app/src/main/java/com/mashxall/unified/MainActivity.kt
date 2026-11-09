@@ -1212,7 +1212,7 @@ fun MashxallApp(startScreen: String? = null) {
         firstRunSetupComplete = prefs.getBoolean("first_run_setup_complete", false),
         legacyUserState = legacyUserState
     )
-    var startupFinished by rememberSaveable { mutableStateOf(!shouldPlayStartupAnimation) }
+    var startupFinished by remember { mutableStateOf(!shouldPlayStartupAnimation) }
     LaunchedEffect(shouldPlayStartupAnimation) {
         prefs.edit().putBoolean("startup_animation_started", true).apply()
         if (!shouldPlayStartupAnimation) {
