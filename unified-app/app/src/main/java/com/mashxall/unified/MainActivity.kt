@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.content.Intent
 import android.content.Context
 import android.net.Uri
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -18,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.SideEffect
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
@@ -138,6 +140,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -482,53 +485,63 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun MashxallStartupScreen(onFinished: () -> Unit) {
-    val motion = rememberInfiniteTransition(label = "Mashxall logo light")
-    val glow by motion.animateFloat(
-        initialValue = 0.18f,
-        targetValue = 0.58f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1250, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Logo gold glow"
-    )
-    var entered by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (entered) 1f else 0.78f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "Logo entrance"
-    )
-    val alpha by animateFloatAsState(
-        targetValue = if (entered) 1f else 0f,
-        animationSpec = tween(850, easing = FastOutSlowInEasing),
-        label = "Logo fade in"
-    )
-    LaunchedEffect(Unit) {
-        entered = true
-        delay(3_700L)
-        onFinished()
-    }
-    Box(
-        Modifier.fillMaxSize().background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            Modifier.fillMaxWidth(0.86f).aspectRatio(1f)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(Gold.copy(alpha = glow * 0.22f), Color.Transparent)
-                    )
-                )
-        )
-        Image(
-            painter = painterResource(R.drawable.mashxall_welcome_logo),
-            contentDescription = "Mashxall",
-            modifier = Modifier.fillMaxWidth(0.84f).graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
+    val context = LocalContext.current
+    val latestOnFinished by rememberUpdatedState(onFinished)
+    var finished by remember { mutableStateOf(false) }
+    var fallback by remember { mutableStateOf(false) }
+
+    // Play the supplied 3.875-second Mashxall logo animation as a bundled,
+    // offline video. The source is optimized to 1080x1920 H.264 for Android.
+    val introVideo = remember(context) {
+        VideoView(context).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            setVideoURI(Uri.parse("android.resource://${context.packageName}/${R.raw.mashxall_intro}"))
+            setOnPreparedListener { player ->
+                player.isLooping = false
+                player.setVolume(0f, 0f)
+                start()
             }
+            setOnCompletionListener {
+                if (!finished) {
+                    finished = true
+                    latestOnFinished()
+                }
+            }
+            setOnErrorListener { _, _, _ ->
+                fallback = true
+                true
+            }
+        }
+    }
+
+    DisposableEffect(introVideo) {
+        onDispose { introVideo.stopPlayback() }
+    }
+
+    if (fallback) {
+        // Keep startup recoverable on devices whose video decoder rejects the
+        // resource: show the corrected original mark, then enter the app.
+        LaunchedEffect(Unit) {
+            delay(900L)
+            if (!finished) {
+                finished = true
+                latestOnFinished()
+            }
+        }
+        Box(
+            Modifier.fillMaxSize().background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(R.drawable.mashxall_welcome_logo),
+                contentDescription = "Mashxall",
+                modifier = Modifier.fillMaxWidth(0.80f).aspectRatio(1f)
+            )
+        }
+    } else {
+        AndroidView(
+            factory = { introVideo },
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
