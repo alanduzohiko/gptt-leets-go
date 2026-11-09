@@ -37,6 +37,45 @@ class MushafSvgVerseGeometryTest {
     }
 
     @Test
+    fun selectionHighlightConnectsWordsOnTheSamePrintedLine() {
+        val wordRects = listOf(
+            MushafPageRect(0, 8, 430f, 500f, 910f, 950f),
+            MushafPageRect(0, 8, 505f, 560f, 912f, 949f),
+            MushafPageRect(0, 8, 565f, 690f, 909f, 951f)
+        )
+
+        val highlights = buildMushafVerseHighlightRects(wordRects)
+
+        assertEquals(1, highlights.size)
+        assertEquals(8, highlights.single().lineNumber)
+        assertEquals(430f, highlights.single().minX, 0.001f)
+        assertEquals(690f, highlights.single().maxX, 0.001f)
+        assertEquals(909f, highlights.single().minY, 0.001f)
+        assertEquals(951f, highlights.single().maxY, 0.001f)
+        // Tap geometry remains word-sized; the rendering helper returns a new list.
+        assertEquals(3, wordRects.size)
+    }
+
+    @Test
+    fun wrappedVerseHighlightUsesOneConnectedBandForEachLine() {
+        val highlights = buildMushafVerseHighlightRects(
+            listOf(
+                MushafPageRect(0, 11, 250f, 320f, 1080f, 1120f),
+                MushafPageRect(0, 10, 300f, 460f, 1000f, 1060f),
+                MushafPageRect(0, 11, 330f, 420f, 1081f, 1140f)
+            )
+        )
+
+        assertEquals(2, highlights.size)
+        assertEquals(10, highlights[0].lineNumber)
+        assertEquals(300f, highlights[0].minX, 0.001f)
+        assertEquals(460f, highlights[0].maxX, 0.001f)
+        assertEquals(11, highlights[1].lineNumber)
+        assertEquals(250f, highlights[1].minX, 0.001f)
+        assertEquals(420f, highlights[1].maxX, 0.001f)
+    }
+
+    @Test
     fun neighbouringAyahsOnTheSamePageAreNeverMerged() {
         val regions = buildMushafPageVerseGeometry(
             listOf(
