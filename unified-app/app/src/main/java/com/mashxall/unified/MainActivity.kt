@@ -238,13 +238,14 @@ enum class AppScreen(val key: String) {
     AUDIO("audio"), RECITERS("reciters"), ADHAN("adhan"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
-/** Saved GPS coordinates are valid only with a recent, real Location.time timestamp. */
+/** Freshness window for a newly requested GPS reading; saved prayer coordinates do not expire. */
 internal const val MAX_SAVED_GPS_FIX_AGE_MILLIS: Long = 30L * 60L * 1000L
 
 /**
- * A location explicitly chosen by the user is a saved place, not a short-lived
- * sensor reading. Keep its valid coordinates usable across launches and while
- * the device Location switch is off; a new GPS fix is requested only on demand.
+ * Persisted coordinates are the user's chosen prayer location, not a live sensor
+ * session. Some older app versions saved the coordinates before writing a GPS
+ * timestamp, so a missing timestamp must not erase a working Salawati timetable
+ * or trigger another permission dialog on every launch.
  */
 internal fun isValidPersistedGpsFix(
     latitude: Double?,
@@ -254,7 +255,7 @@ internal fun isValidPersistedGpsFix(
     latitude != null && longitude != null &&
         latitude.isFinite() && latitude in -90.0..90.0 &&
         longitude.isFinite() && longitude in -180.0..180.0 &&
-        fixTimeMillis > 0L
+        fixTimeMillis >= 0L
 
 internal fun isUsableSavedGpsFix(
     latitude: Double?,
