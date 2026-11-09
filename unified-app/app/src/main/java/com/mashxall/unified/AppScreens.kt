@@ -8449,7 +8449,7 @@ fun AudioScreen(
                                 PremiumIconActionSurface(
                                     contentDescription = playLabel,
                                     accent = Gold,
-                                    size = 34.dp,
+                                    size = 38.dp,
                                     enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
                                     selected = playing == playKey,
                                     onClick = {
@@ -8491,7 +8491,7 @@ fun AudioScreen(
                                 PremiumIconActionSurface(
                                     contentDescription = if (language == AppLanguage.EN) "Download full surah" else if (language == AppLanguage.AR) "تنزيل السورة كاملة" else "داگرتنی تەواوی سوورەت",
                                     accent = if (localComplete) Color(0xFF62C995) else Gold,
-                                    size = 34.dp,
+                                    size = 38.dp,
                                     enabled = downloadProgress == null && surahAyahCount > 0 && surahNumber <= reciter.surahTotal,
                                     selected = localComplete,
                                     onClick = {
@@ -8536,7 +8536,7 @@ fun AudioScreen(
                                         if (language == AppLanguage.EN) "Set preferred reciter" else if (language == AppLanguage.AR) "تعيين القارئ مفضلاً" else "قورئان‌خوێن بکە بە دڵخواز"
                                     },
                                     accent = Gold,
-                                    size = 34.dp,
+                                    size = 38.dp,
                                     selected = preferredReciterId == reciter.id,
                                     onClick = {
                                         preferredReciterId = reciter.id
