@@ -25,6 +25,20 @@ class MushafSwipeNavigationTest {
     }
 
     @Test
+    fun queuedSwipesRetainDirectionAndRemainBoundedDuringFastTurns() {
+        assertEquals(1, mushafQueuedSwipeDirection(120f, 72f))
+        assertEquals(-1, mushafQueuedSwipeDirection(-120f, 72f))
+        assertEquals(0, mushafQueuedSwipeDirection(45f, 72f))
+        assertEquals(0, mushafQueuedSwipeDirection(Float.NaN, 72f))
+        assertEquals(0, mushafQueuedSwipeDirection(120f, 0f))
+
+        assertEquals(3, accumulateMushafQueuedSwipeDirection(2, 1))
+        assertEquals(-3, accumulateMushafQueuedSwipeDirection(-2, -1))
+        assertEquals(1, accumulateMushafQueuedSwipeDirection(2, -1))
+        assertEquals(0, accumulateMushafQueuedSwipeDirection(1, -1))
+    }
+
+    @Test
     fun shortGesturesDoNotTurnThePage() {
         assertEquals(null, mushafSwipeTarget(page = 24, horizontalDragPx = 72f))
         assertEquals(null, mushafSwipeTarget(page = 24, horizontalDragPx = -35f))

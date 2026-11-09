@@ -4281,6 +4281,18 @@ internal fun shouldAcceptMushafGesture(
     bitmapAvailable: Boolean
 ): Boolean = !turnInProgress && !loading && bitmapAvailable
 
+internal fun mushafQueuedSwipeDirection(horizontalDragPx: Float, thresholdPx: Float): Int {
+    if (!horizontalDragPx.isFinite() || !thresholdPx.isFinite() || thresholdPx <= 0f) return 0
+    return when {
+        horizontalDragPx >= thresholdPx -> 1
+        horizontalDragPx <= -thresholdPx -> -1
+        else -> 0
+    }
+}
+
+internal fun accumulateMushafQueuedSwipeDirection(current: Int, direction: Int): Int =
+    (current + direction.coerceIn(-1, 1)).coerceIn(-3, 3)
+
 internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
     if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
     return maxOf(72f, viewportWidthPx * 0.16f)
@@ -4332,6 +4344,7 @@ private fun MushafPageViewer(
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val pageCurlProgress = remember { Animatable(1f) }
     var pageTurnInProgress by remember { mutableStateOf(false) }
+    var queuedPageTurnDelta by remember { mutableIntStateOf(0) }
     var pageTurnDirection by remember { mutableFloatStateOf(1f) }
     var lastLoadedPage by remember { mutableIntStateOf(page) }
     // Finger-led turns keep their two printed faces and the page beneath them.
@@ -4359,6 +4372,13 @@ private fun MushafPageViewer(
     var failed by remember(page, edition) { mutableStateOf(false) }
     var retryPageLoad by remember(page) { mutableIntStateOf(0) }
     var pageInput by rememberSaveable { mutableStateOf(page.toString()) }
+    val latestGestureReady = rememberUpdatedState(
+        shouldAcceptMushafGesture(
+            turnInProgress = pageTurnInProgress,
+            loading = loading,
+            bitmapAvailable = bitmap != null
+        )
+    )
     fun jumpToEnteredPage() {
         val target = parseMushafPageNumber(pageInput) ?: return
         pageInput = target.toString()
@@ -4570,6 +4590,22 @@ private fun MushafPageViewer(
             loading = false
             pageTurnInProgress = false
         }
+    }
+    LaunchedEffect(page, loading, pageTurnInProgress, queuedPageTurnDelta, bitmap) {
+        if (loading || pageTurnInProgress || bitmap == null || queuedPageTurnDelta == 0) {
+            return@LaunchedEffect
+        }
+        val direction = queuedPageTurnDelta.compareTo(0)
+        val targetPage = page + direction
+        if (targetPage !in 1..604) {
+            queuedPageTurnDelta = 0
+            return@LaunchedEffect
+        }
+        queuedPageTurnDelta -= direction
+        pageTurnInProgress = true
+        // Fast swipes made during the current curl are replayed one at a time.
+        // The standard page-change effect then gives each queued turn its own curl.
+        onPageChange(targetPage)
     }
     val visiblePageBitmap = bitmap ?: turningPageBitmap
     val displayedPageBitmap = if (curlPreviewVisible) curlUnderlayBitmap ?: visiblePageBitmap else visiblePageBitmap
@@ -4828,15 +4864,10 @@ private fun MushafPageViewer(
                             .then(
                                 if (scale <= 1.01f) {
                                     Modifier.pointerInput(
-                                        page, scale, bitmap, loading, pageTurnInProgress
+                                        page, scale, bitmap
                                     ) {
-                                        if (!shouldAcceptMushafGesture(
-                                                turnInProgress = pageTurnInProgress,
-                                                loading = loading,
-                                                bitmapAvailable = bitmap != null
-                                            )
-                                        ) return@pointerInput
                                         var dragTotal = 0f
+                                        var dragStartedWhileBusy = false
 
                                         suspend fun returnCurlToRest(startProgress: Float) {
                                             pageTurnInProgress = true
@@ -4859,22 +4890,27 @@ private fun MushafPageViewer(
                                         detectHorizontalDragGestures(
                                             onDragStart = { startPosition ->
                                                 dragTotal = 0f
-                                                fingerCurlAnchorY = if (size.height > 0) {
-                                                    (startPosition.y / size.height.toFloat()).coerceIn(0.04f, 0.96f)
-                                                } else {
-                                                    0.5f
+                                                dragStartedWhileBusy = !latestGestureReady.value
+                                                if (!dragStartedWhileBusy) {
+                                                    fingerCurlAnchorY = if (size.height > 0) {
+                                                        (startPosition.y / size.height.toFloat()).coerceIn(0.04f, 0.96f)
+                                                    } else {
+                                                        0.5f
+                                                    }
+                                                    fingerDragActive = true
+                                                    curlPreviewVisible = false
+                                                    fingerCurlProgress = 0f
+                                                    curlBackBitmap = null
+                                                    curlUnderlayBitmap = null
                                                 }
-                                                fingerDragActive = true
-                                                curlPreviewVisible = false
-                                                fingerCurlProgress = 0f
-                                                curlBackBitmap = null
-                                                curlUnderlayBitmap = null
                                             },
                                             onHorizontalDrag = { _, amount ->
                                                 // Do not consume this pointer stream here: Compose's
                                                 // transformable detector still needs two-finger pinch input.
                                                 dragTotal += amount
-                                                if (scale <= 1.01f && dragTotal != 0f) {
+                                                if (!dragStartedWhileBusy && latestGestureReady.value &&
+                                                    scale <= 1.01f && dragTotal != 0f
+                                                ) {
                                                     val forward = dragTotal > 0f
                                                     val target = mushafCurlAdjacentPage(page, forward)
                                                     val back = if (forward) nextCurlBackBitmap else previousCurlBackBitmap
@@ -4901,7 +4937,24 @@ private fun MushafPageViewer(
                                                 val releaseProgress = fingerCurlProgress
                                                 val direction = fingerCurlDirection
 
-                                                if (targetPage != null) {
+                                                val gestureBusy = dragStartedWhileBusy || !latestGestureReady.value
+                                                if (gestureBusy) {
+                                                    val queuedDirection = mushafQueuedSwipeDirection(
+                                                        dragTotal,
+                                                        mushafSwipeThresholdPx(size.width.toFloat())
+                                                    )
+                                                    if (queuedDirection != 0) {
+                                                        queuedPageTurnDelta = accumulateMushafQueuedSwipeDirection(
+                                                            queuedPageTurnDelta,
+                                                            queuedDirection
+                                                        )
+                                                    }
+                                                    fingerDragActive = false
+                                                    curlPreviewVisible = false
+                                                    fingerCurlProgress = 0f
+                                                    curlBackBitmap = null
+                                                    curlUnderlayBitmap = null
+                                                } else if (targetPage != null) {
                                                     pageTurnInProgress = true
                                                     haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                     if (back != null && motionAllowed) {

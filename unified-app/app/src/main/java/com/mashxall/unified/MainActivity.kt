@@ -573,11 +573,6 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
     }
 }
 
-/**
- * Uses a TextureView-backed MediaPlayer instead of VideoView/SurfaceView.
- * A TextureView participates in Compose's normal view composition, avoiding
- * the black SurfaceView layer seen on some Android/Compose combinations.
- */
 internal fun introVideoCenterCropScale(
     viewWidth: Int,
     viewHeight: Int,
@@ -596,6 +591,11 @@ internal fun introVideoCenterCropScale(
     }
 }
 
+/**
+ * Uses a TextureView-backed MediaPlayer instead of VideoView/SurfaceView.
+ * Its opaque black backing and center-crop matrix keep the supplied animation
+ * edge-to-edge on Android 11, including devices with unusual video scaling.
+ */
 private class MashxallIntroTextureView(
     context: Context,
     private val onFirstFrame: () -> Unit,

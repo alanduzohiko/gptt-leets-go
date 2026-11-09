@@ -80,6 +80,7 @@ class MashxallStartupAnimationPolicyTest {
             )
         )
     }
+
     @Test
     fun introVideoCenterCropFillsTheViewportWithoutStretching() {
         val narrowViewport = introVideoCenterCropScale(
