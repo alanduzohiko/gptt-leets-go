@@ -454,7 +454,7 @@ private val homeModules: List<HomeModule> get() = listOf(
 
 private val textMap = mapOf(
     "ckb" to mapOf(
-        "home" to "سەرەتا", "more" to "زیاتر", "quran" to "قورئانی پیرۆز", "quran_sub" to "خوێندنەوە و گەڕان", "tafsir" to "تەفسیرو وەرگێڕان", "tafsir_sub" to "چەندین تەفسیر", "hadith" to "فەرموودەکان", "hadith_sub" to "گەڕان لە فەرموودە", "azkar" to "زیکر و دوعاکان", "azkar_sub" to "بەیانی، ئێواران و زیاتر", "prayer" to "کاتەکانی بانگ", "prayer_sub" to "کاتی نوێژ و شار", "audio" to "دەنگ و تلاوەت", "audio_sub" to "فایلە دەنگییە ناوخۆییەکان", "names" to "ناوە پیرۆزەکان", "names_sub" to "٩٩ ناوی خودا", "qibla" to "ئاڕاستەی قیبلە", "qibla_sub" to "ئاڕاستە بەپێی شوێن", "lexicon" to "فەرهەنگی وشەکان", "lexicon_sub" to "مانا و ڕەگی وشە", "word_by_word" to "شیکردنەوەی وشە بە وشە", "word_by_word_sub" to "ڕەگ و ڕێزمانی قورئان", "farmuda" to "فەرموودە و دوعاکان", "farmuda_sub" to "دەق و زانیاری زیادە", "tasbih" to "تەسبیح", "tasbih_sub" to "ژماردنی زیکر", "welcome" to "هەموو زانیارییە ئیسلامییەکانت لە شوێنێکدا", "bookmarks" to "نیشانکراوەکان", "bookmarks_sub" to "ئایەتە پاشەکەوتکراوەکان", "surah" to "سوورەت", "ayah" to "ئایەت", "verse" to "ئایەت", "book_online" to "زانیاری کتێب", "mushaf_view" to "مصحەفی پیرۆز", "verse_view" to "ئایەت بە ئایەت", "mushaf_unavailable" to "نەتوانرا پەڕەی مصحف بخوێندرێتەوە", "mushaf_offline" to "٦٠٤ پەڕەی قورئان بەبێ ئینتەرنێت", "no_bookmarks" to "هیچ ئایەتێک نیشان نەکراوە", "no_adhan_audio" to "دەنگی بانگ لەم داتایەدا نەدۆزرایەوە", "page" to "پەڕە", "previous" to "پێشوو", "next" to "دواتر", "open_pdf" to "کردنەوەی PDF", "settings" to "ڕێکخستن", "backup_title" to "پاشەکەوتکردن", "backup_subtitle" to "پاراستنی داتا و گەڕاندنەوە", "back" to "گەڕانەوە", "home_title" to "دڵت ڕووناک بکە", "home_hint" to "ئەمڕۆ بە چەند خولەکێک خوێندنەوە دەست پێ بکە", "quick_access" to "دەستگەیشتنی خێرا", "continue_reading" to "بەردەوام بە لە خوێندنەوە", "language" to "زمان", "offline" to "زۆربەی زانیارییەکان بەبێ ئینتەرنێت کار دەکەن", "about_data" to "دەربارەی مەشخەڵ", "data_notice" to "هەندێک کتێب پێویستی بە ئینتەرنێت یان شیکردنەوەی تایبەت هەیە.", "search" to "گەڕان...", "choose_surah" to "سوورەت هەڵبژێرە", "select_tafsir" to "تەفسیر هەڵبژێرە", "search_hadith" to "لە فەرموودە بگەڕێ...", "search_words" to "وشە یان ڕەگ بگەڕێ...", "city" to "شار", "select_city" to "شار هەڵبژێرە", "fajr" to "بەیانی", "sunrise" to "هەڵهاتنی خۆر", "dhuhr" to "نیوەڕۆ", "asr" to "عەسر", "maghrib" to "مەغریب", "isha" to "عیشا", "search_azkar" to "لە زیکرەکان بگەڕێ...", "arabic" to "عەرەبی", "translation" to "وەرگێڕان", "reference" to "سەرچاوە", "reset" to "سفرکردنەوە", "play" to "لێدان", "available_data" to "داتای بەردەست", "no_data" to "ناوەڕۆک لەم کاتەدا بەردەست نییە؛ دووبارە هەوڵ بدەرەوە.", "not_found" to "هیچ ئەنجامێک نەدۆزرایەوە.", "qibla_heading" to "قیبلە لە ڕووی باکوورەوە", "degrees" to "پلە", "library_hint" to "قورئان، حدیث، تەفسیر، کتێب و دەنگ", "reciters_library_title" to "قورئان‌خوێنەکان", "reciters_library_subtitle" to "قورئان‌خوێن هەڵبژێرە و سوورەتی تەواو یان ئایەت بە ئایەت گوێ لێ بگرە", "adhan_library_title" to "بانگ و موئەزینەکان", "adhan_library_subtitle" to "تۆمارەکانی موئەزین و دەنگی مزگەوتەکان بگەڕێ و دایبگرە"
+        "home" to "سەرەتا", "more" to "زیاتر", "quran" to "قورئانی پیرۆز", "quran_sub" to "خوێندنەوە و گەڕان", "tafsir" to "تەفسیرو وەرگێڕان", "tafsir_sub" to "چەندین تەفسیر", "hadith" to "فەرموودەکان", "hadith_sub" to "گەڕان لە فەرموودە", "azkar" to "زیکر و دوعاکان", "azkar_sub" to "بەیانی، ئێواران و زیاتر", "prayer" to "کاتەکانی بانگ", "prayer_sub" to "کاتی نوێژ و شار", "audio" to "دەنگ و تلاوەت", "audio_sub" to "فایلە دەنگییە ناوخۆییەکان", "names" to "ناوە پیرۆزەکان", "names_sub" to "٩٩ ناوی خودا", "qibla" to "ئاڕاستەی قیبلە", "qibla_sub" to "ئاڕاستە بەپێی شوێن", "lexicon" to "فەرهەنگی وشەکان", "lexicon_sub" to "مانا و ڕەگی وشە", "word_by_word" to "شیکردنەوەی وشە بە وشە", "word_by_word_sub" to "ڕەگ و ڕێزمانی قورئان", "farmuda" to "فەرموودە و دوعاکان", "farmuda_sub" to "دەق و زانیاری زیادە", "tasbih" to "تەسبیح", "tasbih_sub" to "ژماردنی زیکر", "welcome" to "هەموو زانیارییە ئیسلامییەکانت لە شوێنێکدا", "bookmarks" to "نیشانکراوەکان", "bookmarks_sub" to "ئایەتە پاشەکەوتکراوەکان", "surah" to "سوورەت", "ayah" to "ئایەت", "verse" to "ئایەت", "book_online" to "زانیاری کتێب", "mushaf_view" to "مصحەفی پیرۆز", "verse_view" to "ئایەت بە ئایەت", "mushaf_unavailable" to "نەتوانرا پەڕەی مصحف بخوێندرێتەوە", "mushaf_offline" to "٦٠٤ پەڕەی قورئان بەبێ ئینتەرنێت", "no_bookmarks" to "هیچ ئایەتێک نیشان نەکراوە", "no_adhan_audio" to "دەنگی بانگ لەم داتایەدا نەدۆزرایەوە", "page" to "پەڕە", "previous" to "پێشوو", "next" to "دواتر", "open_pdf" to "کردنەوەی PDF", "settings" to "ڕێکخستن", "backup_title" to "پاشەکەوتکردن", "backup_subtitle" to "پاراستنی داتا و گەڕاندنەوە", "back" to "گەڕانەوە", "home_title" to "دڵت ڕووناک بکە", "home_hint" to "ئەمڕۆ بە چەند خولەکێک خوێندنەوە دەست پێ بکە", "quick_access" to "دەستگەیشتنی خێرا", "continue_reading" to "بەردەوام بە لە خوێندنەوە", "language" to "زمان", "offline" to "زۆربەی زانیارییەکان بەبێ ئینتەرنێت کار دەکەن", "about_data" to "دەربارەی مەشخەڵ", "data_notice" to "هەندێک کتێب پێویستی بە ئینتەرنێت یان شیکردنەوەی تایبەت هەیە.", "search" to "گەڕان...", "choose_surah" to "سوورەت هەڵبژێرە", "select_tafsir" to "تەفسیر هەڵبژێرە", "search_hadith" to "لە فەرموودە بگەڕێ...", "search_words" to "وشە یان ڕەگ بگەڕێ...", "city" to "شار", "select_city" to "شار هەڵبژێرە", "fajr" to "بەیانی", "sunrise" to "هەڵهاتنی خۆر", "dhuhr" to "نیوەڕۆ", "asr" to "عەسر", "maghrib" to "مەغریب", "isha" to "عیشا", "search_azkar" to "لە زیکرەکان بگەڕێ...", "arabic" to "عەرەبی", "translation" to "وەرگێڕان", "reference" to "سەرچاوە", "reset" to "سفرکردنەوە", "play" to "لێدان", "available_data" to "داتای بەردەست", "no_data" to "ناوەڕۆک لەم کاتەدا بەردەست نییە؛ دووبارە هەوڵ بدەرەوە.", "not_found" to "هیچ ئەنجامێک نەدۆزرایەوە.", "qibla_heading" to "قیبلە لە ڕووی باکوورەوە", "degrees" to "پلە", "library_hint" to "قورئان، حدیث، تەفسیر، کتێب و دەنگ", "reciters_library_title" to "قورئان‌خوێنەکان", "reciters_library_subtitle" to "قورئان‌خوێن هەڵبژێرە و سوورەتی تەواو یان ئایەت بە ئایەت گوێ لێ بگرە", "adhan_library_title" to "بانگبێژان", "adhan_library_subtitle" to "تۆمارەکانی موئەزین و دەنگی مزگەوتەکان بگەڕێ و دایبگرە"
     ),
     "ar" to mapOf(
         "home" to "الرئيسية", "more" to "المزيد", "quran" to "القرآن الكريم", "quran_sub" to "قراءة وبحث", "tafsir" to "التفسير والترجمة", "tafsir_sub" to "تفاسير متعددة", "hadith" to "الأحاديث", "hadith_sub" to "البحث في الأحاديث", "azkar" to "الأذكار والأدعية", "azkar_sub" to "الصباح والمساء والمزيد", "prayer" to "مواقيت الصلاة", "prayer_sub" to "المواقيت والمدينة", "audio" to "التلاوات والصوتيات", "audio_sub" to "الملفات الصوتية المحلية", "names" to "أسماء الله الحسنى", "names_sub" to "الأسماء التسعة والتسعون", "qibla" to "اتجاه القبلة", "qibla_sub" to "الاتجاه حسب المدينة", "lexicon" to "معجم الكلمات", "lexicon_sub" to "المعاني والجذور", "word_by_word" to "تفسير كلمة بكلمة", "word_by_word_sub" to "الجذور والتحليل النحوي", "farmuda" to "المأثورات والأدعية", "farmuda_sub" to "أدعية ونصوص إضافية", "tasbih" to "المسبحة", "tasbih_sub" to "عدّ الذكر", "welcome" to "مكتبتك الإسلامية في مكان واحد", "bookmarks" to "العلامات المرجعية", "bookmarks_sub" to "الآيات المحفوظة", "surah" to "السورة", "ayah" to "الآية", "verse" to "آية", "book_online" to "معلومات الكتاب", "mushaf_view" to "عرض المصحف", "verse_view" to "عرض الآيات", "mushaf_unavailable" to "تعذر فتح صفحة المصحف. تحقق من ملفات البيانات.", "mushaf_offline" to "٦٠٤ صفحة من المصحف تعمل دون إنترنت", "no_bookmarks" to "لا توجد آيات محفوظة بعد", "no_adhan_audio" to "لا توجد ملفات أذان ضمن البيانات المتاحة", "page" to "صفحة", "previous" to "السابق", "next" to "التالي", "open_pdf" to "فتح PDF", "settings" to "الإعدادات", "backup_title" to "النسخ الاحتياطي", "backup_subtitle" to "حفظ البيانات واستعادتها", "back" to "رجوع", "home_title" to "أضئ قلبك بالمعرفة", "quick_access" to "وصول سريع", "continue_reading" to "متابعة القراءة", "language" to "اللغة", "offline" to "تعمل معظم المكتبة دون اتصال بالإنترنت", "about_data" to "حول مشخّل", "data_notice" to "بعض الكتب تتطلب الإنترنت أو معالجة خاصة.", "search" to "بحث...", "choose_surah" to "اختر السورة", "select_tafsir" to "اختر التفسير", "search_hadith" to "ابحث في الأحاديث...", "search_words" to "ابحث عن كلمة أو جذر...", "city" to "المدينة", "select_city" to "اختر المدينة", "fajr" to "الفجر", "sunrise" to "الشروق", "dhuhr" to "الظهر", "asr" to "العصر", "maghrib" to "المغرب", "isha" to "العشاء", "search_azkar" to "ابحث في الأذكار...", "arabic" to "العربية", "translation" to "الترجمة", "reference" to "المصدر", "reset" to "إعادة", "play" to "تشغيل", "available_data" to "البيانات المتاحة", "no_data" to "تعذّر تحميل المحتوى حاليًا؛ حاول مجددًا أو تحقق من توفر البيانات.", "not_found" to "لم يتم العثور على نتائج.", "qibla_heading" to "اتجاه القبلة من الشمال", "degrees" to "درجة", "library_hint" to "القرآن، الحديث، التفسير، الكتب والصوتيات", "reciters_library_title" to "قرّاء القرآن", "reciters_library_subtitle" to "اختر القارئ واستمع إلى السورة كاملة أو آيةً بآية", "adhan_library_title" to "الأذان والمؤذنون", "adhan_library_subtitle" to "تصفّح تسجيلات المؤذنين وأصوات المساجد وشغّلها أو نزّلها"
@@ -823,98 +823,248 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
         )
         AppLanguage.CKB -> listOf(
             "ئەو زمانەی هەڵیدەبژێریت لە هەموو بەشەکانی ئەپەکەدا بەکاردێت.",
-            "هاوەڵی ئایینی تەواوت، بە مصحەفی ڕەسەن و کاتەکانی نوێژی پشتڕاستکراو.",
+            "",
             "تەنها جارێک مۆڵەتی شوێن بدە؛ کۆئۆردیناتەکانت لەم ئامێرەدا پاشەکەوت دەکرێن و دواتر دووبارە بەکاردێن."
         )
     }
+    val setupGlowTransition = rememberInfiniteTransition(label = "Mashxall onboarding gold glow")
+    val setupGlow by setupGlowTransition.animateFloat(
+        initialValue = 0.20f,
+        targetValue = 0.42f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "Onboarding ambient glow"
+    )
+    val minimalSoraniWelcome = language == AppLanguage.CKB && step == 1
+
     CompositionLocalProvider(
         LocalLayoutDirection provides if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
     ) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF061A16), Color(0xFF0D3027), Color(0xFF061A16)))
-            ),
-            contentAlignment = Alignment.Center
+                Brush.verticalGradient(
+                    listOf(Color(0xFF030F0C), Color(0xFF0A241D), Color(0xFF10382D), Color(0xFF061711))
+                )
+            )
         ) {
+            Box(
+                Modifier.align(Alignment.TopCenter)
+                    .offset(y = (-178).dp)
+                    .size(460.dp)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(Gold.copy(alpha = setupGlow * 0.36f), Color(0xFF1F6047).copy(alpha = 0.08f), Color.Transparent)
+                        ),
+                        CircleShape
+                    )
+            )
+            Box(
+                Modifier.align(Alignment.BottomCenter)
+                    .offset(y = 195.dp)
+                    .size(420.dp)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(Color(0xFFB68B38).copy(alpha = setupGlow * 0.11f), Color.Transparent)
+                        ),
+                        CircleShape
+                    )
+            )
+
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 26.dp),
+                Modifier.fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 22.dp, vertical = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Image(
-                    painter = painterResource(R.drawable.mashxall_welcome_logo),
-                    contentDescription = "Mashxall logo",
-                    modifier = Modifier.fillMaxWidth(0.72f)
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "MASHXALL"
+                            AppLanguage.AR -> "مَشْخەڵ"
+                            AppLanguage.CKB -> "مەشخەڵ"
+                        },
+                        color = PaleGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.2.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "0${step + 1} / 03",
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    repeat(3) { index ->
+                        Box(
+                            Modifier.weight(1f).height(3.dp).clip(CircleShape)
+                                .background(
+                                    if (index <= step) Gold
+                                    else Color.White.copy(alpha = 0.13f)
+                                )
+                        )
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+
+                Box(
+                    Modifier.fillMaxWidth(0.78f).aspectRatio(1f)
+                        .clip(RoundedCornerShape(30.dp))
+                        .background(
+                            Brush.radialGradient(
+                                listOf(Color(0xFF214A38).copy(alpha = 0.76f), Color(0xFF0C211B).copy(alpha = 0.92f), Color.Transparent)
+                            )
+                        )
+                        .border(1.dp, Gold.copy(alpha = 0.32f), RoundedCornerShape(30.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.mashxall_welcome_logo),
+                        contentDescription = "Mashxall logo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth(0.92f).aspectRatio(1f)
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    titles[step],
+                    color = Color.White,
+                    fontSize = if (minimalSoraniWelcome) 25.sp else 23.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 34.sp
                 )
-                Spacer(Modifier.height(12.dp))
-                Text(titles[step], color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Text(subtitles[step], color = Color(0xFFD4DFD8), fontSize = 12.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(24.dp))
+                if (subtitles[step].isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        subtitles[step],
+                        color = Color(0xFFD8E5DC),
+                        fontSize = 12.sp,
+                        lineHeight = 20.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Spacer(Modifier.height(if (minimalSoraniWelcome) 22.dp else 20.dp))
+
                 when (step) {
                     0 -> listOf(AppLanguage.CKB, AppLanguage.AR, AppLanguage.EN).forEach { option ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp).clickable { language = option },
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (language == option) Color(0xFF1D4A3C) else Color(0xFF102B25)
-                            ),
-                            border = BorderStroke(1.dp, if (language == option) Gold else Color.White.copy(alpha = 0.12f))
+                        val selected = language == option
+                        Box(
+                            Modifier.fillMaxWidth().padding(vertical = 5.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(
+                                    if (selected) Brush.horizontalGradient(
+                                        listOf(Color(0xFF285741), Color(0xFF163B30))
+                                    ) else Brush.horizontalGradient(
+                                        listOf(Color(0xFF102820), Color(0xFF0A1C16))
+                                    )
+                                )
+                                .border(
+                                    1.dp,
+                                    if (selected) Gold.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.10f),
+                                    RoundedCornerShape(18.dp)
+                                )
+                                .clickable { language = option }
                         ) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(option.label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 15.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
+                                        .background(Gold.copy(alpha = if (selected) 0.18f else 0.08f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        when (option) {
+                                            AppLanguage.CKB -> "ک"
+                                            AppLanguage.AR -> "ع"
+                                            AppLanguage.EN -> "A"
+                                        },
+                                        color = PaleGold,
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Text(option.label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.weight(1f))
-                                if (language == option) Icon(Icons.Outlined.CheckCircle, null, tint = Gold)
+                                if (selected) Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(22.dp))
                             }
                         }
                     }
-                    1 -> Card(
+
+                    1 -> if (language != AppLanguage.CKB) Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.34f))
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.055f)),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.30f))
                     ) {
                         Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Outlined.AutoStories, null, tint = Gold, modifier = Modifier.size(34.dp))
-                            Spacer(Modifier.height(9.dp))
+                            Icon(Icons.Outlined.AutoStories, null, tint = Gold, modifier = Modifier.size(32.dp))
+                            Spacer(Modifier.height(8.dp))
                             Text(
                                 when (language) {
                                     AppLanguage.EN -> "Read, learn and worship"
                                     AppLanguage.AR -> "اقرأ وتعلّم وتعبّد"
-                                    AppLanguage.CKB -> "بخوێنە، فێربە و عیبادەت بکە"
+                                    AppLanguage.CKB -> ""
                                 },
-                                color = PaleGold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                                color = PaleGold, fontSize = 15.sp, fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(7.dp))
                             Text(
                                 when (language) {
                                     AppLanguage.EN -> "Your language is saved. Next, we will set up the location used for your local prayer timetable."
                                     AppLanguage.AR -> "تم حفظ لغتك. سنضبط الآن الموقع الذي ستُستخدم إحداثياته لمواقيت الصلاة المحلية."
-                                    AppLanguage.CKB -> "زمانەکەت پاشەکەوت کرا؛ ئێستا شوێنی بەکارهاتوو بۆ خشتەی نوێژی ناوخۆیی ڕێکدەخەین."
+                                    AppLanguage.CKB -> ""
                                 },
                                 color = Color(0xFFD4DFD8), textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 19.sp
                             )
                         }
-                    }
+                    } else Spacer(Modifier.height(3.dp))
+
                     else -> Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.30f))
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF10271F)),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.28f))
                     ) {
-                        Column(Modifier.padding(17.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                if (locationSaved) Icons.Outlined.CheckCircle else Icons.Outlined.GpsFixed,
-                                null, tint = if (locationSaved) Color(0xFF86D7A8) else Gold, modifier = Modifier.size(35.dp)
-                            )
-                            Spacer(Modifier.height(9.dp))
+                        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
+                                    .background(Gold.copy(alpha = 0.10f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    if (locationSaved) Icons.Outlined.CheckCircle else Icons.Outlined.GpsFixed,
+                                    null,
+                                    tint = if (locationSaved) Color(0xFF86D7A8) else Gold,
+                                    modifier = Modifier.size(27.dp)
+                                )
+                            }
+                            Spacer(Modifier.height(10.dp))
                             Text(
                                 when (language) {
                                     AppLanguage.EN -> if (locationSaved) "Location saved" else "Find my location"
                                     AppLanguage.AR -> if (locationSaved) "تم حفظ الموقع" else "تحديد موقعي"
                                     AppLanguage.CKB -> if (locationSaved) "شوێن پاشەکەوت کرا" else "شوێنی خۆم دیاری بکە"
                                 },
-                                color = if (locationSaved) Color(0xFF86D7A8) else PaleGold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                                color = if (locationSaved) Color(0xFF86D7A8) else PaleGold,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(7.dp))
                             Text(
@@ -925,7 +1075,10 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                         AppLanguage.CKB -> "کاتەکان ناخرێنە خەیاڵەوە؛ ئەپەکە داتای ڕەسەنی صەڵەواتی بەکاردێنێت."
                                     }
                                 },
-                                color = Color(0xFFD4DFD8), fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center
+                                color = Color(0xFFD4DFD8),
+                                fontSize = 11.sp,
+                                lineHeight = 17.sp,
+                                textAlign = TextAlign.Center
                             )
                             if (!locationSaved) {
                                 Spacer(Modifier.height(12.dp))
@@ -935,46 +1088,70 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                         AppLanguage.AR -> if (locationBusy) "جارٍ تحديد موقعك…" else "إعادة تحديد موقعي"
                                         AppLanguage.CKB -> if (locationBusy) "شوێنت دیاری دەکرێت…" else "دووبارە شوێن دیاری بکە"
                                     },
-                                    color = Gold, fontWeight = FontWeight.Bold,
+                                    color = Gold,
+                                    fontWeight = FontWeight.Bold,
                                     modifier = Modifier.clickable(enabled = !locationBusy) { requestLocation() }.padding(8.dp)
                                 )
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(24.dp))
+
+                Spacer(Modifier.height(22.dp))
                 val buttonLabel = when (step) {
-                    0 -> when (language) { AppLanguage.EN -> "Continue"; AppLanguage.AR -> "متابعة"; AppLanguage.CKB -> "بەردەوام بە" }
-                    1 -> when (language) { AppLanguage.EN -> "Set up location"; AppLanguage.AR -> "إعداد الموقع"; AppLanguage.CKB -> "ڕێکخستنی شوێن" }
+                    0 -> when (language) {
+                        AppLanguage.EN -> "Continue"
+                        AppLanguage.AR -> "متابعة"
+                        AppLanguage.CKB -> "بەردەوام بە"
+                    }
+                    1 -> when (language) {
+                        AppLanguage.EN -> "Set up location"
+                        AppLanguage.AR -> "إعداد الموقع"
+                        AppLanguage.CKB -> "ڕێکخستنی شوێن"
+                    }
                     else -> when (language) {
                         AppLanguage.EN -> if (locationSaved) "Enter Mashxall" else "Continue without location"
                         AppLanguage.AR -> if (locationSaved) "الدخول إلى مەشخەڵ" else "المتابعة دون تحديد الموقع"
                         AppLanguage.CKB -> if (locationSaved) "چوونە ژوورەوەی مەشخەڵ" else "بەردەوام بەبێ شوێن"
                     }
                 }
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        when (step) {
-                            0 -> {
-                                prefs.edit().putString("language", language.key).apply()
-                                step = 1
+                Box(
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Brush.horizontalGradient(listOf(Color(0xFFFFE9A8), Gold, Color(0xFFC18E32))))
+                        .border(1.dp, Color(0xFFFFE8A1).copy(alpha = 0.76f), RoundedCornerShape(18.dp))
+                        .clickable {
+                            when (step) {
+                                0 -> {
+                                    prefs.edit().putString("language", language.key).apply()
+                                    step = 1
+                                }
+                                1 -> step = 2
+                                else -> finishSetup()
                             }
-                            1 -> step = 2
-                            else -> finishSetup()
                         }
-                    },
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Gold)
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(buttonLabel, color = Color(0xFF071E1A), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                        Text(buttonLabel, color = Color(0xFF10251C), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Outlined.ChevronRight, null, tint = Color(0xFF10251C), modifier = Modifier.size(19.dp))
+                    }
                 }
-                if (step > 0) {
-                    Spacer(Modifier.height(10.dp))
+                if (step > 0 && !minimalSoraniWelcome) {
+                    Spacer(Modifier.height(11.dp))
                     Text(
-                        when (language) { AppLanguage.EN -> "Your choices stay on this device"; AppLanguage.AR -> "تُحفظ اختياراتك على هذا الجهاز"; AppLanguage.CKB -> "هەڵبژاردەکانت لەم ئامێرەدا دەمێننەوە" },
-                        color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp
+                        when (language) {
+                            AppLanguage.EN -> "Your choices stay on this device"
+                            AppLanguage.AR -> "تُحفظ اختياراتك على هذا الجهاز"
+                            AppLanguage.CKB -> "هەڵبژاردەکانت لەم ئامێرەدا دەمێننەوە"
+                        },
+                        color = Color.White.copy(alpha = 0.42f),
+                        fontSize = 10.sp
                     )
                 }
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
@@ -984,7 +1161,9 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    var startupFinished by rememberSaveable { mutableStateOf(false) }
+    var startupFinished by rememberSaveable {
+        mutableStateOf(prefs.getBoolean("startup_animation_played", prefs.getBoolean("first_run_setup_complete", false)))
+    }
     var setupFinished by rememberSaveable {
         mutableStateOf(
             prefs.getBoolean(
@@ -998,7 +1177,10 @@ fun MashxallApp(startScreen: String? = null) {
         )
     }
     if (!startupFinished) {
-        MashxallStartupScreen { startupFinished = true }
+        MashxallStartupScreen {
+            prefs.edit().putBoolean("startup_animation_played", true).apply()
+            startupFinished = true
+        }
         return
     }
     if (!setupFinished) {
@@ -4118,7 +4300,7 @@ private fun SettingsScreen(
                 Icons.Outlined.GraphicEq to onAudio
             ),
             Triple(
-                when (language) { AppLanguage.EN -> "Adhan & muezzins"; AppLanguage.AR -> "الأذان والمؤذنون"; AppLanguage.CKB -> "بانگ و موئەزینەکان" },
+                when (language) { AppLanguage.EN -> "Adhan & muezzins"; AppLanguage.AR -> "الأذان والمؤذنون"; AppLanguage.CKB -> "بانگبێژان" },
                 when (language) { AppLanguage.EN -> "Open the separate adhan and mosque-audio collection"; AppLanguage.AR -> "افتح مجموعة الأذان وأصوات المساجد بشكل مستقل"; AppLanguage.CKB -> "کۆمەڵەی بانگ و دەنگی مزگەوت بە جیاوازی بکەرەوە" },
                 Icons.Outlined.NotificationsActive to onAdhan
             ),
