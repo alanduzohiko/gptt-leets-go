@@ -4379,6 +4379,10 @@ private fun MushafPageViewer(
             bitmapAvailable = bitmap != null
         )
     )
+    val latestPage = rememberUpdatedState(page)
+    val latestNextCurlBackBitmap = rememberUpdatedState(nextCurlBackBitmap)
+    val latestPreviousCurlBackBitmap = rememberUpdatedState(previousCurlBackBitmap)
+    val latestMotionAllowed = rememberUpdatedState(motionAllowed)
     fun jumpToEnteredPage() {
         val target = parseMushafPageNumber(pageInput) ?: return
         pageInput = target.toString()
@@ -4863,9 +4867,7 @@ private fun MushafPageViewer(
                             }
                             .then(
                                 if (scale <= 1.01f) {
-                                    Modifier.pointerInput(
-                                        page, scale, bitmap
-                                    ) {
+                                    Modifier.pointerInput(scale) {
                                         var dragTotal = 0f
                                         var dragStartedWhileBusy = false
 
@@ -4912,8 +4914,9 @@ private fun MushafPageViewer(
                                                     scale <= 1.01f && dragTotal != 0f
                                                 ) {
                                                     val forward = dragTotal > 0f
-                                                    val target = mushafCurlAdjacentPage(page, forward)
-                                                    val back = if (forward) nextCurlBackBitmap else previousCurlBackBitmap
+                                                    val activePage = latestPage.value
+                                                    val target = mushafCurlAdjacentPage(activePage, forward)
+                                                    val back = if (forward) latestNextCurlBackBitmap.value else latestPreviousCurlBackBitmap.value
                                                     if (back != null && target != null) {
                                                         fingerCurlDirection = mushafCurlDirectionForPageTransition(page, target)
                                                         curlBackBitmap = back
@@ -4929,7 +4932,7 @@ private fun MushafPageViewer(
                                             },
                                             onDragEnd = {
                                                 val targetPage = mushafSwipeTarget(
-                                                    page = page,
+                                                    page = latestPage.value,
                                                     horizontalDragPx = dragTotal,
                                                     thresholdPx = mushafSwipeThresholdPx(size.width.toFloat())
                                                 )
@@ -4957,7 +4960,7 @@ private fun MushafPageViewer(
                                                 } else if (targetPage != null) {
                                                     pageTurnInProgress = true
                                                     haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
-                                                    if (back != null && motionAllowed) {
+                                                    if (back != null && latestMotionAllowed.value) {
                                                         scope.launch {
                                                             pageCurlProgress.snapTo(releaseProgress)
                                                             fingerDragActive = false
