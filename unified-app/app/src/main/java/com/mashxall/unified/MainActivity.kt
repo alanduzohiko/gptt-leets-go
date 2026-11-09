@@ -486,6 +486,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+internal fun shouldPlayMashxallStartupAnimation(
+    startupPlayed: Boolean,
+    startupStarted: Boolean,
+    firstRunSetupComplete: Boolean,
+    legacyUserState: Boolean
+): Boolean = !startupPlayed && !startupStarted && !firstRunSetupComplete && !legacyUserState
+
 @Composable
 private fun MashxallStartupScreen(onFinished: () -> Unit) {
     val context = LocalContext.current
@@ -517,12 +524,12 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
     // Some vendor decoders can stall without reporting an error. Never leave a
     // black splash: fall back to the original logo and continue gracefully.
     LaunchedEffect(Unit) {
-        delay(7_000L)
+        delay(2_200L)
         if (!firstFrameVisible && !finished) playbackFailed = true
     }
     LaunchedEffect(playbackFailed) {
         if (playbackFailed && !finished) {
-            delay(1_800L)
+            delay(140L)
             if (!finished) {
                 finished = true
                 latestOnFinished()
@@ -542,9 +549,29 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
     )
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black),
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                listOf(Color(0xFF061A16), Color(0xFF0D3027), Color(0xFF061A16))
+            )
+        ),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            Modifier.align(Alignment.TopCenter).offset(y = (-180).dp).size(430.dp)
+                .background(
+                    Brush.radialGradient(
+                        listOf(Gold.copy(alpha = 0.17f), Color(0xFF2B7656).copy(alpha = 0.08f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+        Box(
+            Modifier.align(Alignment.BottomCenter).offset(y = 185.dp).size(360.dp)
+                .background(
+                    Brush.radialGradient(listOf(Gold.copy(alpha = 0.08f), Color.Transparent)),
+                    CircleShape
+                )
+        )
         Image(
             painter = painterResource(R.drawable.mashxall_welcome_logo),
             contentDescription = "Mashxall",
@@ -1161,8 +1188,23 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    var startupFinished by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("startup_animation_played", prefs.getBoolean("first_run_setup_complete", false)))
+    val legacyUserState = !prefs.getBoolean("first_run_setup_started", false) &&
+        (prefs.contains("language") || prefs.contains("last_surah") ||
+            prefs.contains("last_mushaf_page") || prefs.contains("accent_palette") ||
+            prefs.contains("dark_mode") || prefs.contains("gps_latitude") ||
+            prefs.contains("manual_city_latitude"))
+    val shouldPlayStartupAnimation = shouldPlayMashxallStartupAnimation(
+        startupPlayed = prefs.getBoolean("startup_animation_played", false),
+        startupStarted = prefs.getBoolean("startup_animation_started", false),
+        firstRunSetupComplete = prefs.getBoolean("first_run_setup_complete", false),
+        legacyUserState = legacyUserState
+    )
+    var startupFinished by rememberSaveable { mutableStateOf(!shouldPlayStartupAnimation) }
+    LaunchedEffect(shouldPlayStartupAnimation) {
+        prefs.edit().putBoolean("startup_animation_started", true).apply()
+        if (!shouldPlayStartupAnimation) {
+            prefs.edit().putBoolean("startup_animation_played", true).apply()
+        }
     }
     var setupFinished by rememberSaveable {
         mutableStateOf(
@@ -1178,7 +1220,10 @@ fun MashxallApp(startScreen: String? = null) {
     }
     if (!startupFinished) {
         MashxallStartupScreen {
-            prefs.edit().putBoolean("startup_animation_played", true).apply()
+            prefs.edit()
+                .putBoolean("startup_animation_started", true)
+                .putBoolean("startup_animation_played", true)
+                .apply()
             startupFinished = true
         }
         return
