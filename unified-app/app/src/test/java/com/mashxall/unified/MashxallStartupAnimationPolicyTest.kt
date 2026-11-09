@@ -80,4 +80,25 @@ class MashxallStartupAnimationPolicyTest {
             )
         )
     }
+    @Test
+    fun introVideoCenterCropFillsTheViewportWithoutStretching() {
+        val narrowViewport = introVideoCenterCropScale(
+            viewWidth = 480,
+            viewHeight = 1000,
+            videoWidth = 720,
+            videoHeight = 1280
+        )
+        assertTrue(kotlin.math.abs(narrowViewport.first - 1.171875f) < 0.0001f)
+        assertTrue(kotlin.math.abs(narrowViewport.second - 1f) < 0.0001f)
+
+        val wideViewport = introVideoCenterCropScale(
+            viewWidth = 900,
+            viewHeight = 1500,
+            videoWidth = 720,
+            videoHeight = 1280
+        )
+        assertTrue(kotlin.math.abs(wideViewport.first - 1f) < 0.0001f)
+        assertTrue(kotlin.math.abs(wideViewport.second - (1.0666667f)) < 0.0001f)
+        assertTrue(introVideoCenterCropScale(0, 1000, 720, 1280) == (1f to 1f))
+    }
 }

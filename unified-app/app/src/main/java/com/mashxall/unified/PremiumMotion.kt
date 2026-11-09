@@ -146,10 +146,9 @@ internal fun HapticFeedback.performMashxallHaptic(type: HapticFeedbackType) {
 /**
  * Shared native touch response for tappable surfaces throughout Mashxall.
  *
- * The spring scale is deliberately small so cards feel tactile without shifting
- * neighbouring content. Material's current indication supplies the ripple, and
- * haptics can be opted out when a screen already provides richer task-specific
- * feedback (for example, Quran navigation or Tasbih counting).
+ * The spring scale and slight role-specific tilt keep controls tactile without
+ * painting a generic bounding-box highlight over rounded cards. Haptics can be
+ * opted out when a screen already provides task-specific feedback.
  */
 internal fun premiumPressTargetScale(
     enabled: Boolean,
@@ -219,56 +218,16 @@ internal fun Modifier.premiumClickable(
         label = "Mashxall native press scale"
     )
     val haptics = LocalHapticFeedback.current
-    val pressAccent = MaterialTheme.colorScheme.primary
-    val pressGlow by animateFloatAsState(
-        targetValue = if (motionAllowed && enabled && pressed) 1f else 0f,
-        animationSpec = if (motionAllowed) tween(120, easing = FastOutSlowInEasing) else snap(),
-        label = "Mashxall touch edge glow"
-    )
-
-    val touchTarget = this.drawWithContent {
-        drawContent()
-        if (motionAllowed && enabled && pressGlow > 0f) {
-            val glow = premiumRolePressGlowAlpha(role) * pressGlow
-            val corner = CornerRadius((size.minDimension * 0.20f).coerceAtLeast(8.dp.toPx()))
-            drawRoundRect(
-                color = pressAccent.copy(alpha = glow * 0.045f),
-                cornerRadius = corner
-            )
-            drawRoundRect(
-                color = pressAccent.copy(alpha = glow),
-                cornerRadius = corner,
-                style = Stroke(width = (1.1f + 1.5f * pressGlow).dp.toPx())
-            )
-            drawRoundRect(
-                color = Color.White.copy(alpha = glow * 0.16f),
-                cornerRadius = corner,
-                style = Stroke(width = 0.65.dp.toPx())
-            )
-            // A short moving glint makes the press acknowledgement visible,
-            // while its start and edge glow differ by control role.
-            val glintX = size.width * (0.14f + 0.72f * pressGlow)
-            drawLine(
-                color = Color.White.copy(alpha = glow * 0.22f),
-                start = Offset((glintX - 4.dp.toPx()).coerceAtLeast(4.dp.toPx()), 1.5.dp.toPx()),
-                end = Offset((glintX + 4.dp.toPx()).coerceAtMost(size.width - 4.dp.toPx()), 1.5.dp.toPx()),
-                strokeWidth = 1.1.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-            drawCircle(
-                color = pressAccent.copy(alpha = glow * 0.62f),
-                radius = 1.45.dp.toPx(),
-                center = Offset(glintX, 2.dp.toPx())
-            )
-        }
-    }.graphicsLayer {
+    // Avoid a generic rectangular indication/shadow: the control's own clipped
+    // shape remains authoritative while scale, tilt and haptic feedback stay.
+    val touchTarget = this.graphicsLayer {
         scaleX = scale
         scaleY = scale
         translationY = if (motionAllowed && enabled && pressed) 1.15.dp.toPx() else 0f
-        rotationZ = if (motionAllowed && enabled && pressed) premiumControlPressRotationDegrees(role, pressedScale) else 0f
-        shadowElevation = if (motionAllowed && enabled && pressed) {
-            if (role == Role.Button) 7.dp.toPx() else 4.5.dp.toPx()
+        rotationZ = if (motionAllowed && enabled && pressed) {
+            premiumControlPressRotationDegrees(role, pressedScale)
         } else 0f
+        shadowElevation = 0f
     }
     if (onLongClick != null) {
         touchTarget.combinedClickable(

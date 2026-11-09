@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,6 +14,14 @@ class MushafSwipeNavigationTest {
         assertEquals(2, mushafSwipeTarget(page = 1, horizontalDragPx = 120f))
         assertEquals(3, mushafSwipeTarget(page = 2, horizontalDragPx = 150f))
         assertEquals(1, mushafSwipeTarget(page = 2, horizontalDragPx = -150f))
+    }
+
+    @Test
+    fun pageGesturesAreAcceptedOnlyWhenReaderIsReadyAndIdle() {
+        assertTrue(shouldAcceptMushafGesture(false, false, true))
+        assertFalse(shouldAcceptMushafGesture(true, false, true))
+        assertFalse(shouldAcceptMushafGesture(false, true, true))
+        assertFalse(shouldAcceptMushafGesture(false, false, false))
     }
 
     @Test

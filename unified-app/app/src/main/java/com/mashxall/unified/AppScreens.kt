@@ -4275,6 +4275,12 @@ internal fun mushafJuzForPage(page: Int): Int {
     return (starts.indexOfLast { it <= page } + 1).coerceIn(1, 30)
 }
 
+internal fun shouldAcceptMushafGesture(
+    turnInProgress: Boolean,
+    loading: Boolean,
+    bitmapAvailable: Boolean
+): Boolean = !turnInProgress && !loading && bitmapAvailable
+
 internal fun mushafSwipeThresholdPx(viewportWidthPx: Float): Float {
     if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 72f
     return maxOf(72f, viewportWidthPx * 0.16f)
@@ -4325,6 +4331,7 @@ private fun MushafPageViewer(
     }
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val pageCurlProgress = remember { Animatable(1f) }
+    var pageTurnInProgress by remember { mutableStateOf(false) }
     var pageTurnDirection by remember { mutableFloatStateOf(1f) }
     var lastLoadedPage by remember { mutableIntStateOf(page) }
     // Finger-led turns keep their two printed faces and the page beneath them.
@@ -4384,13 +4391,13 @@ private fun MushafPageViewer(
         suspend fun renderPreview(targetPage: Int): Bitmap? {
             if (targetPage !in 1..604) return null
             if (edition == "tajweed") {
-                return TajweedMushafRepository.renderPageBitmap(context, targetPage, 600, 857)
+                return TajweedMushafRepository.renderPageBitmap(context, targetPage, 1148, 1641)
             }
             val source = ContentRepository.loadMushafPageSvg(context, targetPage) ?: return null
             return withContext(Dispatchers.Default) {
                 try {
                     val svg = SVG.getFromString(source)
-                    Bitmap.createBitmap(600, 857, Bitmap.Config.ARGB_8888).also { image ->
+                    Bitmap.createBitmap(1148, 1641, Bitmap.Config.ARGB_8888).also { image ->
                         image.eraseColor(AndroidColor.WHITE)
                         svg.renderToCanvas(Canvas(image))
                     }
@@ -4539,7 +4546,7 @@ private fun MushafPageViewer(
                     // The curl uses the new leaf as its reverse while the normal
                     // Image remains on the old leaf underneath; no white frame leaks.
                     pendingPageBitmap = nextPageBitmap
-                    pageCurlProgress.animateTo(1f, animationSpec = tween(240, easing = FastOutSlowInEasing))
+                    pageCurlProgress.animateTo(1f, animationSpec = tween(190, easing = FastOutSlowInEasing))
                 }
                 bitmap = nextPageBitmap
                 pendingPageBitmap = null
@@ -4561,6 +4568,7 @@ private fun MushafPageViewer(
             failed = true
         } finally {
             loading = false
+            pageTurnInProgress = false
         }
     }
     val visiblePageBitmap = bitmap ?: turningPageBitmap
@@ -4820,22 +4828,32 @@ private fun MushafPageViewer(
                             .then(
                                 if (scale <= 1.01f) {
                                     Modifier.pointerInput(
-                                        page, scale, bitmap
+                                        page, scale, bitmap, loading, pageTurnInProgress
                                     ) {
-                                        if (bitmap == null) return@pointerInput
+                                        if (!shouldAcceptMushafGesture(
+                                                turnInProgress = pageTurnInProgress,
+                                                loading = loading,
+                                                bitmapAvailable = bitmap != null
+                                            )
+                                        ) return@pointerInput
                                         var dragTotal = 0f
 
                                         suspend fun returnCurlToRest(startProgress: Float) {
-                                            pageCurlProgress.snapTo(startProgress.coerceIn(0f, 1f))
-                                            fingerDragActive = false
-                                            pageCurlProgress.animateTo(
-                                                0f,
-                                                animationSpec = tween(260, easing = FastOutSlowInEasing)
-                                            )
-                                            curlPreviewVisible = false
-                                            fingerCurlProgress = 0f
-                                            curlBackBitmap = null
-                                            curlUnderlayBitmap = null
+                                            pageTurnInProgress = true
+                                            try {
+                                                pageCurlProgress.snapTo(startProgress.coerceIn(0f, 1f))
+                                                fingerDragActive = false
+                                                pageCurlProgress.animateTo(
+                                                    0f,
+                                                    animationSpec = tween(180, easing = FastOutSlowInEasing)
+                                                )
+                                            } finally {
+                                                curlPreviewVisible = false
+                                                fingerCurlProgress = 0f
+                                                curlBackBitmap = null
+                                                curlUnderlayBitmap = null
+                                                pageTurnInProgress = false
+                                            }
                                         }
 
                                         detectHorizontalDragGestures(
@@ -4884,6 +4902,7 @@ private fun MushafPageViewer(
                                                 val direction = fingerCurlDirection
 
                                                 if (targetPage != null) {
+                                                    pageTurnInProgress = true
                                                     haptic.performMashxallHaptic(HapticFeedbackType.TextHandleMove)
                                                     if (back != null && motionAllowed) {
                                                         scope.launch {
@@ -4891,7 +4910,7 @@ private fun MushafPageViewer(
                                                             fingerDragActive = false
                                                             pageCurlProgress.animateTo(
                                                                 1f,
-                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                                animationSpec = tween(210, easing = FastOutSlowInEasing)
                                                             )
                                                             // The finger-led curl has already revealed this adjacent page.
                                                             // Keep that ready bitmap on screen while the full-resolution page
@@ -7644,7 +7663,7 @@ fun AudioScreen(
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        if (focusAdhan) {
+        if (focusAdhan || focusReciters) {
         PremiumSectionHero(
             title = if (focusAdhan) {
                 when (language) {
