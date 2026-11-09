@@ -530,8 +530,71 @@ internal fun isLikelyEncryptedLexiconPayload(value: String): Boolean {
 
 private fun readableHadithText(value: String): String = cleanHadithArabicSourceText(value)
 
-private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
-    ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
+/**
+ * Fold Quran text and user input consistently: vowel marks, Quranic annotation
+ * marks, tatweel, punctuation and common Arabic/Persian letter variants do not
+ * prevent a verse from matching what the reader typed.
+ */
+internal fun normalizeArabicSearchText(value: String): String {
+    val folded = buildString(value.length) {
+        value.lowercase(Locale.ROOT).forEach { raw ->
+            val ch = when (raw) {
+                'أ', 'إ', 'آ', 'ٱ' -> 'ا'
+                'ى', 'ئ', 'ی' -> 'ي'
+                'ؤ' -> 'و'
+                'ة' -> 'ه'
+                'ک' -> 'ك'
+                else -> raw
+            }
+            if (
+                ch in '\u0610'..'\u061A' ||
+                ch in '\u064B'..'\u065F' ||
+                ch == '\u0670' ||
+                ch in '\u06D6'..'\u06ED' ||
+                ch in '\u08D3'..'\u08FF' ||
+                ch == '\u0640' ||
+                ch == 'ء'
+            ) return@forEach
+            if (ch.isLetterOrDigit()) append(ch) else append(' ')
+        }
+    }
+    return folded.trim().replace(Regex("\\s+"), " ")
+}
+
+internal fun normalizeArabicKey(value: String): String =
+    normalizeArabicSearchText(value).replace(" ", "")
+
+internal fun quranSearchMatches(
+    query: String,
+    arabic: String,
+    arabicWithoutHarakat: String,
+    translation: String,
+    surahNameArabic: String,
+    surahNameEnglish: String,
+    surah: Int,
+    ayah: Int
+): Boolean {
+    val rawQuery = query.trim()
+    if (rawQuery.isBlank()) return false
+    val verseKey = "$surah:$ayah"
+    if (rawQuery == verseKey || rawQuery == verseKey.replace(":", " ")) return true
+
+    val normalizedQuery = normalizeArabicSearchText(rawQuery)
+    if (normalizedQuery.isBlank()) return false
+    val sources = listOf(arabic, arabicWithoutHarakat, translation, surahNameArabic, surahNameEnglish)
+        .map(::normalizeArabicSearchText)
+        .filter(String::isNotBlank)
+    if (sources.isEmpty()) return false
+
+    val compactQuery = normalizedQuery.replace(" ", "")
+    if (compactQuery.length >= 2 && sources.any { it.replace(" ", "").contains(compactQuery) }) {
+        return true
+    }
+
+    // A query typed with slightly different spacing or punctuation can still
+    // match when all meaningful words occur in the verse or its translation.
+    val terms = normalizedQuery.split(' ').filter { it.length >= 2 }
+    return terms.isNotEmpty() && terms.all { term -> sources.any { it.contains(term) } }
 }
 
 
@@ -1168,19 +1231,19 @@ object ContentRepository {
                     while (c.moveToNext()) {
                         val item = c.toAyah(key, external)
                         if (query == null || query.isBlank()) add(item)
-                        else {
-                            val term = query.trim()
-                            val folded = normalizeArabicKey(term)
-                            val arabicFolded = normalizeArabicKey(item.arabicWithoutHarakat.ifBlank { item.arabic })
-                            val idMatch = term == "${item.surah}:${item.number}" ||
-                                term == "${item.surah}:${item.number}".replace(":", " ")
-                            val containsMatch = item.arabic.contains(term, ignoreCase = true) ||
-                                item.arabicWithoutHarakat.contains(term, ignoreCase = true) ||
-                                item.translation.contains(term, ignoreCase = true) ||
-                                item.surahNameArabic.contains(term, ignoreCase = true) ||
-                                item.surahNameEnglish.contains(term, ignoreCase = true) ||
-                                (folded.isNotBlank() && arabicFolded.contains(folded, ignoreCase = true))
-                            if (idMatch || containsMatch) add(item)
+                        else if (
+                            quranSearchMatches(
+                                query = query,
+                                arabic = item.arabic,
+                                arabicWithoutHarakat = item.arabicWithoutHarakat,
+                                translation = item.translation,
+                                surahNameArabic = item.surahNameArabic,
+                                surahNameEnglish = item.surahNameEnglish,
+                                surah = item.surah,
+                                ayah = item.number
+                            )
+                        ) {
+                            add(item)
                         }
                     }
                 }
