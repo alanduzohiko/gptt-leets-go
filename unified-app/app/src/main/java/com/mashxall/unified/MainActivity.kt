@@ -865,6 +865,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
         label = "Onboarding ambient glow"
     )
     val minimalSoraniWelcome = language == AppLanguage.CKB && step == 1
+    val setupDark = prefs.getBoolean("dark_mode", false)
+    val setupSurface = if (setupDark) Color(0xFF10271F) else Color(0xFFFFFEFA)
+    val setupText = if (setupDark) Color(0xFFFFF8E9) else Color(0xFF12372C)
+    val setupMuted = if (setupDark) Color(0xFFD8E5DC) else Color(0xFF65756D)
+    val setupLine = if (setupDark) Color.White.copy(alpha = 0.14f) else DeepGreen.copy(alpha = 0.13f)
 
     CompositionLocalProvider(
         LocalLayoutDirection provides if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -872,7 +877,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF030F0C), Color(0xFF0A241D), Color(0xFF10382D), Color(0xFF061711))
+                    if (setupDark) {
+                        listOf(Color(0xFF030F0C), Color(0xFF0A241D), Color(0xFF10382D), Color(0xFF061711))
+                    } else {
+                        listOf(Color(0xFFF8F5ED), Color(0xFFEFE8D8), Color(0xFFF7F3E9), Color(0xFFE9E1CF))
+                    }
                 )
             )
         ) {
@@ -882,7 +891,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     .size(460.dp)
                     .background(
                         Brush.radialGradient(
-                            listOf(Gold.copy(alpha = setupGlow * 0.36f), Color(0xFF1F6047).copy(alpha = 0.08f), Color.Transparent)
+                            listOf(Gold.copy(alpha = setupGlow * 0.30f), DeepGreen.copy(alpha = if (setupDark) 0.09f else 0.045f), Color.Transparent)
                         ),
                         CircleShape
                     )
@@ -893,7 +902,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     .size(420.dp)
                     .background(
                         Brush.radialGradient(
-                            listOf(Color(0xFFB68B38).copy(alpha = setupGlow * 0.11f), Color.Transparent)
+                            listOf(Gold.copy(alpha = setupGlow * (if (setupDark) 0.11f else 0.16f)), Color.Transparent)
                         ),
                         CircleShape
                     )
@@ -916,7 +925,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                             AppLanguage.AR -> "مَشْخەڵ"
                             AppLanguage.CKB -> "مەشخەڵ"
                         },
-                        color = PaleGold,
+                        color = if (setupDark) PaleGold else DeepGreen,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 2.2.sp
@@ -924,7 +933,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     Spacer(Modifier.weight(1f))
                     Text(
                         "0${step + 1} / 03",
-                        color = Color.White.copy(alpha = 0.62f),
+                        color = setupMuted.copy(alpha = 0.82f),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
@@ -940,7 +949,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                             Modifier.weight(1f).height(3.dp).clip(CircleShape)
                                 .background(
                                     if (index <= step) Gold
-                                    else Color.White.copy(alpha = 0.13f)
+                                    else setupLine
                                 )
                         )
                     }
@@ -952,7 +961,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                         .clip(RoundedCornerShape(30.dp))
                         .background(
                             Brush.radialGradient(
-                                listOf(Color(0xFF214A38).copy(alpha = 0.76f), Color(0xFF0C211B).copy(alpha = 0.92f), Color.Transparent)
+                                if (setupDark) {
+                                 listOf(Color(0xFF214A38).copy(alpha = 0.76f), Color(0xFF0C211B).copy(alpha = 0.92f), Color.Transparent)
+                             } else {
+                                 listOf(Color.White.copy(alpha = 0.96f), Color(0xFFECE4D2).copy(alpha = 0.86f), Color.Transparent)
+                             }
                             )
                         )
                         .border(1.dp, Gold.copy(alpha = 0.32f), RoundedCornerShape(30.dp)),
@@ -968,7 +981,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                 Spacer(Modifier.height(18.dp))
                 Text(
                     titles[step],
-                    color = Color.White,
+                    color = setupText,
                     fontSize = if (minimalSoraniWelcome) 25.sp else 23.sp,
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center,
@@ -978,7 +991,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     Text(
                         subtitles[step],
-                        color = Color(0xFFD8E5DC),
+                        color = setupMuted,
                         fontSize = 12.sp,
                         lineHeight = 20.sp,
                         textAlign = TextAlign.Center
@@ -996,12 +1009,12 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                     if (selected) Brush.horizontalGradient(
                                         listOf(Color(0xFF285741), Color(0xFF163B30))
                                     ) else Brush.horizontalGradient(
-                                        listOf(Color(0xFF102820), Color(0xFF0A1C16))
+                                        listOf(setupSurface, setupSurface.copy(alpha = 0.94f))
                                     )
                                 )
                                 .border(
                                     1.dp,
-                                    if (selected) Gold.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.10f),
+                                    if (selected) Gold.copy(alpha = 0.92f) else setupLine,
                                     RoundedCornerShape(18.dp)
                                 )
                                 .clickable { language = option }
@@ -1021,13 +1034,13 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                             AppLanguage.AR -> "ع"
                                             AppLanguage.EN -> "A"
                                         },
-                                        color = PaleGold,
+                                        color = if (selected) PaleGold else Gold,
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                                 Spacer(Modifier.width(12.dp))
-                                Text(option.label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text(option.label, color = if (selected) Color.White else setupText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.weight(1f))
                                 if (selected) Icon(Icons.Outlined.CheckCircle, null, tint = Gold, modifier = Modifier.size(22.dp))
                             }
@@ -1037,7 +1050,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     1 -> if (language != AppLanguage.CKB) Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.055f)),
+                        colors = CardDefaults.cardColors(containerColor = setupSurface),
                         border = BorderStroke(1.dp, Gold.copy(alpha = 0.30f))
                     ) {
                         Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1049,7 +1062,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                     AppLanguage.AR -> "اقرأ وتعلّم وتعبّد"
                                     AppLanguage.CKB -> ""
                                 },
-                                color = PaleGold, fontSize = 15.sp, fontWeight = FontWeight.Bold
+                                color = setupText, fontSize = 15.sp, fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(7.dp))
                             Text(
@@ -1058,7 +1071,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                     AppLanguage.AR -> "تم حفظ لغتك. سنضبط الآن الموقع الذي ستُستخدم إحداثياته لمواقيت الصلاة المحلية."
                                     AppLanguage.CKB -> ""
                                 },
-                                color = Color(0xFFD4DFD8), textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 19.sp
+                                color = setupMuted, textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 19.sp
                             )
                         }
                     } else Spacer(Modifier.height(3.dp))
@@ -1066,7 +1079,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     else -> Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF10271F)),
+                        colors = CardDefaults.cardColors(containerColor = setupSurface),
                         border = BorderStroke(1.dp, Gold.copy(alpha = 0.28f))
                     ) {
                         Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1089,7 +1102,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                     AppLanguage.AR -> if (locationSaved) "تم حفظ الموقع" else "تحديد موقعي"
                                     AppLanguage.CKB -> if (locationSaved) "شوێن پاشەکەوت کرا" else "شوێنی خۆم دیاری بکە"
                                 },
-                                color = if (locationSaved) Color(0xFF86D7A8) else PaleGold,
+                                color = if (locationSaved) Color(0xFF3B9B6F) else setupText,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1102,7 +1115,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                         AppLanguage.CKB -> "کاتەکان ناخرێنە خەیاڵەوە؛ ئەپەکە داتای ڕەسەنی صەڵەواتی بەکاردێنێت."
                                     }
                                 },
-                                color = Color(0xFFD4DFD8),
+                                color = setupMuted,
                                 fontSize = 11.sp,
                                 lineHeight = 17.sp,
                                 textAlign = TextAlign.Center
@@ -1174,7 +1187,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                             AppLanguage.AR -> "تُحفظ اختياراتك على هذا الجهاز"
                             AppLanguage.CKB -> "هەڵبژاردەکانت لەم ئامێرەدا دەمێننەوە"
                         },
-                        color = Color.White.copy(alpha = 0.42f),
+                        color = setupMuted.copy(alpha = 0.74f),
                         fontSize = 10.sp
                     )
                 }
