@@ -68,24 +68,27 @@ jobs:
           fi
           ffmpeg -hide_banner -loglevel error -y -i "$SOURCE" \
             -map 0:v:0 -an \
-            -vf "scale=1080:1920:flags=lanczos,fps=24,format=yuv420p" \
-            -c:v libx264 -preset slow -crf 19 -profile:v high -level:v 4.1 \
+            -vf "scale=720:1280:flags=lanczos,fps=24,format=yuv420p" \
+            -c:v libx264 -preset slow -crf 18 -profile:v baseline -level:v 3.1 \
+            -x264-params "cabac=0:bframes=0:ref=1:keyint=48:min-keyint=24:scenecut=0" \
             -movflags +faststart -pix_fmt yuv420p "$OUTPUT"
           python - "$OUTPUT" <<'PY'
           import json, subprocess, sys
           path = sys.argv[1]
           raw = subprocess.check_output([
               "ffprobe", "-v", "error", "-select_streams", "v:0",
-              "-show_entries", "stream=width,height,r_frame_rate",
+              "-show_entries", "stream=profile,width,height,r_frame_rate,level",
               "-show_entries", "format=duration", "-of", "json", path
           ], text=True)
           data = json.loads(raw)
           stream = data["streams"][0]
           duration = float(data["format"]["duration"])
-          assert (stream["width"], stream["height"]) == (1080, 1920), stream
+          assert (stream["width"], stream["height"]) == (720, 1280), stream
+          assert "Baseline" in stream["profile"], stream
+          assert stream["level"] <= 31, stream
           assert abs(duration - 3.875) < 0.15, duration
           assert stream["r_frame_rate"] == "24/1", stream
-          print(f"Verified bundled intro: 1080x1920, {duration:.3f}s, 24fps")
+          print(f"Verified universal H.264 intro: {stream['profile']}, 720x1280, {duration:.3f}s, 24fps")
           PY
           echo "Optimized offline intro size: $(du -h "$OUTPUT" | cut -f1)"
 
