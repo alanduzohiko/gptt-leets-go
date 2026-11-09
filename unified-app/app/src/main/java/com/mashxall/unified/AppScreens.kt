@@ -3610,7 +3610,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     }
                                     PremiumChoicePill(
                                         modifier = Modifier.weight(1f),
-                                        label = if (language == AppLanguage.EN) "From selected ayah" else if (language == AppLanguage.AR) "من الآية المحددة" else "لە ئایەتی هەڵبژێردراوەوە",
+                                        label = if (language == AppLanguage.EN) "Selected ayah" else if (language == AppLanguage.AR) "الآية المحددة" else "ئایەتی هەڵبژێردراو",
                                         selected = readerPlaybackMode == "verse",
                                         accent = Gold,
                                         foreground = foreground
@@ -7698,18 +7698,6 @@ fun AudioScreen(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         when (language) {
-                            AppLanguage.EN -> "QURAN RECITERS"
-                            AppLanguage.AR -> "قرّاء القرآن"
-                            AppLanguage.CKB -> "قورئان‌خوێنەکان"
-                        },
-                        color = Gold,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.0.sp,
-                        maxLines = 1
-                    )
-                    Text(
-                        when (language) {
                             AppLanguage.EN -> "Choose your reciter"
                             AppLanguage.AR -> "اختر قارئك"
                             AppLanguage.CKB -> "قورئان‌خوێن هەڵبژێرە"
@@ -7717,16 +7705,6 @@ fun AudioScreen(
                         color = Color(0xFFFFF8E9),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1
-                    )
-                    Text(
-                        when (language) {
-                            AppLanguage.EN -> "Full surah or verse-by-verse"
-                            AppLanguage.AR -> "السورة كاملة أو آيةً بآية"
-                            AppLanguage.CKB -> "سوورەتی تەواو یان ئایەت بە ئایەت"
-                        },
-                        color = Color.White.copy(alpha = 0.72f),
-                        fontSize = 9.sp,
                         maxLines = 1
                     )
                 }
@@ -7741,7 +7719,7 @@ fun AudioScreen(
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         val normalizedPlayingKey = playing.removePrefix("loading:")
         val preparingAudio = playing.startsWith("loading:")
         val currentAudioTitle = when {
@@ -8252,53 +8230,6 @@ fun AudioScreen(
         } else {
             val visibleReciters = filterRecitersForPlaybackMode(reciters, playbackMode, audioQuery)
             Text(
-                when {
-                    preferredReciter != null && language == AppLanguage.EN -> "Your preferred reciter is saved for Quran playback."
-                    preferredReciter != null && language == AppLanguage.AR -> "سيُستخدم قارئك المفضّل عند تشغيل القرآن."
-                    preferredReciter != null -> "قورئان‌خوێنە دڵخوازەکەت بۆ خوێندنەوە پاشەکەوت کراوە."
-                    language == AppLanguage.EN -> "Choose a reciter; streaming needs an internet connection."
-                    language == AppLanguage.AR -> "اختر قارئًا؛ يتطلب البث اتصالًا بالإنترنت."
-                    else -> "قورئان‌خوێن هەڵبژێرە؛ پەخش پێویستی بە ئینتەرنێت هەیە."
-                },
-                color = foreground.copy(alpha = 0.58f),
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(7.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = surahText,
-                    onValueChange = { surahText = it.filter(Char::isDigit).take(3) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text(tr(language, "surah")) },
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = ayahText,
-                    onValueChange = { ayahText = it.filter(Char::isDigit).take(3) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text(tr(language, "ayah")) },
-                    singleLine = true
-                )
-            }
-            val allSurahEditionCount = reciters.count { ReaderPlaybackSettings.supportsAllSurahs(it) }
-            val partialOnlineEditionCount = reciters.count {
-                it.sourceId.isNotBlank() && !ReaderPlaybackSettings.supportsAllSurahs(it)
-            }
-            Text(
-                when (language) {
-                    AppLanguage.EN -> "${reciters.size} editions • ${allSurahEditionCount} complete • ${partialOnlineEditionCount} partial"
-                    AppLanguage.AR -> "${reciters.size} قارئًا • ${allSurahEditionCount} كاملًا • ${partialOnlineEditionCount} جزئيًا"
-                    AppLanguage.CKB -> "${reciters.size} وەشان • ${allSurahEditionCount} تەواو • ${partialOnlineEditionCount} بەشەکی"
-                },
-                color = foreground.copy(alpha = 0.48f),
-                fontSize = 8.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(7.dp))
-            Text(
                 if (language == AppLanguage.EN) "PLAYBACK MODE" else if (language == AppLanguage.AR) "طريقة التشغيل" else "شێوازی لێدان",
                 color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold
             )
@@ -8330,20 +8261,7 @@ fun AudioScreen(
                     autoPlayKey = ""
                 }
             }
-            Text(
-                when {
-                    playbackMode == "full" && language == AppLanguage.EN -> "Starts at the beginning of the surah."
-                    playbackMode == "full" && language == AppLanguage.AR -> "يبدأ التشغيل من أول السورة."
-                    playbackMode == "full" -> "لە سەرەتای سوورەتەوە دەست پێدەکات."
-                    language == AppLanguage.EN -> "Starts at your selected ayah."
-                    language == AppLanguage.AR -> "يبدأ من الآية المحددة."
-                    else -> "لە ئایەتی هەڵبژێردراوەوە دەست پێدەکات."
-                },
-                color = foreground.copy(alpha = 0.52f),
-                fontSize = 8.sp,
-                maxLines = 1
-            )
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(6.dp))
             if (reciters.isEmpty()) LoadingOrEmpty(loading, language, foreground)
             else if (visibleReciters.isEmpty()) {
                 val emptyMessage = when {
