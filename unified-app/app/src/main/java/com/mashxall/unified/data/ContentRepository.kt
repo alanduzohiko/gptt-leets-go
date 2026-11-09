@@ -561,8 +561,9 @@ internal fun normalizeArabicSearchText(value: String): String {
     return folded.trim().replace(Regex("\\s+"), " ")
 }
 
-internal fun normalizeArabicKey(value: String): String =
-    normalizeArabicSearchText(value).replace(" ", "")
+private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
+    ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
+}
 
 internal fun quranSearchMatches(
     query: String,
