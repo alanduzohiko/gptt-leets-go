@@ -9,7 +9,7 @@ import android.content.Intent
 import android.content.Context
 import android.net.Uri
 import android.media.MediaPlayer
-import android.view.Surface
+import android.view.Surface as VideoOutputSurface
 import android.view.TextureView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -580,7 +580,7 @@ private class MashxallIntroTextureView(
 ) : TextureView(context), TextureView.SurfaceTextureListener {
 
     private var player: MediaPlayer? = null
-    private var outputSurface: Surface? = null
+    private var outputSurface: VideoOutputSurface? = null
     private var firstFrameReported = false
     private var completionReported = false
     private var released = false
@@ -599,7 +599,7 @@ private class MashxallIntroTextureView(
         try {
             val media = MediaPlayer()
             player = media
-            val surface = Surface(surfaceTexture)
+            val surface = VideoOutputSurface(surfaceTexture)
             outputSurface = surface
             media.setSurface(surface)
             media.setVolume(0f, 0f)
