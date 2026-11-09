@@ -256,7 +256,7 @@ internal fun IslamicOccasionsHomeCard(
                     Text(
                         when (language) {
                             AppLanguage.AR -> "المناسبات الإسلامية"
-                            AppLanguage.CKB -> "بۆنە ئیسلامییەکان"
+                            AppLanguage.CKB -> "بۆنەکان"
                             AppLanguage.EN -> "Islamic occasions"
                         },
                         color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Bold
