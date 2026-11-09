@@ -23,6 +23,10 @@ on:
       - "tools/runtime-smoke-android11.sh"
       - ".github/workflows/runtime-smoke-unified-android.yml"
       - ".github/workflows/build-unified-mashxall.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "unified-app/app/src/main/res/values/themes.xml"
   workflow_dispatch:
     inputs:
       source_asset_name:
@@ -40,7 +44,7 @@ permissions:
 
 jobs:
   build-unified-app:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/redesign/')))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.release.tag_name == 'unified-source-v1') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/redesign/'))) || (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
