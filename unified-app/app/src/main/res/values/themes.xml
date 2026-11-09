@@ -7,7 +7,8 @@
         <item name="android:navigationBarColor">#071E1A</item>
         <item name="android:statusBarColor">#071E1A</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowDisablePreview">true</item>
+        <!-- Keep Android's instant starting window, but show only the app-matching
+             surface color: no logo, artwork, splash animation, or intro on relaunch. -->
+        <item name="android:windowBackground">#071E1A</item>
     </style>
 </resources>
