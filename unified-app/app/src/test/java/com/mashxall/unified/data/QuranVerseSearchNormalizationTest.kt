@@ -20,7 +20,7 @@ class QuranVerseSearchNormalizationTest {
             "ان الله",
             normalizeArabicSearchText("إِنَّ اللّٰهَ")
         )
-        assertEquals("ي ي ي", normalizeArabicSearchText("ىئ ی"))
+        assertEquals("يي ي", normalizeArabicSearchText("ىئ ی"))
         assertEquals("ك", normalizeArabicSearchText("ک"))
     }
 
