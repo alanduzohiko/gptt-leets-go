@@ -615,7 +615,7 @@ private class MashxallIntroTextureView(
         // A transparent TextureView can reveal the setup screen's green backdrop
         // in decoder letterbox areas on some Android 11 vendor builds.
         isOpaque = true
-        setBackgroundColor(AndroidColor.BLACK)
+        setBackgroundColor(android.graphics.Color.BLACK)
         surfaceTextureListener = this
     }
 
