@@ -283,6 +283,32 @@ internal fun buildMushafPageVerseGeometry(words: List<MushafWordBounds>): List<M
 }
 
 /**
+ * Build a continuous visible selection band for a verse while keeping the
+ * underlying word rectangles untouched for precise hit testing. Wrapped verses
+ * receive one continuous band per printed line.
+ */
+internal fun buildMushafVerseHighlightRects(wordRects: List<MushafPageRect>): List<MushafPageRect> {
+    val valid = wordRects.filter { rect ->
+        rect.lineNumber >= 0 &&
+            rect.minX.isFinite() && rect.maxX.isFinite() &&
+            rect.minY.isFinite() && rect.maxY.isFinite() &&
+            rect.maxX > rect.minX && rect.maxY > rect.minY
+    }
+    return valid.groupBy { it.lineNumber }
+        .toSortedMap()
+        .map { (lineNumber, words) ->
+            MushafPageRect(
+                glyphId = 0,
+                lineNumber = lineNumber,
+                minX = words.minOf { it.minX },
+                maxX = words.maxOf { it.maxX },
+                minY = words.minOf { it.minY },
+                maxY = words.maxOf { it.maxY }
+            )
+        }
+}
+
+/**
  * Resolve a tap against the displayed page's own vector-word bounds.
  * A small finger-sized tolerance makes the text easy to hit without selecting a
  * neighbouring verse or large blank areas around the printed text.
