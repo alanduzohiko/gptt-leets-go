@@ -40,9 +40,12 @@ class LocationFixFreshnessTest {
         // Saved coordinates are the user's chosen place; they do not expire just
         // because the device's Location switch was off or the app was not opened.
         assertTrue(isValidPersistedGpsFix(36.19, 44.01, savedOneYearAgo))
+        // Legacy releases could save coordinates before the timestamp existed.
+        // The saved coordinate pair still represents the user's prayer location.
+        assertTrue(isValidPersistedGpsFix(36.19, 44.01, 0L))
         assertFalse(isValidPersistedGpsFix(91.0, 44.01, savedOneYearAgo))
         assertFalse(isValidPersistedGpsFix(36.19, -181.0, savedOneYearAgo))
-        assertFalse(isValidPersistedGpsFix(36.19, 44.01, 0L))
+        assertFalse(isValidPersistedGpsFix(36.19, 44.01, -1L))
     }
 
     @Test
