@@ -561,7 +561,7 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
     }
 
     Box(
-        Modifier.fillMaxSize().background(Color(0xFF061A16))
+        Modifier.fillMaxSize().background(Color.Black)
     ) {
         if (!playbackFailed) {
             AndroidView(
@@ -616,7 +616,7 @@ private class MashxallIntroTextureView(
                 if (released || player !== ready) return@setOnPreparedListener
                 try {
                     ready.isLooping = false
-                    ready.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                    ready.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                     ready.start()
                 } catch (_: Exception) {
                     failPlayback()
@@ -703,9 +703,26 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
     var language by rememberSaveable { mutableStateOf(AppLanguage.from(prefs.getString("language", "ckb"))) }
     var step by rememberSaveable { mutableIntStateOf(0) }
     var locationBusy by remember { mutableStateOf(false) }
-    var locationSaved by rememberSaveable { mutableStateOf(false) }
+    val hasPersistedPrayerLocation = remember {
+        val gpsLat = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
+        val gpsLon = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
+        val manualLat = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
+        val manualLon = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
+        isValidPersistedGpsFix(gpsLat, gpsLon, prefs.getLong("gps_location_timestamp", 0L)) ||
+            (manualLat != null && manualLon != null &&
+                manualLat.isFinite() && manualLat in -90.0..90.0 &&
+                manualLon.isFinite() && manualLon in -180.0..180.0)
+    }
+    var locationSaved by rememberSaveable { mutableStateOf(hasPersistedPrayerLocation) }
     var locationMessage by rememberSaveable { mutableStateOf("") }
-    var permissionRequested by rememberSaveable { mutableStateOf(false) }
+    var permissionRequested by rememberSaveable {
+        mutableStateOf(
+            prefs.getBoolean(
+                "first_run_location_prompted",
+                prefs.getBoolean("prayer_location_prompted", false)
+            )
+        )
+    }
 
     LaunchedEffect(Unit) {
         prefs.edit().putBoolean("first_run_setup_started", true).apply()
@@ -778,6 +795,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
         prefs.edit()
             .putString("prayer_location_mode", "gps")
             .putBoolean("prayer_location_prompted", true)
+            .putBoolean("first_run_location_prompted", true)
             .apply()
         if (fine || coarse) {
             locationBusy = true
@@ -804,32 +822,32 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
     }
 
     LaunchedEffect(step) {
-        if (step == 2 && !permissionRequested && !locationSaved) {
+        if (step == 1 && !permissionRequested && !locationSaved &&
+            !prefs.getBoolean("prayer_location_prompted", false)
+        ) {
             permissionRequested = true
+            prefs.edit().putBoolean("first_run_location_prompted", true).apply()
             requestLocation()
         }
     }
 
     val titles = when (language) {
-        AppLanguage.EN -> listOf("Choose your language", "Welcome to Mashxall", "Set your prayer location")
-        AppLanguage.AR -> listOf("اختر لغتك", "مرحبًا بك في مەشخەڵ", "حدّد موقع الصلاة")
-        AppLanguage.CKB -> listOf("زمانەکەت هەڵبژێرە", "بەخێربێیت بۆ مەشخەڵ", "شوێنی نوێژەکەت دیاری بکە")
+        AppLanguage.EN -> listOf("Choose your language", "Set your location")
+        AppLanguage.AR -> listOf("اختر لغتك", "حدّد موقعك")
+        AppLanguage.CKB -> listOf("زمانەکەت هەڵبژێرە", "شوێنی خۆت دیاری بکە")
     }
     val subtitles = when (language) {
         AppLanguage.EN -> listOf(
             "Choose the language that feels most natural. You can change it any time in Settings.",
-            "A beautiful home for the Noble Quran, trusted prayer times, remembrance and knowledge.",
-            "Save your location once to find the closest supported Salawati timetable. You can also do this later."
+            "Save your location once to show the original Salawati prayer timetable."
         )
         AppLanguage.AR -> listOf(
             "اختر اللغة الأقرب إليك. ويمكنك تغييرها لاحقًا من إعدادات التطبيق.",
-            "رفيق إسلامي متكامل يجمع المصحف الكريم ومواقيت الصلاة والأذكار والعلم في تجربة واحدة.",
-            "احفظ موقعك مرة واحدة للعثور على أقرب جدول موثوق من صلواتي، ويمكنك فعل ذلك لاحقًا."
+            "احفظ موقعك مرة واحدة لعرض مواقيت الصلاة الأصلية من صلواتي."
         )
         AppLanguage.CKB -> listOf(
-            "ئەو زمانە هەڵبژێرە کە بۆت ئاسانترە؛ هەر کاتێک دەتوانیت لە ڕێکخستنەکان بیگۆڕیت.",
-            "شوێنێکی جوان بۆ قورئانی پیرۆز، کاتە پەسەندکراوەکانی نوێژ، زیکر و زانیارییە ئیسلامییەکان.",
-            "شوێنەکەت پاشەکەوت بکە بۆ دۆزینەوەی نزیکترین خشتەی ڕەسەنی صەڵەواتی؛ دواتریش دەتوانیت ئەمە بکەیت."
+            "",
+            "شوێنەکەت دیاری بکە بۆ پیشاندانی کاتەکانی نوێژی صەڵەواتی."
         )
     }
 
@@ -841,54 +859,17 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
     val setupText = if (setupDark) Color(0xFFFFF7E5) else Color(0xFF12372C)
     val setupMuted = if (setupDark) Color(0xFFB9CEC3) else Color(0xFF66766D)
     val setupLine = if (setupDark) Color.White.copy(alpha = 0.14f) else DeepGreen.copy(alpha = 0.13f)
-    val setupGlowTransition = rememberInfiniteTransition(label = "Mashxall premium first-run glow")
+    val setupGlowTransition = rememberInfiniteTransition(label = "Mashxall first-run ambient glow")
     val animatedSetupGlow by setupGlowTransition.animateFloat(
         initialValue = 0.18f,
-        targetValue = 0.42f,
+        targetValue = 0.36f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
+            animation = tween(2800, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "First-run ambient glow"
     )
-    val animatedRingRotation by setupGlowTransition.animateFloat(
-        initialValue = -7f,
-        targetValue = 7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(5200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "First-run emblem rotation"
-    )
-    val animatedRingScale by setupGlowTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2300, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "First-run emblem breathing"
-    )
     val setupGlow = if (setupMotionAllowed) animatedSetupGlow else 0.24f
-    val setupRingRotation = if (setupMotionAllowed) animatedRingRotation else 0f
-    val setupRingScale = if (setupMotionAllowed) animatedRingScale else 1f
-    val features = when (language) {
-        AppLanguage.EN -> listOf(
-            Triple(Icons.Outlined.MenuBook, "The Noble Quran", "The original 604-page Mushaf, verse reading, search, tafsir and recitation."),
-            Triple(Icons.Outlined.Schedule, "Prayer times", "Location-aware timetables from the original Salawati source."),
-            Triple(Icons.Outlined.Spa, "A life of remembrance", "Adhkar, Hadith, the Names of Allah, Qibla and more.")
-        )
-        AppLanguage.AR -> listOf(
-            Triple(Icons.Outlined.MenuBook, "القرآن الكريم", "المصحف الأصلي ذو 604 صفحات، وقراءة الآيات والبحث والتفسير والتلاوة."),
-            Triple(Icons.Outlined.Schedule, "مواقيت الصلاة", "مواقيت مرتبطة بموقعك من بيانات صلواتي الأصلية."),
-            Triple(Icons.Outlined.Spa, "الذكر والمعرفة", "الأذكار والأحاديث وأسماء الله الحسنى والقبلة والمزيد.")
-        )
-        AppLanguage.CKB -> listOf(
-            Triple(Icons.Outlined.MenuBook, "قورئانی پیرۆز", "مصحەفی ڕەسەنی ٦٠٤ پەڕە، خوێندنەوەی ئایەت، گەڕان، تەفسیر و تلاوەت."),
-            Triple(Icons.Outlined.Schedule, "کاتەکانی نوێژ", "کاتەکان بە پێی شوێنت و لە داتای ڕەسەنی صەڵەواتی."),
-            Triple(Icons.Outlined.Spa, "زیکر و زانیاری", "زیکر، فەرموودە، ناوە پیرۆزەکان، قیبلە و زۆر شتی تر.")
-        )
-    }
 
     CompositionLocalProvider(
         LocalLayoutDirection provides if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -967,21 +948,23 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.8.sp
                         )
-                        Text(
-                            when (language) {
-                                AppLanguage.EN -> "YOUR ISLAMIC COMPANION"
-                                AppLanguage.AR -> "رفيقك الإسلامي"
-                                AppLanguage.CKB -> "هاوڕێی ئیسلامی تۆ"
-                            },
-                            color = setupMuted.copy(alpha = 0.82f),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        )
+                        if (language != AppLanguage.CKB) {
+                            Text(
+                                when (language) {
+                                    AppLanguage.EN -> "YOUR ISLAMIC COMPANION"
+                                    AppLanguage.AR -> "رفيقك الإسلامي"
+                                    AppLanguage.CKB -> ""
+                                },
+                                color = setupMuted.copy(alpha = 0.82f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
                     }
                     Spacer(Modifier.weight(1f))
                     Text(
-                        "0" + (step + 1) + " / 03",
+                        "0" + (step + 1) + " / 02",
                         color = setupMuted,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -994,7 +977,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    repeat(3) { index ->
+                    repeat(2) { index ->
                         Box(
                             Modifier.weight(1f).height(4.dp).clip(CircleShape)
                                 .background(if (index <= step) Gold else setupLine)
@@ -1003,88 +986,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                 }
                 Spacer(Modifier.height(19.dp))
 
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(29.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF205941), Color(0xFF103A2D), Color(0xFF09251D))))
-                        .border(1.dp, Gold.copy(alpha = 0.48f), RoundedCornerShape(29.dp))
-                        .padding(horizontal = 18.dp, vertical = 18.dp)
-                ) {
-                    Box(
-                        Modifier.align(Alignment.TopEnd).offset(x = 60.dp, y = (-74).dp).size(190.dp)
-                            .background(
-                                Brush.radialGradient(listOf(Gold.copy(alpha = setupGlow * 0.34f), Color.Transparent)),
-                                CircleShape
-                            )
-                    )
-                    Box(
-                        Modifier.align(Alignment.BottomStart).offset(x = (-76).dp, y = 78.dp).size(160.dp)
-                            .background(
-                                Brush.radialGradient(listOf(Color(0xFF68C59A).copy(alpha = 0.18f), Color.Transparent)),
-                                CircleShape
-                            )
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "A NEW KIND OF ISLAMIC EXPERIENCE"
-                                    AppLanguage.AR -> "تجربة إسلامية متكاملة"
-                                    AppLanguage.CKB -> "ئەزموونێکی تەواوی ئیسلامی"
-                                },
-                                color = PaleGold.copy(alpha = 0.86f),
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.65.sp
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "A brighter beginning."
-                                    AppLanguage.AR -> "بداية أكثر إشراقًا."
-                                    AppLanguage.CKB -> "دەستپێکێکی ڕووناکتر."
-                                },
-                                color = Color(0xFFFFF8E8),
-                                fontSize = 20.sp,
-                                lineHeight = 27.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Spacer(Modifier.height(5.dp))
-                            Text(
-                                when (language) {
-                                    AppLanguage.EN -> "Everything you need for your daily journey, thoughtfully brought together."
-                                    AppLanguage.AR -> "كل ما تحتاجه في رحلتك اليومية، في مكان واحد بعناية وجمال."
-                                    AppLanguage.CKB -> "هەموو ئەو شتانەی لە ڕۆژانەدا پێویستن، بە جوانی لە یەک شوێندا کۆکراونەتەوە."
-                                },
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontSize = 10.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Box(
-                            Modifier.size(91.dp).graphicsLayer {
-                                rotationZ = setupRingRotation
-                                scaleX = setupRingScale
-                                scaleY = setupRingScale
-                            }.clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(Color(0xFF347B58), Color(0xFF102F24))))
-                                .border(1.4.dp, Gold.copy(alpha = 0.70f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                Modifier.size(77.dp).border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
-                            )
-                            Image(
-                                painter = painterResource(R.drawable.mashxall_welcome_logo),
-                                contentDescription = "Mashxall",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(73.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(19.dp))
+                Spacer(Modifier.height(5.dp))
                 AnimatedContent(
                     targetState = step,
                     modifier = Modifier.fillMaxWidth(),
@@ -1113,13 +1015,15 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                             lineHeight = 32.sp
                         )
                         Spacer(Modifier.height(6.dp))
-                        Text(
-                            subtitles[visibleStep],
-                            color = setupMuted,
-                            fontSize = 11.sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 18.sp
-                        )
+                        if (subtitles[visibleStep].isNotBlank()) {
+                            Text(
+                                subtitles[visibleStep],
+                                color = setupMuted,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+                        }
                         Spacer(Modifier.height(15.dp))
 
                         when (visibleStep) {
@@ -1191,58 +1095,6 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                         }
                                     }
                                 }
-                            }
-
-                            1 -> {
-                                Column(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(23.dp))
-                                        .background(setupSurface.copy(alpha = if (setupDark) 0.88f else 0.94f))
-                                        .border(1.dp, Gold.copy(alpha = 0.25f), RoundedCornerShape(23.dp))
-                                        .padding(13.dp),
-                                    verticalArrangement = Arrangement.spacedBy(9.dp)
-                                ) {
-                                    features.forEachIndexed { index, item ->
-                                        Row(
-                                            Modifier.fillMaxWidth()
-                                                .staggeredEntrance(
-                                                    itemKey = "first-run-feature-" + index,
-                                                    index = index,
-                                                    enabled = setupMotionAllowed
-                                                )
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .background(if (setupDark) Color.White.copy(alpha = 0.045f) else Color(0xFFF4F0E5))
-                                                .padding(horizontal = 11.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                Modifier.size(43.dp).clip(RoundedCornerShape(14.dp))
-                                                    .background(Gold.copy(alpha = 0.12f))
-                                                    .border(1.dp, Gold.copy(alpha = 0.22f), RoundedCornerShape(14.dp)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(item.first, null, tint = Gold, modifier = Modifier.size(23.dp))
-                                            }
-                                            Spacer(Modifier.width(11.dp))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(item.second, color = setupText, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-                                                Spacer(Modifier.height(3.dp))
-                                                Text(item.third, color = setupMuted, fontSize = 9.sp, lineHeight = 14.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    when (language) {
-                                        AppLanguage.EN -> "Made to feel calm, clear and beautiful every day."
-                                        AppLanguage.AR -> "صُمّم ليكون رفيقك الهادئ والجميل كل يوم."
-                                        AppLanguage.CKB -> "بۆ ئەوە دروستکراوە هەموو ڕۆژێک ئارام و جوان و ئاسان بێت."
-                                    },
-                                    color = Gold,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
                             }
 
                             else -> {
@@ -1361,11 +1213,6 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                         AppLanguage.AR -> "متابعة"
                         AppLanguage.CKB -> "بەردەوام بە"
                     }
-                    1 -> when (language) {
-                        AppLanguage.EN -> "Set up prayer times"
-                        AppLanguage.AR -> "إعداد مواقيت الصلاة"
-                        AppLanguage.CKB -> "ڕێکخستنی کاتەکانی نوێژ"
-                    }
                     else -> when (language) {
                         AppLanguage.EN -> if (locationSaved) "Enter Mashxall" else "Continue without location"
                         AppLanguage.AR -> if (locationSaved) "الدخول إلى مەشخەڵ" else "المتابعة دون تحديد الموقع"
@@ -1382,7 +1229,6 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                     prefs.edit().putString("language", language.key).apply()
                                     step = 1
                                 }
-                                1 -> step = 2
                                 else -> finishSetup()
                             }
                         }
@@ -1394,17 +1240,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                     Spacer(Modifier.width(9.dp))
                     Icon(Icons.Outlined.ChevronRight, null, tint = Color(0xFF10251C), modifier = Modifier.size(20.dp))
                 }
-                Spacer(Modifier.height(9.dp))
-                Text(
-                    when (language) {
-                        AppLanguage.EN -> "Your language and choices stay safely on this device."
-                        AppLanguage.AR -> "تُحفظ لغتك واختياراتك بأمان على هذا الجهاز."
-                        AppLanguage.CKB -> "زمان و هەڵبژاردەکانت بە سەلامەتی لەم ئامێرەدا دەمێننەوە."
-                    },
-                    color = setupMuted.copy(alpha = 0.82f),
-                    fontSize = 9.sp,
-                    textAlign = TextAlign.Center
-                )
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
