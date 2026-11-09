@@ -745,7 +745,7 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
         locationMessage = when (language) {
             AppLanguage.EN -> "Your location is saved. Verified Salawati prayer times will use this place."
             AppLanguage.AR -> "تم حفظ موقعك. ستُستخدم مواقيت صلواتي الموثوقة لهذا المكان."
-            AppLanguage.CKB -> "شوێنەکەت پاشەکەوت کرا؛ کاتە پەسەندکراوەکانی صەڵەواتی بۆ ئەم شوێنە بەکاردێن."
+            AppLanguage.CKB -> ""
         }
     }
 
@@ -840,11 +840,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
     val subtitles = when (language) {
         AppLanguage.EN -> listOf(
             "Choose the language that feels most natural. You can change it any time in Settings.",
-            "Save your location once to show the original Salawati prayer timetable."
+            "Save your location once to find the closest supported Salawati timetable. You can also do this later."
         )
         AppLanguage.AR -> listOf(
             "اختر اللغة الأقرب إليك. ويمكنك تغييرها لاحقًا من إعدادات التطبيق.",
-            "احفظ موقعك مرة واحدة لعرض مواقيت الصلاة الأصلية من صلواتي."
+            "احفظ موقعك مرة واحدة للعثور على أقرب جدول موثوق من صلواتي، ويمكنك فعل ذلك لاحقًا."
         )
         AppLanguage.CKB -> listOf(
             "",
@@ -1136,14 +1136,40 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                     Spacer(Modifier.height(7.dp))
-                                    if (locationMessage.isNotBlank()) {
+                                    val defaultLocationMessage = when (language) {
+                                        AppLanguage.EN -> "The app uses original Salawati source data. Prayer times are never guessed."
+                                        AppLanguage.AR -> "يعتمد التطبيق على بيانات صلواتي الأصلية، ولا يخمّن مواقيت الصلاة."
+                                        AppLanguage.CKB -> ""
+                                    }
+                                    val visibleLocationMessage = locationMessage.ifBlank { defaultLocationMessage }
+                                    if (visibleLocationMessage.isNotBlank()) {
                                         Text(
-                                            locationMessage,
+                                            visibleLocationMessage,
                                             color = setupMuted,
                                             fontSize = 10.sp,
                                             lineHeight = 17.sp,
                                             textAlign = TextAlign.Center
                                         )
+                                    }
+                                    if (locationSaved && language != AppLanguage.CKB) {
+                                        Spacer(Modifier.height(12.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Outlined.CheckCircle, null, tint = Color(0xFF69C995), modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                when (language) {
+                                                    AppLanguage.EN -> "Ready for your first visit"
+                                                    AppLanguage.AR -> "أصبح التطبيق جاهزًا"
+                                                    AppLanguage.CKB -> ""
+                                                },
+                                                color = Color(0xFF69C995),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                     if (!locationSaved) {
                                         Spacer(Modifier.height(13.dp))
