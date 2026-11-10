@@ -26,6 +26,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".QuranPlaybackActionReceiver"
+            android:exported="false" />
         <service
             android:name=".notifications.AdhanPlaybackService"
             android:exported="false"
