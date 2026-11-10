@@ -196,17 +196,16 @@ data class OnlineAdhan(
     val sizeBytes: Long
 )
 
-/** Remove source-only single-letter annotations from the original Sorani article HTML. */
-internal fun cleanSoraniHadithSourceText(value: String): String {
-    val repaired = value
-        .replace(Regex("""<rr>\s*[A-Za-z]\s*</rr>""", RegexOption.IGNORE_CASE), "")
-        .replace("<rr>", "")
-        .replace("</rr>", "")
-    return Html.fromHtml(repaired, Html.FROM_HTML_MODE_LEGACY)
+/** Clean Sorani article HTML with the same source-marker rules used by Hadith display. */
+internal fun cleanSoraniHadithSourceText(value: String): String =
+    Html.fromHtml(
+        stripHadithLatinSourceMarkers(value),
+        Html.FROM_HTML_MODE_LEGACY
+    )
         .toString()
-        .replace('\u00a0', ' ')
+        .replace('\\u00a0', ' ')
+        .replace(Regex("""\\s+:"""), ":")
         .trim()
-}
 
 /** Remove source-database playback suffixes from the name shown to users. */
 internal fun reciterDisplayName(value: String): String = value
