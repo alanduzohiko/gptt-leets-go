@@ -275,6 +275,75 @@ jobs:
           يجب إجراء اختبار فعلي على الجهاز قبل اعتبار الإصدار نهائيًا أو نشره.
           EOF
 
+      - name: Launch and relaunch the APK on Android 11 before publishing
+        id: android11-smoke
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
+          script: |
+            set -euo pipefail
+            mkdir -p dist/runtime-test
+            APK="unified-app/app/build/outputs/apk/debug/app-debug.apk"
+            test -s "$APK"
+            adb wait-for-device
+            adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION
+            adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION
+            adb shell settings put secure location_mode 3 || true
+            adb install -r "$APK" | tee dist/runtime-test/install.txt
+
+            launch_and_check() {
+              local label="$1"
+              adb shell am force-stop com.mashxall.unified
+              adb shell am start -W -n com.mashxall.unified/.MainActivity \
+                > "dist/runtime-test/launch-${label}.txt" 2>&1
+              sleep 12
+              local pid
+              pid="$(adb shell pidof com.mashxall.unified 2>/dev/null | tr -d '\r' || true)"
+              if [[ -z "$pid" ]]; then
+                adb logcat -d -v threadtime > "dist/runtime-test/logcat-${label}-failure.txt" || true
+                adb shell dumpsys activity activities > "dist/runtime-test/activities-${label}.txt" || true
+                echo "FAIL: Mashxall process exited after ${label} launch."
+                grep -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal|am_crash|Process: com.mashxall' \
+                  "dist/runtime-test/logcat-${label}-failure.txt" | tail -n 120 || true
+                return 1
+              fi
+              adb logcat -d -v threadtime > "dist/runtime-test/logcat-${label}.txt"
+              if grep -Eq 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' \
+                "dist/runtime-test/logcat-${label}.txt"; then
+                echo "FAIL: fatal Android runtime error was logged during ${label} launch."
+                grep -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal|Process: com.mashxall' \
+                  "dist/runtime-test/logcat-${label}.txt" | tail -n 120 || true
+                return 1
+              fi
+              echo "PASS: Mashxall stayed alive after ${label} launch (pid $pid)." \
+                | tee "dist/runtime-test/result-${label}.txt"
+            }
+
+            launch_and_check first-install
+            launch_and_check returning-install
+
+      - name: Upload Android 11 launch diagnostics
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-android11-launch-diagnostics-${{ github.run_number }}
+          path: dist/runtime-test/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require Android 11 launch smoke test to pass
+        if: github.event_name == 'push' && steps.android11-smoke.outcome != 'success'
+        run: |
+          echo "Android 11 startup smoke test failed; refusing to publish this APK as ready to install."
+          exit 1
+
       - name: Upload a clean APK-only package for phone installation
         uses: actions/upload-artifact@v4
         with:
