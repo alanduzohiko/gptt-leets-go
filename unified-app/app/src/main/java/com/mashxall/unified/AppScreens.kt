@@ -8625,9 +8625,9 @@ fun AudioScreen(
                                     accent = Gold,
                                     size = 38.dp,
                                     enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
-                                    selected = playing == playKey,
+                                    selected = playing == playKey && AudioController.isActive(),
                                     onClick = {
-                                        if (playing == playKey) {
+                                        if (playing == playKey && AudioController.isActive()) {
                                             AudioController.stop()
                                             playing = ""
                                         } else {
@@ -8649,7 +8649,7 @@ fun AudioScreen(
                                     }
                                 ) {
                                     AnimatedContent(
-                                        targetState = playing == playKey,
+                                        targetState = playing == playKey && AudioController.isActive(),
                                         transitionSpec = {
                                             if (motionAllowed) {
                                                 (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(120))) togetherWith
@@ -8661,7 +8661,7 @@ fun AudioScreen(
                                         label = "Reciter active audio waveform transition"
                                     ) { active ->
                                         if (active) {
-                                            PremiumAudioWaveform(active = true, accent = Gold, contentDescription = playLabel)
+                                            PremiumAudioWaveform(active = !AudioController.isPaused(), accent = Gold, contentDescription = playLabel)
                                         } else {
                                             Icon(Icons.Outlined.PlayCircle, contentDescription = playLabel, tint = Gold, modifier = Modifier.size(23.dp))
                                         }
@@ -9082,6 +9082,8 @@ internal object AudioController {
         activeNotificationSubtitle = notificationSubtitle
         activeNotificationEnabled = showNotification
         if (sources.isEmpty()) {
+            activeContext = null
+            activeNotificationEnabled = false
             callback(false)
             return
         }
