@@ -8707,13 +8707,127 @@ internal fun audioSequencePartialPlaybackMessage(language: AppLanguage, unavaila
 internal fun audioPauseControlEnabled(isPreparing: Boolean, isPrepared: Boolean): Boolean =
     !isPreparing && isPrepared
 
-private object AudioController {
+internal object QuranPlaybackNotification {
+    private const val CHANNEL_ID = "mashxall_quran_playback"
+    private const val NOTIFICATION_ID = 7851
+    private const val ACTION_TOGGLE = "com.mashxall.unified.QURAN_TOGGLE"
+    private const val ACTION_STOP = "com.mashxall.unified.QURAN_STOP"
+
+    private var appContext: Context? = null
+    private var title: String = "مەشخەڵ"
+    private var subtitle: String = "خوێندنەوەی قورئان"
+    private var paused: Boolean = false
+
+    fun show(context: Context, nowPlayingTitle: String, nowPlayingSubtitle: String, isPaused: Boolean) {
+        appContext = context.applicationContext
+        title = nowPlayingTitle.ifBlank { "مەشخەڵ" }
+        subtitle = nowPlayingSubtitle.ifBlank { "خوێندنەوەی قورئان" }
+        paused = isPaused
+        publish()
+    }
+
+    fun updatePaused(context: Context, isPaused: Boolean) {
+        if (appContext == null) appContext = context.applicationContext
+        paused = isPaused
+        publish()
+    }
+
+    fun hide(context: Context? = appContext) {
+        val target = context?.applicationContext ?: return
+        (target.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(NOTIFICATION_ID)
+        appContext = null
+        title = "مەشخەڵ"
+        subtitle = "خوێندنەوەی قورئان"
+        paused = false
+    }
+
+    private fun publish() {
+        val context = appContext ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_ID, "Quran recitation", NotificationManager.IMPORTANCE_LOW).apply {
+                        description = "Playback controls for Quran recitation"
+                        setSound(null, null)
+                    }
+                )
+            }
+        }
+        val language = AppLanguage.from(
+            context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+                .getString("language", "ckb")
+        )
+        val pauseLabel = when (language) {
+            AppLanguage.EN -> if (paused) "Play" else "Pause"
+            AppLanguage.AR -> if (paused) "تشغيل" else "إيقاف مؤقت"
+            AppLanguage.CKB -> if (paused) "لێدان" else "وەستاندنی کاتی"
+        }
+        val stopLabel = when (language) {
+            AppLanguage.EN -> "Stop"
+            AppLanguage.AR -> "إيقاف"
+            AppLanguage.CKB -> "وەستاندن"
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val toggleIntent = PendingIntent.getBroadcast(
+            context, 7852,
+            Intent(context, QuranPlaybackActionReceiver::class.java).setAction(ACTION_TOGGLE),
+            flags
+        )
+        val stopIntent = PendingIntent.getBroadcast(
+            context, 7853,
+            Intent(context, QuranPlaybackActionReceiver::class.java).setAction(ACTION_STOP),
+            flags
+        )
+        val openIntent = PendingIntent.getActivity(
+            context, 7854,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            flags
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_mashxall)
+            .setContentTitle(title)
+            .setContentText(subtitle)
+            .setContentIntent(openIntent)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .addAction(
+                if (paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+                pauseLabel,
+                toggleIntent
+            )
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, stopLabel, stopIntent)
+            .build()
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(NOTIFICATION_ID, notification)
+    }
+}
+
+internal class QuranPlaybackActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        when (intent?.action) {
+            "com.mashxall.unified.QURAN_TOGGLE" -> AudioController.togglePause()
+            "com.mashxall.unified.QURAN_STOP" -> AudioController.stop()
+        }
+    }
+}
+
+internal object AudioController {
     private var player: MediaPlayer? = null
     private var playbackGeneration: Int = 0
     // Compose observes this state from the now-playing control. It also flips
     // false between consecutive files, so pause cannot target a completed player.
     private var playerPrepared by mutableStateOf(false)
-    private var playbackPaused: Boolean = false
+    private var playbackPaused by mutableStateOf(false)
+    private var playbackActive by mutableStateOf(false)
+    private var activeContext: Context? = null
+    private var activeNotificationTitle: String = "Quran recitation"
+    private var activeNotificationSubtitle: String = "Mashxall"
     private var preparationJob: Job? = null
     private var sequenceTrackIndex: Int = 0
     private var sequenceTrackCount: Int = 0
@@ -8722,6 +8836,19 @@ private object AudioController {
     private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     fun isPrepared(): Boolean = playerPrepared && player != null
+
+    fun isActive(): Boolean = playbackActive
+
+    fun isPaused(): Boolean = playbackPaused
+
+    fun playbackPosition(): Pair<Int, Int> {
+        val active = player ?: return 0 to 0
+        return try {
+            active.currentPosition.coerceAtLeast(0) to active.duration.coerceAtLeast(0)
+        } catch (_: Exception) {
+            0 to 0
+        }
+    }
 
     fun hasNextSequenceTrack(): Boolean =
         sequenceTrackRequest != null && sequenceTrackIndex < sequenceTrackCount - 1
@@ -8757,6 +8884,7 @@ private object AudioController {
                 active.pause()
                 playbackPaused = true
             }
+            QuranPlaybackNotification.updatePaused(activeContext ?: return null, playbackPaused)
             playbackPaused
         } catch (_: Exception) {
             null
@@ -8769,6 +8897,9 @@ private object AudioController {
         preparationJob = null
         playerPrepared = false
         playbackPaused = false
+        playbackActive = false
+        QuranPlaybackNotification.hide(activeContext)
+        activeContext = null
         sequenceTrackIndex = 0
         sequenceTrackCount = 0
         sequenceTrackRequest = null
@@ -8783,10 +8914,15 @@ private object AudioController {
         context: Context,
         sources: List<String>,
         failure: AudioPlaybackFailure = AudioPlaybackFailure.RECITATION_SEGMENT,
+        notificationTitle: String = "Quran recitation",
+        notificationSubtitle: String = "Mashxall",
         onTrackStarted: (Int) -> Unit = {},
         callback: (Boolean) -> Unit
     ) {
         stop()
+        activeContext = context.applicationContext
+        activeNotificationTitle = notificationTitle
+        activeNotificationSubtitle = notificationSubtitle
         if (sources.isEmpty()) {
             callback(false)
             return
@@ -8851,9 +8987,12 @@ private object AudioController {
             if (index >= sources.size) {
                 playerPrepared = false
                 playbackPaused = false
+                playbackActive = false
                 player = null
                 sequenceTrackRequest = null
                 sequenceTrackCount = 0
+                QuranPlaybackNotification.hide(context)
+                activeContext = null
                 notifyPartialSequenceIfNeeded()
                 callback(false)
                 return
@@ -8878,7 +9017,14 @@ private object AudioController {
                         prepared.start()
                         playerPrepared = true
                         playbackPaused = false
+                        playbackActive = true
                         if (!hasStartedPlayback) hasStartedPlayback = true
+                        QuranPlaybackNotification.show(
+                            context,
+                            activeNotificationTitle,
+                            activeNotificationSubtitle,
+                            isPaused = false
+                        )
                         onTrackStarted(index)
                         callback(true)
                     } catch (_: Exception) {
