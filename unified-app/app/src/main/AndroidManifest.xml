@@ -30,6 +30,10 @@
             android:name=".QuranPlaybackActionReceiver"
             android:exported="false" />
         <service
+            android:name=".QuranPlaybackForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <service
             android:name=".notifications.AdhanPlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
