@@ -41,6 +41,15 @@ class AuditApkAssetsTests(unittest.TestCase):
                 payload = b"uncompressed-test-asset-data"
             assets[path] = payload
             declared.append({"asset_path": path, "size_bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()})
+        assets["adhan_catalog.json"] = json.dumps({
+            "schema_version": 1,
+            "record_count": 1,
+            "records": [{"id": "adhan-fixture", "url": "https://audio.example.test/adhan.mp3"}],
+        }).encode("utf-8")
+        assets["mp3quran_reciters.json"] = json.dumps({
+            "schema_version": 1,
+            "records": [{"source_id": "reciter-fixture", "name": "Fixture Reciter", "server": "https://audio.example.test/"}],
+        }).encode("utf-8")
         for item in declared:
             if item["asset_path"] in corrupt_hash:
                 item["sha256"] = "f" * 64
@@ -109,6 +118,24 @@ class AuditApkAssetsTests(unittest.TestCase):
         report = audit(self.apk, self.catalog_path)
         self.assertFalse(report["ok"])
         self.assertTrue(any(item["kind"] == "required_asset_not_in_catalog" and item["asset_path"] == REQUIRED_SQLITE[0] for item in report["problems"]))
+
+    def test_missing_bundled_adhan_catalog_fails(self):
+        self.create_fixture(omit={"adhan_catalog.json"})
+        report = audit(self.apk, self.catalog_path)
+        self.assertFalse(report["ok"])
+        self.assertTrue(any(
+            item["kind"] == "missing_required_app_catalog" and item["asset_path"] == "adhan_catalog.json"
+            for item in report["problems"]
+        ))
+
+    def test_missing_bundled_reciter_catalog_fails(self):
+        self.create_fixture(omit={"mp3quran_reciters.json"})
+        report = audit(self.apk, self.catalog_path)
+        self.assertFalse(report["ok"])
+        self.assertTrue(any(
+            item["kind"] == "missing_required_app_catalog" and item["asset_path"] == "mp3quran_reciters.json"
+            for item in report["problems"]
+        ))
 
 
 if __name__ == "__main__":

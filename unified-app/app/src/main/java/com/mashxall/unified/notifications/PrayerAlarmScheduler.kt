@@ -5,14 +5,52 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.mashxall.unified.data.AsrCalculationSchool
 import com.mashxall.unified.data.ContentRepository
-import com.mashxall.unified.data.PrayerCalculationMethod
+import com.mashxall.unified.AppLanguage
+import com.mashxall.unified.isUsableSavedGpsFix
+import com.mashxall.unified.resolvePrayerLocationMode
 import com.mashxall.unified.data.PrayerRow
-import com.mashxall.unified.data.PrayerTimeCalculator
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+data class PrayerAlarmScheduleResult(
+    val sourceTimetableAvailable: Boolean,
+    val scheduledCount: Int
+)
+
+internal fun prayerAlarmScheduleMessage(result: PrayerAlarmScheduleResult, language: AppLanguage): String = when {
+    !result.sourceTimetableAvailable -> when (language) {
+        AppLanguage.EN -> "No valid Salawati timetable was found for this location. Choose a city or refresh GPS, then enable adhan alerts again."
+        AppLanguage.AR -> "لم يُعثر على جدول صلواتي صالح لهذا الموقع. اختر مدينة أو حدّث GPS، ثم فعّل تنبيهات الأذان مجددًا."
+        AppLanguage.CKB -> "خشتەیەکی دروستی صەڵەواتی بۆ ئەم شوێنە نەدۆزرایەوە؛ شارێک هەڵبژێرە یان GPS نوێ بکەرەوە، پاشان ئاگادارکردنەوەی بانگ چالاک بکەوە."
+    }
+    result.scheduledCount == 0 -> when (language) {
+        AppLanguage.EN -> "The timetable loaded, but no enabled upcoming prayer alarm was scheduled. Check the prayer toggles and source times."
+        AppLanguage.AR -> "تم تحميل الجدول، لكن لم تُجدول تنبيهات قادمة. تحقّق من مفاتيح الصلوات ومواقيت المصدر."
+        AppLanguage.CKB -> "خشتەکە بارکرا، بەڵام هیچ ئاگادارکردنەوەیەکی چالاکی داهاتوو دانەنرا؛ کلیلەکانی نوێژ و کاتەکانی سەرچاوە بپشکنە."
+    }
+    else -> when (language) {
+        AppLanguage.EN -> "${result.scheduledCount} enabled prayer alerts were scheduled from the verified Salawati timetable."
+        AppLanguage.AR -> "تمت جدولة ${result.scheduledCount} من تنبيهات الصلاة المفعّلة من جدول صلواتي الموثوق."
+        AppLanguage.CKB -> "${result.scheduledCount} ئاگادارکردنەوەی چالاککراوی نوێژ لە خشتەی پشتڕاستکراوی صەڵەواتی دانرا."
+    }
+}
+
+internal fun prayerAlarmScheduleFailureMessage(language: AppLanguage): String = when (language) {
+    AppLanguage.EN -> "Android could not schedule adhan alerts. Check alarm and notification permissions in system settings."
+    AppLanguage.AR -> "تعذّر على Android جدولة تنبيهات الأذان. تحقّق من أذونات المنبّه والإشعارات في إعدادات النظام."
+    AppLanguage.CKB -> "ئەندرۆید نەتوانی ئاگادارکردنەوەی بانگ دابنێت؛ مۆڵەتی کاتژمێر و ئاگادارکردنەوە لە ڕێکخستنەکانی سیستەم بپشکنە."
+}
+
+internal fun usableSavedPrayerCityName(cityName: String?, hasManualCoordinates: Boolean): String? {
+    val name = cityName?.trim().orEmpty()
+    if (name.isBlank()) return null
+    // Erbil was once a UI placeholder; treat it as real only when the user
+    // explicitly selected it and the app saved its manual coordinates.
+    if (name.equals("Erbil", ignoreCase = true) && !hasManualCoordinates) return null
+    return name
+}
 
 object PrayerAlarmScheduler {
     const val PREFS = "mashxall_preferences"
@@ -20,70 +58,142 @@ object PrayerAlarmScheduler {
     const val KEY_AUDIO = "adhan_audio_asset"
     private const val ACTION_ALARM = "com.mashxall.unified.PRAYER_ALARM"
     private const val BASE_REQUEST_CODE = 7400
-    private val PRAYERS = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
+    val PRAYER_CODES = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
+    val ALERT_CODES = PRAYER_CODES + "jumuah"
+    private const val JUMUAH_CODE = "jumuah"
+
+    fun enabledPreferenceKey(code: String): String = "adhan_enabled_$code"
+    fun audioPreferenceKey(code: String): String = "adhan_audio_asset_$code"
+
+    fun isPrayerAlertEnabled(prefs: android.content.SharedPreferences, code: String): Boolean =
+        code in ALERT_CODES && prefs.getBoolean(enabledPreferenceKey(code), code != JUMUAH_CODE)
+
+    internal fun prayerAlertCodesForDay(enabledCodes: Set<String>, isFriday: Boolean): List<String> = buildList {
+        if ("fajr" in enabledCodes) add("fajr")
+        if (isFriday && JUMUAH_CODE in enabledCodes) add(JUMUAH_CODE)
+        else if ("dhuhr" in enabledCodes) add("dhuhr")
+        if ("asr" in enabledCodes) add("asr")
+        if ("maghrib" in enabledCodes) add("maghrib")
+        if ("isha" in enabledCodes) add("isha")
+    }
 
     fun cancelAll(context: Context) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        PRAYERS.forEach { code ->
+        ALERT_CODES.forEach { code ->
             val pending = pendingIntent(context, code)
             manager.cancel(pending)
             pending.cancel()
         }
     }
 
-    suspend fun scheduleUpcomingFromPreferences(context: Context) {
+    suspend fun scheduleUpcomingFromPreferences(context: Context): PrayerAlarmScheduleResult {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(KEY_ENABLED, false)) {
             cancelAll(context)
-            return
+            return PrayerAlarmScheduleResult(sourceTimetableAvailable = false, scheduledCount = 0)
         }
         // Always retire the previous locations' pending alarms before creating
         // a fresh set. If the new city has no valid timetable, old-city alarms
         // must not remain armed.
         cancelAll(context)
+        val enabledCodes = ALERT_CODES.filter { isPrayerAlertEnabled(prefs, it) }.toSet()
+        if (enabledCodes.isEmpty()) {
+            cancelAll(context)
+            return PrayerAlarmScheduleResult(sourceTimetableAvailable = true, scheduledCount = 0)
+        }
         val today = startOfDay(Date(), 0)
         val tomorrow = startOfDay(Date(), 1)
-        val todayTimes = resolveTimes(context, prefs, today) ?: return
+        val todayTimes = resolveTimes(context, prefs, today)
         val tomorrowTimes = resolveTimes(context, prefs, tomorrow)
+        if (todayTimes == null && tomorrowTimes == null) {
+            return PrayerAlarmScheduleResult(sourceTimetableAvailable = false, scheduledCount = 0)
+        }
         val now = System.currentTimeMillis()
-        PRAYERS.forEach { code ->
-            val todayTrigger = triggerAt(today, prayerTime(todayTimes, code))
-            if (todayTrigger != null && todayTrigger > now + 3000L) {
-                schedule(context, code, todayTrigger)
-            } else {
-                val tomorrowTrigger = tomorrowTimes?.let { triggerAt(tomorrow, prayerTime(it, code)) }
-                if (tomorrowTrigger != null && tomorrowTrigger > now) schedule(context, code, tomorrowTrigger)
+        var scheduledCount = 0
+
+        fun scheduleDate(date: Date, row: PrayerRow?) {
+            if (row == null) return
+            prayerAlertCodesForDay(enabledCodes, isFriday(date)).forEach { code ->
+                val trigger = triggerAt(date, prayerTime(row, code))
+                if (trigger != null && trigger > now + 3000L) {
+                    schedule(context, code, trigger)
+                    scheduledCount++
+                }
             }
         }
+        scheduleDate(today, todayTimes)
+        scheduleDate(tomorrow, tomorrowTimes)
+
+        if (JUMUAH_CODE in enabledCodes && !isFriday(tomorrow)) {
+            val nextFriday = nextFridayStart(Date())
+            val fridayTimes = resolveTimes(context, prefs, nextFriday)
+            if (fridayTimes != null) {
+                val trigger = triggerAt(nextFriday, fridayTimes.dhuhr)
+                if (trigger != null && trigger > now + 3000L) {
+                    schedule(context, JUMUAH_CODE, trigger)
+                    scheduledCount++
+                }
+            }
+        }
+        return PrayerAlarmScheduleResult(
+            sourceTimetableAvailable = todayTimes != null || tomorrowTimes != null,
+            scheduledCount = scheduledCount
+        )
     }
 
     suspend fun scheduleNextDayForPrayer(context: Context, prayerCode: String) {
-        if (prayerCode !in PRAYERS) return
+        if (prayerCode !in ALERT_CODES) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_ENABLED, false)) return
-        val tomorrow = startOfDay(Date(), 1)
-        val row = resolveTimes(context, prefs, tomorrow) ?: return
-        triggerAt(tomorrow, prayerTime(row, prayerCode))?.let { schedule(context, prayerCode, it) }
+        if (!prefs.getBoolean(KEY_ENABLED, false) || !isPrayerAlertEnabled(prefs, prayerCode)) return
+
+        val targetDay = if (prayerCode == JUMUAH_CODE) nextFridayStart(Date()) else startOfDay(Date(), 1)
+        if (prayerCode == "dhuhr" && isFriday(targetDay) && isPrayerAlertEnabled(prefs, JUMUAH_CODE)) return
+        val row = resolveTimes(context, prefs, targetDay) ?: return
+        triggerAt(targetDay, prayerTime(row, prayerCode))?.let { schedule(context, prayerCode, it) }
     }
 
     private suspend fun resolveTimes(context: Context, prefs: android.content.SharedPreferences, date: Date): PrayerRow? {
-        val method = PrayerCalculationMethod.fromId(prefs.getString("prayer_method", "mwl"))
-        val school = AsrCalculationSchool.fromId(prefs.getString("asr_school", "shafi"))
         val gpsLatitude = prefs.getString("gps_latitude", null)?.toDoubleOrNull()
         val gpsLongitude = prefs.getString("gps_longitude", null)?.toDoubleOrNull()
-        if (gpsLatitude != null && gpsLongitude != null) {
-            return ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude, gpsLongitude, date, method, school)
-        }
         val manualLatitude = prefs.getString("manual_city_latitude", null)?.toDoubleOrNull()
         val manualLongitude = prefs.getString("manual_city_longitude", null)?.toDoubleOrNull()
-        if (manualLatitude != null && manualLongitude != null) {
-            return ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude, manualLongitude, date, method, school)
+        val hasManualCoordinates = manualLatitude != null && manualLongitude != null
+        val savedCityName = usableSavedPrayerCityName(prefs.getString("selected_city", ""), hasManualCoordinates)
+        val locationMode = resolvePrayerLocationMode(
+            prefs.getString("prayer_location_mode", null),
+            gpsLatitude != null && gpsLongitude != null,
+            hasManualCoordinates,
+            hasUsableCitySelection = savedCityName != null
+        )
+        if (locationMode == "gps") {
+            val gpsFixTime = prefs.getLong("gps_location_timestamp", 0L)
+            val gpsScheduleStillUsable = isUsableSavedGpsFix(
+                gpsLatitude, gpsLongitude, gpsFixTime, System.currentTimeMillis(),
+                maxAgeMillis = 48L * 60L * 60L * 1000L
+            )
+            if (!gpsScheduleStillUsable) return null
+            return ContentRepository.salawatiOnlyPrayerTimes(
+                ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
+            )
         }
-        val cityName = prefs.getString("selected_city", "Erbil") ?: "Erbil"
-        val countryName = prefs.getString("selected_city_country", "") ?: ""
-        ContentRepository.loadPrayerTimes(context, cityName, date, countryName)?.let { return it }
+        val cityName = savedCityName ?: return null
+        val countryName = prefs.getString("selected_city_country", "").orEmpty().trim()
+
+        if (hasManualCoordinates) {
+            ContentRepository.salawatiOnlyPrayerTimes(
+                ContentRepository.loadPrayerTimes(context, cityName, date, countryName)
+            )?.let { return it }
+            return ContentRepository.salawatiOnlyPrayerTimes(
+                ContentRepository.loadPrayerTimesAtLocation(context, manualLatitude!!, manualLongitude!!, date)
+            )
+        }
+        ContentRepository.salawatiOnlyPrayerTimes(
+            ContentRepository.loadPrayerTimes(context, cityName, date, countryName)
+        )?.let { return it }
         val city = ContentRepository.findCityByName(context, cityName, countryName) ?: return null
-        return PrayerTimeCalculator.calculate(date, city.latitude, city.longitude, method, school)
+        return ContentRepository.salawatiOnlyPrayerTimes(
+            ContentRepository.loadPrayerTimesAtLocation(context, city.latitude, city.longitude, date)
+        )
     }
 
     private fun schedule(context: Context, code: String, whenMillis: Long) {
@@ -107,7 +217,7 @@ object PrayerAlarmScheduler {
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-        return PendingIntent.getBroadcast(context, BASE_REQUEST_CODE + PRAYERS.indexOf(code), intent, flags)
+        return PendingIntent.getBroadcast(context, BASE_REQUEST_CODE + ALERT_CODES.indexOf(code), intent, flags)
     }
 
     private fun startOfDay(date: Date, addDays: Int): Date =
@@ -119,6 +229,23 @@ object PrayerAlarmScheduler {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.time
+
+    private fun isFriday(date: Date): Boolean =
+        Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_WEEK) == Calendar.FRIDAY
+
+    private fun nextFridayStart(from: Date): Date {
+        val calendar = Calendar.getInstance().apply {
+            time = from
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
+        val offset = ((Calendar.FRIDAY - currentDay + 7) % 7).let { if (it == 0) 7 else it }
+        calendar.add(Calendar.DAY_OF_YEAR, offset)
+        return calendar.time
+    }
 
     private fun triggerAt(day: Date, time: String): Long? {
         val pieces = time.split(":")
@@ -139,6 +266,7 @@ object PrayerAlarmScheduler {
         "dhuhr" -> row.dhuhr
         "asr" -> row.asr
         "maghrib" -> row.maghrib
+        "jumuah" -> row.dhuhr
         else -> row.isha
     }
 }

@@ -48,7 +48,7 @@ fi
 install_success=0
 for attempt in 1 2 3; do
   echo "Install attempt $attempt/3" | tee -a dist/runtime-test/install.txt
-  if timeout --foreground 300s "$ADB_BIN" install --no-streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
+  if timeout --foreground 300s "$ADB_BIN" install -r --no-streaming "$APK_PATH" 2>&1 | tee -a dist/runtime-test/install.txt; then
     install_success=1
     break
   fi

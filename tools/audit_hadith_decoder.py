@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that real Noor verse-linked Hadith ciphertext decrypts to readable data."""
+"""Audit every verse-linked Hadith row in Noor's encrypted source database."""
 from __future__ import annotations
 
 import argparse
@@ -29,16 +29,17 @@ COLLECTIONS = {
 }
 
 
-def decrypt_field(value: Any, openssl: str) -> str:
+def decrypt_field(value: Any, openssl: str) -> str | None:
+    """Return decoded text, empty text for a valid encrypted empty field, or None on failure."""
     if not isinstance(value, str) or not value.strip():
-        return ""
+        return None
     compact = "".join(value.split())
     try:
         ciphertext = base64.b64decode(compact, validate=True)
     except (ValueError, binascii.Error):
-        return ""
+        return None
     if not ciphertext or len(ciphertext) % 16 != 0:
-        return ""
+        return None
     try:
         result = subprocess.run(
             [openssl, "enc", "-d", "-aes-256-ecb", "-nosalt", "-K", KEY.encode("utf-8").hex()],
@@ -49,15 +50,15 @@ def decrypt_field(value: Any, openssl: str) -> str:
             timeout=3,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return ""
+        return None
     if result.returncode != 0:
-        return ""
+        return None
     try:
         plain = result.stdout.decode("utf-8", errors="strict").strip()
     except UnicodeDecodeError:
-        return ""
+        return None
     if any(unicodedata.category(ch) == "Cc" and ch not in "\n\r\t" for ch in plain):
-        return ""
+        return None
     return plain
 
 
@@ -74,77 +75,144 @@ def audit(database: Path) -> dict[str, Any]:
 
     samples: list[dict[str, Any]] = []
     unknown_codes: set[str] = set()
-    decoded_rows = 0
+    known_codes: set[str] = set()
+    source_empty_arabic_ids: list[int] = []
+    field_failures = {name: 0 for name in ("collection", "arabic", "english", "reference", "verse_reference")}
+    field_failure_ids: dict[str, list[int]] = {name: [] for name in field_failures}
+    valid_rows = 0
+    rows_with_arabic_text = 0
     rows_examined = 0
-    with sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True) as connection:
+
+    # Collection ciphertexts repeat for most rows; caching avoids repeatedly
+    # spawning OpenSSL for the same small set of collection identifiers.
+    decoded_cache: dict[str, str | None] = {}
+
+    def decode(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        if value not in decoded_cache:
+            decoded_cache[value] = decrypt_field(value, openssl)
+        return decoded_cache[value]
+
+    connection = sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True)
+    try:
         connection.row_factory = sqlite3.Row
         integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
         if integrity != "ok":
             raise RuntimeError(f"SQLite integrity check failed: {integrity}")
-        total = connection.execute("SELECT COUNT(*) FROM hadith_on_ayah").fetchone()[0]
-        distinct_collection_values = connection.execute(
-            "SELECT DISTINCT collection FROM hadith_on_ayah WHERE collection IS NOT NULL AND collection != '' LIMIT 100"
-        ).fetchall()
+        total = int(connection.execute("SELECT COUNT(*) FROM hadith_on_ayah").fetchone()[0])
         rows = connection.execute(
             """
             SELECT id,collection,arabic,english,reference,verse_reference
-            FROM hadith_on_ayah ORDER BY id LIMIT 100
+            FROM hadith_on_ayah ORDER BY id
             """
         ).fetchall()
-
-    distinct_codes: set[str] = set()
-    for value in distinct_collection_values:
-        code = decrypt_field(value[0], openssl)
-        if code in COLLECTIONS:
-            distinct_codes.add(code)
-        elif code:
-            unknown_codes.add(code)
+    finally:
+        connection.close()
 
     for row in rows:
         rows_examined += 1
-        code = decrypt_field(row["collection"], openssl)
-        arabic = decrypt_field(row["arabic"], openssl)
-        english = decrypt_field(row["english"], openssl)
-        reference = decrypt_field(row["reference"], openssl)
-        if code and code not in COLLECTIONS:
-            unknown_codes.add(code)
-        if code in COLLECTIONS and has_arabic(arabic):
-            decoded_rows += 1
-            samples.append({
-                "id": int(row["id"]),
-                "collection_code": code,
-                "arabic_readable": True,
-                "english_decoded": bool(english),
-                "reference_decoded": bool(reference),
-                "linked_verse_count": len([
-                    part for part in str(row["verse_reference"] or "").split(",") if part.strip()
-                ]),
-                "decoded_text_sha256": hashlib.sha256(
-                    (code + "\n" + arabic + "\n" + english + "\n" + reference).encode("utf-8")
-                ).hexdigest(),
-            })
-        if len(samples) >= 8:
-            break
+        row_id = int(row["id"])
+        decoded = {
+            "collection": decode(row["collection"]),
+            "arabic": decode(row["arabic"]),
+            "english": decode(row["english"]),
+            "reference": decode(row["reference"]),
+        }
+        row_valid = True
 
-    passed = total >= 1000 and decoded_rows >= 5
+        code = decoded["collection"]
+        if not code or code not in COLLECTIONS:
+            field_failures["collection"] += 1
+            field_failure_ids["collection"].append(row_id)
+            if code:
+                unknown_codes.add(code)
+            row_valid = False
+        else:
+            known_codes.add(code)
+
+        arabic = decoded["arabic"]
+        if arabic is None:
+            field_failures["arabic"] += 1
+            field_failure_ids["arabic"].append(row_id)
+            row_valid = False
+        elif arabic:
+            if not has_arabic(arabic):
+                field_failures["arabic"] += 1
+                field_failure_ids["arabic"].append(row_id)
+                row_valid = False
+            else:
+                rows_with_arabic_text += 1
+        else:
+            # A valid ciphertext may intentionally represent an empty Arabic
+            # field in the original source; it is not a decryption failure.
+            source_empty_arabic_ids.append(row_id)
+
+        for field in ("english", "reference"):
+            value = decoded[field]
+            if value is None or not value.strip():
+                field_failures[field] += 1
+                field_failure_ids[field].append(row_id)
+                row_valid = False
+
+        verse_reference = str(row["verse_reference"] or "").strip()
+        if not verse_reference:
+            field_failures["verse_reference"] += 1
+            field_failure_ids["verse_reference"].append(row_id)
+            row_valid = False
+
+        if row_valid:
+            valid_rows += 1
+            if arabic and len(samples) < 8:
+                samples.append({
+                    "id": row_id,
+                    "collection_code": code,
+                    "arabic_readable": True,
+                    "english_decoded": True,
+                    "reference_decoded": True,
+                    "verse_reference": verse_reference,
+                    "decoded_text_sha256": hashlib.sha256(
+                        (code + "\n" + arabic + "\n" + decoded["english"] + "\n" + decoded["reference"]).encode("utf-8")
+                    ).hexdigest(),
+                })
+
+    all_rows_examined = rows_examined == total
+    required_fields_valid = all(field_failures[name] == 0 for name in ("collection", "english", "reference", "verse_reference"))
+    arabic_field_valid = field_failures["arabic"] == 0
+    codes_mapped = bool(known_codes) and not unknown_codes and field_failures["collection"] == 0
+    passed = (
+        total >= 1000
+        and all_rows_examined
+        and valid_rows == total
+        and required_fields_valid
+        and arabic_field_valid
+        and codes_mapped
+    )
+    checks = {
+        "minimum_source_rows": total >= 1000,
+        "every_source_row_examined": all_rows_examined,
+        "all_required_fields_decrypt": required_fields_valid,
+        "arabic_fields_decrypt_or_are_source_empty": arabic_field_valid,
+        "collection_codes_map_to_source_names": codes_mapped,
+        "verse_references_present": field_failures["verse_reference"] == 0,
+    }
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "pass" if passed else "fail",
         "database": database.name,
         "sqlite_integrity": integrity,
         "source_rows": total,
         "rows_examined": rows_examined,
-        "valid_decrypted_rows": decoded_rows,
-        "known_source_collection_codes": sorted(distinct_codes),
+        "valid_decrypted_rows": valid_rows,
+        "rows_with_arabic_text": rows_with_arabic_text,
+        "rows_with_valid_empty_arabic_source": len(source_empty_arabic_ids),
+        "valid_empty_arabic_source_row_ids": source_empty_arabic_ids,
+        "field_decode_failures": field_failures,
+        "field_failure_row_ids": field_failure_ids,
+        "known_source_collection_codes": sorted(known_codes),
         "unknown_decrypted_collection_codes": sorted(unknown_codes),
         "source_aes_format": "AES-256-ECB with PKCS5/PKCS7 padding; Base64 payload",
-        "checks": {
-            "minimum_source_rows": total >= 1000,
-            "minimum_real_rows_successfully_decrypted": decoded_rows >= 5,
-            "distinct_collection_values_decrypt": bool(distinct_codes),
-            "collection_codes_map_to_source_names": bool(samples) and not unknown_codes and all(row["collection_code"] in COLLECTIONS for row in samples),
-            "arabic_fields_are_readable_unicode": bool(samples) and all(row["arabic_readable"] for row in samples),
-        },
+        "checks": checks,
         "sample_rows": samples,
     }
 
@@ -162,6 +230,9 @@ def main() -> int:
         "source_rows": report["source_rows"],
         "rows_examined": report["rows_examined"],
         "valid_decrypted_rows": report["valid_decrypted_rows"],
+        "rows_with_arabic_text": report["rows_with_arabic_text"],
+        "rows_with_valid_empty_arabic_source": report["rows_with_valid_empty_arabic_source"],
+        "field_decode_failures": report["field_decode_failures"],
         "known_source_collection_codes": report["known_source_collection_codes"],
         "unknown_decrypted_collection_codes": report["unknown_decrypted_collection_codes"],
         "checks": report["checks"],
