@@ -1730,6 +1730,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             sources = sequence,
             notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
             notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
+            showNotification = true,
             onTrackStarted = { trackIndex ->
                 val activeAyah = quranPlaybackAyahForTrack(
                     audioType = chosen.audioType,
@@ -7871,7 +7872,8 @@ fun AudioScreen(
                     context = context,
                     sources = sources,
                     notificationTitle = preferred.nameArabic.ifBlank { preferred.nameEnglish },
-                    notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty()
+                    notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
+                    showNotification = true
                 ) { state ->
                     if (!state) {
                         playing = ""
@@ -8637,7 +8639,8 @@ fun AudioScreen(
                                                 context = context,
                                                 sources = sources,
                                                 notificationTitle = reciter.nameArabic.ifBlank { reciter.nameEnglish },
-                                                notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty()
+                                                notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
+                                                showNotification = true
                                             ) { state ->
                                                 audioPaused = false
                                                 if (!state) playing = ""
@@ -8875,50 +8878,8 @@ internal object QuranPlaybackNotification {
 
     private fun publish() {
         val context = appContext ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "Quran recitation", NotificationManager.IMPORTANCE_LOW).apply {
-                        description = "Playback controls for Quran recitation"
-                        setSound(null, null)
-                    }
-                )
-            }
-        }
-        val language = AppLanguage.from(
-            context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-                .getString("language", "ckb")
-        )
-        val pauseLabel = when (language) {
-            AppLanguage.EN -> if (paused) "Play" else "Pause"
-            AppLanguage.AR -> if (paused) "تشغيل" else "إيقاف مؤقت"
-            AppLanguage.CKB -> if (paused) "لێدان" else "وەستاندنی کاتی"
-        }
-        val stopLabel = when (language) {
-            AppLanguage.EN -> "Stop"
-            AppLanguage.AR -> "إيقاف"
-            AppLanguage.CKB -> "وەستاندن"
-        }
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-        val toggleIntent = PendingIntent.getBroadcast(
-            context, 7852,
-            Intent(context, QuranPlaybackActionReceiver::class.java).setAction(ACTION_TOGGLE),
-            flags
-        )
-        val stopIntent = PendingIntent.getBroadcast(
-            context, 7853,
-            Intent(context, QuranPlaybackActionReceiver::class.java).setAction(ACTION_STOP),
-            flags
-        )
-        val openIntent = PendingIntent.getActivity(
-            context, 7854,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            flags
-        )
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(NOTIFICATION_ID, buildNotification(context, toggleIntent, stopIntent, openIntent, pauseLabel, stopLabel))
+            .notify(NOTIFICATION_ID, buildNotification(context))
     }
 
     fun buildNotification(serviceContext: Context): Notification {
@@ -9019,6 +8980,7 @@ internal object AudioController {
     private var activeContext: Context? = null
     private var activeNotificationTitle: String = "Quran recitation"
     private var activeNotificationSubtitle: String = "Mashxall"
+    private var activeNotificationEnabled: Boolean = false
     private var preparationJob: Job? = null
     private var sequenceTrackIndex: Int = 0
     private var sequenceTrackCount: Int = 0
@@ -9075,7 +9037,9 @@ internal object AudioController {
                 active.pause()
                 playbackPaused = true
             }
-            QuranPlaybackNotification.updatePaused(activeContext ?: return null, playbackPaused)
+            if (activeNotificationEnabled) {
+                QuranPlaybackNotification.updatePaused(activeContext ?: return null, playbackPaused)
+            }
             playbackPaused
         } catch (_: Exception) {
             null
@@ -9091,6 +9055,7 @@ internal object AudioController {
         playbackActive = false
         QuranPlaybackNotification.hide(activeContext)
         activeContext = null
+        activeNotificationEnabled = false
         sequenceTrackIndex = 0
         sequenceTrackCount = 0
         sequenceTrackRequest = null
@@ -9107,6 +9072,7 @@ internal object AudioController {
         failure: AudioPlaybackFailure = AudioPlaybackFailure.RECITATION_SEGMENT,
         notificationTitle: String = "Quran recitation",
         notificationSubtitle: String = "Mashxall",
+        showNotification: Boolean = false,
         onTrackStarted: (Int) -> Unit = {},
         callback: (Boolean) -> Unit
     ) {
@@ -9114,6 +9080,7 @@ internal object AudioController {
         activeContext = context.applicationContext
         activeNotificationTitle = notificationTitle
         activeNotificationSubtitle = notificationSubtitle
+        activeNotificationEnabled = showNotification
         if (sources.isEmpty()) {
             callback(false)
             return
@@ -9182,8 +9149,9 @@ internal object AudioController {
                 player = null
                 sequenceTrackRequest = null
                 sequenceTrackCount = 0
-                QuranPlaybackNotification.hide(context)
+                if (activeNotificationEnabled) QuranPlaybackNotification.hide(context)
                 activeContext = null
+                activeNotificationEnabled = false
                 notifyPartialSequenceIfNeeded()
                 callback(false)
                 return
@@ -9210,12 +9178,14 @@ internal object AudioController {
                         playbackPaused = false
                         playbackActive = true
                         if (!hasStartedPlayback) hasStartedPlayback = true
-                        QuranPlaybackNotification.show(
-                            context,
-                            activeNotificationTitle,
-                            activeNotificationSubtitle,
-                            isPaused = false
-                        )
+                        if (activeNotificationEnabled) {
+                            QuranPlaybackNotification.show(
+                                context,
+                                activeNotificationTitle,
+                                activeNotificationSubtitle,
+                                isPaused = false
+                            )
+                        }
                         onTrackStarted(index)
                         callback(true)
                     } catch (_: Exception) {
