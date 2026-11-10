@@ -41,6 +41,27 @@ jobs:
           echo "Downloaded APK size: $(stat -c '%s' "$APK") bytes"
           sha256sum "$APK" | tee dist/runtime-test/apk-sha256.txt
 
+      - name: Download verified Build 515 for an in-place upgrade test
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-515
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 42675292425
+          path: ${{ runner.temp }}/mashxall-build-515
+
+      - name: Resolve Build 515 APK path
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASELINE_APK="$(find "$RUNNER_TEMP/mashxall-build-515" -type f -name 'Mashxall-Unified-debug.apk' -print -quit)"
+          if [[ -z "$BASELINE_APK" || ! -s "$BASELINE_APK" ]]; then
+            echo "Verified Build 515 APK was not found."
+            exit 1
+          fi
+          echo "BASELINE_APK_PATH=$BASELINE_APK" >> "$GITHUB_ENV"
+          sha256sum "$BASELINE_APK" | tee dist/runtime-test/baseline-515-sha256.txt
+
       - name: Prepare Android 11 emulator image
         uses: android-actions/setup-android@v3
         with:
@@ -55,7 +76,7 @@ jobs:
           profile: pixel_2
           emulator-boot-timeout: 900
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
-          script: bash tools/runtime-smoke-android11.sh
+          script: bash tools/runtime-upgrade-smoke-android11.sh
       - name: Upload emulator runtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
