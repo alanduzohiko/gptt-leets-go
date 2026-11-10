@@ -276,6 +276,60 @@ jobs:
           يجب إجراء اختبار فعلي على الجهاز قبل اعتبار الإصدار نهائيًا أو نشره.
           EOF
 
+      - name: Download known-good Build 515 for an in-place upgrade test
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-515
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 42675292425
+          path: dist/runtime-test/baseline
+
+      - name: Resolve APK paths for the Android 11 upgrade test
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$GITHUB_WORKSPACE/unified-app/app/build/outputs/apk/debug/app-debug.apk"
+          BASELINE_APK="$GITHUB_WORKSPACE/dist/runtime-test/baseline/Mashxall-Unified-debug.apk"
+          test -s "$APK"
+          test -s "$BASELINE_APK"
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo "BASELINE_APK_PATH=$BASELINE_APK" >> "$GITHUB_ENV"
+          sha256sum "$APK" "$BASELINE_APK" | tee dist/runtime-test/apk-hashes.txt
+
+      - name: Verify Build 515 upgrade and app screens on Android 11
+        id: android11-upgrade-smoke
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
+          script: bash tools/runtime-upgrade-smoke-android11.sh
+
+      - name: Upload Android 11 upgrade diagnostics
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-android11-upgrade-diagnostics-${{ github.run_number }}
+          path: |
+            dist/runtime-test/**
+            !dist/runtime-test/baseline/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require Android 11 upgrade and runtime checks to pass
+        if: github.event_name == 'push' && steps.android11-upgrade-smoke.outcome != 'success'
+        run: |
+          echo "Android 11 Build 515 in-place upgrade/runtime test failed; refusing to publish this APK."
+          exit 1
+
       - name: Upload a clean APK-only package for phone installation
         uses: actions/upload-artifact@v4
         with:
