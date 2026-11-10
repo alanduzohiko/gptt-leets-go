@@ -573,24 +573,6 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
     }
 }
 
-internal fun introVideoCenterCropScale(
-    viewWidth: Int,
-    viewHeight: Int,
-    videoWidth: Int,
-    videoHeight: Int
-): Pair<Float, Float> {
-    if (viewWidth <= 0 || viewHeight <= 0 || videoWidth <= 0 || videoHeight <= 0) {
-        return 1f to 1f
-    }
-    val viewAspect = viewWidth.toFloat() / viewHeight.toFloat()
-    val videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
-    return if (videoAspect > viewAspect) {
-        (videoAspect / viewAspect) to 1f
-    } else {
-        1f to (viewAspect / videoAspect)
-    }
-}
-
 /**
  * Uses a TextureView-backed MediaPlayer instead of VideoView/SurfaceView.
  * Its opaque black backing and center-crop matrix keep the supplied animation
@@ -608,8 +590,6 @@ private class MashxallIntroTextureView(
     private var firstFrameReported = false
     private var completionReported = false
     private var released = false
-    private var videoWidth = 0
-    private var videoHeight = 0
 
     init {
         // A transparent TextureView can reveal the setup screen's green backdrop
@@ -636,19 +616,14 @@ private class MashxallIntroTextureView(
                 context,
                 Uri.parse("android.resource://${context.packageName}/${R.raw.mashxall_intro}")
             )
-            media.setOnVideoSizeChangedListener { _, width, height ->
-                videoWidth = width
-                videoHeight = height
-                applyCenterCropTransform(this.width, this.height)
-            }
             media.setOnPreparedListener { ready ->
                 if (released || player !== ready) return@setOnPreparedListener
                 try {
                     ready.isLooping = false
-                    // TextureView's matrix performs the center crop; FIT avoids
-                    // applying a second decoder crop on devices that support it.
-                    ready.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
-                    applyCenterCropTransform(this.width, this.height)
+                    // Let Android's video pipeline perform the center crop.
+                    // This avoids custom TextureView matrices that can destabilize
+                    // hardware-decoder composition on some Android 11 devices.
+                    ready.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                     ready.start()
                 } catch (_: Exception) {
                     failPlayback()
@@ -674,21 +649,6 @@ private class MashxallIntroTextureView(
         }
     }
 
-    private fun applyCenterCropTransform(viewWidth: Int, viewHeight: Int) {
-        val (scaleX, scaleY) = introVideoCenterCropScale(
-            viewWidth = viewWidth,
-            viewHeight = viewHeight,
-            videoWidth = videoWidth,
-            videoHeight = videoHeight
-        )
-        setTransform(
-            android.graphics.Matrix().apply {
-                setScale(scaleX, scaleY, viewWidth / 2f, viewHeight / 2f)
-            }
-        )
-        invalidate()
-    }
-
     private fun reportFirstFrame() {
         if (!firstFrameReported && !released) {
             firstFrameReported = true
@@ -702,9 +662,7 @@ private class MashxallIntroTextureView(
         reportFirstFrame()
     }
 
-    override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
-        applyCenterCropTransform(width, height)
-    }
+    override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) = Unit
 
     override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
         releasePlayback()
@@ -726,7 +684,6 @@ private class MashxallIntroTextureView(
             player?.setOnInfoListener(null)
             player?.setOnCompletionListener(null)
             player?.setOnErrorListener(null)
-            player?.setOnVideoSizeChangedListener(null)
             player?.stop()
         } catch (_: Exception) {
             // The media pipeline may already be stopped by the platform.
