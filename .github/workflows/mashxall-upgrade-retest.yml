@@ -1,0 +1,78 @@
+name: Re-test Build 542 in place over stable Build 515
+
+on:
+  push:
+    branches:
+      - "redesign/**"
+    paths:
+      - ".github/workflows/mashxall-upgrade-retest.yml"
+      - "tools/runtime-upgrade-smoke-android11.sh"
+      - "tools/runtime-smoke-android11.sh"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  android-11-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the upgrade test scripts
+        uses: actions/checkout@v4
+
+      - name: Download candidate Build 542 (same app source as repaired Build 543)
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-542
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 42817960337
+          path: ${{ runner.temp }}/mashxall-candidate
+
+      - name: Download known-good Build 515
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-515
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 42675292425
+          path: ${{ runner.temp }}/mashxall-baseline
+
+      - name: Resolve candidate and baseline APK paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find "$RUNNER_TEMP/mashxall-candidate" -type f -name 'Mashxall-Unified-debug.apk' -print -quit)"
+          BASELINE="$(find "$RUNNER_TEMP/mashxall-baseline" -type f -name 'Mashxall-Unified-debug.apk' -print -quit)"
+          test -s "$APK"
+          test -s "$BASELINE"
+          mkdir -p dist/runtime-test
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo "BASELINE_APK_PATH=$BASELINE" >> "$GITHUB_ENV"
+          sha256sum "$APK" "$BASELINE" | tee dist/runtime-test/apk-hashes.txt
+
+      - name: Prepare Android 11 emulator
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0 emulator system-images;android-30;default;x86_64"
+
+      - name: Upgrade Build 515 in place and verify app launch/content
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none -memory 3072 -cores 2
+          script: bash tools/runtime-upgrade-smoke-android11.sh
+
+      - name: Upload Android 11 upgrade diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashxall-upgrade-retest-diagnostics-${{ github.run_number }}
+          path: dist/runtime-test/
+          if-no-files-found: warn
+          retention-days: 14
