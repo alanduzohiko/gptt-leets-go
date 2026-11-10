@@ -52,6 +52,27 @@ if grep -Eq 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal sig
 fi
 echo "PASS: candidate remained alive after in-place upgrade (pid $candidate_pid)." | tee dist/runtime-test/upgrade/result-candidate.txt
 
-# The comprehensive UI/content test installs the same APK with -r and opens
-# the real app sections. It does not uninstall or clear package data.
-bash tools/runtime-smoke-android11.sh
+# Repeat the returning-install launch after force-stop. The user's reported
+# regression is an immediate process exit on subsequent opens, so explicitly
+# exercise two launches after the in-place upgrade without clearing package data.
+adb shell am force-stop com.mashxall.unified
+adb shell am start -W -n com.mashxall.unified/.MainActivity > dist/runtime-test/upgrade/launch-returning-install.txt 2>&1
+sleep 12
+returning_pid="$(adb shell pidof com.mashxall.unified 2>/dev/null | tr -d '\r' || true)"
+if [[ -z "$returning_pid" ]]; then
+  adb logcat -d -v threadtime > dist/runtime-test/upgrade/logcat-returning-failure.txt || true
+  echo "FAIL: candidate closed on the second returning-install launch."
+  grep -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal|am_crash|Process: com.mashxall' dist/runtime-test/upgrade/logcat-returning-failure.txt | tail -n 120 || true
+  exit 1
+fi
+adb shell screencap -p /sdcard/mashxall-home.png
+adb pull /sdcard/mashxall-home.png dist/runtime-test/upgrade/home-after-upgrade.png >/dev/null
+adb shell dumpsys activity activities > dist/runtime-test/upgrade/activities-after-upgrade.txt
+adb logcat -d -v threadtime > dist/runtime-test/upgrade/logcat-final.txt
+if grep -Eq 'FATAL EXCEPTION|NoClassDefFoundError|UnsatisfiedLinkError|Fatal signal' dist/runtime-test/upgrade/logcat-final.txt; then
+  echo "FAIL: fatal Android runtime error was logged after the in-place upgrade."
+  grep -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal|Process: com.mashxall' dist/runtime-test/upgrade/logcat-final.txt | tail -n 120 || true
+  exit 1
+fi
+echo "PASS: Build 515 upgraded in place to the candidate; the app opened, stayed alive, and reopened successfully." | tee dist/runtime-test/upgrade/RESULT.txt
+
