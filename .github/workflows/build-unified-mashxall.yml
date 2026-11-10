@@ -40,6 +40,7 @@ on:
         default: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -275,6 +276,15 @@ jobs:
           يجب إجراء اختبار فعلي على الجهاز قبل اعتبار الإصدار نهائيًا أو نشره.
           EOF
 
+      - name: Download known-good Build 515 APK for upgrade regression test
+        uses: actions/download-artifact@v4
+        with:
+          name: mashxall-unified-android11-apk-515
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 42675292425
+          path: dist/runtime-test/baseline
+
       - name: Launch and relaunch the APK on Android 11 before publishing
         id: android11-smoke
         if: github.event_name == 'push'
@@ -291,12 +301,41 @@ jobs:
             set -euo pipefail
             mkdir -p dist/runtime-test
             APK="unified-app/app/build/outputs/apk/debug/app-debug.apk"
+            BASELINE_APK="dist/runtime-test/baseline/Mashxall-Unified-debug.apk"
             test -s "$APK"
+            test -s "$BASELINE_APK"
             adb wait-for-device
-            adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION
-            adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION
+            adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION || true
+            adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION || true
             adb shell settings put secure location_mode 3 || true
-            adb install -r "$APK" | tee dist/runtime-test/install.txt
+
+            # Reproduce the user's real path: start from the known-good Build 515,
+            # preserve app data, then upgrade in place to the candidate APK.
+            adb install --no-streaming "$BASELINE_APK" | tee dist/runtime-test/install-build-515.txt
+            adb shell am force-stop com.mashxall.unified
+            adb shell am start -W -n com.mashxall.unified/.MainActivity \
+              > dist/runtime-test/launch-build-515.txt 2>&1
+            sleep 12
+            baseline_pid="$(adb shell pidof com.mashxall.unified 2>/dev/null | tr -d '\r' || true)"
+            if [[ -z "$baseline_pid" ]]; then
+              adb logcat -d -v threadtime > dist/runtime-test/logcat-build-515-failure.txt || true
+              echo "FAIL: known-good Build 515 did not stay alive in the Android 11 upgrade test."
+              grep -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal|am_crash|Process: com.mashxall' \
+                dist/runtime-test/logcat-build-515-failure.txt | tail -n 100 || true
+              exit 1
+            fi
+            echo "PASS: baseline Build 515 stayed alive (pid $baseline_pid)." \
+              | tee dist/runtime-test/result-build-515.txt
+            adb shell am force-stop com.mashxall.unified
+
+            # Seed realistic, already-completed user preferences in the same
+            # SharedPreferences file used by the shipping app. Do not clear app data.
+            prefs_xml="<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><string name='language'>ckb</string><boolean name='first_run_setup_started' value='true' /><boolean name='first_run_setup_complete' value='true' /><boolean name='startup_animation_started' value='true' /><boolean name='startup_animation_played' value='true' /><boolean name='dark_mode' value='true' /></map>"
+            prefs_base64="$(printf '%s' "$prefs_xml" | base64 -w0)"
+            adb shell run-as com.mashxall.unified sh -c "mkdir -p shared_prefs && printf '%s' '$prefs_base64' | base64 -d > shared_prefs/mashxall_preferences.xml"
+
+            # Update install in place. ADB must not use -d or clear package data.
+            adb install -r --no-streaming "$APK" | tee dist/runtime-test/upgrade-to-candidate.txt
 
             launch_and_check() {
               local label="$1"
@@ -326,7 +365,7 @@ jobs:
                 | tee "dist/runtime-test/result-${label}.txt"
             }
 
-            launch_and_check first-install
+            launch_and_check upgrade-from-build-515
             launch_and_check returning-install
 
       - name: Upload Android 11 launch diagnostics
