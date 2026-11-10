@@ -196,6 +196,18 @@ data class OnlineAdhan(
     val sizeBytes: Long
 )
 
+/** Remove source-only single-letter annotations from the original Sorani article HTML. */
+internal fun cleanSoraniHadithSourceText(value: String): String {
+    val repaired = value
+        .replace(Regex("""<rr>\s*[A-Za-z]\s*</rr>""", RegexOption.IGNORE_CASE), "")
+        .replace("<rr>", "")
+        .replace("</rr>", "")
+    return Html.fromHtml(repaired, Html.FROM_HTML_MODE_LEGACY)
+        .toString()
+        .replace('\u00a0', ' ')
+        .trim()
+}
+
 /** Remove source-database playback suffixes from the name shown to users. */
 internal fun reciterDisplayName(value: String): String = value
     .replace(Regex("""\s*\((?:بێ بچڕان|gapless)\)""", RegexOption.IGNORE_CASE), "")
@@ -728,28 +740,25 @@ object ContentRepository {
 
     val quranTranslations = listOf(
         QuranTranslation("puxta", "پوختە", "كردي (پۇختە)", "Sorani — Puxta"),
-        QuranTranslation("raman", "ڕەمان", "كردي (رەمان)", "Sorani — Raman"),
+        QuranTranslation("raman", "ڕامان", "كردي (رەمان)", "Sorani — Raman"),
         QuranTranslation("asan", "ئاسان", "كردي (ئاسان)", "Sorani — Asan"),
-        QuranTranslation("sanahi", "ساناهی (بادینی)", "كردي باديني", "Badini — Sanahi"),
+        QuranTranslation("sanahi", "بادینی", "كردي باديني", "Badini — Sanahi"),
         QuranTranslation("sahih", "Sahih International", "Sahih International", "English — Sahih International"),
-        QuranTranslation("translit", "خوێندنەوەی بە پیتی لاتینی", "النطق الكردي بالحروف اللاتينية", "Kurdish transliteration"),
+        QuranTranslation("translit", "ئایەتەکان بە کوردی", "النطق الكردي بالحروف اللاتينية", "Kurdish transliteration"),
         QuranTranslation("none", "بێ وەرگێڕان", "النص العربي فقط", "Arabic text only")
     )
 
     val tafsirBooks = listOf(
         TafsirBook("roshn", "ڕۆشن", "تفسير ڕۆشن", "Roshn Kurdish Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_roshn.db", "ckb"),
         TafsirBook("hazhar", "هەژار", "تفسير هەژار", "Hazhar Kurdish Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_hazhar.db", "ckb"),
-        TafsirBook("maisar", "ميسەر", "التيسير", "Muyassar Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseer_maisar.db", "ckb"),
+        TafsirBook("maisar", "ئاسان", "التيسير", "Muyassar Tafsir, "content/noor_tafsir_1.2.2/base/assets/tafseer_maisar.db", "ckb"),
         TafsirBook("sahih", "Sahih International", "Sahih International", "Sahih International", "content/noor_tafsir_1.2.2/base/assets/tafseer_sahih_international.db", "en"),
-        TafsirBook("noor", "تفسير نور", "تفسیر نور", "Noor Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_noor.db", "fa"),
-        TafsirBook("hawrami", "هەورامی", "التفسير الهورامي", "Hawrami Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_hawrami.db", "ckb"),
         TafsirBook("runahi", "ڕووناهی بادینی", "التفسير الباديني", "Runahi Badini Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_runahi_badini.db", "bad"),
         TafsirBook("zhian", "ژیان بادینی", "تفسير ژيان", "Zhian Badini Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_zhian_badini.db", "bad"),
         TafsirBook("saadi", "تفسير السعدي", "تفسير السعدي", "Saadi Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_saadi.db", "ar"),
         TafsirBook("mukhtasar", "مختصر", "المختصر", "Mukhtasar Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_mukhtasar.db", "ar"),
         TafsirBook("rebar", "ڕێبەر", "تفسير ريبار", "Rebar Tafsir (Sorani)", "content/noor_tafsir_1.2.2/base/assets/tafseer_rebar.db", "ckb"),
-        TafsirBook("tawhid", "تەوحید", "تفسير التوحيد", "Tawhid Tafsir", "content/noor_tafsir_1.2.2/base/assets/tafseeri_tawhid.db", "ar"),
-        TafsirBook("khairah_ibn_kathir", "ابن کەثیر", "تفسير ابن كثير", "Ibn Kathir (Khairah)", "content/khairah_1.2/base/assets/tafsir/ibn-kathir.sqlite", "ar"),
+        TafsirBook("khairah_ibn_kathir", "ابن كثير", "تفسير ابن كثير", "Ibn Kathir (Khairah)", "content/khairah_1.2/base/assets/tafsir/ibn-kathir.sqlite", "ar"),
         TafsirBook("khairah_muyassar", "التفسير الميسّر", "التفسير الميسر", "Al-Muyassar (Khairah)", "content/khairah_1.2/base/assets/tafsir/muyassar.sqlite", "ar"),
         TafsirBook("khairah_saadi", "تفسير السعدي", "تفسير السعدي", "Al-Saadi (Khairah)", "content/khairah_1.2/base/assets/tafsir/saadi.sqlite", "ar"),
         TafsirBook("khairah_tabari", "تفسير الطبري", "تفسير الطبري", "Al-Tabari (Khairah)", "content/khairah_1.2/base/assets/tafsir/tabari.sqlite", "ar")
@@ -1669,16 +1678,17 @@ object ContentRepository {
                     while (c.moveToNext()) {
                         fun plain(html: String): String = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
                             .toString().replace('\u00a0', ' ').trim()
+                        fun plainCkb(html: String): String = cleanSoraniHadithSourceText(html)
                         add(
                             HadithArticle(
                                 id = c.int("id"),
-                                titleCkb = plain(c.string("description")),
+                                titleCkb = plainCkb(c.string("description")),
                                 titleArabic = plain(c.string("description_text_ar")),
                                 titleEnglish = plain(c.string("description_text_en")),
-                                bodyCkb = plain(c.string("text")),
+                                bodyCkb = plainCkb(c.string("text")),
                                 bodyArabic = plain(c.string("text_ar")),
                                 bodyEnglish = plain(c.string("text_en")),
-                                authorCkb = plain(c.string("author_ckb")),
+                                authorCkb = plainCkb(c.string("author_ckb")),
                                 authorArabic = plain(c.string("author_arabic")),
                                 authorEnglish = plain(c.string("author_english")),
                                 authorDetail = plain(c.string("author_detail"))
@@ -1693,7 +1703,15 @@ object ContentRepository {
     suspend fun loadHadithCollections(context: Context): List<HadithCollection> = withContext(Dispatchers.IO) {
         queryDb(context, HADITH_DB, emptyList()) { db ->
             db.rawQuery(
-                "SELECT id,name,name_ar,name_en,count,type,sort FROM book ORDER BY sort,name",
+                """
+                SELECT b.id,b.name,b.name_ar,b.name_en,
+                       COUNT(DISTINCT h.id) AS actual_count,b.type,b.sort
+                FROM book b
+                LEFT JOIN hadiths h ON h.book_id=b.id
+                GROUP BY b.id,b.name,b.name_ar,b.name_en,b.type,b.sort
+                HAVING COUNT(DISTINCT h.id)>0
+                ORDER BY b.sort,b.name
+                """.trimIndent(),
                 null
             ).use { c ->
                 buildList {
@@ -1703,7 +1721,7 @@ object ContentRepository {
                             name = c.string("name"),
                             nameArabic = c.string("name_ar"),
                             nameEnglish = c.string("name_en"),
-                            hadithCount = c.int("count"),
+                            hadithCount = c.int("actual_count"),
                             kind = c.int("type"),
                             sort = c.int("sort")
                         )
