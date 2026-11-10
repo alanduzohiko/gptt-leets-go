@@ -481,11 +481,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launchPrefs = getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-        val legacyUserState = !launchPrefs.getBoolean("first_run_setup_started", false) &&
-            (launchPrefs.contains("language") || launchPrefs.contains("last_surah") ||
-                launchPrefs.contains("last_mushaf_page") || launchPrefs.contains("accent_palette") ||
-                launchPrefs.contains("dark_mode") || launchPrefs.contains("gps_latitude") ||
-                launchPrefs.contains("manual_city_latitude"))
+        // Any saved app data identifies an existing installation, even when a
+        // previous onboarding attempt already wrote first_run_setup_started.
+        // Never replay the native video splash over a returning user's data.
+        val legacyUserState = listOf(
+            "language", "last_surah", "last_mushaf_page", "accent_palette",
+            "dark_mode", "gps_latitude", "manual_city_latitude"
+        ).any(launchPrefs::contains)
         MashxallMotionPreferences.skipColdStartEntrance = shouldSuppressMashxallColdStartEntrance(
             firstRunSetupComplete = launchPrefs.getBoolean("first_run_setup_complete", false),
             legacyUserState = legacyUserState
@@ -1260,11 +1262,12 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    val legacyUserState = !prefs.getBoolean("first_run_setup_started", false) &&
-        (prefs.contains("language") || prefs.contains("last_surah") ||
-            prefs.contains("last_mushaf_page") || prefs.contains("accent_palette") ||
-            prefs.contains("dark_mode") || prefs.contains("gps_latitude") ||
-            prefs.contains("manual_city_latitude"))
+    // Keep upgrades on the returning-user path regardless of whether an
+    // earlier version had already marked onboarding as started.
+    val legacyUserState = listOf(
+        "language", "last_surah", "last_mushaf_page", "accent_palette",
+        "dark_mode", "gps_latitude", "manual_city_latitude"
+    ).any(prefs::contains)
     val shouldPlayStartupAnimation = shouldPlayMashxallStartupAnimation(
         startupPlayed = prefs.getBoolean("startup_animation_played", false),
         startupStarted = prefs.getBoolean("startup_animation_started", false),
@@ -1282,11 +1285,9 @@ fun MashxallApp(startScreen: String? = null) {
         mutableStateOf(
             prefs.getBoolean(
                 "first_run_setup_complete",
-                !prefs.getBoolean("first_run_setup_started", false) &&
-                    (prefs.contains("language") || prefs.contains("last_surah") ||
-                        prefs.contains("last_mushaf_page") || prefs.contains("accent_palette") ||
-                        prefs.contains("dark_mode") || prefs.contains("gps_latitude") ||
-                        prefs.contains("manual_city_latitude"))
+                // Existing installs should not be forced through first-run setup
+                // again just because a prior version began writing setup flags.
+                legacyUserState
             )
         )
     }
