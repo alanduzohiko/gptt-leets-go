@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Notification
+import android.app.Service
 import android.annotation.SuppressLint
 import android.text.Html
 import androidx.compose.animation.AnimatedVisibility
@@ -35,6 +37,7 @@ import android.os.Handler
 import android.os.Build
 import android.os.CancellationSignal
 import android.os.Looper
+import android.os.IBinder
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.Canvas
@@ -8831,12 +8834,22 @@ internal object QuranPlaybackNotification {
     private var title: String = "مەشخەڵ"
     private var subtitle: String = "خوێندنەوەی قورئان"
     private var paused: Boolean = false
+    private var serviceStarted: Boolean = false
 
     fun show(context: Context, nowPlayingTitle: String, nowPlayingSubtitle: String, isPaused: Boolean) {
         appContext = context.applicationContext
         title = nowPlayingTitle.ifBlank { "مەشخەڵ" }
         subtitle = nowPlayingSubtitle.ifBlank { "خوێندنەوەی قورئان" }
         paused = isPaused
+        val app = context.applicationContext
+        if (!serviceStarted) {
+            runCatching {
+                val serviceIntent = Intent(app, QuranPlaybackForegroundService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) app.startForegroundService(serviceIntent)
+                else app.startService(serviceIntent)
+                serviceStarted = true
+            }
+        }
         publish()
     }
 
@@ -8850,6 +8863,10 @@ internal object QuranPlaybackNotification {
         val target = context?.applicationContext ?: return
         (target.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
+        if (serviceStarted) {
+            runCatching { target.stopService(Intent(target, QuranPlaybackForegroundService::class.java)) }
+            serviceStarted = false
+        }
         appContext = null
         title = "مەشخەڵ"
         subtitle = "خوێندنەوەی قورئان"
@@ -8900,7 +8917,55 @@ internal object QuranPlaybackNotification {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             flags
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(NOTIFICATION_ID, buildNotification(context, toggleIntent, stopIntent, openIntent, pauseLabel, stopLabel))
+    }
+
+    fun buildNotification(serviceContext: Context): Notification {
+        val context = serviceContext.applicationContext
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_ID, "Quran recitation", NotificationManager.IMPORTANCE_LOW).apply {
+                        description = "Playback controls for Quran recitation"
+                        setSound(null, null)
+                    }
+                )
+            }
+        }
+        val language = AppLanguage.from(
+            context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+                .getString("language", "ckb")
+        )
+        val pauseLabel = when (language) {
+            AppLanguage.EN -> if (paused) "Play" else "Pause"
+            AppLanguage.AR -> if (paused) "تشغيل" else "إيقاف مؤقت"
+            AppLanguage.CKB -> if (paused) "لێدان" else "وەستاندنی کاتی"
+        }
+        val stopLabel = when (language) {
+            AppLanguage.EN -> "Stop"
+            AppLanguage.AR -> "إيقاف"
+            AppLanguage.CKB -> "وەستاندن"
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val toggleIntent = PendingIntent.getBroadcast(
+            context, 7852,
+            Intent(context, QuranPlaybackActionReceiver::class.java).setAction(ACTION_TOGGLE),
+            flags
+        )
+        val stopIntent = PendingIntent.getBroadcast(
+            context, 7853,
+            Intent(context, QuranPlaybackActionReceiver::class.java).setAction(ACTION_STOP),
+            flags
+        )
+        val openIntent = PendingIntent.getActivity(
+            context, 7854,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            flags
+        )
+        return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_mashxall)
             .setContentTitle(title)
             .setContentText(subtitle)
@@ -8917,8 +8982,20 @@ internal object QuranPlaybackNotification {
             )
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, stopLabel, stopIntent)
             .build()
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(NOTIFICATION_ID, notification)
+    }
+}
+
+internal class QuranPlaybackForegroundService : Service() {
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(7851, QuranPlaybackNotification.buildNotification(this))
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 }
 
