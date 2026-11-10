@@ -2365,27 +2365,44 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
             )
             }
-            if (inlinePlaybackVisible) {
+            if (inlinePlaybackVisible && AudioController.isActive()) {
                 val activeAyah = inlinePlaybackActiveVerse
                     ?.takeIf { it.first == inlinePlaybackSurah }?.second
                     ?: inlinePlaybackStartAyah
                 val inlineSurah = surahs.firstOrNull { it.number == inlinePlaybackSurah }
+                val inlineReciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId }
+                val hasPreviousTrack = if (inlinePlaybackUsesAyahClips) {
+                    activeAyah > inlinePlaybackStartAyah
+                } else {
+                    inlinePlaybackSurah > 1
+                }
+                val hasNextTrack = if (inlinePlaybackUsesAyahClips) {
+                    activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah)
+                } else {
+                    inlinePlaybackSurah < (inlineReciter?.surahTotal ?: 114)
+                }
+                val trackProgress = if (inlinePlaybackDurationMs > 0) {
+                    inlinePlaybackPositionMs.toFloat() / inlinePlaybackDurationMs.toFloat()
+                } else 0f
+                val trackTimeLabel = "${formatAudioClock(inlinePlaybackPositionMs)} / ${formatAudioClock(inlinePlaybackDurationMs)}"
                 QuranInlinePlaybackBar(
                     language = language,
                     foreground = foreground,
                     cardColor = cardColor,
-                    reciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId },
+                    reciter = inlineReciter,
                     surahName = inlineSurah?.let {
                         if (language == AppLanguage.EN) it.englishName else it.arabicName
                     } ?: inlinePlaybackSurah.toString(),
                     activeAyah = activeAyah,
                     ayahCount = inlineSurah?.ayahCount ?: 0,
-                    isPaused = inlinePlaybackPaused,
+                    isPaused = AudioController.isPaused(),
                     isPrepared = AudioController.isPrepared(),
                     repeatCurrent = inlinePlaybackRepeatCurrent,
                     usesAyahClips = inlinePlaybackUsesAyahClips,
-                    hasNext = inlinePlaybackUsesAyahClips &&
-                        activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah),
+                    hasPrevious = hasPreviousTrack,
+                    hasNext = hasNextTrack,
+                    progress = trackProgress,
+                    timeLabel = trackTimeLabel,
                     onChooseReciter = {
                         inlineReciterSearch = ""
                         showInlineReciterPicker = true
@@ -2393,11 +2410,31 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     onRepeat = {
                         inlinePlaybackRepeatCurrent = AudioController.toggleRepeatCurrentTrack()
                     },
-                    onPrevious = { AudioController.skipPreviousSequenceTrack() },
+                    onPrevious = {
+                        if (inlinePlaybackUsesAyahClips) {
+                            AudioController.skipPreviousSequenceTrack()
+                        } else if (inlinePlaybackSurah > 1 && inlineReciter != null) {
+                            startInlineRecitation(
+                                surahNumber = inlinePlaybackSurah - 1,
+                                requestedAyah = 1,
+                                reciterOverride = inlineReciter
+                            )
+                        }
+                    },
                     onTogglePause = {
                         AudioController.togglePause()?.let { inlinePlaybackPaused = it }
                     },
-                    onNext = { AudioController.skipNextSequenceTrack() },
+                    onNext = {
+                        if (inlinePlaybackUsesAyahClips) {
+                            AudioController.skipNextSequenceTrack()
+                        } else if (hasNextTrack && inlineReciter != null) {
+                            startInlineRecitation(
+                                surahNumber = inlinePlaybackSurah + 1,
+                                requestedAyah = 1,
+                                reciterOverride = inlineReciter
+                            )
+                        }
+                    },
                     onStop = {
                         AudioController.stop()
                         inlinePlaybackVisible = false
@@ -7760,7 +7797,12 @@ fun AudioScreen(
             if (autoPlayKey != key && sources.isNotEmpty()) {
                 autoPlayKey = key
                 playing = key
-                AudioController.playSequence(context, sources) { state ->
+                AudioController.playSequence(
+                    context = context,
+                    sources = sources,
+                    notificationTitle = preferred.nameArabic.ifBlank { preferred.nameEnglish },
+                    notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty()
+                ) { state ->
                     if (!state) {
                         playing = ""
                         audioPaused = false
@@ -8521,7 +8563,12 @@ fun AudioScreen(
                                             prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
                                             playing = playKey
                                             autoPlayKey = playKey
-                                            AudioController.playSequence(context, sources) { state ->
+                                            AudioController.playSequence(
+                                                context = context,
+                                                sources = sources,
+                                                notificationTitle = reciter.nameArabic.ifBlank { reciter.nameEnglish },
+                                                notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty()
+                                            ) { state ->
                                                 audioPaused = false
                                                 if (!state) playing = ""
                                             }
