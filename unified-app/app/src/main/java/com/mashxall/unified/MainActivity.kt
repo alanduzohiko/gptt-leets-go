@@ -481,13 +481,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launchPrefs = getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
-        // Any saved app data identifies an existing installation, even when a
-        // previous onboarding attempt already wrote first_run_setup_started.
-        // Never replay the native video splash over a returning user's data.
-        val legacyUserState = listOf(
-            "language", "last_surah", "last_mushaf_page", "accent_palette",
-            "dark_mode", "gps_latitude", "manual_city_latitude"
-        ).any(launchPrefs::contains)
+        val legacyUserState = !launchPrefs.getBoolean("first_run_setup_started", false) &&
+            (launchPrefs.contains("language") || launchPrefs.contains("last_surah") ||
+                launchPrefs.contains("last_mushaf_page") || launchPrefs.contains("accent_palette") ||
+                launchPrefs.contains("dark_mode") || launchPrefs.contains("gps_latitude") ||
+                launchPrefs.contains("manual_city_latitude"))
         MashxallMotionPreferences.skipColdStartEntrance = shouldSuppressMashxallColdStartEntrance(
             firstRunSetupComplete = launchPrefs.getBoolean("first_run_setup_complete", false),
             legacyUserState = legacyUserState
@@ -577,8 +575,8 @@ private fun MashxallStartupScreen(onFinished: () -> Unit) {
 
 /**
  * Uses a TextureView-backed MediaPlayer instead of VideoView/SurfaceView.
- * Its opaque black backing and center-crop matrix keep the supplied animation
- * edge-to-edge on Android 11, including devices with unusual video scaling.
+ * A TextureView participates in Compose's normal view composition, avoiding
+ * the black SurfaceView layer seen on some Android/Compose combinations.
  */
 private class MashxallIntroTextureView(
     context: Context,
@@ -594,10 +592,7 @@ private class MashxallIntroTextureView(
     private var released = false
 
     init {
-        // A transparent TextureView can reveal the setup screen's green backdrop
-        // in decoder letterbox areas on some Android 11 vendor builds.
-        isOpaque = true
-        setBackgroundColor(android.graphics.Color.BLACK)
+        isOpaque = false
         surfaceTextureListener = this
     }
 
@@ -622,9 +617,6 @@ private class MashxallIntroTextureView(
                 if (released || player !== ready) return@setOnPreparedListener
                 try {
                     ready.isLooping = false
-                    // Let Android's video pipeline perform the center crop.
-                    // This avoids custom TextureView matrices that can destabilize
-                    // hardware-decoder composition on some Android 11 devices.
                     ready.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                     ready.start()
                 } catch (_: Exception) {
@@ -1262,12 +1254,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
-    // Keep upgrades on the returning-user path regardless of whether an
-    // earlier version had already marked onboarding as started.
-    val legacyUserState = listOf(
-        "language", "last_surah", "last_mushaf_page", "accent_palette",
-        "dark_mode", "gps_latitude", "manual_city_latitude"
-    ).any(prefs::contains)
+    val legacyUserState = !prefs.getBoolean("first_run_setup_started", false) &&
+        (prefs.contains("language") || prefs.contains("last_surah") ||
+            prefs.contains("last_mushaf_page") || prefs.contains("accent_palette") ||
+            prefs.contains("dark_mode") || prefs.contains("gps_latitude") ||
+            prefs.contains("manual_city_latitude"))
     val shouldPlayStartupAnimation = shouldPlayMashxallStartupAnimation(
         startupPlayed = prefs.getBoolean("startup_animation_played", false),
         startupStarted = prefs.getBoolean("startup_animation_started", false),
@@ -1285,9 +1276,11 @@ fun MashxallApp(startScreen: String? = null) {
         mutableStateOf(
             prefs.getBoolean(
                 "first_run_setup_complete",
-                // Existing installs should not be forced through first-run setup
-                // again just because a prior version began writing setup flags.
-                legacyUserState
+                !prefs.getBoolean("first_run_setup_started", false) &&
+                    (prefs.contains("language") || prefs.contains("last_surah") ||
+                        prefs.contains("last_mushaf_page") || prefs.contains("accent_palette") ||
+                        prefs.contains("dark_mode") || prefs.contains("gps_latitude") ||
+                        prefs.contains("manual_city_latitude"))
             )
         )
     }
