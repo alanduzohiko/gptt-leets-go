@@ -70,7 +70,9 @@ class MashxallStartupAnimationPolicyTest {
     }
 
     @Test
-    fun olderConfiguredInstallWithoutNewSetupFlagsSkipsTheIntro() {
+    fun returningInstallWithSavedDataSkipsIntroEvenWhenPreviousOnboardingWasStarted() {
+        // first_run_setup_started may already be true on an upgraded install.
+        // Saved app preferences must still keep that user out of the startup video.
         assertFalse(
             shouldPlayMashxallStartupAnimation(
                 startupPlayed = false,
