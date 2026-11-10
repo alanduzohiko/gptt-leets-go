@@ -1,6 +1,10 @@
 package com.mashxall.unified
 
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.annotation.SuppressLint
 import android.text.Html
 import androidx.compose.animation.AnimatedVisibility
@@ -141,6 +145,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -311,6 +316,11 @@ internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: 
     return defaultReciterId(mode, reciters)
 }
 
+internal fun formatAudioClock(milliseconds: Int): String {
+    val totalSeconds = milliseconds.coerceAtLeast(0) / 1000
+    return "%d:%02d".format(Locale.US, totalSeconds / 60, totalSeconds % 60)
+}
+
 @Composable
 private fun LoadingOrEmpty(
     loading: Boolean,
@@ -443,7 +453,10 @@ private fun QuranInlinePlaybackBar(
     isPrepared: Boolean,
     repeatCurrent: Boolean,
     usesAyahClips: Boolean,
+    hasPrevious: Boolean,
     hasNext: Boolean,
+    progress: Float,
+    timeLabel: String,
     onChooseReciter: () -> Unit,
     onRepeat: () -> Unit,
     onPrevious: () -> Unit,
@@ -493,30 +506,42 @@ private fun QuranInlinePlaybackBar(
                     color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1
                 )
                 Text(
-                    "$surahName  •  " + when (language) {
-                        AppLanguage.EN -> "Ayah $activeAyah / $ayahCount"
-                        AppLanguage.AR -> "الآية $activeAyah / $ayahCount"
-                        AppLanguage.CKB -> "ئایەتی $activeAyah / $ayahCount"
+                    "$surahName  •  " + if (usesAyahClips) {
+                        when (language) {
+                            AppLanguage.EN -> "Ayah $activeAyah / $ayahCount"
+                            AppLanguage.AR -> "الآية $activeAyah / $ayahCount"
+                            AppLanguage.CKB -> "ئایەتی $activeAyah / $ayahCount"
+                        }
+                    } else {
+                        when (language) {
+                            AppLanguage.EN -> "Full surah"
+                            AppLanguage.AR -> "السورة كاملة"
+                            AppLanguage.CKB -> "سوورەتی تەواو"
+                        }
                     },
                     color = foreground.copy(alpha = 0.65f), fontSize = 9.sp, maxLines = 1
                 )
                 if (!usesAyahClips) {
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                        color = Gold,
+                        trackColor = Gold.copy(alpha = 0.14f)
+                    )
                     Text(
-                        when (language) {
-                            AppLanguage.EN -> "This full-surah file has no per-ayah timing."
-                            AppLanguage.AR -> "هذا الملف لا يحتوي توقيتًا منفصلًا لكل آية."
-                            AppLanguage.CKB -> "ئەم فایلە کاتی جیاوازی ئایەتەکانی تێدا نییە."
-                        },
-                        color = Gold.copy(alpha = 0.8f), fontSize = 8.sp, maxLines = 1
+                        timeLabel,
+                        color = foreground.copy(alpha = 0.62f),
+                        fontSize = 8.sp,
+                        maxLines = 1
                     )
                 }
             }
             ReaderActionIcon(
                 icon = Icons.Outlined.Repeat,
                 description = when (language) {
-                    AppLanguage.EN -> if (repeatCurrent) "Repeat current ayah" else "Repeat current ayah off"
-                    AppLanguage.AR -> if (repeatCurrent) "تكرار الآية الحالية مفعّل" else "تكرار الآية الحالية"
-                    AppLanguage.CKB -> if (repeatCurrent) "دووبارەکردنەوەی ئایەتی ئێستا چالاکە" else "دووبارەکردنەوەی ئایەتی ئێستا"
+                    AppLanguage.EN -> if (usesAyahClips) "Repeat current ayah" else "Repeat current surah"
+                    AppLanguage.AR -> if (usesAyahClips) "تكرار الآية الحالية" else "تكرار السورة الحالية"
+                    AppLanguage.CKB -> if (usesAyahClips) "دووبارەکردنەوەی ئایەتی ئێستا" else "دووبارەکردنەوەی سوورەتی ئێستا"
                 },
                 selected = repeatCurrent,
                 pressedScale = quranReaderActionPressScale("repeat_ayah"),
@@ -524,8 +549,12 @@ private fun QuranInlinePlaybackBar(
             )
             ReaderActionIcon(
                 icon = Icons.Outlined.ChevronRight,
-                description = if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو",
-                enabled = usesAyahClips,
+                description = if (usesAyahClips) {
+                    if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو"
+                } else {
+                    if (language == AppLanguage.EN) "Previous surah" else if (language == AppLanguage.AR) "السورة السابقة" else "سوورەتی پێشوو"
+                },
+                enabled = hasPrevious,
                 rotationDegrees = 180f,
                 pressedScale = quranReaderActionPressScale("previous_ayah"),
                 onClick = onPrevious
@@ -546,8 +575,12 @@ private fun QuranInlinePlaybackBar(
             }
             ReaderActionIcon(
                 icon = Icons.Outlined.ChevronRight,
-                description = if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر",
-                enabled = usesAyahClips && hasNext,
+                description = if (usesAyahClips) {
+                    if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر"
+                } else {
+                    if (language == AppLanguage.EN) "Next surah" else if (language == AppLanguage.AR) "السورة التالية" else "سوورەتی دواتر"
+                },
+                enabled = hasNext,
                 pressedScale = quranReaderActionPressScale("next_ayah"),
                 onClick = onNext
             )
@@ -1598,8 +1631,24 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
     var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
+    var inlinePlaybackPositionMs by remember { mutableIntStateOf(0) }
+    var inlinePlaybackDurationMs by remember { mutableIntStateOf(0) }
     var showInlineReciterPicker by remember { mutableStateOf(false) }
     var inlineReciterSearch by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(inlinePlaybackVisible, AudioController.isActive()) {
+        if (inlinePlaybackVisible && AudioController.isActive()) {
+            while (true) {
+                val (position, duration) = AudioController.playbackPosition()
+                inlinePlaybackPositionMs = position
+                inlinePlaybackDurationMs = duration
+                delay(400)
+            }
+        } else {
+            inlinePlaybackPositionMs = 0
+            inlinePlaybackDurationMs = 0
+        }
+    }
 
     fun startInlineRecitation(
         surahNumber: Int,
@@ -1674,6 +1723,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         AudioController.playSequence(
             context = context,
             sources = sequence,
+            notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
+            notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
             onTrackStarted = { trackIndex ->
                 val activeAyah = quranPlaybackAyahForTrack(
                     audioType = chosen.audioType,
