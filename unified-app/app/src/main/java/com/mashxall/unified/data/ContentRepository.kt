@@ -203,8 +203,8 @@ internal fun cleanSoraniHadithSourceText(value: String): String =
         Html.FROM_HTML_MODE_LEGACY
     )
         .toString()
-        .replace('\\u00a0', ' ')
-        .replace(Regex("""\\s+:"""), ":")
+        .replace('\u00a0', ' ')
+        .replace(Regex("""\s+:"""), ":")
         .trim()
 
 /** Remove source-database playback suffixes from the name shown to users. */
