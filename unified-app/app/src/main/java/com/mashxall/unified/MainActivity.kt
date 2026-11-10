@@ -871,6 +871,36 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
         label = "First-run ambient glow"
     )
     val setupGlow = if (setupMotionAllowed) animatedSetupGlow else 0.24f
+    val setupOrbitRotation by setupGlowTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(14_000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "First-run orbit rotation"
+    )
+    val setupInnerOrbit by setupGlowTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(19_000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "First-run inner orbit"
+    )
+    val setupBadgePulse by setupGlowTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1_700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "First-run badge pulse"
+    )
+    val orbitRotation = if (setupMotionAllowed) setupOrbitRotation else 0f
+    val innerOrbit = if (setupMotionAllowed) setupInnerOrbit else 0f
+    val badgePulse = if (setupMotionAllowed) setupBadgePulse else 1f
 
     CompositionLocalProvider(
         LocalLayoutDirection provides if (language == AppLanguage.EN) LayoutDirection.Ltr else LayoutDirection.Rtl
@@ -985,9 +1015,76 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                         )
                     }
                 }
-                Spacer(Modifier.height(19.dp))
-
-                Spacer(Modifier.height(5.dp))
+                Spacer(Modifier.height(13.dp))
+                Box(
+                    Modifier.fillMaxWidth().height(104.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        Modifier.size(106.dp)
+                            .graphicsLayer {
+                                scaleX = 0.94f + setupGlow * 0.22f
+                                scaleY = 0.94f + setupGlow * 0.22f
+                            }
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(
+                                        Gold.copy(alpha = setupGlow * 0.32f),
+                                        Color(0xFF2E8D67).copy(alpha = 0.16f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                CircleShape
+                            )
+                    )
+                    Box(
+                        Modifier.size(92.dp)
+                            .graphicsLayer { rotationZ = orbitRotation }
+                            .border(1.dp, Gold.copy(alpha = if (setupDark) 0.62f else 0.46f), CircleShape)
+                    )
+                    Box(
+                        Modifier.size(76.dp)
+                            .graphicsLayer { rotationZ = innerOrbit }
+                            .border(1.dp, Color(0xFF6CC79B).copy(alpha = 0.48f), CircleShape)
+                    )
+                    Box(
+                        Modifier.size(61.dp)
+                            .graphicsLayer {
+                                scaleX = badgePulse
+                                scaleY = badgePulse
+                            }
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    if (setupDark) listOf(Color(0xFF397E5C), Color(0xFF102E24), Color(0xFF1E513C))
+                                    else listOf(Color(0xFFE7D29D), Color(0xFFF9F3E2), Color(0xFFD6E6D7))
+                                )
+                            )
+                            .border(1.4.dp, Gold.copy(alpha = 0.8f), RoundedCornerShape(20.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.AutoStories,
+                            contentDescription = null,
+                            tint = if (setupDark) PaleGold else DeepGreen,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                    Box(
+                        Modifier.offset(x = 42.dp, y = (-29).dp).size(9.dp)
+                            .background(Gold, CircleShape)
+                            .border(1.dp, setupDark.let { if (it) Color(0xFF092017) else Color.White }, CircleShape)
+                    )
+                    Box(
+                        Modifier.offset(x = (-37).dp, y = 27.dp).size(7.dp)
+                            .background(Color(0xFF6CC79B), CircleShape)
+                    )
+                    Box(
+                        Modifier.offset(x = 4.dp, y = (-47).dp).size(5.dp)
+                            .background(PaleGold.copy(alpha = 0.92f), CircleShape)
+                    )
+                }
+                Spacer(Modifier.height(7.dp))
                 AnimatedContent(
                     targetState = step,
                     modifier = Modifier.fillMaxWidth(),
@@ -1033,6 +1130,11 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
                                     val selected = language == option
                                     Box(
                                         Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                            .graphicsLayer {
+                                                val scale = if (selected && setupMotionAllowed) badgePulse else 1f
+                                                scaleX = scale
+                                                scaleY = scale
+                                            }
                                             .staggeredEntrance(
                                                 itemKey = "first-run-language-" + option.key,
                                                 index = index,
