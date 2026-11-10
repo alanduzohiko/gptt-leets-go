@@ -1576,11 +1576,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         quranFontLoading = false
     }
     var selectedTafsirBook by rememberSaveable {
-        mutableStateOf(prefs.getString("quran_tafsir_book", null) ?: when (language) {
-            AppLanguage.EN -> "sahih"
-            AppLanguage.AR -> "mukhtasar"
-            AppLanguage.CKB -> "roshn"
-        })
+        val stored = prefs.getString("quran_tafsir_book", null)
+        mutableStateOf(stored?.takeIf { savedId -> ContentRepository.tafsirBooks.any { it.id == savedId } }
+            ?: when (language) {
+                AppLanguage.EN -> "sahih"
+                AppLanguage.AR -> "mukhtasar"
+                AppLanguage.CKB -> "roshn"
+            })
     }
     var readerReciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var preferredReaderReciterId by rememberSaveable {
@@ -3240,7 +3242,66 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         title = { Text(tr(language, "translation")) },
         text = {
             LazyColumn(Modifier.height(380.dp)) {
-                items(ContentRepository.quranTranslations, key = { it.id }) { choice ->
+                item(key = "quran-no-translation-toggle") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "No translation"
+                                        AppLanguage.AR -> "بدون ترجمة"
+                                        AppLanguage.CKB -> "بێ وەرگێڕان"
+                                    },
+                                    color = foreground,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    when (language) {
+                                        AppLanguage.EN -> "Show Arabic Quran text only."
+                                        AppLanguage.AR -> "اعرض نص القرآن العربي فقط."
+                                        AppLanguage.CKB -> "تەنها دەقی عەرەبیی قورئان پیشان بدە."
+                                    },
+                                    color = foreground.copy(alpha = 0.6f),
+                                    fontSize = 10.sp
+                                )
+                            }
+                            PremiumSwitch(
+                                checked = translationKey == "none",
+                                onCheckedChange = { noTranslation ->
+                                    if (noTranslation) {
+                                        if (translationKey != "none") {
+                                            prefs.edit().putString("quran_last_translation", translationKey).apply()
+                                        }
+                                        translationKey = "none"
+                                        prefs.edit().putString("quran_translation", "none").apply()
+                                    } else {
+                                        val savedChoice = prefs.getString("quran_last_translation", null)
+                                            ?.takeIf { savedId -> ContentRepository.quranTranslations.any { it.id == savedId && it.id != "none" } }
+                                        val restored = savedChoice ?: when (language) {
+                                            AppLanguage.CKB -> "puxta"
+                                            AppLanguage.AR, AppLanguage.EN -> "sahih"
+                                        }
+                                        translationKey = restored
+                                        prefs.edit()
+                                            .putString("quran_translation", restored)
+                                            .putString("quran_last_translation", restored)
+                                            .apply()
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+                if (translationKey != "none") items(ContentRepository.quranTranslations.filter { it.id != "none" }, key = { it.id }) { choice ->
                     val label = when (language) {
                         AppLanguage.CKB -> choice.ckb
                         AppLanguage.AR -> choice.arabic
@@ -3249,7 +3310,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     Row(
                         Modifier.fillMaxWidth().premiumClickable {
                             translationKey = choice.id
-                            prefs.edit().putString("quran_translation", choice.id).apply()
+                            prefs.edit()
+                                .putString("quran_translation", choice.id)
+                                .putString("quran_last_translation", choice.id)
+                                .apply()
                             chooseTranslation = false
                         }.padding(vertical = 11.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -3262,7 +3326,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                             selected = translationKey == choice.id
                         ) {
                             translationKey = choice.id
-                            prefs.edit().putString("quran_translation", choice.id).apply()
+                            prefs.edit()
+                                .putString("quran_translation", choice.id)
+                                .putString("quran_last_translation", choice.id)
+                                .apply()
                             chooseTranslation = false
                         }
                         Spacer(Modifier.width(6.dp))
