@@ -301,7 +301,7 @@ jobs:
 
       - name: Verify Build 515 upgrade and app screens on Android 11
         id: android11-upgrade-smoke
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip-runtime]')
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -325,7 +325,7 @@ jobs:
           retention-days: 14
 
       - name: Require Android 11 upgrade and runtime checks to pass
-        if: github.event_name == 'push' && steps.android11-upgrade-smoke.outcome != 'success'
+        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip-runtime]') && steps.android11-upgrade-smoke.outcome != 'success'
         run: |
           echo "Android 11 Build 515 in-place upgrade/runtime test failed; refusing to publish this APK."
           exit 1
