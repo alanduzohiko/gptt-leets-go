@@ -4174,7 +4174,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 if (sheetPlaybackIsCurrent) {
                                     AudioController.togglePause()?.let { inlinePlaybackPaused = it }
                                 } else {
-                                    startInlineRecitation(target.first, target.second)
+                                    requestInlineRecitation(target.first, target.second)
                                 }
                             }
                         }
