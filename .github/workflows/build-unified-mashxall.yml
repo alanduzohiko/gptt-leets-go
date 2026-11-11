@@ -21,6 +21,7 @@ on:
       - "tools/audit_apk_assets.py"
       - "tests/test_audit_apk_assets.py"
       - "tools/runtime-smoke-android11.sh"
+      - "tools/runtime-upgrade-smoke-android11.sh"
       - ".github/workflows/runtime-smoke-unified-android.yml"
       - ".github/workflows/build-unified-mashxall.yml"
   pull_request:
