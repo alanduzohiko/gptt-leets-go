@@ -9554,94 +9554,106 @@ internal object AudioController {
             preloadedPlayer = queued
             preloadedTrackIndex = nextIndex
             preloadedPlayerPrepared = false
-            try {
-                val source = sources[nextIndex]
-                setReciterAudioSource(queued, source)
-                queued.setOnPreparedListener { prepared ->
+            preparationScope.launch {
+                try {
+                    val source = cacheReciterStreamSource(context.applicationContext, sources[nextIndex])
                     if (generation != playbackGeneration || player !== currentPlayer ||
-                        preloadedPlayer !== prepared || repeatCurrentTrack
+                        preloadedPlayer !== queued || repeatCurrentTrack
                     ) {
-                        if (preloadedPlayer === prepared) {
+                        if (preloadedPlayer === queued) {
                             preloadedPlayer = null
                             preloadedTrackIndex = -1
                             preloadedPlayerPrepared = false
                         }
-                        runCatching { prepared.release() }
-                        return@setOnPreparedListener
+                        runCatching { queued.release() }
+                        return@launch
                     }
-                    try {
-                        currentPlayer.setNextMediaPlayer(prepared)
-                        preloadedPlayerPrepared = true
-                    } catch (_: Exception) {
-                        preloadedPlayer = null
-                        preloadedTrackIndex = -1
-                        preloadedPlayerPrepared = false
-                        fallbackTrackIndex = nextIndex + 1
-                        unavailableTrackCount += 1
-                        runCatching { prepared.release() }
+                    setReciterAudioSource(queued, source)
+                    queued.setOnPreparedListener { prepared ->
+                        if (generation != playbackGeneration || player !== currentPlayer ||
+                            preloadedPlayer !== prepared || repeatCurrentTrack
+                        ) {
+                            if (preloadedPlayer === prepared) {
+                                preloadedPlayer = null
+                                preloadedTrackIndex = -1
+                                preloadedPlayerPrepared = false
+                            }
+                            runCatching { prepared.release() }
+                            return@setOnPreparedListener
+                        }
+                        try {
+                            currentPlayer.setNextMediaPlayer(prepared)
+                            preloadedPlayerPrepared = true
+                        } catch (_: Exception) {
+                            preloadedPlayer = null
+                            preloadedTrackIndex = -1
+                            preloadedPlayerPrepared = false
+                            fallbackTrackIndex = nextIndex + 1
+                            unavailableTrackCount += 1
+                            runCatching { prepared.release() }
+                        }
                     }
-                }
-                val onStartedAsNext: (MediaPlayer, Int) -> Boolean = { eventPlayer, what ->
-                    val nextPlayer = preloadedPlayer
-                    if (
-                        what == MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT &&
-                        generation == playbackGeneration &&
-                        nextPlayer != null &&
-                        nextPlayer === queued &&
-                        (eventPlayer === currentPlayer || eventPlayer === nextPlayer) &&
-                        preloadedTrackIndex == nextIndex &&
-                        preloadedPlayerPrepared &&
-                        player === currentPlayer
-                    ) {
-                        // Both Android callback targets are covered: some platform builds
-                        // report this on the current player, others on the queued player.
-                        preloadedPlayer = null
-                        preloadedTrackIndex = -1
-                        preloadedPlayerPrepared = false
-                        announceActiveTrack(nextPlayer, nextIndex)
-                        preloadNext(nextIndex, nextPlayer)
+                    val onStartedAsNext: (MediaPlayer, Int) -> Boolean = { eventPlayer, what ->
+                        val nextPlayer = preloadedPlayer
+                        if (
+                            what == MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT &&
+                            generation == playbackGeneration &&
+                            nextPlayer === queued &&
+                            (eventPlayer === currentPlayer || eventPlayer === nextPlayer) &&
+                            preloadedTrackIndex == nextIndex &&
+                            preloadedPlayerPrepared &&
+                            player === currentPlayer
+                        ) {
+                            preloadedPlayer = null
+                            preloadedTrackIndex = -1
+                            preloadedPlayerPrepared = false
+                            announceActiveTrack(nextPlayer, nextIndex)
+                            preloadNext(nextIndex, nextPlayer)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    currentPlayer.setOnInfoListener { eventPlayer, what, _ ->
+                        onStartedAsNext(eventPlayer, what)
+                    }
+                    queued.setOnInfoListener { eventPlayer, what, _ ->
+                        onStartedAsNext(eventPlayer, what)
+                    }
+                    queued.setOnCompletionListener { completed -> completeTrack(completed, nextIndex) }
+                    queued.setOnErrorListener { failed, _, _ ->
+                        if (generation == playbackGeneration && preloadedPlayer === failed) {
+                            preloadedPlayer = null
+                            preloadedTrackIndex = -1
+                            preloadedPlayerPrepared = false
+                            fallbackTrackIndex = nextIndex + 1
+                            unavailableTrackCount += 1
+                            runCatching { failed.release() }
+                        } else if (generation == playbackGeneration && player === failed) {
+                            player = null
+                            playerPrepared = false
+                            playbackPreparing = false
+                            playbackPaused = false
+                            discardQueuedPlayer()
+                            handleTrackFailure(nextIndex)
+                        } else {
+                            runCatching { failed.release() }
+                        }
                         true
-                    } else {
-                        false
                     }
-                }
-                currentPlayer.setOnInfoListener { eventPlayer, what, _ ->
-                    onStartedAsNext(eventPlayer, what)
-                }
-                queued.setOnInfoListener { eventPlayer, what, _ ->
-                    onStartedAsNext(eventPlayer, what)
-                }
-                queued.setOnCompletionListener { completed -> completeTrack(completed, nextIndex) }
-                queued.setOnErrorListener { failed, _, _ ->
-                    if (generation == playbackGeneration && preloadedPlayer === failed) {
+                    queued.prepareAsync()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    if (generation == playbackGeneration && preloadedPlayer === queued) {
                         preloadedPlayer = null
                         preloadedTrackIndex = -1
                         preloadedPlayerPrepared = false
                         fallbackTrackIndex = nextIndex + 1
                         unavailableTrackCount += 1
-                        runCatching { failed.release() }
-                    } else if (generation == playbackGeneration && player === failed) {
-                        player = null
-                        playerPrepared = false
-                        playbackPreparing = false
-                        playbackPaused = false
-                        discardQueuedPlayer()
-                        handleTrackFailure(nextIndex)
-                    } else {
-                        runCatching { failed.release() }
                     }
-                    true
+                    runCatching { queued.release() }
                 }
-                queued.prepareAsync()
-            } catch (_: Exception) {
-                if (generation == playbackGeneration && preloadedPlayer === queued) {
-                    preloadedPlayer = null
-                    preloadedTrackIndex = -1
-                    preloadedPlayerPrepared = false
-                    fallbackTrackIndex = nextIndex + 1
-                    unavailableTrackCount += 1
-                }
-                runCatching { queued.release() }
             }
         }
 
