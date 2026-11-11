@@ -8,6 +8,27 @@ import org.junit.Test
 
 class PrayerAlarmScheduleStatusTest {
     @Test
+    fun pendingAlarmIdentityIncludesTheLocalPrayerDate() {
+        val today = PrayerAlarmScheduler.alarmIdentity("fajr", "2026-315")
+        val tomorrow = PrayerAlarmScheduler.alarmIdentity("fajr", "2026-316")
+        val otherPrayer = PrayerAlarmScheduler.alarmIdentity("jumuah", "2026-315")
+        assertEquals("fajr|2026-315", today)
+        assertTrue(today != tomorrow)
+        assertTrue(today != otherPrayer)
+    }
+
+    @Test
+    fun parsesTwentyFourHourAndTwelveHourPrayerTimes() {
+        assertEquals(6 * 60 + 2, PrayerAlarmScheduler.parsePrayerTimeInMinutes("06:02"))
+        assertEquals(17 * 60 + 45, PrayerAlarmScheduler.parsePrayerTimeInMinutes("17:45"))
+        assertEquals(10, PrayerAlarmScheduler.parsePrayerTimeInMinutes("12:10 AM"))
+        assertEquals(12 * 60 + 10, PrayerAlarmScheduler.parsePrayerTimeInMinutes("12:10 PM"))
+        assertEquals(17 * 60 + 5, PrayerAlarmScheduler.parsePrayerTimeInMinutes("5:05 pm"))
+        assertTrue(PrayerAlarmScheduler.parsePrayerTimeInMinutes("25:70") == null)
+        assertTrue(PrayerAlarmScheduler.parsePrayerTimeInMinutes("not-a-time") == null)
+    }
+
+    @Test
     fun savedGpsCoordinatesRemainValidAfterManyDays() {
         assertTrue(isValidPersistedGpsFix(35.56, 45.44, 1L))
         assertTrue(isValidPersistedGpsFix(35.56, 45.44, 0L))

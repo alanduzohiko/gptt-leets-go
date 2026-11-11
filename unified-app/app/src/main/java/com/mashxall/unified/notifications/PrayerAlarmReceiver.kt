@@ -15,6 +15,11 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val code = intent.getStringExtra("prayer_code") ?: return
         if (code !in PrayerAlarmScheduler.ALERT_CODES) return
         val prefs = context.getSharedPreferences(PrayerAlarmScheduler.PREFS, Context.MODE_PRIVATE)
+        PrayerAlarmScheduler.markAlarmDelivered(
+            context,
+            code,
+            intent.getStringExtra(PrayerAlarmScheduler.EXTRA_DAY_TOKEN)
+        )
         if (!PrayerAlarmScheduler.isPrayerAlertActive(prefs, code)) {
             Log.i("MashxallAdhanAlarm", "Ignored disabled prayer alarm: " + code)
             return

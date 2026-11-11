@@ -1737,7 +1737,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         readingProgressRevision++
                     }
                 }
-                delay(100L)
+                delay(50L)
             }
         } else {
             inlinePlaybackPositionMs = 0
@@ -1869,13 +1869,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             ).coerceIn(1, ayahCount)
         }
         val (position, duration) = AudioController.playbackPosition()
-        val weights = quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, ayahCount)
         return quranPlaybackAyahAtPosition(
             startingAyah = inlinePlaybackStartAyah,
             ayahCount = ayahCount,
             positionMs = position,
             durationMs = duration,
-            ayahWeights = weights
+            ayahWeights = inlinePlaybackAyahWeights
         ).coerceIn(1, ayahCount)
     }
 
@@ -7895,13 +7894,23 @@ internal fun quranPlaybackTrackAyahs(audioType: Int, startingAyah: Int, ayahCoun
     return if (audioType == 0) (start..ayahCount).toList() else listOf(start)
 }
 
-/** Full-surah files have no exact verse timestamps; this estimates the current ayah from track progress. */
+/** Full-surah files have no embedded verse timestamps; estimate duration using articulation and pause marks. */
+internal fun quranPlaybackAyahWeight(arabicText: String): Int {
+    if (arabicText.isBlank()) return 12
+    val letters = arabicText.count { it.isLetter() }
+    val words = arabicText.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+    val elongationLetters = arabicText.count { it == 'ا' || it == 'و' || it == 'ي' || it == 'ى' }
+    val pauseMarks = arabicText.count {
+        it == 'ۚ' || it == 'ۖ' || it == 'ۛ' || it == 'ۗ' || it == 'ۙ' || it == 'ۜ' || it == '۝'
+    }
+    return (letters + words * 2 + elongationLetters + pauseMarks * 12 + 6).coerceAtLeast(12)
+}
+
 internal fun quranPlaybackAyahWeights(ayahs: List<Ayah>, ayahCount: Int): List<Int> {
     if (ayahCount < 1) return emptyList()
     val byNumber = ayahs.associateBy { it.number }
     return (1..ayahCount).map { number ->
-        val letters = byNumber[number]?.arabic.orEmpty().count { it.isLetter() }
-        (letters + 6).coerceAtLeast(12)
+        quranPlaybackAyahWeight(byNumber[number]?.arabic.orEmpty())
     }
 }
 
@@ -8185,13 +8194,17 @@ fun AudioScreen(
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId, playbackMode) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId }
         if (autoPlayRequested && focusReciters && preferred != null && surahs.isNotEmpty()) {
+            val requestKeyAtStart = autoPlayKey
             val surahNumber = initialSurah.coerceIn(1, 114)
             val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
             val startAyah = resolveReciterStartAyah(playbackMode, initialAyah, ayahCount)
+            val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}"
             val sources = withContext(Dispatchers.IO) {
                 reciterAudioSequence(context, preferred, surahNumber, startAyah, ayahCount)
             }
-            val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}"
+            // A slow navigation auto-play request must not replace a reciter that
+            // the user selected manually while the audio source was loading.
+            if (autoPlayKey != requestKeyAtStart) return@LaunchedEffect
             if (autoPlayKey != key && sources.isNotEmpty()) {
                 autoPlayKey = key
                 playing = key
@@ -9846,6 +9859,9 @@ internal object AudioController {
                             return@setOnPreparedListener
                         }
                         try {
+                            // A new MediaPlayer instance must always begin at the
+                            // start of the requested recording, never a stale position.
+                            prepared.seekTo(0)
                             prepared.start()
                             announceActiveTrack(prepared, index)
                             preloadNext(index, prepared)

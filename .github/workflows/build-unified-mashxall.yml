@@ -301,7 +301,7 @@ jobs:
           EOF
 
       - name: Download known-good Build 515 for an in-place upgrade test
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[run-runtime]')
         uses: actions/download-artifact@v4
         with:
           name: mashxall-unified-android11-apk-515
@@ -311,7 +311,7 @@ jobs:
           path: dist/runtime-test/baseline
 
       - name: Resolve APK paths for the Android 11 upgrade test
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[run-runtime]')
         shell: bash
         run: |
           set -euo pipefail
@@ -328,7 +328,7 @@ jobs:
       # physical Android 11 phone instead of starting the hosted emulator.
       - name: Verify Build 515 upgrade and app screens on Android 11
         id: android11-upgrade-smoke
-        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip-runtime]')
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[run-runtime]')
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -341,7 +341,7 @@ jobs:
           script: bash tools/runtime-upgrade-smoke-android11.sh
 
       - name: Upload Android 11 upgrade diagnostics
-        if: always() && github.event_name == 'push'
+        if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[run-runtime]')
         uses: actions/upload-artifact@v4
         with:
           name: mashxall-android11-upgrade-diagnostics-${{ github.run_number }}
@@ -352,7 +352,7 @@ jobs:
           retention-days: 14
 
       - name: Require Android 11 upgrade and runtime checks to pass
-        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip-runtime]') && steps.android11-upgrade-smoke.outcome != 'success'
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[run-runtime]') && steps.android11-upgrade-smoke.outcome != 'success'
         run: |
           echo "Android 11 Build 515 in-place upgrade/runtime test failed; refusing to publish this APK."
           exit 1

@@ -4,7 +4,10 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.util.Log
+import com.mashxall.unified.MainActivity
 import com.mashxall.unified.data.ContentRepository
 import com.mashxall.unified.AppLanguage
 import com.mashxall.unified.isValidPersistedGpsFix
@@ -57,8 +60,12 @@ object PrayerAlarmScheduler {
     const val KEY_ENABLED = "adhan_enabled"
     const val KEY_AUDIO = "adhan_audio_asset"
     const val KEY_AUDIO_TITLE = "adhan_audio_title"
+    const val KEY_SCHEDULED_ALARM_IDS = "adhan_scheduled_alarm_ids"
+    const val EXTRA_DAY_TOKEN = "prayer_alarm_day_token"
     private const val ACTION_ALARM = "com.mashxall.unified.PRAYER_ALARM"
+    private const val ACTION_SHOW_ALARM = "com.mashxall.unified.SHOW_PRAYER_ALARM"
     private const val BASE_REQUEST_CODE = 7400
+    private const val BASE_SHOW_REQUEST_CODE = 7600
     val PRAYER_CODES = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
     val ALERT_CODES = PRAYER_CODES + "jumuah"
     private const val JUMUAH_CODE = "jumuah"
@@ -90,12 +97,47 @@ object PrayerAlarmScheduler {
 
     fun cancelAll(context: Context) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        ALERT_CODES.forEach { code ->
-            val pending = pendingIntent(context, code)
-            manager.cancel(pending)
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Each prayer may have more than one future occurrence. Cancel every
+        // date-specific token so tomorrow can never replace today's alarm.
+        val scheduledIds = prefs.getStringSet(KEY_SCHEDULED_ALARM_IDS, emptySet()).orEmpty().toList()
+        scheduledIds.forEach { identity ->
+            val separator = identity.indexOf('|')
+            if (separator <= 0 || separator >= identity.lastIndex) return@forEach
+            val code = identity.substring(0, separator)
+            val dayToken = identity.substring(separator + 1)
+            if (code !in ALERT_CODES || dayToken.isBlank()) return@forEach
+            val pending = pendingIntent(context, code, dayToken)
+            runCatching { manager.cancel(pending) }
             pending.cancel()
         }
+        // Retire the single-token PendingIntents created by earlier app versions.
+        ALERT_CODES.forEach { code ->
+            val legacy = pendingIntent(context, code, null)
+            runCatching { manager.cancel(legacy) }
+            legacy.cancel()
+        }
+        prefs.edit().remove(KEY_SCHEDULED_ALARM_IDS).apply()
     }
+
+    fun markAlarmDelivered(context: Context, code: String, dayToken: String?) {
+        if (code !in ALERT_CODES || dayToken.isNullOrBlank()) return
+        val pending = pendingIntent(context, code, dayToken)
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        runCatching { manager.cancel(pending) }
+        pending.cancel()
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val remaining = prefs.getStringSet(KEY_SCHEDULED_ALARM_IDS, emptySet()).orEmpty().toMutableSet()
+        remaining.remove(alarmIdentity(code, dayToken))
+        prefs.edit().putStringSet(KEY_SCHEDULED_ALARM_IDS, remaining).apply()
+    }
+
+    internal fun prayerAlarmDayToken(triggerAtMillis: Long): String =
+        Calendar.getInstance().apply { timeInMillis = triggerAtMillis }.let { calendar ->
+            "%04d-%03d".format(Locale.US, calendar.get(Calendar.YEAR), calendar.get(Calendar.DAY_OF_YEAR))
+        }
+
+    internal fun alarmIdentity(code: String, dayToken: String): String = "$code|$dayToken"
 
     suspend fun scheduleUpcomingFromPreferences(context: Context): PrayerAlarmScheduleResult {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -127,8 +169,7 @@ object PrayerAlarmScheduler {
             prayerAlertCodesForDay(enabledCodes, isFriday(date)).forEach { code ->
                 val trigger = triggerAt(date, prayerTime(row, code))
                 if (trigger != null && trigger > now + 3000L) {
-                    schedule(context, code, trigger)
-                    scheduledCount++
+                    if (schedule(context, code, trigger)) scheduledCount++
                 }
             }
         }
@@ -141,8 +182,7 @@ object PrayerAlarmScheduler {
             if (fridayTimes != null) {
                 val trigger = triggerAt(nextFriday, fridayTimes.dhuhr)
                 if (trigger != null && trigger > now + 3000L) {
-                    schedule(context, JUMUAH_CODE, trigger)
-                    scheduledCount++
+                    if (schedule(context, JUMUAH_CODE, trigger)) scheduledCount++
                 }
             }
         }
@@ -205,24 +245,73 @@ object PrayerAlarmScheduler {
         )
     }
 
-    private fun schedule(context: Context, code: String, whenMillis: Long) {
+    private fun schedule(context: Context, code: String, whenMillis: Long): Boolean {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pending = pendingIntent(context, code)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
-            try {
-                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMillis, pending)
-            } catch (_: SecurityException) {
-                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMillis, pending)
-            }
-        } else {
-            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMillis, pending)
+        val dayToken = prayerAlarmDayToken(whenMillis)
+        val pending = pendingIntent(context, code, dayToken)
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val prayerIndex = ALERT_CODES.indexOf(code).coerceAtLeast(0)
+        val showIntent = Intent(context, MainActivity::class.java).apply {
+            action = ACTION_SHOW_ALARM
+            data = Uri.parse("mashxall://show-prayer-alarm/" + code)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
+        val showPending = PendingIntent.getActivity(
+            context,
+            BASE_SHOW_REQUEST_CODE + prayerIndex,
+            showIntent,
+            flags
+        )
+        try {
+            // AlarmClockInfo gives the system a visible wake-up alarm and is more
+            // reliable than an ordinary idle alarm on OEM battery managers.
+            manager.setAlarmClock(AlarmManager.AlarmClockInfo(whenMillis, showPending), pending)
+        } catch (error: Exception) {
+            Log.w("MashxallAdhanAlarm", "AlarmClock scheduling failed for " + code + "; trying exact fallback.", error)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                    (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms())
+                ) {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMillis, pending)
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMillis, pending)
+                } else {
+                    manager.setExact(AlarmManager.RTC_WAKEUP, whenMillis, pending)
+                }
+            } catch (exactError: Exception) {
+                Log.e("MashxallAdhanAlarm", "Exact alarm fallback failed for " + code + "; trying idle alarm.", exactError)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMillis, pending)
+                    } else {
+                        manager.set(AlarmManager.RTC_WAKEUP, whenMillis, pending)
+                    }
+                } catch (fallbackError: Exception) {
+                    Log.e("MashxallAdhanAlarm", "Could not schedule prayer alarm for " + code, fallbackError)
+                    pending.cancel()
+                    return false
+                }
+            }
+        }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val identities = prefs.getStringSet(KEY_SCHEDULED_ALARM_IDS, emptySet()).orEmpty().toMutableSet()
+        identities.add(alarmIdentity(code, dayToken))
+        prefs.edit().putStringSet(KEY_SCHEDULED_ALARM_IDS, identities).apply()
+        Log.i("MashxallAdhanAlarm", "Scheduled prayer alarm: code=" + code + " day=" + dayToken + " at=" + whenMillis)
+        return true
     }
 
-    private fun pendingIntent(context: Context, code: String): PendingIntent {
+    private fun pendingIntent(context: Context, code: String, dayToken: String?): PendingIntent {
         val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
             action = ACTION_ALARM
             putExtra("prayer_code", code)
+            if (!dayToken.isNullOrBlank()) {
+                putExtra(EXTRA_DAY_TOKEN, dayToken)
+                // PendingIntent identity includes the data URI: each date has a
+                // distinct token for the same prayer code.
+                data = Uri.parse("mashxall://prayer-alarm/" + code + "/" + dayToken)
+            }
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
@@ -256,11 +345,31 @@ object PrayerAlarmScheduler {
         return calendar.time
     }
 
+    internal fun parsePrayerTimeInMinutes(value: String): Int? {
+        val match = Regex("""^(\d{1,2}):(\d{2})(?:\s*([AaPp][Mm]))?$""")
+            .matchEntire(value.trim()) ?: return null
+        val rawHour = match.groupValues[1].toIntOrNull() ?: return null
+        val minute = match.groupValues[2].toIntOrNull() ?: return null
+        val suffix = match.groupValues[3].uppercase(Locale.US)
+        if (minute !in 0..59) return null
+        val hour = when (suffix) {
+            "AM" -> {
+                if (rawHour !in 1..12) return null
+                rawHour % 12
+            }
+            "PM" -> {
+                if (rawHour !in 1..12) return null
+                (rawHour % 12) + 12
+            }
+            else -> rawHour.takeIf { it in 0..23 } ?: return null
+        }
+        return hour * 60 + minute
+    }
+
     private fun triggerAt(day: Date, time: String): Long? {
-        val pieces = time.split(":")
-        val hour = pieces.getOrNull(0)?.toIntOrNull() ?: return null
-        val minute = pieces.getOrNull(1)?.toIntOrNull() ?: return null
-        if (hour !in 0..23 || minute !in 0..59) return null
+        val minutes = parsePrayerTimeInMinutes(time) ?: return null
+        val hour = minutes / 60
+        val minute = minutes % 60
         return Calendar.getInstance().apply {
             this.time = day
             set(Calendar.HOUR_OF_DAY, hour)

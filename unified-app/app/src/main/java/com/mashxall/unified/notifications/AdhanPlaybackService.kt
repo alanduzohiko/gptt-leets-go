@@ -458,7 +458,7 @@ class AdhanPlaybackService : Service() {
         mp.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
         mp.setAudioAttributes(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
         )
