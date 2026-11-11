@@ -8502,14 +8502,12 @@ fun AudioScreen(
                                     selected = playing == playKey,
                                     onClick = {
                                         if (playing == playKey || playing == "loading:$playKey") {
-                                            AudioController.stop()
+                                            AdhanPlaybackService.stopPlayback(context)
                                             playing = ""
                                         } else {
-                                            playing = "loading:$playKey"
-                                            AudioController.play(context, item.assetPath) { state ->
-                                                audioPaused = false
-                                                playing = if (state) playKey else ""
-                                            }
+                                            AudioController.stop()
+                                            playing = playKey
+                                            AdhanPlaybackService.startPreview(context, item.assetPath, item.title)
                                         }
                                     }
                                 ) {
@@ -8607,19 +8605,13 @@ fun AudioScreen(
                                 selected = playing == playKey,
                                 onClick = {
                                     if (playing == playKey || playing == "loading:$playKey") {
-                                        AudioController.stop()
+                                        AdhanPlaybackService.stopPlayback(context)
                                         playing = ""
                                     } else {
+                                        AudioController.stop()
                                         val source = if (localSaved) "local:${file.absolutePath}" else item.url
-                                        playing = "loading:$playKey"
-                                        AudioController.playSequence(
-                                            context,
-                                            listOf(source),
-                                            failure = if (localSaved) AudioPlaybackFailure.LOCAL_ASSET else AudioPlaybackFailure.STREAM
-                                        ) { state ->
-                                            audioPaused = false
-                                            playing = if (state) playKey else ""
-                                        }
+                                        playing = playKey
+                                        AdhanPlaybackService.startPreview(context, source, title)
                                     }
                                 }
                             ) {
@@ -13070,6 +13062,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Row(
                         Modifier.fillMaxWidth().premiumClickable {
                             AudioController.stop()
+                            AdhanPlaybackService.stopPlayback(context)
                             previewingAdhan = ""
                             assignAdhanSound(sound.assetPath)
                             adhanMessage = ""
@@ -13089,6 +13082,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             }
                         ) {
                             AudioController.stop()
+                            AdhanPlaybackService.stopPlayback(context)
                             previewingAdhan = ""
                             assignAdhanSound(sound.assetPath)
                             adhanMessage = ""
@@ -13106,20 +13100,12 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             selected = previewingAdhan == sound.assetPath,
                             onClick = {
                                 if (previewingAdhan == sound.assetPath) {
-                                    AudioController.stop()
+                                    AdhanPlaybackService.stopPlayback(context)
                                     previewingAdhan = ""
                                 } else {
                                     AudioController.stop()
                                     previewingAdhan = sound.assetPath
-                                    if (sound.assetPath.startsWith("local:")) {
-                                        AudioController.playSequence(context, listOf(sound.assetPath)) { active ->
-                                            if (!active) previewingAdhan = ""
-                                        }
-                                    } else {
-                                        AudioController.play(context, sound.assetPath) { active ->
-                                            if (!active) previewingAdhan = ""
-                                        }
-                                    }
+                                    AdhanPlaybackService.startPreview(context, sound.assetPath, sound.title)
                                 }
                             }
                         ) {
