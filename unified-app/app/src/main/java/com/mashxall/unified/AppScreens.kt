@@ -2443,7 +2443,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
             )
             }
-            if (inlinePlaybackVisible && AudioController.isActive()) {
+            if (inlinePlaybackVisible && (AudioController.isActive() || AudioController.isPreparing())) {
                 val activeAyah = inlinePlaybackActiveVerse
                     ?.takeIf { it.first == inlinePlaybackSurah }?.second
                     ?: inlinePlaybackStartAyah
@@ -9091,6 +9091,7 @@ internal object AudioController {
     // Compose observes this state from the now-playing control. It also flips
     // false between consecutive files, so pause cannot target a completed player.
     private var playerPrepared by mutableStateOf(false)
+    private var playbackPreparing by mutableStateOf(false)
     private var playbackPaused by mutableStateOf(false)
     private var playbackActive by mutableStateOf(false)
     private var activeContext: Context? = null
@@ -9107,6 +9108,8 @@ internal object AudioController {
     fun isPrepared(): Boolean = playerPrepared && player != null
 
     fun isActive(): Boolean = playbackActive
+
+    fun isPreparing(): Boolean = playbackPreparing
 
     fun isPaused(): Boolean = playbackPaused
 
@@ -9179,6 +9182,7 @@ internal object AudioController {
         preparationJob?.cancel()
         preparationJob = null
         playerPrepared = false
+        playbackPreparing = false
         playbackPaused = false
         playbackActive = false
         QuranPlaybackNotification.hide(activeContext)
@@ -9212,9 +9216,11 @@ internal object AudioController {
         if (sources.isEmpty()) {
             activeContext = null
             activeNotificationEnabled = false
+            playbackPreparing = false
             callback(false)
             return
         }
+        playbackPreparing = true
         val generation = playbackGeneration
         var hasStartedPlayback = false
         var unavailableTrackCount = 0
@@ -9274,6 +9280,7 @@ internal object AudioController {
             if (generation != playbackGeneration) return
             if (index >= sources.size) {
                 playerPrepared = false
+                playbackPreparing = false
                 playbackPaused = false
                 playbackActive = false
                 player = null
@@ -9305,6 +9312,7 @@ internal object AudioController {
                     try {
                         prepared.start()
                         playerPrepared = true
+                        playbackPreparing = false
                         playbackPaused = false
                         playbackActive = true
                         if (!hasStartedPlayback) hasStartedPlayback = true
