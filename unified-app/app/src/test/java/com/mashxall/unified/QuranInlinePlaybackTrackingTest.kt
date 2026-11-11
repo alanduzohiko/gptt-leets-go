@@ -24,6 +24,7 @@ class QuranInlinePlaybackTrackingTest {
         assertEquals(emptyList<Int>(), quranPlaybackTrackAyahs(audioType = 0, startingAyah = 1, ayahCount = 0))
     }
 
+    // One-file recordings have no per-ayah timestamps, so mapping is explicitly approximate.
     @Test
     fun fullSurahPlaybackEstimateAdvancesAsTheSingleTrackProgresses() {
         assertEquals(1, quranPlaybackAyahAtPosition(1, 7, 0, 7_000))
