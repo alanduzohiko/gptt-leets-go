@@ -23,7 +23,6 @@ class QuranInlinePlaybackTrackingTest {
         assertEquals(listOf(5, 6, 7), quranPlaybackTrackAyahs(audioType = 0, startingAyah = 5, ayahCount = 7))
         assertEquals(emptyList<Int>(), quranPlaybackTrackAyahs(audioType = 0, startingAyah = 1, ayahCount = 0))
     }
-}
 
     @Test
     fun fullSurahPlaybackEstimateAdvancesAsTheSingleTrackProgresses() {
@@ -53,4 +52,4 @@ class QuranInlinePlaybackTrackingTest {
         })
         assertEquals(0, quranPlaybackPositionForAyah(4, 4, 7, 0))
     }
-
+}
