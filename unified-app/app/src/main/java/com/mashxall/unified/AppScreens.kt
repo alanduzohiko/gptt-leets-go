@@ -9275,8 +9275,14 @@ internal object AudioController {
 
     fun isPaused(): Boolean = playbackPaused
 
-    /** Active clip index, excluding the clip that is merely being preloaded. */
-    fun currentSequenceTrackIndex(): Int = sequenceTrackIndex
+    /** Track that is actually audible; the prepared next clip counts once it starts gaplessly. */
+    fun currentSequenceTrackIndex(): Int {
+        val queued = preloadedPlayer
+        return if (
+            preloadedPlayerPrepared && preloadedTrackIndex >= 0 &&
+            runCatching { queued?.isPlaying == true }.getOrDefault(false)
+        ) preloadedTrackIndex else sequenceTrackIndex
+    }
 
     fun playbackPosition(): Pair<Int, Int> {
         val active = player ?: return 0 to 0
@@ -9300,12 +9306,12 @@ internal object AudioController {
     }
 
     fun hasNextSequenceTrack(): Boolean =
-        sequenceTrackRequest != null && sequenceTrackIndex < sequenceTrackCount - 1
+        sequenceTrackRequest != null && currentSequenceTrackIndex() < sequenceTrackCount - 1
 
     fun skipNextSequenceTrack(): Boolean {
         if (playbackPreparing || !playerPrepared) return false
         val request = sequenceTrackRequest ?: return false
-        val next = adjacentAudioSequenceIndex(sequenceTrackIndex, sequenceTrackCount, forward = true) ?: return false
+        val next = adjacentAudioSequenceIndex(currentSequenceTrackIndex(), sequenceTrackCount, forward = true) ?: return false
         request(next)
         return true
     }
@@ -9313,7 +9319,7 @@ internal object AudioController {
     fun skipPreviousSequenceTrack(): Boolean {
         if (playbackPreparing || !playerPrepared) return false
         val request = sequenceTrackRequest ?: return false
-        val previous = adjacentAudioSequenceIndex(sequenceTrackIndex, sequenceTrackCount, forward = false) ?: return false
+        val previous = adjacentAudioSequenceIndex(currentSequenceTrackIndex(), sequenceTrackCount, forward = false) ?: return false
         request(previous)
         return true
     }
@@ -9665,58 +9671,64 @@ internal object AudioController {
             }
             discardQueuedPlayer()
             sequenceTrackIndex = index
-            var currentPlayer: MediaPlayer? = null
-            try {
-                val source = sources[index]
-                val current = MediaPlayer()
-                currentPlayer = current
-                player = current
-                playerPrepared = false
-                playbackPreparing = true
-                playbackPaused = false
-                playbackActive = hasStartedPlayback
-                setReciterAudioSource(current, source)
-                current.setOnPreparedListener { prepared ->
-                    if (generation != playbackGeneration || player !== prepared) {
-                        runCatching { prepared.release() }
-                        return@setOnPreparedListener
+            val current = MediaPlayer()
+            player = current
+            playerPrepared = false
+            playbackPreparing = true
+            playbackPaused = false
+            playbackActive = hasStartedPlayback
+            preparationScope.launch {
+                try {
+                    val source = cacheReciterStreamSource(context.applicationContext, sources[index])
+                    if (generation != playbackGeneration || player !== current) {
+                        runCatching { current.release() }
+                        return@launch
                     }
-                    try {
-                        prepared.start()
-                        announceActiveTrack(prepared, index)
-                        preloadNext(index, prepared)
-                    } catch (_: Exception) {
-                        if (player === prepared) player = null
+                    setReciterAudioSource(current, source)
+                    current.setOnPreparedListener { prepared ->
+                        if (generation != playbackGeneration || player !== prepared) {
+                            runCatching { prepared.release() }
+                            return@setOnPreparedListener
+                        }
+                        try {
+                            prepared.start()
+                            announceActiveTrack(prepared, index)
+                            preloadNext(index, prepared)
+                        } catch (_: Exception) {
+                            if (player === prepared) player = null
+                            playerPrepared = false
+                            playbackPreparing = false
+                            playbackPaused = false
+                            runCatching { prepared.release() }
+                            handleTrackFailure(index)
+                        }
+                    }
+                    current.setOnCompletionListener { completed -> completeTrack(completed, index) }
+                    current.setOnErrorListener { failed, _, _ ->
+                        if (generation == playbackGeneration && player === failed) {
+                            player = null
+                            playerPrepared = false
+                            playbackPreparing = false
+                            playbackPaused = false
+                            discardQueuedPlayer()
+                            handleTrackFailure(index)
+                        } else {
+                            runCatching { failed.release() }
+                        }
+                        true
+                    }
+                    current.prepareAsync()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    if (generation == playbackGeneration) {
+                        if (player === current) player = null
                         playerPrepared = false
                         playbackPreparing = false
                         playbackPaused = false
-                        runCatching { prepared.release() }
+                        runCatching { current.release() }
                         handleTrackFailure(index)
                     }
-                }
-                current.setOnCompletionListener { completed -> completeTrack(completed, index) }
-                current.setOnErrorListener { failed, _, _ ->
-                    if (generation == playbackGeneration && player === failed) {
-                        player = null
-                        playerPrepared = false
-                        playbackPreparing = false
-                        playbackPaused = false
-                        discardQueuedPlayer()
-                        handleTrackFailure(index)
-                    } else {
-                        runCatching { failed.release() }
-                    }
-                    true
-                }
-                current.prepareAsync()
-            } catch (_: Exception) {
-                if (generation == playbackGeneration) {
-                    if (player === currentPlayer) player = null
-                    playerPrepared = false
-                    playbackPreparing = false
-                    playbackPaused = false
-                    runCatching { currentPlayer?.release() }
-                    handleTrackFailure(index)
                 }
             }
         }
