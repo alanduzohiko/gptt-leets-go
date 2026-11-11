@@ -54,47 +54,70 @@ jobs:
 
       - name: Prepare the supplied Mashxall intro animation
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          SOURCE="$RUNNER_TEMP/mashxall-intro-original.mp4"
           OUTPUT="unified-app/app/src/main/res/raw/mashxall_intro.mp4"
           mkdir -p "$(dirname "$OUTPUT")"
-          SOURCE_URL="https://www.dropbox.com/scl/fi/uh8uv0d6k1cfmvn640nci/VID_-1.mp4?rlkey=8fphd3qq18wv80aq80gf8hhnj&dl=1"
-          curl --fail --location --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 "$SOURCE_URL" -o "$SOURCE"
-          ACTUAL_SHA="$(sha256sum "$SOURCE" | awk '{print $1}')"
-          EXPECTED_SHA="6332623d1d7e82d3d9e982c1b2081fd78c40b23a20d5ff9a3e4aafa503b3d3d5"
-          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
-            echo "The downloaded intro is not the exact video supplied for Mashxall."
+          EXPECTED_OUTPUT_SHA="847849e9bc36887d8516ee0113d3ddcc50ddc71d91ae55c5716603e0c81dfd0d"
+
+          # Reuse the exact intro already embedded in the most recent successful
+          # build. This keeps ordinary code fixes independent of the external
+          # Dropbox URL while preserving the video bit-for-bit.
+          PREVIOUS_RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow build-unified-mashxall.yml --branch "$GITHUB_REF_NAME" \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId // ""')"
+          PREVIOUS_RUN_NUMBER="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow build-unified-mashxall.yml --branch "$GITHUB_REF_NAME" \
+            --status success --limit 1 --json number --jq '.[0].number // ""')"
+          REUSED_INTRO=false
+          if [[ -n "$PREVIOUS_RUN_ID" && -n "$PREVIOUS_RUN_NUMBER" ]]; then
+            PREVIOUS_DIR="$RUNNER_TEMP/mashxall-previous-build"
+            mkdir -p "$PREVIOUS_DIR"
+            if gh run download "$PREVIOUS_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "mashxall-unified-android11-apk-$PREVIOUS_RUN_NUMBER" --dir "$PREVIOUS_DIR"; then
+              PREVIOUS_APK="$PREVIOUS_DIR/Mashxall-Unified-debug.apk"
+              if [[ -s "$PREVIOUS_APK" ]]; then
+                unzip -p "$PREVIOUS_APK" res/raw/mashxall_intro.mp4 > "$OUTPUT" || true
+                ACTUAL_OUTPUT_SHA="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+                if [[ "$ACTUAL_OUTPUT_SHA" == "$EXPECTED_OUTPUT_SHA" ]]; then
+                  REUSED_INTRO=true
+                  echo "Reused the previously verified intro from successful build $PREVIOUS_RUN_NUMBER."
+                fi
+              fi
+            fi
+          fi
+
+          # First build on a new branch can fall back to the supplied original video.
+          if [[ "$REUSED_INTRO" != true ]]; then
+            SOURCE="$RUNNER_TEMP/mashxall-intro-original.mp4"
+            SOURCE_URL="https://www.dropbox.com/scl/fi/uh8uv0d6k1cfmvn640nci/VID_-1.mp4?rlkey=8fphd3qq18wv80aq80gf8hhnj&dl=1"
+            curl --fail --location --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --connect-timeout 15 --max-time 240 "$SOURCE_URL" -o "$SOURCE"
+            ACTUAL_SHA="$(sha256sum "$SOURCE" | awk '{print $1}')"
+            EXPECTED_SHA="6332623d1d7e82d3d9e982c1b2081fd78c40b23a20d5ff9a3e4aafa503b3d3d5"
+            if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+              echo "The downloaded intro is not the exact video supplied for Mashxall."
+              exit 1
+            fi
+            if ! command -v ffmpeg >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y ffmpeg
+            fi
+            ffmpeg -hide_banner -loglevel error -y -i "$SOURCE" \
+              -map 0:v:0 -an \
+              -vf "scale=720:1280:flags=lanczos,fps=24,format=yuv420p" \
+              -c:v libx264 -preset slow -crf 18 -profile:v baseline -level:v 3.1 \
+              -x264-params "cabac=0:bframes=0:ref=1:keyint=48:min-keyint=24:scenecut=0" \
+              -movflags +faststart -pix_fmt yuv420p "$OUTPUT"
+          fi
+
+          FINAL_SHA="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+          if [[ "$FINAL_SHA" != "$EXPECTED_OUTPUT_SHA" ]]; then
+            echo "The packaged Mashxall intro does not match the previously verified video."
             exit 1
           fi
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-          ffmpeg -hide_banner -loglevel error -y -i "$SOURCE" \
-            -map 0:v:0 -an \
-            -vf "scale=720:1280:flags=lanczos,fps=24,format=yuv420p" \
-            -c:v libx264 -preset slow -crf 18 -profile:v baseline -level:v 3.1 \
-            -x264-params "cabac=0:bframes=0:ref=1:keyint=48:min-keyint=24:scenecut=0" \
-            -movflags +faststart -pix_fmt yuv420p "$OUTPUT"
-          python - "$OUTPUT" <<'PY'
-          import json, subprocess, sys
-          path = sys.argv[1]
-          raw = subprocess.check_output([
-              "ffprobe", "-v", "error", "-select_streams", "v:0",
-              "-show_entries", "stream=profile,width,height,r_frame_rate,level",
-              "-show_entries", "format=duration", "-of", "json", path
-          ], text=True)
-          data = json.loads(raw)
-          stream = data["streams"][0]
-          duration = float(data["format"]["duration"])
-          assert (stream["width"], stream["height"]) == (720, 1280), stream
-          assert "Baseline" in stream["profile"], stream
-          assert stream["level"] <= 31, stream
-          assert abs(duration - 3.875) < 0.15, duration
-          assert stream["r_frame_rate"] == "24/1", stream
-          print(f"Verified universal H.264 intro: {stream['profile']}, 720x1280, {duration:.3f}s, 24fps")
-          PY
+          echo "Verified reusable offline intro SHA-256: $FINAL_SHA"
           echo "Optimized offline intro size: $(du -h "$OUTPUT" | cut -f1)"
 
       - name: Set up Python
