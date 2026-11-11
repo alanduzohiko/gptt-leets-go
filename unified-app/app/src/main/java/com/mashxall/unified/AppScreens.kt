@@ -483,6 +483,9 @@ internal fun quranReaderSettingsCategoryPressScale(categoryKey: String): Float =
 }
 
 
+internal fun quranAudioNavigationArrowRotation(isNext: Boolean): Float =
+    if (isNext) 180f else 0f
+
 @Composable
 private fun QuranInlinePlaybackBar(
     language: AppLanguage,
@@ -606,7 +609,7 @@ private fun QuranInlinePlaybackBar(
                     if (language == AppLanguage.EN) "Seek to the previous approximate ayah position" else if (language == AppLanguage.AR) "الانتقال التقريبي إلى موضع الآية السابقة" else "چوونە شوێنی نزیکەیی ئایەتی پێشوو"
                 },
                 enabled = hasPrevious && isPrepared,
-                rotationDegrees = 180f,
+                rotationDegrees = quranAudioNavigationArrowRotation(isNext = false),
                 pressedScale = quranReaderActionPressScale("previous_ayah"),
                 onClick = onPrevious
             )
@@ -632,6 +635,7 @@ private fun QuranInlinePlaybackBar(
                     if (language == AppLanguage.EN) "Seek to the next approximate ayah position" else if (language == AppLanguage.AR) "الانتقال التقريبي إلى موضع الآية التالية" else "چوونە شوێنی نزیکەیی ئایەتی دواتر"
                 },
                 enabled = hasNext && isPrepared,
+                rotationDegrees = quranAudioNavigationArrowRotation(isNext = true),
                 pressedScale = quranReaderActionPressScale("next_ayah"),
                 onClick = onNext
             )
@@ -1693,9 +1697,18 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var pendingInlineRecitationTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackPreparing by remember { mutableStateOf(false) }
 
-    // Poll while the inline player is visible, including MediaPlayer preparation.
-    // This avoids tying progress updates to a one-time "is active" snapshot.
-    LaunchedEffect(inlinePlaybackVisible, inlinePlaybackUsesAyahClips, inlinePlaybackSurah, inlinePlaybackStartAyah, verses) {
+    // Cache verse timing weights once per surah and sample the audio clock at 10 Hz.
+    val inlinePlaybackAyahWeights = remember(inlinePlaybackSurah, verses, surahs) {
+        val count = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
+        quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, count)
+    }
+    LaunchedEffect(
+        inlinePlaybackVisible,
+        inlinePlaybackUsesAyahClips,
+        inlinePlaybackSurah,
+        inlinePlaybackStartAyah,
+        inlinePlaybackAyahWeights
+    ) {
         if (inlinePlaybackVisible) {
             while (true) {
                 val (position, duration) = AudioController.playbackPosition()
@@ -1703,13 +1716,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackDurationMs = duration.coerceAtLeast(0)
                 if (!inlinePlaybackUsesAyahClips && duration > 0) {
                     val count = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
-                    val weights = quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, count)
                     val estimatedAyah = quranPlaybackAyahAtPosition(
                         startingAyah = inlinePlaybackStartAyah,
                         ayahCount = count,
                         positionMs = position,
                         durationMs = duration,
-                        ayahWeights = weights
+                        ayahWeights = inlinePlaybackAyahWeights
                     )
                     val target = inlinePlaybackSurah to estimatedAyah
                     if (estimatedAyah > 0 && inlinePlaybackActiveVerse != target) {
@@ -1725,7 +1737,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         readingProgressRevision++
                     }
                 }
-                delay(300)
+                delay(100L)
             }
         } else {
             inlinePlaybackPositionMs = 0
@@ -7762,12 +7774,37 @@ private fun reciterOfflineFile(context: Context, reciter: Reciter, surah: Int, a
     }
 }
 
+internal fun hasPlausibleMp3StreamSignature(bytes: ByteArray): Boolean {
+    if (bytes.size < 3) return false
+    if (bytes[0] == 0x49.toByte() && bytes[1] == 0x44.toByte() && bytes[2] == 0x33.toByte()) {
+        return true
+    }
+    val scanLimit = (bytes.size - 1).coerceAtMost(65_535)
+    for (index in 0 until scanLimit) {
+        val first = bytes[index].toInt() and 0xFF
+        val second = bytes[index + 1].toInt() and 0xFF
+        if (first == 0xFF && (second and 0xE0) == 0xE0 && (second and 0x06) != 0) return true
+    }
+    return false
+}
+
+private fun isValidReciterAudioFile(file: File): Boolean {
+    if (!file.isFile || file.length() <= 512L) return false
+    return runCatching {
+        file.inputStream().use { input ->
+            val prefix = ByteArray(65_536)
+            val count = input.read(prefix)
+            count > 0 && hasPlausibleMp3StreamSignature(prefix.copyOf(count))
+        }
+    }.getOrDefault(false)
+}
+
 private fun isReciterSurahOffline(context: Context, reciter: Reciter, surah: Int, ayahCount: Int): Boolean {
     if (surah !in 1..reciter.surahTotal) return false
-    if (reciter.audioType != 0) return reciterOfflineFile(context, reciter, surah).let { it.isFile && it.length() > 512L }
+    if (reciter.audioType != 0) return isValidReciterAudioFile(reciterOfflineFile(context, reciter, surah))
     if (ayahCount < 1) return false
     return (1..ayahCount).all { ayah ->
-        reciterOfflineFile(context, reciter, surah, ayah).let { it.isFile && it.length() > 512L }
+        isValidReciterAudioFile(reciterOfflineFile(context, reciter, surah, ayah))
     }
 }
 
@@ -7791,7 +7828,7 @@ private suspend fun cacheReciterStreamSource(context: Context, source: String): 
     withContext(Dispatchers.IO) {
         if (source.startsWith("local:")) {
             val localFile = File(source.removePrefix("local:"))
-            require(localFile.isFile && localFile.length() > 512L) { "The saved recitation file is missing." }
+            require(isValidReciterAudioFile(localFile)) { "The saved recitation file is missing or is not a valid MP3." }
             return@withContext source
         }
         require(source.startsWith("https://") || source.startsWith("http://")) {
@@ -7801,14 +7838,16 @@ private suspend fun cacheReciterStreamSource(context: Context, source: String): 
         val key = digest.take(12).joinToString("") { "%02x".format(it) }
         // v2 deliberately invalidates files cached by older builds. Those files
         // were trusted based on size alone and could be HTML/error responses.
-        val cacheDirectory = File(context.cacheDir, "reciter-stream-cache-v2")
+        val cacheDirectory = File(context.cacheDir, "reciter-stream-cache-v3")
         val targetFile = File(cacheDirectory, key + ".mp3")
         try {
-            if (!targetFile.isFile || targetFile.length() <= 512L) {
+            // v3 invalidates old large HTML/JSON error responses that were cached by size alone.
+            if (!isValidReciterAudioFile(targetFile)) {
+                targetFile.delete()
                 downloadReciterFile(source, targetFile)
             }
-            require(targetFile.isFile && targetFile.length() > 512L) {
-                "The recitation download is incomplete."
+            require(isValidReciterAudioFile(targetFile)) {
+                "The recitation source did not return a valid MP3 file."
             }
             "local:" + targetFile.absolutePath
         } catch (error: CancellationException) {
@@ -7833,13 +7872,13 @@ private fun reciterAudioSequence(
     if (surah !in 1..reciter.surahTotal) return emptyList()
     if (reciter.audioType != 0) {
         val local = reciterOfflineFile(context, reciter, surah)
-        return listOf(if (local.isFile && local.length() > 512L) "local:${local.absolutePath}" else ContentRepository.reciterSampleUrl(reciter, surah, 1))
+        return listOf(if (isValidReciterAudioFile(local)) "local:${local.absolutePath}" else ContentRepository.reciterSampleUrl(reciter, surah, 1))
     }
     if (ayahCount < 1) return emptyList()
     val start = startingAyah.coerceIn(1, ayahCount)
     return (start..ayahCount).map { ayah ->
         val local = reciterOfflineFile(context, reciter, surah, ayah)
-        if (local.isFile && local.length() > 512L) "local:${local.absolutePath}"
+        if (isValidReciterAudioFile(local)) "local:${local.absolutePath}"
         else ContentRepository.reciterSampleUrl(reciter, surah, ayah)
     }
 }
@@ -7924,14 +7963,16 @@ private suspend fun downloadReciterSurah(
         require(ayahCount > 0) { "The source did not provide this surah's verse count." }
         for (ayah in 1..ayahCount) {
             val destination = reciterOfflineFile(context, reciter, chapter, ayah)
-            if (!destination.isFile || destination.length() <= 512L) {
+            if (!isValidReciterAudioFile(destination)) {
+                destination.delete()
                 downloadReciterFile(ContentRepository.reciterSampleUrl(reciter, chapter, ayah), destination)
             }
             withContext(Dispatchers.Main) { onProgress(ayah, ayahCount) }
         }
     } else {
         val destination = reciterOfflineFile(context, reciter, chapter)
-        if (!destination.isFile || destination.length() <= 512L) {
+        if (!isValidReciterAudioFile(destination)) {
+            destination.delete()
             downloadReciterFile(ContentRepository.reciterSampleUrl(reciter, chapter, 1), destination)
         }
         withContext(Dispatchers.Main) { onProgress(1, 1) }
@@ -7945,10 +7986,11 @@ private fun onlineAdhanOfflineFile(context: Context, item: OnlineAdhan): File {
 
 private suspend fun downloadOnlineAdhan(context: Context, item: OnlineAdhan): File = withContext(Dispatchers.IO) {
     val destination = onlineAdhanOfflineFile(context, item)
-    if (!destination.isFile || destination.length() <= 512L) {
+    if (!isValidReciterAudioFile(destination)) {
+        destination.delete()
         downloadReciterFile(item.url, destination)
     }
-    require(destination.isFile && destination.length() > 512L) { "The downloaded adhan file is incomplete." }
+    require(isValidReciterAudioFile(destination)) { "The downloaded adhan file is incomplete or is not a valid MP3." }
     destination
 }
 
@@ -8002,6 +8044,9 @@ private fun downloadReciterFile(url: String, destination: File) {
         }
         if (total <= 512L || !temporary.isFile) {
             throw java.io.IOException("The audio source returned an empty or incomplete file.")
+        }
+        if (!isValidReciterAudioFile(temporary)) {
+            throw java.io.IOException("The audio source returned content that is not a valid MP3 file.")
         }
         if (destination.exists()) destination.delete()
         if (!temporary.renameTo(destination)) {
@@ -11927,16 +11972,32 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
 
     fun assignAdhanSound(assetPath: String) {
         selectedAdhanAsset = assetPath
+        val selectedTitle = adhanAssets.firstOrNull { it.assetPath == assetPath }?.title.orEmpty()
         if (activeAdhanPrayerCode == "all") {
             prayerAudioSelections = PrayerAlarmScheduler.ALERT_CODES.associateWith { assetPath }
             PrayerAlarmScheduler.ALERT_CODES.forEach { code ->
-                prefs.edit().putString(PrayerAlarmScheduler.audioPreferenceKey(code), assetPath).apply()
+                prefs.edit()
+                    .putString(PrayerAlarmScheduler.audioPreferenceKey(code), assetPath)
+                    .apply {
+                        if (selectedTitle.isNotBlank()) putString(PrayerAlarmScheduler.audioTitlePreferenceKey(code), selectedTitle)
+                    }
+                    .apply()
             }
         } else {
             prayerAudioSelections = prayerAudioSelections + (activeAdhanPrayerCode to assetPath)
-            prefs.edit().putString(PrayerAlarmScheduler.audioPreferenceKey(activeAdhanPrayerCode), assetPath).apply()
+            prefs.edit()
+                .putString(PrayerAlarmScheduler.audioPreferenceKey(activeAdhanPrayerCode), assetPath)
+                .apply {
+                    if (selectedTitle.isNotBlank()) putString(PrayerAlarmScheduler.audioTitlePreferenceKey(activeAdhanPrayerCode), selectedTitle)
+                }
+                .apply()
         }
-        prefs.edit().putString("adhan_audio_asset", assetPath).apply()
+        prefs.edit()
+            .putString(PrayerAlarmScheduler.KEY_AUDIO, assetPath)
+            .apply {
+                if (selectedTitle.isNotBlank()) putString(PrayerAlarmScheduler.KEY_AUDIO_TITLE, selectedTitle)
+            }
+            .apply()
     }
 
     val onFix: (Location) -> Unit = { fix ->
@@ -12232,7 +12293,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
         prayerAudioSelections.forEach { (code, asset) ->
             if (asset.isNotBlank() && hasSelectableAdhanAsset(asset, adhanAssets)) {
-                prefs.edit().putString(PrayerAlarmScheduler.audioPreferenceKey(code), asset).apply()
+                val title = adhanAssets.firstOrNull { it.assetPath == asset }?.title.orEmpty()
+                prefs.edit()
+                    .putString(PrayerAlarmScheduler.audioPreferenceKey(code), asset)
+                    .apply {
+                        if (title.isNotBlank()) putString(PrayerAlarmScheduler.audioTitlePreferenceKey(code), title)
+                    }
+                    .apply()
             }
         }
         if (adhanEnabled) {
