@@ -1,11 +1,19 @@
 package com.mashxall.unified.notifications
 
 import com.mashxall.unified.AppLanguage
+import com.mashxall.unified.isValidPersistedGpsFix
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PrayerAlarmScheduleStatusTest {
+    @Test
+    fun savedGpsCoordinatesRemainValidAfterManyDays() {
+        assertTrue(isValidPersistedGpsFix(35.56, 45.44, 1L))
+        assertTrue(isValidPersistedGpsFix(35.56, 45.44, 0L))
+        assertEquals(false, isValidPersistedGpsFix(95.0, 45.44, 1L))
+    }
+
     @Test
     fun eachPrayerCanBeEnabledIndependentlyAndJumuahReplacesDhuhrOnlyOnFriday() {
         val enabled = setOf("fajr", "dhuhr", "asr", "jumuah")
@@ -37,6 +45,10 @@ class PrayerAlarmScheduleStatusTest {
         assertEquals(
             PrayerAlarmScheduler.ALERT_CODES.size,
             PrayerAlarmScheduler.ALERT_CODES.map(PrayerAlarmScheduler::audioPreferenceKey).distinct().size
+        )
+        assertEquals(
+            PrayerAlarmScheduler.ALERT_CODES.size,
+            PrayerAlarmScheduler.ALERT_CODES.map(PrayerAlarmScheduler::audioTitlePreferenceKey).distinct().size
         )
     }
 

@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Build
 import com.mashxall.unified.data.ContentRepository
 import com.mashxall.unified.AppLanguage
-import com.mashxall.unified.isUsableSavedGpsFix
+import com.mashxall.unified.isValidPersistedGpsFix
 import com.mashxall.unified.resolvePrayerLocationMode
 import com.mashxall.unified.data.PrayerRow
 import java.util.Calendar
@@ -56,6 +56,7 @@ object PrayerAlarmScheduler {
     const val PREFS = "mashxall_preferences"
     const val KEY_ENABLED = "adhan_enabled"
     const val KEY_AUDIO = "adhan_audio_asset"
+    const val KEY_AUDIO_TITLE = "adhan_audio_title"
     private const val ACTION_ALARM = "com.mashxall.unified.PRAYER_ALARM"
     private const val BASE_REQUEST_CODE = 7400
     val PRAYER_CODES = listOf("fajr", "dhuhr", "asr", "maghrib", "isha")
@@ -64,6 +65,7 @@ object PrayerAlarmScheduler {
 
     fun enabledPreferenceKey(code: String): String = "adhan_enabled_$code"
     fun audioPreferenceKey(code: String): String = "adhan_audio_asset_$code"
+    fun audioTitlePreferenceKey(code: String): String = "adhan_audio_title_$code"
 
     fun isPrayerAlertEnabled(prefs: android.content.SharedPreferences, code: String): Boolean =
         code in ALERT_CODES && prefs.getBoolean(enabledPreferenceKey(code), code != JUMUAH_CODE)
@@ -176,11 +178,9 @@ object PrayerAlarmScheduler {
         )
         if (locationMode == "gps") {
             val gpsFixTime = prefs.getLong("gps_location_timestamp", 0L)
-            val gpsScheduleStillUsable = isUsableSavedGpsFix(
-                gpsLatitude, gpsLongitude, gpsFixTime, System.currentTimeMillis(),
-                maxAgeMillis = 48L * 60L * 60L * 1000L
-            )
-            if (!gpsScheduleStillUsable) return null
+            // Saved GPS coordinates are the user's persistent prayer location. Do not
+            // cancel alarms because the phone has been stationary for more than 48 hours.
+            if (!isValidPersistedGpsFix(gpsLatitude, gpsLongitude, gpsFixTime)) return null
             return ContentRepository.salawatiOnlyPrayerTimes(
                 ContentRepository.loadPrayerTimesAtLocation(context, gpsLatitude!!, gpsLongitude!!, date)
             )
