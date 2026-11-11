@@ -9094,6 +9094,12 @@ internal fun adjacentAudioSequenceIndex(currentIndex: Int, trackCount: Int, forw
     return target.takeIf { it in 0 until trackCount }
 }
 
+internal fun resolveActiveAudioSequenceIndex(
+    currentIndex: Int,
+    preloadedIndex: Int,
+    preloadedHasStarted: Boolean
+): Int = if (preloadedHasStarted && preloadedIndex >= 0) preloadedIndex else currentIndex
+
 internal object QuranPlaybackNotification {
     private const val CHANNEL_ID = "mashxall_quran_playback"
     private const val NOTIFICATION_ID = 7851
@@ -9270,10 +9276,9 @@ internal object AudioController {
     /** Track that is actually audible; the prepared next clip counts once it starts gaplessly. */
     fun currentSequenceTrackIndex(): Int {
         val queued = preloadedPlayer
-        return if (
-            preloadedPlayerPrepared && preloadedTrackIndex >= 0 &&
+        val preloadHasStarted = preloadedPlayerPrepared &&
             runCatching { queued?.isPlaying == true }.getOrDefault(false)
-        ) preloadedTrackIndex else sequenceTrackIndex
+        return resolveActiveAudioSequenceIndex(sequenceTrackIndex, preloadedTrackIndex, preloadHasStarted)
     }
 
     fun playbackPosition(): Pair<Int, Int> {
