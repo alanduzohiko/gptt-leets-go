@@ -14,9 +14,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.mashxall.unified.AppLanguage
 import java.io.File
 import java.security.MessageDigest
+import java.net.HttpURLConnection
+import java.net.URL
 
 internal data class AdhanNotificationCopy(
     val fallbackPrayerTitle: String,
@@ -164,6 +167,59 @@ class AdhanPlaybackService : Service() {
         }
     }
 
+    private fun downloadRemoteAdhanFile(url: String): File {
+        require(url.startsWith("https://")) { "Adhan audio must use a secure HTTPS source." }
+        val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
+            .take(12).joinToString("") { "%02x".format(it) }
+        val target = File(cacheDir, "adhan-stream-$key.audio")
+        if (target.isFile && target.length() > 512L) return target
+        val temporary = File(cacheDir, target.name + ".part")
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 60_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "Mashxall Android")
+        }
+        try {
+            connection.connect()
+            val code = connection.responseCode
+            if (code !in 200..299) throw java.io.IOException("The audio server returned HTTP $code.")
+            if (connection.contentLengthLong > 100L * 1024L * 1024L) {
+                throw java.io.IOException("The Adhan recording is larger than the supported download limit.")
+            }
+            if (connection.contentType.orEmpty().contains("text/html", ignoreCase = true)) {
+                throw java.io.IOException("The audio source returned a web page instead of audio.")
+            }
+            var total = 0L
+            connection.inputStream.use { input ->
+                temporary.outputStream().buffered(64 * 1024).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > 100L * 1024L * 1024L) {
+                            throw java.io.IOException("The Adhan recording exceeded the supported download limit.")
+                        }
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            if (total <= 512L || !temporary.isFile) {
+                throw java.io.IOException("The audio source returned an empty or incomplete file.")
+            }
+            if (target.exists()) target.delete()
+            if (!temporary.renameTo(target)) {
+                temporary.copyTo(target, overwrite = true)
+                temporary.delete()
+            }
+            return target
+        } finally {
+            if (temporary.exists()) temporary.delete()
+            connection.disconnect()
+        }
+    }
+
     private fun createNotificationChannel(channelId: String, copy: AdhanNotificationCopy) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -188,6 +244,7 @@ class AdhanPlaybackService : Service() {
         val source = try {
             when {
                 assetPath.startsWith("local:") -> resolveLocalAdhanFileReference(assetPath)
+                assetPath.startsWith("https://") -> downloadRemoteAdhanFile(assetPath)
                 assetPath.isBlank() -> null
                 else -> {
                     val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
@@ -317,5 +374,21 @@ class AdhanPlaybackService : Service() {
         private const val TOGGLE_REQUEST_CODE = 7845
         const val ACTION_STOP = "com.mashxall.unified.STOP_ADHAN"
         const val ACTION_TOGGLE = "com.mashxall.unified.TOGGLE_ADHAN"
+
+        /** Start an Adhan-library preview in the same foreground service that owns its notification controls. */
+        fun startPreview(context: Context, audioPath: String, title: String) {
+            val intent = Intent(context.applicationContext, AdhanPlaybackService::class.java)
+                .putExtra(EXTRA_PRAYER_LABEL, title)
+                .putExtra(EXTRA_AUDIO_PATH, audioPath)
+            ContextCompat.startForegroundService(context.applicationContext, intent)
+        }
+
+        /** Stop a preview or a currently playing scheduled Adhan. */
+        fun stopPlayback(context: Context) {
+            val intent = Intent(context.applicationContext, AdhanPlaybackService::class.java)
+                .setAction(ACTION_STOP)
+            runCatching { context.applicationContext.startService(intent) }
+                .onFailure { runCatching { ContextCompat.startForegroundService(context.applicationContext, intent) } }
+        }
     }
 }
