@@ -68,6 +68,15 @@ object PrayerAlarmScheduler {
     fun isPrayerAlertEnabled(prefs: android.content.SharedPreferences, code: String): Boolean =
         code in ALERT_CODES && prefs.getBoolean(enabledPreferenceKey(code), code != JUMUAH_CODE)
 
+    internal fun effectivePrayerAlertEnabled(masterEnabled: Boolean, prayerEnabled: Boolean): Boolean =
+        masterEnabled && prayerEnabled
+
+    fun isPrayerAlertActive(prefs: android.content.SharedPreferences, code: String): Boolean =
+        effectivePrayerAlertEnabled(
+            prefs.getBoolean(KEY_ENABLED, false),
+            isPrayerAlertEnabled(prefs, code)
+        )
+
     internal fun prayerAlertCodesForDay(enabledCodes: Set<String>, isFriday: Boolean): List<String> = buildList {
         if ("fajr" in enabledCodes) add("fajr")
         if (isFriday && JUMUAH_CODE in enabledCodes) add(JUMUAH_CODE)
@@ -96,7 +105,7 @@ object PrayerAlarmScheduler {
         // a fresh set. If the new city has no valid timetable, old-city alarms
         // must not remain armed.
         cancelAll(context)
-        val enabledCodes = ALERT_CODES.filter { isPrayerAlertEnabled(prefs, it) }.toSet()
+        val enabledCodes = ALERT_CODES.filter { isPrayerAlertActive(prefs, it) }.toSet()
         if (enabledCodes.isEmpty()) {
             cancelAll(context)
             return PrayerAlarmScheduleResult(sourceTimetableAvailable = true, scheduledCount = 0)
@@ -144,7 +153,7 @@ object PrayerAlarmScheduler {
     suspend fun scheduleNextDayForPrayer(context: Context, prayerCode: String) {
         if (prayerCode !in ALERT_CODES) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_ENABLED, false) || !isPrayerAlertEnabled(prefs, prayerCode)) return
+        if (!isPrayerAlertActive(prefs, prayerCode)) return
 
         val targetDay = if (prayerCode == JUMUAH_CODE) nextFridayStart(Date()) else startOfDay(Date(), 1)
         if (prayerCode == "dhuhr" && isFriday(targetDay) && isPrayerAlertEnabled(prefs, JUMUAH_CODE)) return

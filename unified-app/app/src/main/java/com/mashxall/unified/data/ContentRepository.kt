@@ -572,6 +572,31 @@ internal fun normalizeArabicSearchText(value: String): String {
     return folded.trim().replace(Regex("\\s+"), " ")
 }
 
+/**
+ * SQLite GLOB search pattern that tolerates Arabic diacritics, punctuation,
+ * spacing, and common Arabic/Persian keyboard variants without changing source rows.
+ */
+internal fun hadithSearchGlobPattern(query: String): String {
+    val letters = normalizeArabicSearchText(query).filterNot(Char::isWhitespace)
+    if (letters.isBlank()) return ""
+    return buildString {
+        append('*')
+        letters.forEach { letter ->
+            append(
+                when (letter) {
+                    'ا' -> "[اأإآٱ]"
+                    'ي' -> "[يىئ]"
+                    'و' -> "[وؤ]"
+                    'ه' -> "[هة]"
+                    'ك' -> "[كک]"
+                    else -> letter.toString()
+                }
+            )
+            append('*')
+        }
+    }
+}
+
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
 }
@@ -1731,6 +1756,14 @@ object ContentRepository {
     }
 
     private fun hadithSearchFilter(query: String, bookId: Int? = null, hadithIds: Set<Int>? = null): String {
+        val searchableColumns = listOf(
+            "h.text", "h.text_ar", "h.text_en",
+            "b.name", "b.name_ar", "b.name_en",
+            "k.title", "k.title_ar", "k.title_en",
+            "ch.title", "ch.title_ar", "ch.title_en",
+            "h.note", "h.footnote"
+        )
+        val normalizedPattern = hadithSearchGlobPattern(query)
         val conditions = buildList {
             if (bookId != null) add("h.book_id=?")
             if (hadithIds != null) {
@@ -1739,17 +1772,13 @@ object ContentRepository {
                 else add("h.id IN (" + safeIds.joinToString(",") + ")")
             }
             if (query.isNotBlank()) {
-                add(
-                    """
-                    (
-                        h.text LIKE ? OR h.text_ar LIKE ? OR h.text_en LIKE ?
-                        OR b.name LIKE ? OR b.name_ar LIKE ? OR b.name_en LIKE ?
-                        OR k.title LIKE ? OR k.title_ar LIKE ? OR k.title_en LIKE ?
-                        OR ch.title LIKE ? OR ch.title_ar LIKE ? OR ch.title_en LIKE ?
-                        OR h.note LIKE ? OR h.footnote LIKE ?
-                    )
-                    """.trimIndent()
-                )
+                val clauses = buildList {
+                    searchableColumns.forEach { add("$it LIKE ?") }
+                    if (normalizedPattern.isNotBlank()) {
+                        searchableColumns.forEach { add("LOWER(COALESCE($it,'')) GLOB ?") }
+                    }
+                }
+                add("(" + clauses.joinToString(" OR ") + ")")
             }
         }
         return if (conditions.isEmpty()) "" else "WHERE " + conditions.joinToString(" AND ")
@@ -1758,7 +1787,11 @@ object ContentRepository {
     private fun hadithSearchArgs(query: String, bookId: Int? = null): Array<String> =
         buildList {
             if (bookId != null) add(bookId.toString())
-            if (query.isNotBlank()) repeat(14) { add("%${query.trim()}%") }
+            if (query.isNotBlank()) {
+                repeat(14) { add("%${query.trim()}%") }
+                val normalizedPattern = hadithSearchGlobPattern(query)
+                if (normalizedPattern.isNotBlank()) repeat(14) { add(normalizedPattern) }
+            }
         }.toTypedArray()
 
     suspend fun loadHadithCount(
@@ -2832,8 +2865,17 @@ object ContentRepository {
         }.getOrDefault(emptyList())
     }
 
+    internal fun secureReciterStreamBaseUrl(value: String): String {
+        val trimmed = value.trim()
+        return if (trimmed.startsWith("http://", ignoreCase = true)) {
+            "https://" + trimmed.substringAfter("://")
+        } else {
+            trimmed
+        }
+    }
+
     fun reciterSampleUrl(reciter: Reciter, surah: Int, ayah: Int): String {
-        val base = reciter.baseUrl.trimEnd('/') + "/"
+        val base = secureReciterStreamBaseUrl(reciter.baseUrl).trimEnd('/') + "/"
         val fileName = if (reciter.audioType == 0) "%03d%03d.mp3".format(Locale.US, surah.coerceIn(1, 114), ayah.coerceAtLeast(1))
             else "%03d.mp3".format(Locale.US, surah.coerceIn(1, 114))
         return base + fileName

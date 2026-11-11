@@ -51,6 +51,14 @@ class PrayerAlarmScheduleStatusTest {
     }
 
     @Test
+    fun masterAdhanSwitchOverridesEveryIndividualPrayerSwitch() {
+        assertEquals(false, PrayerAlarmScheduler.effectivePrayerAlertEnabled(false, true))
+        assertEquals(false, PrayerAlarmScheduler.effectivePrayerAlertEnabled(false, false))
+        assertEquals(true, PrayerAlarmScheduler.effectivePrayerAlertEnabled(true, true))
+        assertEquals(false, PrayerAlarmScheduler.effectivePrayerAlertEnabled(true, false))
+    }
+
+    @Test
     fun zeroFutureAlarmsDoesNotClaimThatAdhanWillPlay() {
         val message = prayerAlarmScheduleMessage(
             PrayerAlarmScheduleResult(sourceTimetableAvailable = true, scheduledCount = 0),

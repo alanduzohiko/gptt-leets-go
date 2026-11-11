@@ -7704,6 +7704,21 @@ private fun isReciterSurahOffline(context: Context, reciter: Reciter, surah: Int
     }
 }
 
+private fun setReciterAudioSource(player: MediaPlayer, source: String) {
+    if (source.startsWith("local:")) {
+        player.setDataSource(source.removePrefix("local:"))
+    } else {
+        player.setDataSource(
+            source,
+            mapOf(
+                "User-Agent" to "Mozilla/5.0 (Linux; Android) Mashxall/1.0",
+                "Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8",
+                "Connection" to "keep-alive"
+            )
+        )
+    }
+}
+
 private fun reciterAudioSequence(
     context: Context,
     reciter: Reciter,
@@ -9459,8 +9474,7 @@ internal object AudioController {
             preloadedPlayerPrepared = false
             try {
                 val source = sources[nextIndex]
-                if (source.startsWith("local:")) queued.setDataSource(source.removePrefix("local:"))
-                else queued.setDataSource(source)
+                setReciterAudioSource(queued, source)
                 queued.setOnPreparedListener { prepared ->
                     if (generation != playbackGeneration || player !== currentPlayer ||
                         preloadedPlayer !== prepared || repeatCurrentTrack
@@ -9537,8 +9551,7 @@ internal object AudioController {
                 playbackPreparing = true
                 playbackPaused = false
                 playbackActive = hasStartedPlayback
-                if (source.startsWith("local:")) current.setDataSource(source.removePrefix("local:"))
-                else current.setDataSource(source)
+                setReciterAudioSource(current, source)
                 current.setOnPreparedListener { prepared ->
                     if (generation != playbackGeneration || player !== prepared) {
                         runCatching { prepared.release() }
@@ -12704,7 +12717,8 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                     Text(prayerTimeText, color = foreground.copy(alpha = 0.55f), fontSize = 10.sp)
                                 }
                                 Switch(
-                                    checked = enabledForPrayer,
+                                    checked = PrayerAlarmScheduler.effectivePrayerAlertEnabled(adhanEnabled, enabledForPrayer),
+                                    enabled = adhanEnabled,
                                     onCheckedChange = { enabled ->
                                         prayerAlertSelections = prayerAlertSelections + (code to enabled)
                                         prefs.edit().putBoolean(PrayerAlarmScheduler.enabledPreferenceKey(code), enabled).apply()

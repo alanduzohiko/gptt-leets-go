@@ -14,9 +14,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val code = intent.getStringExtra("prayer_code") ?: return
         if (code !in PrayerAlarmScheduler.ALERT_CODES) return
         val prefs = context.getSharedPreferences(PrayerAlarmScheduler.PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(PrayerAlarmScheduler.KEY_ENABLED, false) ||
-            !PrayerAlarmScheduler.isPrayerAlertEnabled(prefs, code)
-        ) return
+        if (!PrayerAlarmScheduler.isPrayerAlertActive(prefs, code)) return
         val language = prefs.getString("language", "ckb") ?: "ckb"
         val label = when (code) {
             "fajr" -> when (language) { "en" -> "Fajr"; "ar" -> "الفجر"; else -> "بەیانی" }
