@@ -349,13 +349,13 @@ internal fun defaultReciterId(mode: String, reciters: List<Reciter>): Int? =
         reciters.firstOrNull { it.audioType == 0 }?.id
     }
 
-/** Never retain a hidden partial edition in Full Surah mode or an incompatible source in verse mode. */
+/** Keep an explicitly chosen source when it can play the selected playback mode. */
 internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: List<Reciter>): Int? {
     if (currentId <= 0) return null
     val current = reciters.firstOrNull { it.id == currentId } ?: return null
     return current.id.takeIf {
         (mode == "verse" && current.audioType == 0) ||
-            (mode == "full" && ReaderPlaybackSettings.supportsAllSurahs(current))
+            (mode == "full" && (current.audioType == 0 || current.surahTotal > 0))
     }
 }
 
