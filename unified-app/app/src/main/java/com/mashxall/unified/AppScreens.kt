@@ -7709,14 +7709,7 @@ private fun setReciterAudioSource(player: MediaPlayer, source: String) {
     if (source.startsWith("local:")) {
         player.setDataSource(source.removePrefix("local:"))
     } else {
-        player.setDataSource(
-            source,
-            mapOf(
-                "User-Agent" to "Mozilla/5.0 (Linux; Android) Mashxall/1.0",
-                "Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8",
-                "Connection" to "keep-alive"
-            )
-        )
+        player.setDataSource(source)
     }
 }
 

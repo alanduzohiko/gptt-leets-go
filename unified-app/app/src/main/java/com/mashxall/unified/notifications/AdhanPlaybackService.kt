@@ -87,14 +87,6 @@ class AdhanPlaybackService : Service() {
             Intent(this, AdhanPlaybackService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
         )
-        val stopAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_media_stop,
-            notificationCopy.stopAction,
-            stopPending
-        )
-            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_STOP)
-            .setShowsUserInterface(false)
-            .build()
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
             .setContentTitle(prayerLabel.ifBlank { notificationCopy.fallbackPrayerTitle })
@@ -104,7 +96,7 @@ class AdhanPlaybackService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setOngoing(true)
-            .addAction(stopAction)
+            .addAction(android.R.drawable.ic_media_pause, notificationCopy.stopAction, stopPending)
             .build()
         startForeground(NOTIFICATION_ID, notification)
         stopRequested = false
