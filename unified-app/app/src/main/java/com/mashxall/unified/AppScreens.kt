@@ -7972,6 +7972,7 @@ fun AudioScreen(
             else -1
         )
     }
+    var playbackPreparingKey by rememberSaveable { mutableStateOf("") }
     val preferredReciter = reciters.firstOrNull { it.id == preferredReciterId }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
@@ -8701,11 +8702,13 @@ fun AudioScreen(
                     val playKey = "${reciter.id}|${surahNumber}|${startingAyah}|${playbackMode}"
                     val downloadKey = "${reciter.id}|${surahNumber}"
                     val downloadProgress = downloadingTracks[downloadKey]
-                    val localComplete = remember(reciter.id, reciter.audioType, surahNumber, surahAyahCount, offlineRevision) {
-                        isReciterSurahOffline(context, reciter, surahNumber, surahAyahCount)
+                    var localComplete by remember(reciter.id, reciter.audioType, surahNumber) {
+                        mutableStateOf(false)
                     }
-                    val sources = remember(reciter.id, reciter.audioType, surahNumber, startingAyah, surahAyahCount, offlineRevision) {
-                        reciterAudioSequence(context, reciter, surahNumber, startingAyah, surahAyahCount)
+                    LaunchedEffect(reciter.id, reciter.audioType, surahNumber, surahAyahCount, offlineRevision) {
+                        localComplete = withContext(Dispatchers.IO) {
+                            isReciterSurahOffline(context, reciter, surahNumber, surahAyahCount)
+                        }
                     }
                     val playLabel = if (playbackMode == "full") {
                         if (language == AppLanguage.EN) "Play full surah"
@@ -8779,26 +8782,48 @@ fun AudioScreen(
                                     contentDescription = playLabel,
                                     accent = Gold,
                                     size = 38.dp,
-                                    enabled = sources.isNotEmpty() && surahNumber <= reciter.surahTotal,
-                                    selected = playing == playKey && AudioController.isActive(),
+                                    enabled = surahNumber <= reciter.surahTotal && surahAyahCount > 0 && playbackPreparingKey.isBlank(),
+                                    selected = playbackPreparingKey == playKey || (playing == playKey && AudioController.isActive()),
                                     onClick = {
-                                        if (playing == playKey && AudioController.isActive()) {
-                                            AudioController.stop()
-                                            playing = ""
-                                        } else {
-                                            preferredReciterId = reciter.id
-                                            prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply()
-                                            playing = playKey
-                                            autoPlayKey = playKey
-                                            AudioController.playSequence(
-                                                context = context,
-                                                sources = sources,
-                                                notificationTitle = reciter.nameArabic.ifBlank { reciter.nameEnglish },
-                                                notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
-                                                showNotification = true
-                                            ) { state ->
-                                                audioPaused = false
-                                                if (!state) playing = ""
+                                        if (playbackPreparingKey.isBlank()) {
+                                            if (playing == playKey && AudioController.isActive()) {
+                                                AudioController.stop()
+                                                playing = ""
+                                            } else {
+                                                playbackPreparingKey = playKey
+                                                scope.launch {
+                                                    try {
+                                                        val sources = withContext(Dispatchers.IO) {
+                                                            reciterAudioSequence(context, reciter, surahNumber, startingAyah, surahAyahCount)
+                                                        }
+                                                        if (sources.isEmpty()) {
+                                                            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            preferredReciterId = reciter.id
+                                                            prefs.edit()
+                                                                .putBoolean("preferred_reciter_explicit", true)
+                                                                .putInt("preferred_reciter_id", reciter.id)
+                                                                .apply()
+                                                            playing = playKey
+                                                            autoPlayKey = playKey
+                                                            AudioController.playSequence(
+                                                                context = context,
+                                                                sources = sources,
+                                                                notificationTitle = reciter.nameArabic.ifBlank { reciter.nameEnglish },
+                                                                notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
+                                                                showNotification = true
+                                                            ) { state ->
+                                                                audioPaused = false
+                                                                if (!state) playing = ""
+                                                            }
+                                                        }
+                                                    } catch (error: Exception) {
+                                                        if (error is CancellationException) throw error
+                                                        Toast.makeText(context, audioPlaybackFailureMessage(language, AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
+                                                    } finally {
+                                                        if (playbackPreparingKey == playKey) playbackPreparingKey = ""
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -8815,7 +8840,9 @@ fun AudioScreen(
                                         },
                                         label = "Reciter active audio waveform transition"
                                     ) { active ->
-                                        if (active) {
+                                        if (playbackPreparingKey == playKey) {
+                                            PremiumLoadingIndicator(modifier = Modifier.size(20.dp), color = Gold, strokeWidth = 2.dp)
+                                        } else if (active) {
                                             PremiumAudioWaveform(active = !AudioController.isPaused(), accent = Gold, contentDescription = playLabel)
                                         } else {
                                             Icon(Icons.Outlined.PlayCircle, contentDescription = playLabel, tint = Gold, modifier = Modifier.size(23.dp))
