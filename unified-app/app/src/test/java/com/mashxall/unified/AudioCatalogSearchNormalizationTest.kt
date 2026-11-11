@@ -1,5 +1,6 @@
 package com.mashxall.unified
 
+import com.mashxall.unified.data.Reciter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -28,6 +29,43 @@ class AudioCatalogSearchNormalizationTest {
     @Test
     fun searchRequiresEveryQueryWord() {
         assertFalse(matchesAudioCatalogSearch("عبدالملك", "عبد الرحمن"))
+    }
+
+    @Test
+    fun fullSurahSearchDoesNotHideReadersWithPartialCatalogCoverage() {
+        val partialFullSurah = Reciter(
+            id = 700,
+            nameArabic = "مشاري العفاسي",
+            nameEnglish = "Mishary Alafasy",
+            audioType = 1,
+            baseUrl = "https://server.example/reciter/",
+            order = 1,
+            surahTotal = 42
+        )
+        val verseByVerse = Reciter(
+            id = 701,
+            nameArabic = "مشاري العفاسي آيات",
+            nameEnglish = "Mishary Alafasy Ayah",
+            audioType = 0,
+            baseUrl = "https://server.example/ayah/",
+            order = 2
+        )
+
+        assertEquals(
+            listOf(partialFullSurah, verseByVerse),
+            filterRecitersForPlaybackMode(listOf(partialFullSurah, verseByVerse), "full", "مشاري")
+        )
+        assertEquals(
+            listOf(verseByVerse),
+            filterRecitersForPlaybackMode(listOf(partialFullSurah, verseByVerse), "verse", "مشاري")
+        )
+    }
+
+    @Test
+    fun nextUsesTheClipThatHasActuallyStartedAfterGaplessTransition() {
+        assertEquals(5, resolveActiveAudioSequenceIndex(4, 5, preloadedHasStarted = true))
+        assertEquals(4, resolveActiveAudioSequenceIndex(4, 5, preloadedHasStarted = false))
+        assertEquals(4, resolveActiveAudioSequenceIndex(4, -1, preloadedHasStarted = true))
     }
 
     @Test
