@@ -9,6 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.session.PlaybackState
+import android.media.session.MediaSession
+import android.media.MediaMetadata
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -78,6 +81,7 @@ class AdhanPlaybackService : Service() {
     private var activePrayerLabel: String = ""
     private var activeNotificationCopy: AdhanNotificationCopy? = null
     private var activeChannelId: String = CHANNEL_ID
+    private var mediaSession: MediaSession? = null
     private var playbackRequestGeneration: Int = 0
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -85,11 +89,7 @@ class AdhanPlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            playbackRequestGeneration += 1
-            stopRequested = true
-            releasePlayer()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            stopPlaybackAndService()
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_TOGGLE) {
@@ -107,6 +107,9 @@ class AdhanPlaybackService : Service() {
         activePrayerLabel = prayerLabel
         activeNotificationCopy = notificationCopy
         activeChannelId = channelId
+        ensureMediaSession()
+        updateMediaSessionMetadata()
+        updateMediaSessionPlaybackState()
         val notification = buildPlaybackNotification()
         startForeground(NOTIFICATION_ID, notification)
         stopRequested = false
@@ -136,14 +139,20 @@ class AdhanPlaybackService : Service() {
             Intent(this, AdhanPlaybackService::class.java).setAction(ACTION_STOP),
             flags
         )
-        return NotificationCompat.Builder(this, activeChannelId)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, activeChannelId)
+        } else {
+            Notification.Builder(this)
+        }
+        return builder
             .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
             .setContentTitle(activePrayerLabel.ifBlank { copy.fallbackPrayerTitle })
             .setContentText(copy.contentText)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(Notification.PRIORITY_LOW)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .setOngoing(true)
             .addAction(
                 if (playbackPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
@@ -151,11 +160,17 @@ class AdhanPlaybackService : Service() {
                 togglePending
             )
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, copy.stopAction, stopPending)
+            .setStyle(
+                Notification.MediaStyle()
+                    .setMediaSession(mediaSession?.sessionToken)
+                    .setShowActionsInCompactView(0, 1)
+            )
             .build()
     }
 
     private fun publishNotification() {
         if (activeNotificationCopy == null) return
+        updateMediaSessionPlaybackState()
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .notify(NOTIFICATION_ID, buildPlaybackNotification())
     }
@@ -171,10 +186,75 @@ class AdhanPlaybackService : Service() {
                 active.pause()
                 playbackPaused = true
             }
+            updateMediaSessionPlaybackState()
             publishNotification()
         } catch (_: Exception) {
             // The notification remains available; the service releases the player on its error/completion path.
         }
+    }
+
+    private fun ensureMediaSession() {
+        if (mediaSession != null) return
+        mediaSession = MediaSession(this, "Mashxall Adhan").apply {
+            setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+                    MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+            )
+            setCallback(object : MediaSession.Callback() {
+                override fun onPlay() {
+                    if (playerPrepared && playbackPaused) togglePlayback()
+                }
+
+                override fun onPause() {
+                    if (playerPrepared && !playbackPaused) togglePlayback()
+                }
+
+                override fun onStop() {
+                    stopPlaybackAndService()
+                }
+            })
+            isActive = true
+        }
+    }
+
+    private fun updateMediaSessionMetadata() {
+        val copy = activeNotificationCopy ?: return
+        mediaSession?.setMetadata(
+            MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, activePrayerLabel.ifBlank { copy.fallbackPrayerTitle })
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, copy.contentText)
+                .build()
+        )
+    }
+
+    private fun updateMediaSessionPlaybackState() {
+        mediaSession?.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(
+                    PlaybackState.ACTION_PLAY or
+                        PlaybackState.ACTION_PAUSE or
+                        PlaybackState.ACTION_PLAY_PAUSE or
+                        PlaybackState.ACTION_STOP
+                )
+                .setState(
+                    when {
+                        !playerPrepared -> PlaybackState.STATE_BUFFERING
+                        playbackPaused -> PlaybackState.STATE_PAUSED
+                        else -> PlaybackState.STATE_PLAYING
+                    },
+                    -1L,
+                    if (playbackPaused || !playerPrepared) 0f else 1f
+                )
+                .build()
+        )
+    }
+
+    private fun stopPlaybackAndService() {
+        playbackRequestGeneration += 1
+        stopRequested = true
+        releasePlayer()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun downloadRemoteAdhanFile(url: String): File {
@@ -338,6 +418,7 @@ class AdhanPlaybackService : Service() {
                     playerPrepared = true
                     playbackPaused = false
                     ready.start()
+                    updateMediaSessionPlaybackState()
                     publishNotification()
                 }
             }
@@ -395,6 +476,13 @@ class AdhanPlaybackService : Service() {
         playbackRequestGeneration += 1
         playbackScope.cancel()
         releasePlayer()
+        mediaSession?.let { session ->
+            runCatching {
+                session.isActive = false
+                session.release()
+            }
+        }
+        mediaSession = null
         super.onDestroy()
     }
 

@@ -50,6 +50,9 @@ import android.hardware.SensorManager
 import android.os.ParcelFileDescriptor
 import android.content.Intent
 import android.media.MediaPlayer
+import android.media.session.PlaybackState
+import android.media.session.MediaSession
+import android.media.MediaMetadata
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
@@ -7768,15 +7771,22 @@ private fun isReciterSurahOffline(context: Context, reciter: Reciter, surah: Int
     }
 }
 
-private fun setReciterAudioSource(player: MediaPlayer, source: String) {
+private fun setReciterAudioSource(context: Context, player: MediaPlayer, source: String) {
     if (source.startsWith("local:")) {
         player.setDataSource(source.removePrefix("local:"))
     } else {
-        player.setDataSource(source)
+        // Some MP3 hosts reject a bare MediaPlayer URL even though the same
+        // file is downloadable. Supply normal audio/browser headers when the
+        // cache path is unavailable and the player must stream the source.
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
+            "Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8"
+        )
+        player.setDataSource(context, Uri.parse(source), headers)
     }
 }
 
-/** Download redirected MP3 streams to cache before MediaPlayer opens them. */
+/** Cache when possible, but never make a network download a prerequisite for listening. */
 private suspend fun cacheReciterStreamSource(context: Context, source: String): String =
     withContext(Dispatchers.IO) {
         if (source.startsWith("local:")) {
@@ -7789,13 +7799,28 @@ private suspend fun cacheReciterStreamSource(context: Context, source: String): 
         }
         val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray())
         val key = digest.take(12).joinToString("") { "%02x".format(it) }
-        val cacheDirectory = File(context.cacheDir, "reciter-stream-cache")
+        // v2 deliberately invalidates files cached by older builds. Those files
+        // were trusted based on size alone and could be HTML/error responses.
+        val cacheDirectory = File(context.cacheDir, "reciter-stream-cache-v2")
         val targetFile = File(cacheDirectory, key + ".mp3")
-        if (!targetFile.isFile || targetFile.length() <= 512L) {
-            downloadReciterFile(source, targetFile)
+        try {
+            if (!targetFile.isFile || targetFile.length() <= 512L) {
+                downloadReciterFile(source, targetFile)
+            }
+            require(targetFile.isFile && targetFile.length() > 512L) {
+                "The recitation download is incomplete."
+            }
+            "local:" + targetFile.absolutePath
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w(
+                "MashxallQuranAudio",
+                "Could not cache the recitation from ${Uri.parse(source).host}; trying direct stream playback.",
+                error
+            )
+            source
         }
-        require(targetFile.isFile && targetFile.length() > 512L) { "The recitation download is incomplete." }
-        "local:" + targetFile.absolutePath
     }
 
 private fun reciterAudioSequence(
@@ -7938,7 +7963,11 @@ private fun downloadReciterFile(url: String, destination: File) {
         connectTimeout = 15_000
         readTimeout = 60_000
         instanceFollowRedirects = true
-        setRequestProperty("User-Agent", "Mashxall Android")
+        setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+        )
+        setRequestProperty("Accept", "audio/mpeg,audio/*;q=0.9,*/*;q=0.8")
     }
     val temporary = File(destination.parentFile, destination.name + ".part")
     try {
@@ -7950,8 +7979,11 @@ private fun downloadReciterFile(url: String, destination: File) {
         if (connection.contentLengthLong > 100L * 1024L * 1024L) {
             throw java.io.IOException("This audio file is larger than the supported download limit.")
         }
-        if (connection.contentType.orEmpty().contains("text/html", ignoreCase = true)) {
-            throw java.io.IOException("The audio source returned a web page instead of audio.")
+        val contentType = connection.contentType.orEmpty()
+        if (contentType.startsWith("text/", ignoreCase = true) ||
+            contentType.contains("text/html", ignoreCase = true)
+        ) {
+            throw java.io.IOException("The audio source returned text instead of an audio file.")
         }
         var total = 0L
         connection.inputStream.use { input ->
@@ -9116,6 +9148,7 @@ internal object QuranPlaybackNotification {
     private var subtitle: String = "خوێندنەوەی قورئان"
     private var paused: Boolean = false
     private var serviceStarted: Boolean = false
+    private var mediaSession: MediaSession? = null
 
     fun show(context: Context, nowPlayingTitle: String, nowPlayingSubtitle: String, isPaused: Boolean) {
         appContext = context.applicationContext
@@ -9123,6 +9156,8 @@ internal object QuranPlaybackNotification {
         subtitle = nowPlayingSubtitle.ifBlank { "خوێندنەوەی قورئان" }
         paused = isPaused
         val app = context.applicationContext
+        ensureMediaSession(app)
+        updateMediaSession()
         if (!serviceStarted) {
             runCatching {
                 val serviceIntent = Intent(app, QuranPlaybackForegroundService::class.java)
@@ -9137,6 +9172,8 @@ internal object QuranPlaybackNotification {
     fun updatePaused(context: Context, isPaused: Boolean) {
         if (appContext == null) appContext = context.applicationContext
         paused = isPaused
+        ensureMediaSession(context.applicationContext)
+        updateMediaSession()
         publish()
     }
 
@@ -9148,10 +9185,66 @@ internal object QuranPlaybackNotification {
             runCatching { target.stopService(Intent(target, QuranPlaybackForegroundService::class.java)) }
             serviceStarted = false
         }
+        mediaSession?.let { session ->
+            runCatching {
+                session.isActive = false
+                session.release()
+            }
+        }
+        mediaSession = null
         appContext = null
         title = "مەشخەڵ"
         subtitle = "خوێندنەوەی قورئان"
         paused = false
+    }
+
+    private fun ensureMediaSession(context: Context) {
+        if (mediaSession != null) return
+        mediaSession = MediaSession(context, "Mashxall Quran").apply {
+            setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+                    MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+            )
+            setCallback(object : MediaSession.Callback() {
+                override fun onPlay() {
+                    if (AudioController.isPaused()) AudioController.togglePause()
+                }
+
+                override fun onPause() {
+                    if (!AudioController.isPaused()) AudioController.togglePause()
+                }
+
+                override fun onStop() {
+                    AudioController.stop()
+                }
+            })
+            isActive = true
+        }
+    }
+
+    private fun updateMediaSession() {
+        val session = mediaSession ?: return
+        session.setMetadata(
+            MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, subtitle)
+                .build()
+        )
+        session.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(
+                    PlaybackState.ACTION_PLAY or
+                        PlaybackState.ACTION_PAUSE or
+                        PlaybackState.ACTION_PLAY_PAUSE or
+                        PlaybackState.ACTION_STOP
+                )
+                .setState(
+                    if (paused) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING,
+                    -1L,
+                    if (paused) 0f else 1f
+                )
+                .build()
+        )
     }
 
     private fun publish() {
@@ -9162,6 +9255,8 @@ internal object QuranPlaybackNotification {
 
     fun buildNotification(serviceContext: Context): Notification {
         val context = serviceContext.applicationContext
+        ensureMediaSession(context)
+        updateMediaSession()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
@@ -9204,15 +9299,21 @@ internal object QuranPlaybackNotification {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             flags
         )
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(context, CHANNEL_ID)
+        } else {
+            Notification.Builder(context)
+        }
+        return builder
             .setSmallIcon(R.drawable.ic_mashxall)
             .setContentTitle(title)
             .setContentText(subtitle)
             .setContentIntent(openIntent)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setPriority(Notification.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .setOngoing(true)
             .addAction(
                 if (paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
@@ -9220,6 +9321,11 @@ internal object QuranPlaybackNotification {
                 toggleIntent
             )
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, stopLabel, stopIntent)
+            .setStyle(
+                Notification.MediaStyle()
+                    .setMediaSession(mediaSession?.sessionToken)
+                    .setShowActionsInCompactView(0, 1)
+            )
             .build()
     }
 }
@@ -9579,7 +9685,7 @@ internal object AudioController {
                         runCatching { queued.release() }
                         return@launch
                     }
-                    setReciterAudioSource(queued, source)
+                    setReciterAudioSource(context.applicationContext, queued, source)
                     queued.setOnPreparedListener { prepared ->
                         if (generation != playbackGeneration || player !== currentPlayer ||
                             preloadedPlayer !== prepared || repeatCurrentTrack
@@ -9689,7 +9795,7 @@ internal object AudioController {
                         runCatching { current.release() }
                         return@launch
                     }
-                    setReciterAudioSource(current, source)
+                    setReciterAudioSource(context.applicationContext, current, source)
                     current.setOnPreparedListener { prepared ->
                         if (generation != playbackGeneration || player !== prepared) {
                             runCatching { prepared.release() }
