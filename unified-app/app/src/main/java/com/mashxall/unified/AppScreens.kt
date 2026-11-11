@@ -5068,10 +5068,10 @@ private fun MushafPageViewer(
         ) {
             ReaderActionIcon(
                 Icons.Outlined.ChevronRight,
-                tr(language, "previous"),
-                enabled = page > 1,
-                pressedScale = quranReaderActionPressScale("previous_page"),
-                onClick = { onPageChange(page - 1) }
+                tr(language, "next"),
+                enabled = page < 604,
+                pressedScale = quranReaderActionPressScale("next_page"),
+                onClick = { onPageChange(page + 1) }
             )
             OutlinedTextField(
                 value = pageInput,
@@ -5095,11 +5095,11 @@ private fun MushafPageViewer(
             }
             ReaderActionIcon(
                 Icons.Outlined.ChevronRight,
-                tr(language, "next"),
-                enabled = page < 604,
+                tr(language, "previous"),
+                enabled = page > 1,
                 rotationDegrees = 180f,
-                pressedScale = quranReaderActionPressScale("next_page"),
-                onClick = { onPageChange(page + 1) }
+                pressedScale = quranReaderActionPressScale("previous_page"),
+                onClick = { onPageChange(page - 1) }
             )
         }
         val pageProgress by animateFloatAsState(
