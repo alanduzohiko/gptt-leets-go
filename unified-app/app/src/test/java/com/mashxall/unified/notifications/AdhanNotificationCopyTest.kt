@@ -16,9 +16,15 @@ class AdhanNotificationCopyTest {
     fun notificationContentAndStopActionAreLocalized() {
         assertEquals("Prayer adhan", adhanNotificationCopy(AppLanguage.EN).channelName)
         assertEquals("Stop", adhanNotificationCopy(AppLanguage.EN).stopAction)
+        assertEquals("Pause", adhanNotificationCopy(AppLanguage.EN).pauseAction)
+        assertEquals("Resume", adhanNotificationCopy(AppLanguage.EN).resumeAction)
         assertEquals("أذان الصلاة", adhanNotificationCopy(AppLanguage.AR).channelName)
         assertEquals("إيقاف", adhanNotificationCopy(AppLanguage.AR).stopAction)
+        assertEquals("إيقاف مؤقت", adhanNotificationCopy(AppLanguage.AR).pauseAction)
+        assertEquals("استئناف", adhanNotificationCopy(AppLanguage.AR).resumeAction)
         assertEquals("بانگی نوێژ", adhanNotificationCopy(AppLanguage.CKB).channelName)
         assertEquals("وەستاندن", adhanNotificationCopy(AppLanguage.CKB).stopAction)
+        assertEquals("وەستاندنی کاتی", adhanNotificationCopy(AppLanguage.CKB).pauseAction)
+        assertEquals("بەردەوامبوون", adhanNotificationCopy(AppLanguage.CKB).resumeAction)
     }
 }
