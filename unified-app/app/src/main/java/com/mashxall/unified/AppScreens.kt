@@ -8474,8 +8474,7 @@ fun AudioScreen(
                     "muezzin" to onlineAdhan.count { it.category == "muezzin" } + bundledAdhan.count { it.category == "muezzin" },
                     "mosque" to onlineAdhan.count { it.category == "mosque" } + bundledAdhan.count { it.category == "mosque" },
                     "downloaded" to bundledAdhan.size + onlineAdhan.count { item ->
-                        val file = onlineAdhanOfflineFile(context, item)
-                        file.isFile && file.length() > 512L
+                        isValidReciterAudioFile(onlineAdhanOfflineFile(context, item))
                     }
                 )
             }
@@ -8487,7 +8486,7 @@ fun AudioScreen(
                     matchesSearch && matchesAdhanLibraryFilter(
                         adhanCategory,
                         item.category,
-                        file.isFile && file.length() > 512L
+                        isValidReciterAudioFile(file)
                     )
                 }
             }
@@ -8653,7 +8652,7 @@ fun AudioScreen(
                 }
                 itemsIndexed(visibleAdhan, key = { _, it -> "online:${it.id}" }) { itemIndex, item ->
                     val file = onlineAdhanOfflineFile(context, item)
-                    val localSaved = remember(item.id, offlineAdhanRevision) { file.isFile && file.length() > 512L }
+                    val localSaved = remember(item.id, offlineAdhanRevision) { isValidReciterAudioFile(file) }
                     val downloadProgress = downloadingAdhan[item.id]
                     val playKey = "online-adhan-${item.id}"
                     val title = if (language == AppLanguage.EN) item.titleEnglish else item.titleArabic.ifBlank { item.titleEnglish }
@@ -12264,7 +12263,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         onlineAdhanCount = onlineCatalog.size
         val downloadedOnlineAssets = onlineCatalog.mapNotNull { item ->
             val file = onlineAdhanOfflineFile(context, item)
-            if (file.isFile && file.length() > 512L) {
+            if (isValidReciterAudioFile(file)) {
                 AudioItem(
                     assetPath = "local:${file.absolutePath}",
                     title = item.titleArabic.ifBlank { item.titleEnglish },
@@ -12291,14 +12290,27 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         prayerAlertSelections.forEach { (code, enabled) ->
             prefs.edit().putBoolean(PrayerAlarmScheduler.enabledPreferenceKey(code), enabled).apply()
         }
-        prayerAudioSelections.forEach { (code, asset) ->
-            if (asset.isNotBlank() && hasSelectableAdhanAsset(asset, adhanAssets)) {
+        if (adhanAssetsLoaded) {
+            val fallbackAsset = selectedAdhanAsset.takeIf {
+                hasSelectableAdhanAsset(it, adhanAssets)
+            }.orEmpty()
+            val resolvedAudioSelections = PrayerAlarmScheduler.ALERT_CODES.associateWith { code ->
+                val savedInState = prayerAudioSelections[code].orEmpty()
+                val savedInPreferences = prefs.getString(
+                    PrayerAlarmScheduler.audioPreferenceKey(code),
+                    prefs.getString(PrayerAlarmScheduler.KEY_AUDIO, "")
+                ).orEmpty()
+                val candidate = savedInState.ifBlank { savedInPreferences }
+                candidate.takeIf { hasSelectableAdhanAsset(it, adhanAssets) } ?: fallbackAsset
+            }
+            if (resolvedAudioSelections != prayerAudioSelections) {
+                prayerAudioSelections = resolvedAudioSelections
+            }
+            resolvedAudioSelections.forEach { (code, asset) ->
                 val title = adhanAssets.firstOrNull { it.assetPath == asset }?.title.orEmpty()
                 prefs.edit()
                     .putString(PrayerAlarmScheduler.audioPreferenceKey(code), asset)
-                    .apply {
-                        if (title.isNotBlank()) putString(PrayerAlarmScheduler.audioTitlePreferenceKey(code), title)
-                    }
+                    .putString(PrayerAlarmScheduler.audioTitlePreferenceKey(code), title)
                     .apply()
             }
         }
