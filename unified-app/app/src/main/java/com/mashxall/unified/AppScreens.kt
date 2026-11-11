@@ -322,15 +322,9 @@ internal fun filterRecitersForPlaybackMode(
     val matchesSearch = matchesAudioCatalogSearch(
         query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
     )
-    val supportsSelectedMode = if (mode == "verse") {
-        reciter.audioType == 0
-    } else {
-        // Full-surah mode includes complete 114-surah editions and verse clips
-        // that can be played continuously in sequence; partial full-only editions
-        // must not be offered as a complete-surah choice.
-        reciter.audioType == 0 || ReaderPlaybackSettings.supportsAllSurahs(reciter)
-    }
-    matchesSearch && supportsSelectedMode
+    // Partial editions remain searchable in full-surah mode; the play action
+    // checks coverage for the selected surah before starting that recitation.
+    matchesSearch && (mode != "verse" || reciter.audioType == 0)
 }
 
 internal object ReaderPlaybackSettings {
