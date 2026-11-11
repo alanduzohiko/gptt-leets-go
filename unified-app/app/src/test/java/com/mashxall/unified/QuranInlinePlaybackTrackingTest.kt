@@ -45,6 +45,17 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
+    fun fullSurahWeightsFollowArabicVerseLengthWhenAvailable() {
+        val weights = listOf(10, 20, 30)
+        assertEquals(1, quranPlaybackAyahAtPosition(1, 3, 500, 6_000, weights))
+        assertEquals(2, quranPlaybackAyahAtPosition(1, 3, 1_500, 6_000, weights))
+        assertEquals(3, quranPlaybackAyahAtPosition(1, 3, 3_500, 6_000, weights))
+        val targetPosition = quranPlaybackPositionForAyah(2, 1, 3, 6_000, weights)
+        assertEquals(2_000, targetPosition)
+        assertEquals(2, quranPlaybackAyahAtPosition(1, 3, targetPosition, 6_000, weights))
+    }
+
+    @Test
     fun fullSurahProgressAndSeekClampToTheAvailableAyahRange() {
         assertEquals(3, quranPlaybackAyahAtPosition(3, 7, 0, 10_000))
         assertEquals(7, quranPlaybackAyahAtPosition(3, 7, 100_000, 10_000))

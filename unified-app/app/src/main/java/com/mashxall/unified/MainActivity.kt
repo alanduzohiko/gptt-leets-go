@@ -1723,7 +1723,7 @@ fun MashxallApp(startScreen: String? = null) {
                                         selectedAyah = a
                                         audioStartsAtReciters = true
                                         audioStartsAtAdhan = false
-                                        audioAutoPlayRequested = true
+                                        audioAutoPlayRequested = false
                                         prefs.edit().putInt("last_surah", s).putInt("last_ayah_number", a).apply()
                                         navigateTo(AppScreen.RECITERS.key)
                                     },

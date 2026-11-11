@@ -66,7 +66,7 @@ class AudioPlaybackModeTest {
     fun selectedAyahModeSwitchesAwayFromFullSurahOnlyReciter() {
         val verseReciter = com.mashxall.unified.data.Reciter(1, "قارئ آية", "Verse Reciter", 0, "https://example.invalid/verse/", 1)
         val fullReciter = com.mashxall.unified.data.Reciter(2, "قارئ سورة", "Full Reciter", 1, "https://example.invalid/full/", 2)
-        assertEquals(1, resolveCompatibleReciterId("verse", 2, listOf(verseReciter, fullReciter)))
+        assertNull(resolveCompatibleReciterId("verse", 2, listOf(verseReciter, fullReciter)))
     }
 
     @Test
@@ -87,7 +87,8 @@ class AudioPlaybackModeTest {
             surahTotal = 114, sourceId = "complete-114"
         )
         assertEquals(6, defaultReciterId("full", listOf(partial, complete)))
-        assertEquals(6, resolveCompatibleReciterId("full", 5, listOf(partial, complete)))
+        assertNull(resolveCompatibleReciterId("full", 5, listOf(partial, complete)))
+        assertNull(resolveCompatibleReciterId("full", -1, listOf(partial, complete)))
         assertNull(defaultReciterId("full", listOf(partial)))
     }
 

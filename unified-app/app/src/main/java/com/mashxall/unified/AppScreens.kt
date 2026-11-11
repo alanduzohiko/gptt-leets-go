@@ -311,12 +311,12 @@ internal fun defaultReciterId(mode: String, reciters: List<Reciter>): Int? =
 
 /** Never retain a hidden partial edition in Full Surah mode or an incompatible source in verse mode. */
 internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: List<Reciter>): Int? {
-    val current = reciters.firstOrNull { it.id == currentId }
-    if (current != null) {
-        if (mode == "verse" && current.audioType == 0) return current.id
-        if (mode == "full" && ReaderPlaybackSettings.supportsAllSurahs(current)) return current.id
+    if (currentId <= 0) return null
+    val current = reciters.firstOrNull { it.id == currentId } ?: return null
+    return current.id.takeIf {
+        (mode == "verse" && current.audioType == 0) ||
+            (mode == "full" && ReaderPlaybackSettings.supportsAllSurahs(current))
     }
-    return defaultReciterId(mode, reciters)
 }
 
 internal fun formatAudioClock(milliseconds: Int): String {
@@ -1597,24 +1597,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     var readerReciters by remember { mutableStateOf<List<Reciter>>(emptyList()) }
     var preferredReaderReciterId by rememberSaveable {
-        mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1))
+        mutableIntStateOf(
+            if (prefs.getBoolean("preferred_reciter_explicit", false)) prefs.getInt("preferred_reciter_id", -1)
+            else -1
+        )
     }
     val readerPlaybackMode = ReaderPlaybackSettings.mode
     LaunchedEffect(Unit) {
         ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
         readerReciters = ContentRepository.loadReciters(context)
-        if (preferredReaderReciterId == -1 || readerReciters.none { it.id == preferredReaderReciterId }) {
-            preferredReaderReciterId = defaultReciterId(ReaderPlaybackSettings.mode, readerReciters) ?: -1
-            if (preferredReaderReciterId > 0) {
-                prefs.edit().putInt("preferred_reciter_id", preferredReaderReciterId).apply()
-            }
+        if (preferredReaderReciterId > 0 && readerReciters.none { it.id == preferredReaderReciterId }) {
+            preferredReaderReciterId = -1
+            prefs.edit().remove("preferred_reciter_id").putBoolean("preferred_reciter_explicit", false).apply()
         }
     }
     LaunchedEffect(readerReciters, readerPlaybackMode, preferredReaderReciterId) {
-        val compatible = resolveCompatibleReciterId(readerPlaybackMode, preferredReaderReciterId, readerReciters)
-        if (compatible != null && compatible != preferredReaderReciterId) {
-            preferredReaderReciterId = compatible
-            prefs.edit().putInt("preferred_reciter_id", compatible).apply()
+        if (readerReciters.isNotEmpty() && preferredReaderReciterId > 0 &&
+            resolveCompatibleReciterId(readerPlaybackMode, preferredReaderReciterId, readerReciters) == null
+        ) {
+            preferredReaderReciterId = -1
+            prefs.edit().remove("preferred_reciter_id").putBoolean("preferred_reciter_explicit", false).apply()
         }
     }
     var selectedAyahForSheet by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -1649,21 +1651,25 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var showInlineReciterPicker by remember { mutableStateOf(false) }
     var inlineReciterSearch by rememberSaveable { mutableStateOf("") }
     var pendingInlineRecitationTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var inlinePlaybackPreparing by remember { mutableStateOf(false) }
 
     // Poll while the inline player is visible, including MediaPlayer preparation.
     // This avoids tying progress updates to a one-time "is active" snapshot.
-    LaunchedEffect(inlinePlaybackVisible, inlinePlaybackUsesAyahClips, inlinePlaybackSurah, inlinePlaybackStartAyah) {
+    LaunchedEffect(inlinePlaybackVisible, inlinePlaybackUsesAyahClips, inlinePlaybackSurah, inlinePlaybackStartAyah, verses) {
         if (inlinePlaybackVisible) {
             while (true) {
                 val (position, duration) = AudioController.playbackPosition()
                 inlinePlaybackPositionMs = position.coerceAtLeast(0)
                 inlinePlaybackDurationMs = duration.coerceAtLeast(0)
                 if (!inlinePlaybackUsesAyahClips && duration > 0) {
+                    val count = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
+                    val weights = quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, count)
                     val estimatedAyah = quranPlaybackAyahAtPosition(
                         startingAyah = inlinePlaybackStartAyah,
-                        ayahCount = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0,
+                        ayahCount = count,
                         positionMs = position,
-                        durationMs = duration
+                        durationMs = duration,
+                        ayahWeights = weights
                     )
                     val target = inlinePlaybackSurah to estimatedAyah
                     if (estimatedAyah > 0 && inlinePlaybackActiveVerse != target) {
@@ -1712,28 +1718,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
             return
         }
-        val storedInline = readerReciters.firstOrNull {
-            it.id == inlinePlaybackReciterId && it.surahTotal >= surahNumber
-        }
-        val preferred = readerReciters.firstOrNull {
-            it.id == preferredReaderReciterId && it.surahTotal >= surahNumber
-        }
-        val synchronizedChoice = readerReciters.firstOrNull {
-            it.audioType == 0 && it.surahTotal == 114 && surahNumber <= it.surahTotal
-        } ?: readerReciters.firstOrNull {
-            it.audioType == 0 && surahNumber <= it.surahTotal
-        }
-        // Respect the user's saved/selected reciter first. Do not silently
-        // replace a full-surah edition with a different default ayah reader.
-        val chosen = reciterOverride
-            ?: storedInline
-            ?: preferred
-            ?: synchronizedChoice
-            ?: readerReciters.firstOrNull { it.surahTotal >= surahNumber }
+        val chosen = reciterOverride?.takeIf { it.surahTotal >= surahNumber }
         if (chosen == null) {
-            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+            requestInlineRecitation(surahNumber, requestedAyah)
             return
         }
+        if (inlinePlaybackPreparing) return
+
         val configuredMode = ReaderPlaybackSettings.normalize(
             prefs.getString("reciter_playback_mode", readerPlaybackMode)
         )
@@ -1743,62 +1734,76 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             else -> configuredMode
         }
         val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyah, ayahCount)
-        val sequence = reciterAudioSequence(context, chosen, surahNumber, startAyah, ayahCount)
-        if (sequence.isEmpty()) {
-            Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
-            return
-        }
-        inlinePlaybackVisible = true
-        inlinePlaybackPaused = false
-        inlinePlaybackRepeatCurrent = false
-        inlinePlaybackSurah = surahNumber
-        inlinePlaybackStartAyah = startAyah
-        inlinePlaybackReciterId = chosen.id
-        inlinePlaybackUsesAyahClips = chosen.audioType == 0
-        inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
-        inlinePlaybackActiveVerse = surahNumber to (inlinePlaybackTrackAyahs.firstOrNull() ?: startAyah)
-        selected = surahNumber
-        selectedAyahForSheet = null
-        sheetAudioPlaying = false
-        onSurah(surahNumber)
-        onOpenVerse(surahNumber, startAyah)
-        prefs.edit()
-            .putInt("quran_inline_reciter_id", chosen.id)
-            .putInt("last_surah", surahNumber)
-            .putInt("last_ayah_number", startAyah)
-            .putInt("quran_progress_ayah_$surahNumber", startAyah)
-            .apply()
-        readingProgressRevision++
-        AudioController.playSequence(
-            context = context,
-            sources = sequence,
-            notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
-            notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
-            showNotification = true,
-            onTrackStarted = { trackIndex ->
-                val activeAyah = quranPlaybackAyahForTrack(
-                    audioType = chosen.audioType,
-                    startingAyah = startAyah,
-                    trackIndex = trackIndex
-                ).coerceIn(1, ayahCount)
-                inlinePlaybackActiveVerse = surahNumber to activeAyah
+        inlinePlaybackPreparing = true
+        scope.launch {
+            try {
+                val sequence = withContext(Dispatchers.IO) {
+                    reciterAudioSequence(context, chosen, surahNumber, startAyah, ayahCount)
+                }
+                if (sequence.isEmpty()) {
+                    Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                inlinePlaybackVisible = true
+                inlinePlaybackPaused = false
+                inlinePlaybackRepeatCurrent = false
                 inlinePlaybackSurah = surahNumber
+                inlinePlaybackStartAyah = startAyah
+                inlinePlaybackReciterId = chosen.id
+                inlinePlaybackUsesAyahClips = chosen.audioType == 0
+                inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
+                inlinePlaybackActiveVerse = surahNumber to (inlinePlaybackTrackAyahs.firstOrNull() ?: startAyah)
                 selected = surahNumber
+                selectedAyahForSheet = null
+                sheetAudioPlaying = false
                 onSurah(surahNumber)
-                onOpenVerse(surahNumber, activeAyah)
+                onOpenVerse(surahNumber, startAyah)
                 prefs.edit()
+                    .putInt("quran_inline_reciter_id", chosen.id)
                     .putInt("last_surah", surahNumber)
-                    .putInt("last_ayah_number", activeAyah)
-                    .putInt("quran_progress_ayah_$surahNumber", activeAyah)
+                    .putInt("last_ayah_number", startAyah)
+                    .putInt("quran_progress_ayah_$surahNumber", startAyah)
                     .apply()
                 readingProgressRevision++
-            },
-            callback = { isPlaying ->
-                inlinePlaybackVisible = isPlaying
-                inlinePlaybackPaused = false
-                if (!isPlaying) inlinePlaybackRepeatCurrent = false
+                AudioController.playSequence(
+                    context = context,
+                    sources = sequence,
+                    notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
+                    notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
+                    showNotification = true,
+                    onTrackStarted = { trackIndex ->
+                        val activeAyah = quranPlaybackAyahForTrack(
+                            audioType = chosen.audioType,
+                            startingAyah = startAyah,
+                            trackIndex = trackIndex
+                        ).coerceIn(1, ayahCount)
+                        inlinePlaybackActiveVerse = surahNumber to activeAyah
+                        inlinePlaybackSurah = surahNumber
+                        selected = surahNumber
+                        onSurah(surahNumber)
+                        onOpenVerse(surahNumber, activeAyah)
+                        prefs.edit()
+                            .putInt("last_surah", surahNumber)
+                            .putInt("last_ayah_number", activeAyah)
+                            .putInt("quran_progress_ayah_$surahNumber", activeAyah)
+                            .apply()
+                        readingProgressRevision++
+                    },
+                    callback = { isPlaying ->
+                        inlinePlaybackVisible = isPlaying
+                        inlinePlaybackPaused = false
+                        if (!isPlaying) inlinePlaybackRepeatCurrent = false
+                    }
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                android.util.Log.w("MashxallQuranAudio", "Could not prepare chosen reciter", error)
+                Toast.makeText(context, audioPlaybackFailureMessage(language, AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
+            } finally {
+                inlinePlaybackPreparing = false
             }
-        )
+        }
     }
 
     fun moveInlineFullSurahToAyah(targetAyah: Int) {
@@ -1809,11 +1814,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             .takeIf { it > 0 } ?: inlinePlaybackDurationMs
         if (duration < 1) return
         val target = targetAyah.coerceIn(1, ayahCount)
+        val weights = quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, ayahCount)
         val targetPosition = quranPlaybackPositionForAyah(
             targetAyah = target,
             startingAyah = inlinePlaybackStartAyah,
             ayahCount = ayahCount,
-            durationMs = duration
+            durationMs = duration,
+            ayahWeights = weights
         )
         if (!AudioController.seekTo(targetPosition)) return
         inlinePlaybackPositionMs = targetPosition
@@ -2453,12 +2460,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val hasPreviousTrack = if (inlinePlaybackUsesAyahClips) {
                     activeAyah > inlinePlaybackStartAyah
                 } else {
-                    inlinePlaybackDurationMs > 0 && activeAyah > inlinePlaybackStartAyah
+                    inlinePlaybackDurationMs > 0 &&
+                        (activeAyah > inlinePlaybackStartAyah || inlinePlaybackSurah > 1)
                 }
                 val hasNextTrack = if (inlinePlaybackUsesAyahClips) {
                     activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah)
                 } else {
-                    inlinePlaybackDurationMs > 0 && activeAyah < inlineAyahCount
+                    inlinePlaybackDurationMs > 0 &&
+                        (activeAyah < inlineAyahCount || inlinePlaybackSurah < (inlineReciter?.surahTotal ?: 114))
                 }
                 val trackProgress = if (inlinePlaybackDurationMs > 0) {
                     inlinePlaybackPositionMs.toFloat() / inlinePlaybackDurationMs.toFloat()
@@ -2498,8 +2507,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     onPrevious = {
                         if (inlinePlaybackUsesAyahClips) {
                             AudioController.skipPreviousSequenceTrack()
-                        } else {
+                        } else if (activeAyah > inlinePlaybackStartAyah) {
                             moveInlineFullSurahToAyah(activeAyah - 1)
+                        } else if (inlinePlaybackSurah > 1 && inlineReciter != null) {
+                            startInlineRecitation(inlinePlaybackSurah - 1, 1, reciterOverride = inlineReciter)
                         }
                     },
                     onTogglePause = {
@@ -2508,8 +2519,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     onNext = {
                         if (inlinePlaybackUsesAyahClips) {
                             AudioController.skipNextSequenceTrack()
-                        } else {
+                        } else if (activeAyah < inlineAyahCount) {
                             moveInlineFullSurahToAyah(activeAyah + 1)
+                        } else if (inlineReciter != null && inlinePlaybackSurah < inlineReciter.surahTotal) {
+                            startInlineRecitation(inlinePlaybackSurah + 1, 1, reciterOverride = inlineReciter)
                         }
                     },
                     onStop = {
@@ -3519,6 +3532,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                         prefs.edit()
                                             .putInt("quran_inline_reciter_id", reciter.id)
                                             .putInt("preferred_reciter_id", reciter.id)
+                                            .putBoolean("preferred_reciter_explicit", true)
                                             .apply()
                                         showInlineReciterPicker = false
                                         pendingInlineRecitationTarget = null
@@ -3883,7 +3897,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 )
                             }
                             items(readerReciters.filter { it.audioType == 0 }, key = { "verse-reciter-" + it.id }) { reciter ->
-                                Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
                                         PremiumIconButton(
@@ -3892,7 +3906,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             accent = Gold,
                                             size = 31.dp,
                                             selected = preferredReaderReciterId == reciter.id
-                                        ) { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }
+                                        ) { preferredReaderReciterId = reciter.id; prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply() }
                                     }
                                 }
                             }
@@ -3904,7 +3918,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                     Spacer(Modifier.height(6.dp))
                                 }
                                 items(readerReciters.filter { it.audioType != 0 }, key = { "full-reciter-" + it.id }) { reciter ->
-                                Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
+                                Card(modifier = Modifier.fillMaxWidth().premiumClickable { preferredReaderReciterId = reciter.id; prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply() }, colors = CardDefaults.cardColors(containerColor = cardColor), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, if (preferredReaderReciterId == reciter.id) Gold else Gold.copy(alpha = 0.12f))) {
                                     Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) { Text(reciter.nameArabic, color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold); Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.58f), fontSize = 10.sp) }
                                         PremiumIconButton(
@@ -3913,7 +3927,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             accent = Gold,
                                             size = 31.dp,
                                             selected = preferredReaderReciterId == reciter.id
-                                        ) { preferredReaderReciterId = reciter.id; prefs.edit().putInt("preferred_reciter_id", reciter.id).apply() }
+                                        ) { preferredReaderReciterId = reciter.id; prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply() }
                                     }
                                 }
                             }
@@ -7724,36 +7738,57 @@ internal fun quranPlaybackTrackAyahs(audioType: Int, startingAyah: Int, ayahCoun
 }
 
 /** Full-surah files have no exact verse timestamps; this estimates the current ayah from track progress. */
+internal fun quranPlaybackAyahWeights(ayahs: List<Ayah>, ayahCount: Int): List<Int> {
+    if (ayahCount < 1) return emptyList()
+    val byNumber = ayahs.associateBy { it.number }
+    return (1..ayahCount).map { number ->
+        val letters = byNumber[number]?.arabic.orEmpty().count { it.isLetter() }
+        (letters + 6).coerceAtLeast(12)
+    }
+}
+
+/** One-file surah recordings have no exact timestamps; estimate by Arabic verse length. */
 internal fun quranPlaybackAyahAtPosition(
     startingAyah: Int,
     ayahCount: Int,
     positionMs: Int,
-    durationMs: Int
+    durationMs: Int,
+    ayahWeights: List<Int> = emptyList()
 ): Int {
     if (ayahCount < 1) return 1
     val start = startingAyah.coerceIn(1, ayahCount)
     if (durationMs < 1) return start
-    val remainingAyahs = ayahCount - start + 1
-    val offset = (
-        positionMs.coerceAtLeast(0).toLong() * remainingAyahs.toLong() /
-            durationMs.toLong()
-        ).toInt().coerceIn(0, remainingAyahs - 1)
-    return (start + offset).coerceIn(start, ayahCount)
+    val weights = (start..ayahCount).map { number ->
+        ayahWeights.getOrNull(number - 1)?.coerceAtLeast(1)?.toLong() ?: 1L
+    }
+    val total = weights.sum().coerceAtLeast(1L)
+    val scaledPosition = positionMs.coerceIn(0, durationMs).toLong() * total
+    var consumed = 0L
+    weights.forEachIndexed { index, weight ->
+        consumed += weight
+        if (scaledPosition < durationMs.toLong() * consumed) return start + index
+    }
+    return ayahCount
 }
 
-/** Seek to the midpoint of the requested ayah's estimated time slice in a single full-surah file. */
+/** Seek to the midpoint of a selected ayah's approximate slice in a one-file surah recording. */
 internal fun quranPlaybackPositionForAyah(
     targetAyah: Int,
     startingAyah: Int,
     ayahCount: Int,
-    durationMs: Int
+    durationMs: Int,
+    ayahWeights: List<Int> = emptyList()
 ): Int {
     if (ayahCount < 1 || durationMs < 1) return 0
     val start = startingAyah.coerceIn(1, ayahCount)
-    val remainingAyahs = ayahCount - start + 1
-    val offset = targetAyah.coerceIn(start, ayahCount) - start
-    val numerator = (offset.toLong() * 2L + 1L) * durationMs.toLong()
-    return (numerator / (remainingAyahs.toLong() * 2L))
+    val target = targetAyah.coerceIn(start, ayahCount)
+    val weights = (start..ayahCount).map { number ->
+        ayahWeights.getOrNull(number - 1)?.coerceAtLeast(1)?.toLong() ?: 1L
+    }
+    val total = weights.sum().coerceAtLeast(1L)
+    val before = weights.take(target - start).sum()
+    val targetWeight = weights.getOrNull(target - start) ?: 1L
+    return ((before * 2L + targetWeight) * durationMs.toLong() / (total * 2L))
         .toInt().coerceIn(0, durationMs)
 }
 
@@ -7931,7 +7966,12 @@ fun AudioScreen(
     var offlineRevision by remember { mutableIntStateOf(0) }
     var offlineAdhanRevision by remember { mutableIntStateOf(0) }
     var audioNotice by rememberSaveable { mutableStateOf("") }
-    var preferredReciterId by rememberSaveable { mutableIntStateOf(prefs.getInt("preferred_reciter_id", -1)) }
+    var preferredReciterId by rememberSaveable {
+        mutableIntStateOf(
+            if (prefs.getBoolean("preferred_reciter_explicit", false)) prefs.getInt("preferred_reciter_id", -1)
+            else -1
+        )
+    }
     val preferredReciter = reciters.firstOrNull { it.id == preferredReciterId }
     var autoPlayKey by rememberSaveable { mutableStateOf("") }
     var playing by rememberSaveable { mutableStateOf("") }
@@ -7956,21 +7996,18 @@ fun AudioScreen(
         val loadedReciters = ContentRepository.loadReciters(context)
         reciters = loadedReciters
         surahs = ContentRepository.loadSurahs(context)
-        // The first-use default is complete-surah playback. Prefer a source with
-        // complete-surah files; verse-by-verse remains available as an explicit choice.
-        if (preferredReciterId < 0 || loadedReciters.none { it.id == preferredReciterId }) {
-            defaultReciterId(ReaderPlaybackSettings.mode, loadedReciters)?.let { firstAvailableId ->
-                preferredReciterId = firstAvailableId
-                prefs.edit().putInt("preferred_reciter_id", firstAvailableId).apply()
-            }
+        if (preferredReciterId > 0 && loadedReciters.none { it.id == preferredReciterId }) {
+            preferredReciterId = -1
+            prefs.edit().remove("preferred_reciter_id").putBoolean("preferred_reciter_explicit", false).apply()
         }
         loading = false
     }
     LaunchedEffect(reciters, playbackMode, preferredReciterId) {
-        val compatible = resolveCompatibleReciterId(playbackMode, preferredReciterId, reciters)
-        if (compatible != null && compatible != preferredReciterId) {
-            preferredReciterId = compatible
-            prefs.edit().putInt("preferred_reciter_id", compatible).apply()
+        if (reciters.isNotEmpty() && preferredReciterId > 0 &&
+            resolveCompatibleReciterId(playbackMode, preferredReciterId, reciters) == null
+        ) {
+            preferredReciterId = -1
+            prefs.edit().remove("preferred_reciter_id").putBoolean("preferred_reciter_explicit", false).apply()
         }
     }
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId, playbackMode) {
@@ -7979,7 +8016,9 @@ fun AudioScreen(
             val surahNumber = initialSurah.coerceIn(1, 114)
             val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
             val startAyah = resolveReciterStartAyah(playbackMode, initialAyah, ayahCount)
-            val sources = reciterAudioSequence(context, preferred, surahNumber, startAyah, ayahCount)
+            val sources = withContext(Dispatchers.IO) {
+                reciterAudioSequence(context, preferred, surahNumber, startAyah, ayahCount)
+            }
             val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}"
             if (autoPlayKey != key && sources.isNotEmpty()) {
                 autoPlayKey = key
@@ -8748,7 +8787,7 @@ fun AudioScreen(
                                             playing = ""
                                         } else {
                                             preferredReciterId = reciter.id
-                                            prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                            prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply()
                                             playing = playKey
                                             autoPlayKey = playKey
                                             AudioController.playSequence(
@@ -8836,7 +8875,7 @@ fun AudioScreen(
                                     selected = preferredReciterId == reciter.id,
                                     onClick = {
                                         preferredReciterId = reciter.id
-                                        prefs.edit().putInt("preferred_reciter_id", reciter.id).apply()
+                                        prefs.edit().putBoolean("preferred_reciter_explicit", true).putInt("preferred_reciter_id", reciter.id).apply()
                                     }
                                 ) {
                                     Icon(
@@ -9087,6 +9126,9 @@ internal class QuranPlaybackActionReceiver : BroadcastReceiver() {
 
 internal object AudioController {
     private var player: MediaPlayer? = null
+    private var preloadedPlayer: MediaPlayer? = null
+    private var preloadedTrackIndex: Int = -1
+    private var preloadedPlayerPrepared: Boolean = false
     private var playbackGeneration: Int = 0
     // Compose observes this state from the now-playing control. It also flips
     // false between consecutive files, so pause cannot target a completed player.
@@ -9154,6 +9196,14 @@ internal object AudioController {
 
     fun toggleRepeatCurrentTrack(): Boolean {
         repeatCurrentTrack = !repeatCurrentTrack
+        if (repeatCurrentTrack) {
+            val queued = preloadedPlayer
+            preloadedPlayer = null
+            preloadedTrackIndex = -1
+            preloadedPlayerPrepared = false
+            runCatching { player?.setNextMediaPlayer(null) }
+            releaseMediaPlayer(queued)
+        }
         return repeatCurrentTrack
     }
 
@@ -9177,6 +9227,13 @@ internal object AudioController {
         }
     }
 
+    private fun releaseMediaPlayer(target: MediaPlayer?) {
+        if (target == null) return
+        runCatching { target.setNextMediaPlayer(null) }
+        runCatching { target.stop() }
+        runCatching { target.release() }
+    }
+
     fun stop() {
         playbackGeneration += 1
         preparationJob?.cancel()
@@ -9193,9 +9250,13 @@ internal object AudioController {
         sequenceTrackRequest = null
         repeatCurrentTrack = false
         val active = player
+        val queued = preloadedPlayer
         player = null
-        try { active?.stop() } catch (_: Exception) {}
-        try { active?.release() } catch (_: Exception) {}
+        preloadedPlayer = null
+        preloadedTrackIndex = -1
+        preloadedPlayerPrepared = false
+        releaseMediaPlayer(active)
+        releaseMediaPlayer(queued)
     }
 
     fun playSequence(
@@ -9224,20 +9285,18 @@ internal object AudioController {
         val generation = playbackGeneration
         var hasStartedPlayback = false
         var unavailableTrackCount = 0
+        var fallbackTrackIndex: Int? = null
         sequenceTrackCount = sources.size
         sequenceTrackIndex = 0
         repeatCurrentTrack = false
-        lateinit var playAt: (Int) -> Unit
-        sequenceTrackRequest = { targetIndex ->
-            if (generation == playbackGeneration && targetIndex in sources.indices) {
-                val active = player
-                player = null
-                playerPrepared = false
-                playbackPaused = false
-                try { active?.stop() } catch (_: Exception) {}
-                try { active?.release() } catch (_: Exception) {}
-                playAt(targetIndex)
-            }
+
+        fun discardQueuedPlayer() {
+            val queued = preloadedPlayer
+            preloadedPlayer = null
+            preloadedTrackIndex = -1
+            preloadedPlayerPrepared = false
+            runCatching { player?.setNextMediaPlayer(null) }
+            releaseMediaPlayer(queued)
         }
 
         fun notifyPartialSequenceIfNeeded() {
@@ -9253,115 +9312,261 @@ internal object AudioController {
             }
         }
 
+        lateinit var playAt: (Int) -> Unit
+        lateinit var preloadNext: (Int, MediaPlayer) -> Unit
+        lateinit var completeTrack: (MediaPlayer, Int) -> Unit
+
+        fun finishSequence() {
+            discardQueuedPlayer()
+            val active = player
+            player = null
+            releaseMediaPlayer(active)
+            playerPrepared = false
+            playbackPreparing = false
+            playbackPaused = false
+            playbackActive = false
+            sequenceTrackRequest = null
+            sequenceTrackCount = 0
+            if (activeNotificationEnabled) QuranPlaybackNotification.hide(context)
+            activeContext = null
+            activeNotificationEnabled = false
+            notifyPartialSequenceIfNeeded()
+            callback(false)
+        }
+
         fun handleTrackFailure(index: Int) {
             if (generation != playbackGeneration) return
             unavailableTrackCount += 1
-            val decision = audioSequenceFailureDecision(index, sources.size, hasStartedPlayback)
-            val nextIndex = decision.nextIndex
+            val nextIndex = (index + 1).takeIf { it in sources.indices }
             if (nextIndex != null) {
-                // Defer the retry to avoid deep synchronous recursion if several files fail quickly.
                 Handler(Looper.getMainLooper()).post { playAt(nextIndex) }
-                return
-            }
-            if (decision.showFailureMessage) {
-                Toast.makeText(
-                    context,
-                    audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
-                    Toast.LENGTH_LONG
-                ).show()
             } else {
-                notifyPartialSequenceIfNeeded()
+                if (!hasStartedPlayback) {
+                    Toast.makeText(
+                        context,
+                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                finishSequence()
             }
-            callback(false)
-            stop()
         }
 
-        playAt = fun(index: Int) {
-            if (generation != playbackGeneration) return
-            if (index >= sources.size) {
+        fun announceActiveTrack(active: MediaPlayer, index: Int) {
+            player = active
+            sequenceTrackIndex = index
+            playerPrepared = true
+            playbackPreparing = false
+            playbackPaused = false
+            playbackActive = true
+            if (!hasStartedPlayback) hasStartedPlayback = true
+            if (activeNotificationEnabled) {
+                QuranPlaybackNotification.show(
+                    context,
+                    activeNotificationTitle,
+                    activeNotificationSubtitle,
+                    isPaused = false
+                )
+            }
+            onTrackStarted(index)
+            callback(true)
+        }
+
+        completeTrack = completion@{ completed, completedIndex ->
+            if (generation != playbackGeneration) {
+                runCatching { completed.release() }
+                return@completion
+            }
+            if (preloadedPlayer === completed && preloadedTrackIndex == completedIndex) {
+                preloadedPlayer = null
+                preloadedTrackIndex = -1
+                preloadedPlayerPrepared = false
+                announceActiveTrack(completed, completedIndex)
+            }
+            if (player !== completed) {
+                runCatching { completed.release() }
+                return@completion
+            }
+            if (repeatCurrentTrack) {
+                discardQueuedPlayer()
+                player = null
                 playerPrepared = false
                 playbackPreparing = false
                 playbackPaused = false
-                playbackActive = false
-                player = null
-                sequenceTrackRequest = null
-                sequenceTrackCount = 0
-                if (activeNotificationEnabled) QuranPlaybackNotification.hide(context)
-                activeContext = null
-                activeNotificationEnabled = false
-                notifyPartialSequenceIfNeeded()
-                callback(false)
-                return
+                runCatching { completed.release() }
+                Handler(Looper.getMainLooper()).post { playAt(completedIndex) }
+                return@completion
             }
+            val queued = preloadedPlayer
+            val queuedIndex = preloadedTrackIndex
+            if (queued != null && preloadedPlayerPrepared && queuedIndex == completedIndex + 1) {
+                preloadedPlayer = null
+                preloadedTrackIndex = -1
+                preloadedPlayerPrepared = false
+                runCatching { completed.setNextMediaPlayer(null) }
+                runCatching { completed.release() }
+                announceActiveTrack(queued, queuedIndex)
+                preloadNext(queuedIndex, queued)
+            } else {
+                val nextIndex = fallbackTrackIndex?.takeIf { it > completedIndex + 1 }
+                    ?: (completedIndex + 1)
+                fallbackTrackIndex = null
+                discardQueuedPlayer()
+                player = null
+                playerPrepared = false
+                playbackPreparing = true
+                playbackPaused = false
+                runCatching { completed.release() }
+                Handler(Looper.getMainLooper()).post { playAt(nextIndex) }
+            }
+        }
+
+        preloadNext = preload@{ currentIndex, currentPlayer ->
+            val nextIndex = currentIndex + 1
+            if (generation != playbackGeneration || repeatCurrentTrack ||
+                nextIndex !in sources.indices || preloadedPlayer != null
+            ) return@preload
+            val queued = MediaPlayer()
+            preloadedPlayer = queued
+            preloadedTrackIndex = nextIndex
+            preloadedPlayerPrepared = false
+            try {
+                val source = sources[nextIndex]
+                if (source.startsWith("local:")) queued.setDataSource(source.removePrefix("local:"))
+                else queued.setDataSource(source)
+                queued.setOnPreparedListener { prepared ->
+                    if (generation != playbackGeneration || player !== currentPlayer ||
+                        preloadedPlayer !== prepared || repeatCurrentTrack
+                    ) {
+                        if (preloadedPlayer === prepared) {
+                            preloadedPlayer = null
+                            preloadedTrackIndex = -1
+                            preloadedPlayerPrepared = false
+                        }
+                        runCatching { prepared.release() }
+                        return@setOnPreparedListener
+                    }
+                    try {
+                        currentPlayer.setNextMediaPlayer(prepared)
+                        preloadedPlayerPrepared = true
+                    } catch (_: Exception) {
+                        preloadedPlayer = null
+                        preloadedTrackIndex = -1
+                        preloadedPlayerPrepared = false
+                        fallbackTrackIndex = nextIndex + 1
+                        unavailableTrackCount += 1
+                        runCatching { prepared.release() }
+                    }
+                }
+                queued.setOnCompletionListener { completed -> completeTrack(completed, nextIndex) }
+                queued.setOnErrorListener { failed, _, _ ->
+                    if (generation == playbackGeneration && preloadedPlayer === failed) {
+                        preloadedPlayer = null
+                        preloadedTrackIndex = -1
+                        preloadedPlayerPrepared = false
+                        fallbackTrackIndex = nextIndex + 1
+                        unavailableTrackCount += 1
+                        runCatching { failed.release() }
+                    } else if (generation == playbackGeneration && player === failed) {
+                        player = null
+                        playerPrepared = false
+                        playbackPreparing = false
+                        playbackPaused = false
+                        discardQueuedPlayer()
+                        handleTrackFailure(nextIndex)
+                    } else {
+                        runCatching { failed.release() }
+                    }
+                    true
+                }
+                queued.prepareAsync()
+            } catch (_: Exception) {
+                if (generation == playbackGeneration && preloadedPlayer === queued) {
+                    preloadedPlayer = null
+                    preloadedTrackIndex = -1
+                    preloadedPlayerPrepared = false
+                    fallbackTrackIndex = nextIndex + 1
+                    unavailableTrackCount += 1
+                }
+                runCatching { queued.release() }
+            }
+        }
+
+        playAt = play@{ index ->
+            if (generation != playbackGeneration) return@play
+            if (index >= sources.size) {
+                finishSequence()
+                return@play
+            }
+            discardQueuedPlayer()
             sequenceTrackIndex = index
             var currentPlayer: MediaPlayer? = null
             try {
                 val source = sources[index]
-                val next = MediaPlayer()
-                currentPlayer = next
-                player = next
+                val current = MediaPlayer()
+                currentPlayer = current
+                player = current
                 playerPrepared = false
+                playbackPreparing = true
                 playbackPaused = false
-                if (source.startsWith("local:")) next.setDataSource(source.removePrefix("local:"))
-                else next.setDataSource(source)
-                next.setOnPreparedListener { prepared ->
-                    if (generation != playbackGeneration) {
+                playbackActive = hasStartedPlayback
+                if (source.startsWith("local:")) current.setDataSource(source.removePrefix("local:"))
+                else current.setDataSource(source)
+                current.setOnPreparedListener { prepared ->
+                    if (generation != playbackGeneration || player !== prepared) {
                         runCatching { prepared.release() }
                         return@setOnPreparedListener
                     }
                     try {
                         prepared.start()
-                        playerPrepared = true
+                        announceActiveTrack(prepared, index)
+                        preloadNext(index, prepared)
+                    } catch (_: Exception) {
+                        if (player === prepared) player = null
+                        playerPrepared = false
                         playbackPreparing = false
                         playbackPaused = false
-                        playbackActive = true
-                        if (!hasStartedPlayback) hasStartedPlayback = true
-                        if (activeNotificationEnabled) {
-                            QuranPlaybackNotification.show(
-                                context,
-                                activeNotificationTitle,
-                                activeNotificationSubtitle,
-                                isPaused = false
-                            )
-                        }
-                        onTrackStarted(index)
-                        callback(true)
-                    } catch (_: Exception) {
                         runCatching { prepared.release() }
-                        if (player === prepared) player = null
                         handleTrackFailure(index)
                     }
                 }
-                next.setOnCompletionListener { completed ->
-                    if (generation != playbackGeneration) {
-                        runCatching { completed.release() }
-                        return@setOnCompletionListener
-                    }
-                    runCatching { completed.release() }
-                    if (player === completed) player = null
-                    playerPrepared = false
-                    playbackPaused = false
-                    if (repeatCurrentTrack) playAt(index) else playAt(index + 1)
-                }
-                next.setOnErrorListener { failed, _, _ ->
-                    runCatching { failed.release() }
-                    if (generation == playbackGeneration) {
-                        if (player === failed) player = null
+                current.setOnCompletionListener { completed -> completeTrack(completed, index) }
+                current.setOnErrorListener { failed, _, _ ->
+                    if (generation == playbackGeneration && player === failed) {
+                        player = null
                         playerPrepared = false
+                        playbackPreparing = false
                         playbackPaused = false
+                        discardQueuedPlayer()
                         handleTrackFailure(index)
+                    } else {
+                        runCatching { failed.release() }
                     }
                     true
                 }
-                next.prepareAsync()
+                current.prepareAsync()
             } catch (_: Exception) {
                 if (generation == playbackGeneration) {
-                    runCatching { currentPlayer?.release() }
                     if (player === currentPlayer) player = null
                     playerPrepared = false
+                    playbackPreparing = false
                     playbackPaused = false
+                    runCatching { currentPlayer?.release() }
                     handleTrackFailure(index)
                 }
+            }
+        }
+
+        sequenceTrackRequest = { targetIndex ->
+            if (generation == playbackGeneration && targetIndex in sources.indices) {
+                discardQueuedPlayer()
+                val active = player
+                player = null
+                playerPrepared = false
+                playbackPreparing = true
+                playbackPaused = false
+                runCatching { active?.release() }
+                Handler(Looper.getMainLooper()).post { playAt(targetIndex) }
             }
         }
         playAt(0)
