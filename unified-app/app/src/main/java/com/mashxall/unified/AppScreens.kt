@@ -317,11 +317,9 @@ internal fun filterRecitersForPlaybackMode(
     val matchesSearch = matchesAudioCatalogSearch(
         query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
     )
-    matchesSearch && if (mode == "full") {
-        ReaderPlaybackSettings.supportsAllSurahs(reciter)
-    } else {
-        reciter.audioType == 0
-    }
+    // Partial editions are still searchable in full-surah mode; the play button
+    // independently checks whether the currently selected surah is available.
+    matchesSearch && (mode != "verse" || reciter.audioType == 0)
 }
 
 internal object ReaderPlaybackSettings {
@@ -7772,6 +7770,28 @@ private fun setReciterAudioSource(player: MediaPlayer, source: String) {
         player.setDataSource(source)
     }
 }
+
+/** Download redirected MP3 streams to cache before MediaPlayer opens them. */
+private suspend fun cacheReciterStreamSource(context: Context, source: String): String =
+    withContext(Dispatchers.IO) {
+        if (source.startsWith("local:")) {
+            val localFile = File(source.removePrefix("local:"))
+            require(localFile.isFile && localFile.length() > 512L) { "The saved recitation file is missing." }
+            return@withContext source
+        }
+        require(source.startsWith("https://") || source.startsWith("http://")) {
+            "The recitation source is not a supported audio URL."
+        }
+        val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray())
+        val key = digest.take(12).joinToString("") { "%02x".format(it) }
+        val cacheDirectory = File(context.cacheDir, "reciter-stream-cache")
+        val targetFile = File(cacheDirectory, key + ".mp3")
+        if (!targetFile.isFile || targetFile.length() <= 512L) {
+            downloadReciterFile(source, targetFile)
+        }
+        require(targetFile.isFile && targetFile.length() > 512L) { "The recitation download is incomplete." }
+        "local:" + targetFile.absolutePath
+    }
 
 private fun reciterAudioSequence(
     context: Context,
