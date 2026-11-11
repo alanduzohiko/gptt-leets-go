@@ -323,6 +323,9 @@ jobs:
           echo "BASELINE_APK_PATH=$BASELINE_APK" >> "$GITHUB_ENV"
           sha256sum "$APK" "$BASELINE_APK" | tee dist/runtime-test/apk-hashes.txt
 
+      # Device-side verification is opt-in for this build. A [skip-runtime]
+      # commit intentionally publishes the signed APK for the user to test on a
+      # physical Android 11 phone instead of starting the hosted emulator.
       - name: Verify Build 515 upgrade and app screens on Android 11
         id: android11-upgrade-smoke
         if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip-runtime]')
