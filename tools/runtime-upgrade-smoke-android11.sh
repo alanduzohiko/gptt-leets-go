@@ -65,9 +65,18 @@ install_apk_with_retry "Build 515 baseline" "$BASELINE_APK_PATH" "dist/runtime-t
 
 # Seed the same kind of already-configured returning-user preferences used by
 # the real app. This is a CI-only emulator; it never touches the user's phone.
-prefs_xml="<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><string name='language'>ckb</string><boolean name='first_run_setup_started' value='true' /><boolean name='first_run_setup_complete' value='true' /><boolean name='startup_animation_started' value='true' /><boolean name='startup_animation_played' value='true' /><boolean name='dark_mode' value='true' /></map>"
+# Model a returning user who already completed onboarding and saved a prayer
+# location. The second-launch check must not be interrupted by a first-run permission
+# dialog; first-run location permission is still tested in the normal app flow.
+prefs_xml="<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><string name='language'>ckb</string><string name='prayer_location_mode'>gps</string><string name='gps_latitude'>35.56</string><string name='gps_longitude'>45.44</string><long name='gps_location_timestamp' value='0' /><boolean name='prayer_location_prompted' value='true' /><boolean name='first_run_location_prompted' value='true' /><boolean name='first_run_setup_started' value='true' /><boolean name='first_run_setup_complete' value='true' /><boolean name='startup_animation_started' value='true' /><boolean name='startup_animation_played' value='true' /><boolean name='dark_mode' value='true' /></map>"
 prefs_base64="$(printf '%s' "$prefs_xml" | base64 -w0)"
 adb shell "run-as com.mashxall.unified sh -c 'mkdir -p shared_prefs && printf %s $prefs_base64 | base64 -d > shared_prefs/mashxall_preferences.xml'"
+
+# Grant the already-selected location permissions to the CI returning-user profile.
+# This prevents Android's GrantPermissionsActivity from covering the app on relaunch.
+adb shell pm grant com.mashxall.unified android.permission.ACCESS_COARSE_LOCATION
+adb shell pm grant com.mashxall.unified android.permission.ACCESS_FINE_LOCATION
+adb shell dumpsys package com.mashxall.unified | grep -E 'ACCESS_(COARSE|FINE)_LOCATION: granted=true' > dist/runtime-test/upgrade/location-permissions.txt
 
 adb shell am force-stop com.mashxall.unified
 adb shell am start -W -n com.mashxall.unified/.MainActivity > dist/runtime-test/upgrade/launch-515.txt 2>&1
