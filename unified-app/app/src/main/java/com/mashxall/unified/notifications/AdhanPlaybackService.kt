@@ -16,6 +16,8 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.mashxall.unified.AppLanguage
@@ -79,6 +81,8 @@ class AdhanPlaybackService : Service() {
     private var playerPrepared = false
     private var playbackPaused = false
     private var activePrayerLabel: String = ""
+    private var activePrayerCode: String = ""
+    private var activeMuezzinName: String = ""
     private var activeNotificationCopy: AdhanNotificationCopy? = null
     private var activeChannelId: String = CHANNEL_ID
     private var mediaSession: MediaSession? = null
@@ -97,6 +101,8 @@ class AdhanPlaybackService : Service() {
             return START_NOT_STICKY
         }
         val prayerLabel = intent?.getStringExtra(EXTRA_PRAYER_LABEL).orEmpty()
+        val prayerCode = intent?.getStringExtra(EXTRA_PRAYER_CODE).orEmpty()
+        val muezzinName = intent?.getStringExtra(EXTRA_ADHAN_NAME).orEmpty()
         val audioPath = intent?.getStringExtra(EXTRA_AUDIO_PATH).orEmpty()
         val language = AppLanguage.from(
             getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE).getString("language", "ckb")
@@ -105,6 +111,8 @@ class AdhanPlaybackService : Service() {
         val channelId = CHANNEL_ID + "_" + language.key
         createNotificationChannel(channelId, notificationCopy)
         activePrayerLabel = prayerLabel
+        activePrayerCode = prayerCode
+        activeMuezzinName = muezzinName
         activeNotificationCopy = notificationCopy
         activeChannelId = channelId
         ensureMediaSession()
@@ -112,6 +120,9 @@ class AdhanPlaybackService : Service() {
         updateMediaSessionPlaybackState()
         val notification = buildPlaybackNotification()
         startForeground(NOTIFICATION_ID, notification)
+        if (activePrayerCode.isNotBlank()) {
+            postPrayerAlarmAlert(activePrayerCode, activePrayerLabel, activeMuezzinName, language)
+        }
         stopRequested = false
         playbackRequestGeneration += 1
         playAsset(audioPath, prayerLabel, notificationCopy, language, channelId, playbackRequestGeneration)
@@ -147,7 +158,7 @@ class AdhanPlaybackService : Service() {
         return builder
             .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
             .setContentTitle(activePrayerLabel.ifBlank { copy.fallbackPrayerTitle })
-            .setContentText(copy.contentText)
+            .setContentText(activeMuezzinName.ifBlank { copy.contentText })
             .setPriority(Notification.PRIORITY_LOW)
             .setCategory(Notification.CATEGORY_TRANSPORT)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -222,9 +233,96 @@ class AdhanPlaybackService : Service() {
         mediaSession?.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, activePrayerLabel.ifBlank { copy.fallbackPrayerTitle })
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, copy.contentText)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, activeMuezzinName.ifBlank { copy.contentText })
                 .build()
         )
+    }
+
+    private fun postPrayerAlarmAlert(
+        prayerCode: String,
+        prayerLabel: String,
+        muezzinName: String,
+        language: AppLanguage
+    ) {
+        val alertChannelId = ALERT_CHANNEL_PREFIX + "_" + language.key
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (manager.getNotificationChannel(alertChannelId) == null) {
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        alertChannelId,
+                        when (language) {
+                            AppLanguage.EN -> "Prayer time alerts"
+                            AppLanguage.AR -> "تنبيهات أوقات الصلاة"
+                            AppLanguage.CKB -> "ئاگادارکردنەوەی کاتەکانی نوێژ"
+                        },
+                        NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = when (language) {
+                            AppLanguage.EN -> "Opens the selected Adhan screen when an enabled prayer begins."
+                            AppLanguage.AR -> "تعرض شاشة الأذان المختار عند دخول وقت الصلاة المفعّلة."
+                            AppLanguage.CKB -> "لە کاتی هاتنی نوێژی چالاککراودا شاشەی بانگی هەڵبژێردراو پیشان دەدات."
+                        }
+                        // The selected Adhan file supplies the sound; don't overlay a generic chime.
+                        setSound(null, null)
+                        enableVibration(true)
+                        vibrationPattern = longArrayOf(0L, 260L, 150L, 260L)
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    }
+                )
+            }
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val prayerIndex = PrayerAlarmScheduler.ALERT_CODES.indexOf(prayerCode).coerceAtLeast(0)
+        val screenIntent = Intent(this, AdhanAlertActivity::class.java).apply {
+            putExtra(EXTRA_PRAYER_CODE, prayerCode)
+            putExtra(EXTRA_PRAYER_LABEL, prayerLabel)
+            putExtra(EXTRA_ADHAN_NAME, muezzinName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val screenPending = PendingIntent.getActivity(
+            this,
+            ALERT_PENDING_INTENT_BASE + prayerIndex,
+            screenIntent,
+            flags
+        )
+        val detail = if (muezzinName.isBlank()) {
+            when (language) {
+                AppLanguage.EN -> "The selected Adhan is starting"
+                AppLanguage.AR -> "يبدأ الأذان المختار الآن"
+                AppLanguage.CKB -> "بانگی هەڵبژێردراو ئێستا دەست پێدەکات"
+            }
+        } else {
+            when (language) {
+                AppLanguage.EN -> "Muezzin: " + muezzinName
+                AppLanguage.AR -> "المؤذن: " + muezzinName
+                AppLanguage.CKB -> "موئەزین: " + muezzinName
+            }
+        }
+        val alert = NotificationCompat.Builder(this, alertChannelId)
+            .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
+            .setContentTitle(prayerLabel.ifBlank { adhanNotificationCopy(language).fallbackPrayerTitle })
+            .setContentText(detail)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(screenPending)
+            .setFullScreenIntent(screenPending, true)
+            .setTimeoutAfter(10L * 60L * 1000L)
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(ALARM_NOTIFICATION_ID, alert)
+        Log.i("MashxallAdhanAlarm", "Published prayer alert for " + prayerCode + " with muezzin " + muezzinName)
+    }
+
+    private fun cancelPrayerAlarmAlert() {
+        runCatching {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .cancel(ALARM_NOTIFICATION_ID)
+        }
     }
 
     private fun updateMediaSessionPlaybackState() {
@@ -253,6 +351,8 @@ class AdhanPlaybackService : Service() {
         playbackRequestGeneration += 1
         stopRequested = true
         releasePlayer()
+        cancelPrayerAlarmAlert()
+        cancelPrayerAlarmAlert()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -262,13 +362,18 @@ class AdhanPlaybackService : Service() {
         val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
             .take(12).joinToString("") { "%02x".format(it) }
         val target = File(cacheDir, "adhan-stream-$key.audio")
-        if (target.isFile && target.length() > 512L) return target
+        if (hasPlausibleMp3File(target)) return target
+        target.delete()
         val temporary = File(cacheDir, target.name + ".part")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 60_000
+            connectTimeout = 12_000
+            readTimeout = 40_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mashxall Android")
+            setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+            )
+            setRequestProperty("Accept", "audio/mpeg,audio/*;q=0.9,*/*;q=0.8")
         }
         try {
             connection.connect()
@@ -277,8 +382,12 @@ class AdhanPlaybackService : Service() {
             if (connection.contentLengthLong > 100L * 1024L * 1024L) {
                 throw java.io.IOException("The Adhan recording is larger than the supported download limit.")
             }
-            if (connection.contentType.orEmpty().contains("text/html", ignoreCase = true)) {
-                throw java.io.IOException("The audio source returned a web page instead of audio.")
+            val contentType = connection.contentType.orEmpty()
+            if (contentType.startsWith("text/", ignoreCase = true) ||
+                contentType.contains("json", ignoreCase = true) ||
+                contentType.contains("xml", ignoreCase = true)
+            ) {
+                throw java.io.IOException("The audio source returned text or metadata instead of audio.")
             }
             var total = 0L
             connection.inputStream.use { input ->
@@ -298,6 +407,9 @@ class AdhanPlaybackService : Service() {
             if (total <= 512L || !temporary.isFile) {
                 throw java.io.IOException("The audio source returned an empty or incomplete file.")
             }
+            if (!hasPlausibleMp3File(temporary)) {
+                throw java.io.IOException("The audio source did not return a valid MP3 stream.")
+            }
             if (target.exists()) target.delete()
             if (!temporary.renameTo(target)) {
                 temporary.copyTo(target, overwrite = true)
@@ -310,6 +422,25 @@ class AdhanPlaybackService : Service() {
         }
     }
 
+    private fun hasPlausibleMp3File(file: File): Boolean {
+        if (!file.isFile || file.length() <= 512L) return false
+        return runCatching {
+            file.inputStream().use { input ->
+                val bytes = ByteArray(65_536)
+                val count = input.read(bytes)
+                if (count < 3) false
+                else {
+                    val prefix = bytes.copyOf(count)
+                    val hasId3 = prefix[0] == 0x49.toByte() && prefix[1] == 0x44.toByte() && prefix[2] == 0x33.toByte()
+                    hasId3 || (0 until (count - 1).coerceAtMost(65_535)).any { index ->
+                        val first = prefix[index].toInt() and 0xFF
+                        val second = prefix[index + 1].toInt() and 0xFF
+                        first == 0xFF && (second and 0xE0) == 0xE0 && (second and 0x06) != 0
+                    }
+                }
+            }
+        }.getOrDefault(false)
+    }
     private fun createNotificationChannel(channelId: String, copy: AdhanNotificationCopy) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -323,6 +454,93 @@ class AdhanPlaybackService : Service() {
         }
     }
 
+    private fun prepareAdhanPlayer(
+        mp: MediaPlayer,
+        prayerLabel: String,
+        notificationCopy: AdhanNotificationCopy,
+        language: AppLanguage,
+        channelId: String,
+        requestGeneration: Int,
+        selectedAssetPath: String
+    ) {
+        mp.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
+        mp.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+        )
+        mp.setOnPreparedListener { ready ->
+            if (!stopRequested && requestGeneration == playbackRequestGeneration) {
+                playerPrepared = true
+                playbackPaused = false
+                try {
+                    ready.start()
+                    updateMediaSessionPlaybackState()
+                    publishNotification()
+                    Log.i("MashxallAdhanAlarm", "Selected Adhan started for " + prayerLabel)
+                } catch (error: Exception) {
+                    Log.e("MashxallAdhanAlarm", "Could not start Adhan for " + prayerLabel, error)
+                    handleAdhanPlaybackFailure(prayerLabel, notificationCopy, language, channelId, selectedAssetPath)
+                }
+            }
+        }
+        mp.setOnCompletionListener {
+            releasePlayer()
+            cancelPrayerAlarmAlert()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+        mp.setOnErrorListener { failed, what, extra ->
+            Log.e("MashxallAdhanAlarm", "MediaPlayer failed for " + prayerLabel + ": what=" + what + " extra=" + extra)
+            if (player === failed) {
+                handleAdhanPlaybackFailure(prayerLabel, notificationCopy, language, channelId, selectedAssetPath)
+            } else {
+                runCatching { failed.release() }
+            }
+            true
+        }
+        mp.prepareAsync()
+    }
+
+    private fun handleAdhanPlaybackFailure(
+        prayerLabel: String,
+        notificationCopy: AdhanNotificationCopy,
+        language: AppLanguage,
+        channelId: String,
+        selectedAssetPath: String
+    ) {
+        releasePlayer()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        if (selectedAssetPath.isNotBlank()) {
+            postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
+        }
+        stopSelf()
+    }
+
+    private fun playRemoteAdhanStream(
+        url: String,
+        prayerLabel: String,
+        notificationCopy: AdhanNotificationCopy,
+        language: AppLanguage,
+        channelId: String,
+        requestGeneration: Int
+    ) {
+        if (requestGeneration != playbackRequestGeneration || stopRequested) return
+        val mp = MediaPlayer()
+        player = mp
+        try {
+            val headers = mapOf(
+                "User-Agent" to ("Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"),
+                "Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8"
+            )
+            mp.setDataSource(this, Uri.parse(url), headers)
+            prepareAdhanPlayer(mp, prayerLabel, notificationCopy, language, channelId, requestGeneration, url)
+        } catch (error: Exception) {
+            Log.e("MashxallAdhanAlarm", "Direct Adhan stream failed for " + prayerLabel, error)
+            handleAdhanPlaybackFailure(prayerLabel, notificationCopy, language, channelId, url)
+        }
+    }
     private fun playAsset(
         assetPath: String,
         prayerLabel: String,
@@ -334,9 +552,14 @@ class AdhanPlaybackService : Service() {
         releasePlayer()
         if (assetPath.startsWith("https://")) {
             playbackScope.launch {
-                try {
-                    val downloaded = withContext(Dispatchers.IO) { downloadRemoteAdhanFile(assetPath) }
-                    if (requestGeneration != playbackRequestGeneration || stopRequested) return@launch
+                val downloaded = try {
+                    withContext(Dispatchers.IO) { downloadRemoteAdhanFile(assetPath) }
+                } catch (error: Exception) {
+                    Log.w("MashxallAdhanAlarm", "Adhan download failed; trying direct stream playback.", error)
+                    null
+                }
+                if (requestGeneration != playbackRequestGeneration || stopRequested) return@launch
+                if (downloaded != null && hasPlausibleMp3File(downloaded)) {
                     playAsset(
                         "local:" + downloaded.absolutePath,
                         prayerLabel,
@@ -345,12 +568,8 @@ class AdhanPlaybackService : Service() {
                         channelId,
                         requestGeneration
                     )
-                } catch (_: Exception) {
-                    if (requestGeneration == playbackRequestGeneration && !stopRequested) {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                        postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
-                        stopSelf()
-                    }
+                } else {
+                    playRemoteAdhanStream(assetPath, prayerLabel, notificationCopy, language, channelId, requestGeneration)
                 }
             }
             return
@@ -386,12 +605,6 @@ class AdhanPlaybackService : Service() {
         val mp = MediaPlayer()
         player = mp
         try {
-            mp.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
             when (classifyAdhanAudioSource(assetPath, source)) {
                 AdhanAudioSourceSelection.SELECTED_AUDIO -> mp.setDataSource(source!!.absolutePath)
                 AdhanAudioSourceSelection.DEFAULT_SYSTEM_ALARM -> {
@@ -399,6 +612,7 @@ class AdhanPlaybackService : Service() {
                         ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                         ?: run {
                             releasePlayer()
+                            cancelPrayerAlarmAlert()
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf()
                             return
@@ -406,44 +620,17 @@ class AdhanPlaybackService : Service() {
                     mp.setDataSource(this, fallback)
                 }
                 AdhanAudioSourceSelection.MISSING_SELECTED_AUDIO -> {
-                    // Guarded above; this branch exists for exhaustive enum handling.
                     releasePlayer()
                     stopForeground(STOP_FOREGROUND_REMOVE)
+                    postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
                     stopSelf()
                     return
                 }
             }
-            mp.setOnPreparedListener { ready ->
-                if (!stopRequested && requestGeneration == playbackRequestGeneration) {
-                    playerPrepared = true
-                    playbackPaused = false
-                    ready.start()
-                    updateMediaSessionPlaybackState()
-                    publishNotification()
-                }
-            }
-            mp.setOnCompletionListener {
-                releasePlayer()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
-            mp.setOnErrorListener { _, _, _ ->
-                releasePlayer()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                if (assetPath.isNotBlank()) {
-                    postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
-                }
-                stopSelf()
-                true
-            }
-            mp.prepareAsync()
-        } catch (_: Exception) {
-            releasePlayer()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            if (assetPath.isNotBlank()) {
-                postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
-            }
-            stopSelf()
+            prepareAdhanPlayer(mp, prayerLabel, notificationCopy, language, channelId, requestGeneration, assetPath)
+        } catch (error: Exception) {
+            Log.e("MashxallAdhanAlarm", "Could not prepare selected Adhan for " + prayerLabel, error)
+            handleAdhanPlaybackFailure(prayerLabel, notificationCopy, language, channelId, assetPath)
         }
     }
 
@@ -490,9 +677,13 @@ class AdhanPlaybackService : Service() {
         const val EXTRA_PRAYER_CODE = "prayer_code"
         const val EXTRA_PRAYER_LABEL = "prayer_label"
         const val EXTRA_AUDIO_PATH = "audio_path"
+        const val EXTRA_ADHAN_NAME = "adhan_name"
         private const val CHANNEL_ID = "mashxall_adhan_playback"
+        private const val ALERT_CHANNEL_PREFIX = "mashxall_adhan_alarm_v2"
         private const val NOTIFICATION_ID = 7842
         private const val MISSING_AUDIO_NOTIFICATION_ID = 7844
+        private const val ALARM_NOTIFICATION_ID = 7846
+        private const val ALERT_PENDING_INTENT_BASE = 7860
         private const val STOP_REQUEST_CODE = 7843
         private const val TOGGLE_REQUEST_CODE = 7845
         const val ACTION_STOP = "com.mashxall.unified.STOP_ADHAN"
@@ -502,6 +693,7 @@ class AdhanPlaybackService : Service() {
         fun startPreview(context: Context, audioPath: String, title: String) {
             val intent = Intent(context.applicationContext, AdhanPlaybackService::class.java)
                 .putExtra(EXTRA_PRAYER_LABEL, title)
+                .putExtra(EXTRA_ADHAN_NAME, title)
                 .putExtra(EXTRA_AUDIO_PATH, audioPath)
             ContextCompat.startForegroundService(context.applicationContext, intent)
         }
