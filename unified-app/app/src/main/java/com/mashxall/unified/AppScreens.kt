@@ -168,6 +168,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
+import java.text.Normalizer
 import java.security.MessageDigest
 import java.util.Date
 import java.util.Calendar
@@ -273,14 +274,49 @@ internal fun matchesSurahProgressFilter(
     }
 }
 
+/**
+ * Normalize Arabic/Kurdish audio names only for search; original labels and catalog data stay intact.
+ */
+internal fun normalizeAudioCatalogSearchText(value: String): String {
+    val decomposed = Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFKD)
+    return buildString(decomposed.length) {
+        decomposed.forEach { character ->
+            when {
+                character == '\u0640' -> Unit
+                Character.getType(character) == Character.NON_SPACING_MARK.toInt() ||
+                    Character.getType(character) == Character.COMBINING_SPACING_MARK.toInt() ||
+                    Character.getType(character) == Character.ENCLOSING_MARK.toInt() -> Unit
+                character in "أإآٱ" -> append('ا')
+                character == 'ة' -> append('ه')
+                character == 'ى' || character == 'ی' -> append('ي')
+                character == 'ک' -> append('ك')
+                character == 'ؤ' -> append('و')
+                character == 'ئ' -> append('ي')
+                character.isLetterOrDigit() -> append(character)
+                else -> if (isNotEmpty() && last() != ' ') append(' ')
+            }
+        }
+    }.trim().split(' ').filter(String::isNotBlank).joinToString(" ")
+}
+
+internal fun matchesAudioCatalogSearch(query: String, vararg candidates: String): Boolean {
+    val normalizedQuery = normalizeAudioCatalogSearchText(query)
+    if (normalizedQuery.isBlank()) return true
+    val normalizedCandidates = candidates.joinToString(" ") { normalizeAudioCatalogSearchText(it) }
+    val tokens = normalizedQuery.split(' ').filter(String::isNotBlank)
+    return tokens.all(normalizedCandidates::contains) ||
+        normalizedCandidates.replace(" ", "").contains(normalizedQuery.replace(" ", ""))
+}
+
 /** Keep the list aligned with usable playback coverage instead of saving hidden partial editions as the default. */
 internal fun filterRecitersForPlaybackMode(
     reciters: List<Reciter>,
     mode: String,
     query: String
 ): List<Reciter> = reciters.filter { reciter ->
-    val matchesSearch = (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.baseUrl)
-        .contains(query, ignoreCase = true)
+    val matchesSearch = matchesAudioCatalogSearch(
+        query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
+    )
     matchesSearch && if (mode == "full") {
         ReaderPlaybackSettings.supportsAllSurahs(reciter)
     } else {
@@ -566,7 +602,7 @@ private fun QuranInlinePlaybackBar(
                 } else {
                     if (language == AppLanguage.EN) "Seek to the previous approximate ayah position" else if (language == AppLanguage.AR) "الانتقال التقريبي إلى موضع الآية السابقة" else "چوونە شوێنی نزیکەیی ئایەتی پێشوو"
                 },
-                enabled = hasPrevious,
+                enabled = hasPrevious && isPrepared,
                 rotationDegrees = 180f,
                 pressedScale = quranReaderActionPressScale("previous_ayah"),
                 onClick = onPrevious
@@ -592,7 +628,7 @@ private fun QuranInlinePlaybackBar(
                 } else {
                     if (language == AppLanguage.EN) "Seek to the next approximate ayah position" else if (language == AppLanguage.AR) "الانتقال التقريبي إلى موضع الآية التالية" else "چوونە شوێنی نزیکەیی ئایەتی دواتر"
                 },
-                enabled = hasNext,
+                enabled = hasNext && isPrepared,
                 pressedScale = quranReaderActionPressScale("next_ayah"),
                 onClick = onNext
             )
@@ -1807,6 +1843,27 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
     }
 
+    fun currentInlineAudioAyah(): Int {
+        val ayahCount = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
+        if (ayahCount < 1) return inlinePlaybackStartAyah.coerceAtLeast(1)
+        if (inlinePlaybackUsesAyahClips) {
+            return quranPlaybackAyahForTrack(
+                audioType = 0,
+                startingAyah = inlinePlaybackStartAyah,
+                trackIndex = AudioController.currentSequenceTrackIndex()
+            ).coerceIn(1, ayahCount)
+        }
+        val (position, duration) = AudioController.playbackPosition()
+        val weights = quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, ayahCount)
+        return quranPlaybackAyahAtPosition(
+            startingAyah = inlinePlaybackStartAyah,
+            ayahCount = ayahCount,
+            positionMs = position,
+            durationMs = duration,
+            ayahWeights = weights
+        ).coerceIn(1, ayahCount)
+    }
+
     fun moveInlineFullSurahToAyah(targetAyah: Int) {
         if (inlinePlaybackUsesAyahClips) return
         val ayahCount = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
@@ -2452,9 +2509,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             )
             }
             if (inlinePlaybackVisible && (AudioController.isActive() || AudioController.isPreparing())) {
-                val activeAyah = inlinePlaybackActiveVerse
-                    ?.takeIf { it.first == inlinePlaybackSurah }?.second
-                    ?: inlinePlaybackStartAyah
+                val activeAyah = currentInlineAudioAyah()
                 val inlineSurah = surahs.firstOrNull { it.number == inlinePlaybackSurah }
                 val inlineReciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId }
                 val inlineAyahCount = inlineSurah?.ayahCount ?: 0
@@ -2508,8 +2563,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     onPrevious = {
                         if (inlinePlaybackUsesAyahClips) {
                             AudioController.skipPreviousSequenceTrack()
-                        } else if (activeAyah > inlinePlaybackStartAyah) {
-                            moveInlineFullSurahToAyah(activeAyah - 1)
+                        } else if (currentInlineAudioAyah() > inlinePlaybackStartAyah) {
+                            moveInlineFullSurahToAyah(currentInlineAudioAyah() - 1)
                         } else if (inlinePlaybackSurah > 1 && inlineReciter != null) {
                             startInlineRecitation(inlinePlaybackSurah - 1, 1, reciterOverride = inlineReciter)
                         }
@@ -2520,8 +2575,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     onNext = {
                         if (inlinePlaybackUsesAyahClips) {
                             AudioController.skipNextSequenceTrack()
-                        } else if (activeAyah < inlineAyahCount) {
-                            moveInlineFullSurahToAyah(activeAyah + 1)
+                        } else if (currentInlineAudioAyah() < inlineAyahCount) {
+                            moveInlineFullSurahToAyah(currentInlineAudioAyah() + 1)
                         } else if (inlineReciter != null && inlinePlaybackSurah < inlineReciter.surahTotal) {
                             startInlineRecitation(inlinePlaybackSurah + 1, 1, reciterOverride = inlineReciter)
                         }
@@ -3489,8 +3544,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         reciter.surahTotal >= targetSurahForReciter &&
                             (
                                 inlineReciterSearch.isBlank() ||
-                                    (reciter.nameArabic + " " + reciter.nameEnglish + " " + reciter.recitation)
-                                        .contains(inlineReciterSearch.trim(), ignoreCase = true)
+                                    matchesAudioCatalogSearch(
+                                        inlineReciterSearch,
+                                        reciter.nameArabic,
+                                        reciter.nameEnglish,
+                                        reciter.recitation,
+                                        reciter.baseUrl
+                                    )
                             )
                     }.sortedWith(
                         compareBy<Reciter> { if (it.audioType == 0) 0 else 1 }
@@ -8302,8 +8362,7 @@ fun AudioScreen(
             val visibleBundledAdhan = remember(bundledAdhan, searchTerm, adhanCategory) {
                 bundledAdhan.filter { track ->
                     val matchesSearch = searchTerm.isBlank() ||
-                        (track.item.title + " " + track.item.assetPath + " " + track.item.group)
-                            .contains(searchTerm, ignoreCase = true)
+                        matchesAudioCatalogSearch(searchTerm, track.item.title, track.item.assetPath, track.item.group)
                     matchesSearch && matchesAdhanLibraryFilter(adhanCategory, track.category, downloaded = true)
                 }
             }
@@ -8321,8 +8380,7 @@ fun AudioScreen(
             val visibleAdhan = remember(onlineAdhan, searchTerm, adhanCategory, offlineAdhanRevision) {
                 onlineAdhan.filter { item ->
                     val matchesSearch = searchTerm.isBlank() ||
-                        (item.titleArabic + " " + item.titleEnglish + " " + item.sourceFilename)
-                            .contains(searchTerm, ignoreCase = true)
+                        matchesAudioCatalogSearch(searchTerm, item.titleArabic, item.titleEnglish, item.sourceFilename, item.id)
                     val file = onlineAdhanOfflineFile(context, item)
                     matchesSearch && matchesAdhanLibraryFilter(
                         adhanCategory,
@@ -9018,6 +9076,12 @@ internal fun audioSequencePartialPlaybackMessage(language: AppLanguage, unavaila
 internal fun audioPauseControlEnabled(isPreparing: Boolean, isPrepared: Boolean): Boolean =
     !isPreparing && isPrepared
 
+internal fun adjacentAudioSequenceIndex(currentIndex: Int, trackCount: Int, forward: Boolean): Int? {
+    if (trackCount <= 0 || currentIndex !in 0 until trackCount) return null
+    val target = currentIndex + if (forward) 1 else -1
+    return target.takeIf { it in 0 until trackCount }
+}
+
 internal object QuranPlaybackNotification {
     private const val CHANNEL_ID = "mashxall_quran_playback"
     private const val NOTIFICATION_ID = 7851
@@ -9191,6 +9255,9 @@ internal object AudioController {
 
     fun isPaused(): Boolean = playbackPaused
 
+    /** Active clip index, excluding the clip that is merely being preloaded. */
+    fun currentSequenceTrackIndex(): Int = sequenceTrackIndex
+
     fun playbackPosition(): Pair<Int, Int> {
         val active = player ?: return 0 to 0
         return try {
@@ -9216,17 +9283,18 @@ internal object AudioController {
         sequenceTrackRequest != null && sequenceTrackIndex < sequenceTrackCount - 1
 
     fun skipNextSequenceTrack(): Boolean {
+        if (playbackPreparing || !playerPrepared) return false
         val request = sequenceTrackRequest ?: return false
-        val next = sequenceTrackIndex + 1
-        if (next !in 0 until sequenceTrackCount) return false
+        val next = adjacentAudioSequenceIndex(sequenceTrackIndex, sequenceTrackCount, forward = true) ?: return false
         request(next)
         return true
     }
 
     fun skipPreviousSequenceTrack(): Boolean {
+        if (playbackPreparing || !playerPrepared) return false
         val request = sequenceTrackRequest ?: return false
-        if (sequenceTrackCount <= 0) return false
-        request((sequenceTrackIndex - 1).coerceAtLeast(0))
+        val previous = adjacentAudioSequenceIndex(sequenceTrackIndex, sequenceTrackCount, forward = false) ?: return false
+        request(previous)
         return true
     }
 
@@ -9493,6 +9561,26 @@ internal object AudioController {
                         runCatching { prepared.release() }
                     }
                 }
+                queued.setOnInfoListener { started, what, _ ->
+                    if (
+                        what == MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT &&
+                        generation == playbackGeneration &&
+                        preloadedPlayer === started &&
+                        preloadedTrackIndex == nextIndex &&
+                        player === currentPlayer
+                    ) {
+                        // Publish the clip index at the actual gapless switch, before the
+                        // previous player's completion callback can leave the UI one clip behind.
+                        preloadedPlayer = null
+                        preloadedTrackIndex = -1
+                        preloadedPlayerPrepared = false
+                        announceActiveTrack(started, nextIndex)
+                        preloadNext(nextIndex, started)
+                        true
+                    } else {
+                        false
+                    }
+                }
                 queued.setOnCompletionListener { completed -> completeTrack(completed, nextIndex) }
                 queued.setOnErrorListener { failed, _, _ ->
                     if (generation == playbackGeneration && preloadedPlayer === failed) {
@@ -9593,6 +9681,7 @@ internal object AudioController {
 
         sequenceTrackRequest = { targetIndex ->
             if (generation == playbackGeneration && targetIndex in sources.indices) {
+                sequenceTrackIndex = targetIndex
                 discardQueuedPlayer()
                 val active = player
                 player = null
@@ -11935,8 +12024,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     }
     val visibleAdhanAssets = remember(adhanAssets, adhanSoundQuery) {
         if (adhanSoundQuery.isBlank()) adhanAssets else adhanAssets.filter { sound ->
-            (sound.title + " " + sound.group + " " + sound.assetPath)
-                .contains(adhanSoundQuery.trim(), ignoreCase = true)
+            matchesAudioCatalogSearch(adhanSoundQuery, sound.title, sound.group, sound.assetPath)
         }
     }
     LaunchedEffect(isActive, language) {
