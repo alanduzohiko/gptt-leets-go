@@ -20,6 +20,12 @@ import java.io.File
 import java.security.MessageDigest
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 internal data class AdhanNotificationCopy(
     val fallbackPrayerTitle: String,
@@ -72,11 +78,14 @@ class AdhanPlaybackService : Service() {
     private var activePrayerLabel: String = ""
     private var activeNotificationCopy: AdhanNotificationCopy? = null
     private var activeChannelId: String = CHANNEL_ID
+    private var playbackRequestGeneration: Int = 0
+    private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            playbackRequestGeneration += 1
             stopRequested = true
             releasePlayer()
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -101,7 +110,8 @@ class AdhanPlaybackService : Service() {
         val notification = buildPlaybackNotification()
         startForeground(NOTIFICATION_ID, notification)
         stopRequested = false
-        playAsset(audioPath, prayerLabel, notificationCopy, language, channelId)
+        playbackRequestGeneration += 1
+        playAsset(audioPath, prayerLabel, notificationCopy, language, channelId, playbackRequestGeneration)
         return START_NOT_STICKY
     }
 
@@ -238,13 +248,36 @@ class AdhanPlaybackService : Service() {
         prayerLabel: String,
         notificationCopy: AdhanNotificationCopy,
         language: AppLanguage,
-        channelId: String
+        channelId: String,
+        requestGeneration: Int
     ) {
         releasePlayer()
+        if (assetPath.startsWith("https://")) {
+            playbackScope.launch {
+                try {
+                    val downloaded = withContext(Dispatchers.IO) { downloadRemoteAdhanFile(assetPath) }
+                    if (requestGeneration != playbackRequestGeneration || stopRequested) return@launch
+                    playAsset(
+                        "local:" + downloaded.absolutePath,
+                        prayerLabel,
+                        notificationCopy,
+                        language,
+                        channelId,
+                        requestGeneration
+                    )
+                } catch (_: Exception) {
+                    if (requestGeneration == playbackRequestGeneration && !stopRequested) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
+                        stopSelf()
+                    }
+                }
+            }
+            return
+        }
         val source = try {
             when {
                 assetPath.startsWith("local:") -> resolveLocalAdhanFileReference(assetPath)
-                assetPath.startsWith("https://") -> downloadRemoteAdhanFile(assetPath)
                 assetPath.isBlank() -> null
                 else -> {
                     val hash = MessageDigest.getInstance("SHA-256").digest(assetPath.toByteArray())
@@ -301,7 +334,7 @@ class AdhanPlaybackService : Service() {
                 }
             }
             mp.setOnPreparedListener { ready ->
-                if (!stopRequested) {
+                if (!stopRequested && requestGeneration == playbackRequestGeneration) {
                     playerPrepared = true
                     playbackPaused = false
                     ready.start()
@@ -359,6 +392,8 @@ class AdhanPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        playbackRequestGeneration += 1
+        playbackScope.cancel()
         releasePlayer()
         super.onDestroy()
     }
