@@ -51,6 +51,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Close
@@ -88,6 +89,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.Role
@@ -97,6 +99,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -2146,18 +2149,22 @@ internal fun PremiumPageScrubber(
                 fontWeight = FontWeight.ExtraBold
             )
         }
-        PremiumSlider(
-            value = previewPage.value,
-            onValueChange = { previewPage.value = it },
-            onValueChangeFinished = {
-                val selected = previewPage.value.roundToInt().coerceIn(1, pageCount)
-                if (selected != safeCurrent) onPageSelected(selected)
-            },
-            valueRange = 1f..pageCount.toFloat(),
-            accent = accent,
-            foreground = foreground,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // A physical drag to the right must always move to a later Mushaf page,
+        // regardless of whether the surrounding Sorani/Arabic screen is RTL.
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            PremiumSlider(
+                value = previewPage.value,
+                onValueChange = { previewPage.value = it },
+                onValueChangeFinished = {
+                    val selected = previewPage.value.roundToInt().coerceIn(1, pageCount)
+                    if (selected != safeCurrent) onPageSelected(selected)
+                },
+                valueRange = 1f..pageCount.toFloat(),
+                accent = accent,
+                foreground = foreground,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
