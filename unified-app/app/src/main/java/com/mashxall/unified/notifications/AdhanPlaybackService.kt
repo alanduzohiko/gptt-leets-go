@@ -352,7 +352,6 @@ class AdhanPlaybackService : Service() {
         stopRequested = true
         releasePlayer()
         cancelPrayerAlarmAlert()
-        cancelPrayerAlarmAlert()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -454,6 +453,17 @@ class AdhanPlaybackService : Service() {
         }
     }
 
+    private fun configureAdhanPlayer(mp: MediaPlayer) {
+        // These attributes must be applied before setDataSource/prepareAsync.
+        mp.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
+        mp.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+        )
+    }
+
     private fun prepareAdhanPlayer(
         mp: MediaPlayer,
         prayerLabel: String,
@@ -463,13 +473,6 @@ class AdhanPlaybackService : Service() {
         requestGeneration: Int,
         selectedAssetPath: String
     ) {
-        mp.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
-        mp.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build()
-        )
         mp.setOnPreparedListener { ready ->
             if (!stopRequested && requestGeneration == playbackRequestGeneration) {
                 playerPrepared = true
@@ -512,6 +515,9 @@ class AdhanPlaybackService : Service() {
     ) {
         releasePlayer()
         stopForeground(STOP_FOREGROUND_REMOVE)
+        if (activePrayerCode.isNotBlank()) {
+            cancelPrayerAlarmAlert()
+        }
         if (selectedAssetPath.isNotBlank()) {
             postMissingAudioNotification(prayerLabel, notificationCopy, language, channelId)
         }
@@ -530,6 +536,7 @@ class AdhanPlaybackService : Service() {
         val mp = MediaPlayer()
         player = mp
         try {
+            configureAdhanPlayer(mp)
             val headers = mapOf(
                 "User-Agent" to ("Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"),
                 "Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8"
@@ -605,6 +612,7 @@ class AdhanPlaybackService : Service() {
         val mp = MediaPlayer()
         player = mp
         try {
+            configureAdhanPlayer(mp)
             when (classifyAdhanAudioSource(assetPath, source)) {
                 AdhanAudioSourceSelection.SELECTED_AUDIO -> mp.setDataSource(source!!.absolutePath)
                 AdhanAudioSourceSelection.DEFAULT_SYSTEM_ALARM -> {
