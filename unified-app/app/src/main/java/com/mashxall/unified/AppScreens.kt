@@ -7898,7 +7898,8 @@ internal fun quranPlaybackTrackAyahs(audioType: Int, startingAyah: Int, ayahCoun
 internal fun quranPlaybackAyahWeight(arabicText: String): Int {
     if (arabicText.isBlank()) return 12
     val letters = arabicText.count { it.isLetter() }
-    val words = arabicText.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+    // Quranic pause symbols occupy their own visual token but are not words.
+    val words = arabicText.trim().split(Regex("\\s+")).count { token -> token.any { it.isLetter() } }
     val elongationLetters = arabicText.count { it == 'ا' || it == 'و' || it == 'ي' || it == 'ى' }
     val pauseMarks = arabicText.count {
         it == 'ۚ' || it == 'ۖ' || it == 'ۛ' || it == 'ۗ' || it == 'ۙ' || it == 'ۜ' || it == '۝'
@@ -8964,6 +8965,12 @@ fun AudioScreen(
                                                 playing = ""
                                             } else {
                                                 playbackPreparingKey = playKey
+                                                // Reserve the manual choice before asynchronous source lookup.
+                                                // A slower navigation auto-play must not replace this request.
+                                                autoPlayKey = playKey
+                                                AudioController.stop()
+                                                playing = ""
+                                                audioPaused = false
                                                 scope.launch {
                                                     try {
                                                         val sources = withContext(Dispatchers.IO) {
