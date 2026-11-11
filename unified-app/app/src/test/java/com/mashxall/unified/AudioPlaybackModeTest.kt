@@ -86,14 +86,16 @@ class AudioPlaybackModeTest {
             6, "قارئ كامل", "Full coverage", 1, "https://example.invalid/full/", 1,
             surahTotal = 114, sourceId = "complete-114"
         )
+        // First-use default still prefers a complete edition, but an explicitly
+        // selected partial edition remains a valid full-surah source for its coverage.
         assertEquals(6, defaultReciterId("full", listOf(partial, complete)))
-        assertNull(resolveCompatibleReciterId("full", 5, listOf(partial, complete)))
+        assertEquals(5, resolveCompatibleReciterId("full", 5, listOf(partial, complete)))
         assertNull(resolveCompatibleReciterId("full", -1, listOf(partial, complete)))
         assertNull(defaultReciterId("full", listOf(partial)))
     }
 
     @Test
-    fun fullSurahLibraryShowsOnlyCompleteCoverageAndVerseModeShowsVerseSources() {
+    fun fullSurahLibraryShowsAvailablePartialAndCompleteEditionsAndVerseModeShowsVerseSources() {
         val partial = com.mashxall.unified.data.Reciter(
             5, "قارئ جزئي", "Partial edition", 1, "https://example.invalid/partial/", 0,
             surahTotal = 40, sourceId = "partial-40"
@@ -106,9 +108,9 @@ class AudioPlaybackModeTest {
             7, "قارئ آية", "Verse source", 0, "https://example.invalid/ayah/", 2,
             surahTotal = 114
         )
-        assertEquals(listOf(complete, verse), filterRecitersForPlaybackMode(listOf(partial, complete, verse), "full", ""))
+        assertEquals(listOf(partial, complete, verse), filterRecitersForPlaybackMode(listOf(partial, complete, verse), "full", ""))
         assertEquals(listOf(verse), filterRecitersForPlaybackMode(listOf(partial, complete, verse), "verse", ""))
-        assertEquals(emptyList<com.mashxall.unified.data.Reciter>(), filterRecitersForPlaybackMode(listOf(partial), "full", ""))
+        assertEquals(listOf(partial), filterRecitersForPlaybackMode(listOf(partial), "full", ""))
     }
 
     @Test
