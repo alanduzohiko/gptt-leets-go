@@ -24,3 +24,33 @@ class QuranInlinePlaybackTrackingTest {
         assertEquals(emptyList<Int>(), quranPlaybackTrackAyahs(audioType = 0, startingAyah = 1, ayahCount = 0))
     }
 }
+
+    @Test
+    fun fullSurahPlaybackEstimateAdvancesAsTheSingleTrackProgresses() {
+        assertEquals(1, quranPlaybackAyahAtPosition(1, 7, 0, 7_000))
+        assertEquals(4, quranPlaybackAyahAtPosition(1, 7, 3_500, 7_000))
+        assertEquals(7, quranPlaybackAyahAtPosition(1, 7, 7_000, 7_000))
+    }
+
+    @Test
+    fun fullSurahSeekTargetsTheApproximateTimeSliceForTheRequestedAyah() {
+        val position = quranPlaybackPositionForAyah(
+            targetAyah = 3,
+            startingAyah = 1,
+            ayahCount = 7,
+            durationMs = 7_000
+        )
+        assertEquals(2_500, position)
+        assertEquals(3, quranPlaybackAyahAtPosition(1, 7, position, 7_000))
+    }
+
+    @Test
+    fun fullSurahProgressAndSeekClampToTheAvailableAyahRange() {
+        assertEquals(3, quranPlaybackAyahAtPosition(3, 7, 0, 10_000))
+        assertEquals(7, quranPlaybackAyahAtPosition(3, 7, 100_000, 10_000))
+        assertEquals(4, quranPlaybackPositionForAyah(1, 4, 7, 9_000).let {
+            quranPlaybackAyahAtPosition(4, 7, it, 9_000)
+        })
+        assertEquals(0, quranPlaybackPositionForAyah(4, 4, 7, 0))
+    }
+
