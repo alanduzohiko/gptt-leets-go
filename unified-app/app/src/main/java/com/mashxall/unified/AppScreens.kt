@@ -139,7 +139,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
@@ -5062,6 +5064,7 @@ private fun MushafPageViewer(
             }
             ReaderActionIcon(Icons.Outlined.Settings, tr(language, "settings"), pressedScale = quranReaderActionPressScale("reader_settings"), onClick = onReaderSettings)
         }
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Row(
             Modifier.fillMaxWidth().background(DeepGreen.copy(alpha = 0.97f)).padding(horizontal = 7.dp, vertical = if (edition == "tajweed") 2.dp else 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -5102,6 +5105,7 @@ private fun MushafPageViewer(
                 pressedScale = quranReaderActionPressScale("previous_page"),
                 onClick = { onPageChange(page - 1) }
             )
+        }
         }
         val pageProgress by animateFloatAsState(
             targetValue = (page.toFloat() / 604f).coerceIn(0f, 1f),
