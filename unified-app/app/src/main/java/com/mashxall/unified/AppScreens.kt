@@ -9561,25 +9561,35 @@ internal object AudioController {
                         runCatching { prepared.release() }
                     }
                 }
-                queued.setOnInfoListener { started, what, _ ->
+                val onStartedAsNext: (MediaPlayer, Int) -> Boolean = { eventPlayer, what ->
+                    val nextPlayer = preloadedPlayer
                     if (
                         what == MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT &&
                         generation == playbackGeneration &&
-                        preloadedPlayer === started &&
+                        nextPlayer != null &&
+                        nextPlayer === queued &&
+                        (eventPlayer === currentPlayer || eventPlayer === nextPlayer) &&
                         preloadedTrackIndex == nextIndex &&
+                        preloadedPlayerPrepared &&
                         player === currentPlayer
                     ) {
-                        // Publish the clip index at the actual gapless switch, before the
-                        // previous player's completion callback can leave the UI one clip behind.
+                        // Both Android callback targets are covered: some platform builds
+                        // report this on the current player, others on the queued player.
                         preloadedPlayer = null
                         preloadedTrackIndex = -1
                         preloadedPlayerPrepared = false
-                        announceActiveTrack(started, nextIndex)
-                        preloadNext(nextIndex, started)
+                        announceActiveTrack(nextPlayer, nextIndex)
+                        preloadNext(nextIndex, nextPlayer)
                         true
                     } else {
                         false
                     }
+                }
+                currentPlayer.setOnInfoListener { eventPlayer, what, _ ->
+                    onStartedAsNext(eventPlayer, what)
+                }
+                queued.setOnInfoListener { eventPlayer, what, _ ->
+                    onStartedAsNext(eventPlayer, what)
                 }
                 queued.setOnCompletionListener { completed -> completeTrack(completed, nextIndex) }
                 queued.setOnErrorListener { failed, _, _ ->
