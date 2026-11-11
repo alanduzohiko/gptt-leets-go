@@ -2511,14 +2511,15 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val inlineSurah = surahs.firstOrNull { it.number == inlinePlaybackSurah }
                 val inlineReciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId }
                 val inlineAyahCount = inlineSurah?.ayahCount ?: 0
+                val sequenceNavigationReady = !AudioController.isPreparingNextSequenceTrack()
                 val hasPreviousTrack = if (inlinePlaybackUsesAyahClips) {
-                    activeAyah > inlinePlaybackStartAyah
+                    activeAyah > inlinePlaybackStartAyah && sequenceNavigationReady
                 } else {
                     inlinePlaybackDurationMs > 0 &&
                         (activeAyah > inlinePlaybackStartAyah || inlinePlaybackSurah > 1)
                 }
                 val hasNextTrack = if (inlinePlaybackUsesAyahClips) {
-                    activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah)
+                    activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah) && sequenceNavigationReady
                 } else {
                     inlinePlaybackDurationMs > 0 &&
                         (activeAyah < inlineAyahCount || inlinePlaybackSurah < (inlineReciter?.surahTotal ?: 114))
@@ -9302,11 +9303,14 @@ internal object AudioController {
         }
     }
 
+    fun isPreparingNextSequenceTrack(): Boolean =
+        preloadedPlayer != null && !preloadedPlayerPrepared
+
     fun hasNextSequenceTrack(): Boolean =
         sequenceTrackRequest != null && currentSequenceTrackIndex() < sequenceTrackCount - 1
 
     fun skipNextSequenceTrack(): Boolean {
-        if (playbackPreparing || !playerPrepared) return false
+        if (playbackPreparing || !playerPrepared || isPreparingNextSequenceTrack()) return false
         val request = sequenceTrackRequest ?: return false
         val next = adjacentAudioSequenceIndex(currentSequenceTrackIndex(), sequenceTrackCount, forward = true) ?: return false
         request(next)
@@ -9314,7 +9318,7 @@ internal object AudioController {
     }
 
     fun skipPreviousSequenceTrack(): Boolean {
-        if (playbackPreparing || !playerPrepared) return false
+        if (playbackPreparing || !playerPrepared || isPreparingNextSequenceTrack()) return false
         val request = sequenceTrackRequest ?: return false
         val previous = adjacentAudioSequenceIndex(currentSequenceTrackIndex(), sequenceTrackCount, forward = false) ?: return false
         request(previous)
