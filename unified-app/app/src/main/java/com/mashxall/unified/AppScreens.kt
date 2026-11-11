@@ -158,6 +158,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mashxall.unified.data.*
+import com.mashxall.unified.notifications.AdhanPlaybackService
 import com.mashxall.unified.notifications.PrayerAlarmScheduler
 import com.mashxall.unified.notifications.prayerAlarmScheduleFailureMessage
 import com.mashxall.unified.notifications.prayerAlarmScheduleMessage
@@ -11670,6 +11671,13 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
+    fun stopCurrentAdhanPlayback() {
+        context.startService(
+            Intent(context, AdhanPlaybackService::class.java)
+                .setAction(AdhanPlaybackService.ACTION_STOP)
+        )
+    }
+
     fun assignAdhanSound(assetPath: String) {
         selectedAdhanAsset = assetPath
         if (activeAdhanPrayerCode == "all") {
@@ -12567,6 +12575,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             adhanEnabled = false
                             prefs.edit().putBoolean("adhan_enabled", false).apply()
                             PrayerAlarmScheduler.cancelAll(context)
+                            stopCurrentAdhanPlayback()
                             adhanMessage = ""
                         } else if (!adhanAssetsLoaded || !hasSelectableAdhanAsset(selectedAdhanAsset, adhanAssets)) {
                             adhanMessage = adhanSourceRequiredMessage(language)
