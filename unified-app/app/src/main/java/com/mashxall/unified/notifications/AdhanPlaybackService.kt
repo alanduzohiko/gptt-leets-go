@@ -22,14 +22,16 @@ internal data class AdhanNotificationCopy(
     val fallbackPrayerTitle: String,
     val contentText: String,
     val stopAction: String,
+    val pauseAction: String,
+    val resumeAction: String,
     val channelName: String,
     val channelDescription: String
 )
 
 internal fun adhanNotificationCopy(language: AppLanguage): AdhanNotificationCopy = when (language) {
-    AppLanguage.EN -> AdhanNotificationCopy("Prayer time", "Adhan · Mashxall", "Stop", "Prayer adhan", "Shown while the selected adhan audio plays.")
-    AppLanguage.AR -> AdhanNotificationCopy("وقت الصلاة", "الأذان · مەشخەڵ", "إيقاف", "أذان الصلاة", "تظهر هذه القناة أثناء تشغيل صوت الأذان المختار.")
-    AppLanguage.CKB -> AdhanNotificationCopy("کاتی نوێژ", "بانگ · مەشخەڵ", "وەستاندن", "بانگی نوێژ", "ئەم ئاگادارکردنەوەیە لە کاتی لێدانی دەنگی بانگی هەڵبژێردراو پیشان دەدرێت.")
+    AppLanguage.EN -> AdhanNotificationCopy("Prayer time", "Adhan · Mashxall", "Stop", "Pause", "Resume", "Prayer adhan", "Shown while the selected adhan audio plays.")
+    AppLanguage.AR -> AdhanNotificationCopy("وقت الصلاة", "الأذان · مەشخەڵ", "إيقاف", "إيقاف مؤقت", "استئناف", "أذان الصلاة", "تظهر هذه القناة أثناء تشغيل صوت الأذان المختار.")
+    AppLanguage.CKB -> AdhanNotificationCopy("کاتی نوێژ", "بانگ · مەشخەڵ", "وەستاندن", "وەستاندنی کاتی", "بەردەوامبوون", "بانگی نوێژ", "ئەم ئاگادارکردنەوەیە لە کاتی لێدانی دەنگی بانگی هەڵبژێردراو پیشان دەدرێت.")
 }
 
 internal fun resolveLocalAdhanFileReference(reference: String): File? {
@@ -62,6 +64,11 @@ internal fun missingAdhanAudioMessage(language: AppLanguage): String = when (lan
 class AdhanPlaybackService : Service() {
     private var player: MediaPlayer? = null
     private var stopRequested = false
+    private var playerPrepared = false
+    private var playbackPaused = false
+    private var activePrayerLabel: String = ""
+    private var activeNotificationCopy: AdhanNotificationCopy? = null
+    private var activeChannelId: String = CHANNEL_ID
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -73,6 +80,10 @@ class AdhanPlaybackService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_TOGGLE) {
+            togglePlayback()
+            return START_NOT_STICKY
+        }
         val prayerLabel = intent?.getStringExtra(EXTRA_PRAYER_LABEL).orEmpty()
         val audioPath = intent?.getStringExtra(EXTRA_AUDIO_PATH).orEmpty()
         val language = AppLanguage.from(
@@ -81,27 +92,76 @@ class AdhanPlaybackService : Service() {
         val notificationCopy = adhanNotificationCopy(language)
         val channelId = CHANNEL_ID + "_" + language.key
         createNotificationChannel(channelId, notificationCopy)
-        val stopPending = PendingIntent.getService(
-            this,
-            STOP_REQUEST_CODE,
-            Intent(this, AdhanPlaybackService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-        )
-        val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
-            .setContentTitle(prayerLabel.ifBlank { notificationCopy.fallbackPrayerTitle })
-            .setContentText(notificationCopy.contentText)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOnlyAlertOnce(true)
-            .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, notificationCopy.stopAction, stopPending)
-            .build()
+        activePrayerLabel = prayerLabel
+        activeNotificationCopy = notificationCopy
+        activeChannelId = channelId
+        val notification = buildPlaybackNotification()
         startForeground(NOTIFICATION_ID, notification)
         stopRequested = false
         playAsset(audioPath, prayerLabel, notificationCopy, language, channelId)
         return START_NOT_STICKY
+    }
+
+    private fun buildPlaybackNotification(): Notification {
+        val copy = activeNotificationCopy ?: adhanNotificationCopy(
+            AppLanguage.from(
+                getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+                    .getString("language", "ckb")
+            )
+        )
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val togglePending = PendingIntent.getService(
+            this,
+            TOGGLE_REQUEST_CODE,
+            Intent(this, AdhanPlaybackService::class.java).setAction(ACTION_TOGGLE),
+            flags
+        )
+        val stopPending = PendingIntent.getService(
+            this,
+            STOP_REQUEST_CODE,
+            Intent(this, AdhanPlaybackService::class.java).setAction(ACTION_STOP),
+            flags
+        )
+        return NotificationCompat.Builder(this, activeChannelId)
+            .setSmallIcon(com.mashxall.unified.R.drawable.ic_mashxall)
+            .setContentTitle(activePrayerLabel.ifBlank { copy.fallbackPrayerTitle })
+            .setContentText(copy.contentText)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .addAction(
+                if (playbackPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+                if (playbackPaused) copy.resumeAction else copy.pauseAction,
+                togglePending
+            )
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, copy.stopAction, stopPending)
+            .build()
+    }
+
+    private fun publishNotification() {
+        if (activeNotificationCopy == null) return
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(NOTIFICATION_ID, buildPlaybackNotification())
+    }
+
+    private fun togglePlayback() {
+        val active = player ?: return
+        if (!playerPrepared) return
+        try {
+            if (playbackPaused) {
+                active.start()
+                playbackPaused = false
+            } else {
+                active.pause()
+                playbackPaused = true
+            }
+            publishNotification()
+        } catch (_: Exception) {
+            // The notification remains available; the service releases the player on its error/completion path.
+        }
     }
 
     private fun createNotificationChannel(channelId: String, copy: AdhanNotificationCopy) {
@@ -183,7 +243,14 @@ class AdhanPlaybackService : Service() {
                     return
                 }
             }
-            mp.setOnPreparedListener { ready -> if (!stopRequested) ready.start() }
+            mp.setOnPreparedListener { ready ->
+                if (!stopRequested) {
+                    playerPrepared = true
+                    playbackPaused = false
+                    ready.start()
+                    publishNotification()
+                }
+            }
             mp.setOnCompletionListener {
                 releasePlayer()
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -230,6 +297,8 @@ class AdhanPlaybackService : Service() {
     private fun releasePlayer() {
         try { player?.setOnCompletionListener(null); player?.setOnErrorListener(null); player?.release() } catch (_: Exception) {}
         player = null
+        playerPrepared = false
+        playbackPaused = false
     }
 
     override fun onDestroy() {
@@ -245,6 +314,8 @@ class AdhanPlaybackService : Service() {
         private const val NOTIFICATION_ID = 7842
         private const val MISSING_AUDIO_NOTIFICATION_ID = 7844
         private const val STOP_REQUEST_CODE = 7843
+        private const val TOGGLE_REQUEST_CODE = 7845
         const val ACTION_STOP = "com.mashxall.unified.STOP_ADHAN"
+        const val ACTION_TOGGLE = "com.mashxall.unified.TOGGLE_ADHAN"
     }
 }
