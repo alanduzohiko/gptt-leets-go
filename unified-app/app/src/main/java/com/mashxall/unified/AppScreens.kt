@@ -12472,7 +12472,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 AudioItem(
                     assetPath = "local:${file.absolutePath}",
                     title = item.titleArabic.ifBlank { item.titleEnglish },
-                    group = if (language == AppLanguage.EN) "Downloaded muezzin voice" else if (language == AppLanguage.AR) "صوت مؤذن منزّل للاستماع دون إنترنت" else "دەنگی بانگبێژی داگیراو بۆ بەبێ ئینتەرنێت"
+                    group = if (language == AppLanguage.EN) "Downloaded muezzin voice" else if (language == AppLanguage.AR) "صوت مؤذن منزّل للاستماع دون إنترنت" else "دەنگی موئەزین داگیراو بۆ بەبێ ئینتەرنێت"
                 )
             } else null
         }
