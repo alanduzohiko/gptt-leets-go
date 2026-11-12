@@ -524,12 +524,10 @@ private fun QuranInlinePlaybackBar(
     var playbackPositionMs by remember { mutableIntStateOf(0) }
     var playbackDurationMs by remember { mutableIntStateOf(0) }
     LaunchedEffect(usesAyahClips, isPrepared, isPaused) {
-        if (usesAyahClips) {
-            playbackPositionMs = 0
-            playbackDurationMs = 0
-            return@LaunchedEffect
-        }
         while (true) {
+            // Media3 reports the live position/duration of the active file.
+            // For ayah playlists this is the current verse clip; the ayah
+            // counter advances separately only after the next clip is READY.
             val (position, duration) = AudioController.playbackPosition()
             playbackPositionMs = position.coerceAtLeast(0)
             playbackDurationMs = duration.coerceAtLeast(0)
@@ -606,28 +604,26 @@ private fun QuranInlinePlaybackBar(
                     },
                     color = foreground.copy(alpha = 0.65f), fontSize = 9.sp, maxLines = 1
                 )
-                if (!usesAyahClips) {
-                    if (timeLabel.substringAfter(" / ") != "—") {
-                        LinearProgressIndicator(
-                            progress = { progress.coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
-                            color = Gold,
-                            trackColor = Gold.copy(alpha = 0.14f)
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
-                            color = Gold,
-                            trackColor = Gold.copy(alpha = 0.14f)
-                        )
-                    }
-                    Text(
-                        timeLabel,
-                        color = foreground.copy(alpha = 0.62f),
-                        fontSize = 8.sp,
-                        maxLines = 1
+                if (timeLabel.substringAfter(" / ") != "—") {
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                        color = Gold,
+                        trackColor = Gold.copy(alpha = 0.14f)
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                        color = Gold,
+                        trackColor = Gold.copy(alpha = 0.14f)
                     )
                 }
+                Text(
+                    timeLabel,
+                    color = foreground.copy(alpha = 0.62f),
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
             }
             ReaderActionIcon(
                 icon = Icons.Outlined.Repeat,
