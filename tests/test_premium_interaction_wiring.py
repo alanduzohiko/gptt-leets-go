@@ -86,8 +86,16 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("maxLines = 2", sorani)
         self.assertIn("softWrap = true", sorani)
         self.assertIn("Modifier.fillMaxWidth()", sorani)
-        self.assertIn(".heightIn(min = 72.dp)", sorani)
-        self.assertIn(".heightIn(min = 64.dp)", other_languages)
+        self.assertIn(".heightIn(min = 84.dp)", sorani)
+        self.assertIn(".heightIn(min = 74.dp)", other_languages)
+        self.assertIn("fontSize = 14.sp", sorani)
+        self.assertIn("fontSize = 13.sp", other_languages)
+        tasbih = APP_SCREENS.split("fun TasbihScreen(", 1)[1].split(
+            "internal fun resolveQuranSearchMushafPage", 1
+        )[0]
+        self.assertIn("verticalScroll(rememberScrollState())", tasbih)
+        self.assertIn("fontSize = 20.sp, lineHeight = 32.sp", tasbih)
+        self.assertIn("fontSize = 14.sp", tasbih)
         self.assertIn("modifier = Modifier.weight(1f)", other_languages)
         app_lines = APP_SCREENS.splitlines()
         footer_calls = [
@@ -98,19 +106,40 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         for index in footer_calls:
             self.assertEqual("language = language,", app_lines[index + 1].strip())
 
-    def test_full_surah_mushaf_sync_loads_complete_arabic_ayah_timing_data(self):
+    def test_full_surah_mushaf_does_not_fabricate_verse_timestamps(self):
         playback = APP_SCREENS.split("fun startInlineRecitation(", 1)[1].split(
             "fun currentInlineAudioAyah()", 1
         )[0]
-        manual_seek = APP_SCREENS.split("fun moveInlineFullSurahToAyah(", 1)[1].split(
+        current_ayah = APP_SCREENS.split("fun currentInlineAudioAyah()", 1)[1].split(
             "LaunchedEffect(inlinePlaybackActiveVerse", 1
         )[0]
-        self.assertIn("ContentRepository.loadAyahs(", playback)
-        self.assertIn('language = "ar"', playback)
-        self.assertIn('translationKey = "none"', playback)
-        self.assertIn("inlinePlaybackAyahWeights = fullSurahAyahWeights", playback)
-        self.assertNotIn("verses.filter", playback)
-        self.assertIn("val weights = inlinePlaybackAyahWeights", manual_seek)
+        clock_ticker = APP_SCREENS.split(
+            "// A one-file full-surah MP3 has an accurate track clock", 1
+        )[1].split("fun requestInlineRecitation(", 1)[0]
+        bar = APP_SCREENS.split("private fun QuranInlinePlaybackBar(", 1)[1].split(
+            "private fun ReaderActionIcon(", 1
+        )[0]
+
+        self.assertIn("chosen.audioType != 0 && requestedAyahInSurah > 1", playback)
+        self.assertIn("fullSurahSeekUnavailableMessage(language)", playback)
+        self.assertNotIn("ContentRepository.loadAyahs(", playback)
+        self.assertNotIn("quranPlaybackPositionAtAyahStart(", playback)
+        self.assertIn("return inlinePlaybackStartAyah.coerceIn(1, ayahCount)", current_ayah)
+        self.assertNotIn("quranPlaybackAyahAtPosition(", clock_ticker)
+        self.assertIn(
+            "playbackVerse = inlinePlaybackActiveVerse.takeIf { inlinePlaybackUsesAyahClips }",
+            APP_SCREENS,
+        )
+        self.assertIn('"Full surah • continuous recording"', bar)
+        self.assertIn('"Previous surah"', bar)
+        self.assertIn('"Next surah"', bar)
+
+    def test_muezzin_library_keeps_all_voices_and_only_two_filters(self):
+        self.assertIn('items(listOf("all", "downloaded")', APP_SCREENS)
+        self.assertNotIn('items(listOf("all", "featured", "downloaded")', APP_SCREENS)
+        self.assertNotIn("featuredAdhanVoiceIds", APP_SCREENS)
+        self.assertNotIn("isFeaturedAdhanVoice", APP_SCREENS)
+        self.assertIn("matchesAdhanLibraryFilter(adhanLibraryFilter, downloaded = true)", APP_SCREENS)
 
     def test_pending_ayah_picker_does_not_mutate_the_active_audio_session(self):
         request = APP_SCREENS.split("fun requestInlineRecitation(", 1)[1].split(
