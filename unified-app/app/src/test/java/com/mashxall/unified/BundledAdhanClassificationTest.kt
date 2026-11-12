@@ -40,6 +40,18 @@ class BundledAdhanClassificationTest {
     }
 
     @Test
+    fun recognizesNewCuratedMuezzinDownloadsWithTheSoraniLibraryLabel() {
+        val downloadedMuezzin = AudioItem(
+            "local:/data/user/0/com.mashxall/files/adhan-audio/muezzin-kurdish.mp3",
+            "أحمد الكوردي",
+            "دەنگی موئەزین داگیراو بۆ بەبێ ئینتەرنێت"
+        )
+        assertEquals("muezzin", bundledAdhanCategory(downloadedMuezzin))
+        assertTrue(filterSelectableAdhanAssets(listOf(downloadedMuezzin)).contains(downloadedMuezzin))
+        assertTrue(hasSelectableAdhanAsset(downloadedMuezzin.assetPath, listOf(downloadedMuezzin)))
+    }
+
+    @Test
     fun recognizesArabicNamedMosqueRecordings() {
         assertEquals(
             "mosque",
