@@ -7460,7 +7460,7 @@ private fun TasbihFooterAction(
     if (language == AppLanguage.CKB) {
         Row(
             modifier = modifier
-                .heightIn(min = 72.dp)
+                .heightIn(min = 84.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(Brush.horizontalGradient(
                     listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
@@ -7472,15 +7472,15 @@ private fun TasbihFooterAction(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
-                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
+                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
                     .background(accent.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text(
-                    text = label, color = foreground, fontSize = 11.sp, lineHeight = 15.sp,
+                    text = label, color = foreground, fontSize = 14.sp, lineHeight = 19.sp,
                     fontWeight = FontWeight.Bold, maxLines = 2, softWrap = true,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
                 )
@@ -7489,7 +7489,7 @@ private fun TasbihFooterAction(
     } else {
         Row(
             modifier = modifier
-                .heightIn(min = 64.dp)
+                .heightIn(min = 74.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(Brush.horizontalGradient(
                     listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
@@ -7509,7 +7509,7 @@ private fun TasbihFooterAction(
             }
             Spacer(Modifier.width(7.dp))
             Text(
-                label, color = foreground, fontSize = 11.sp, lineHeight = 15.sp,
+                label, color = foreground, fontSize = 13.sp, lineHeight = 18.sp,
                 fontWeight = FontWeight.Bold, maxLines = 2, textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
@@ -7560,7 +7560,10 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         totalCount = prefs.getInt("tasbih_total_$selectedId", count)
         prefs.edit().putInt("tasbih_preset_id", selectedId).apply()
     }
-    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         PremiumSectionHero(
             title = tr(language, "tasbih"),
             subtitle = when (language) {
@@ -7593,7 +7596,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         Spacer(Modifier.height(10.dp))
         Text(
             selected?.zikr ?: "سُبْحَانَ اللّٰهِ • اَلْحَمْدُلِلّٰهِ • اَللّٰهُ أَكْبَرُ",
-            color = Gold, textAlign = TextAlign.Center, fontSize = 18.sp, lineHeight = 29.sp
+            color = Gold, textAlign = TextAlign.Center, fontSize = 20.sp, lineHeight = 32.sp
         )
         selected?.targetCount?.takeIf { it > 0 }?.let { target ->
             Spacer(Modifier.height(6.dp))
@@ -7633,7 +7636,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         }
         if (language == AppLanguage.CKB && !selected?.meaningCkb.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
-            Text(selected?.meaningCkb.orEmpty(), color = foreground.copy(alpha = 0.7f), fontSize = 12.sp, textAlign = TextAlign.Center, lineHeight = 18.sp)
+            Text(selected?.meaningCkb.orEmpty(), color = foreground.copy(alpha = 0.78f), fontSize = 14.sp, textAlign = TextAlign.Center, lineHeight = 22.sp)
         }
         Spacer(Modifier.height(24.dp))
         val counterLabel = when (language) {
@@ -7747,13 +7750,13 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 ) { displayedCount ->
                     Text(displayedCount.toString(), color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.ExtraBold)
                 }
-                Text(if (language == AppLanguage.EN) "TAP TO COUNT" else if (language == AppLanguage.AR) "اضغط للعدّ" else "بۆ ژماردن لێی بدە", color = Gold, fontSize = 10.sp, letterSpacing = 1.4.sp)
+                Text(if (language == AppLanguage.EN) "TAP TO COUNT" else if (language == AppLanguage.AR) "اضغط للعدّ" else "بۆ ژماردن لێی بدە", color = Gold, fontSize = 12.sp, letterSpacing = 1.0.sp)
                 if (targetCount > 0) {
                     Spacer(Modifier.height(3.dp))
                     Text(
                         "${(targetProgress * 100f).toInt()}%",
-                        color = Color.White.copy(alpha = 0.72f),
-                        fontSize = 10.sp
+                        color = Color.White.copy(alpha = 0.78f),
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -7765,7 +7768,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 AppLanguage.AR -> "إجمالي التسبيحات: $totalCount"
                 AppLanguage.CKB -> "کۆی ژمارەکان: $totalCount"
             },
-            color = foreground.copy(alpha = 0.63f), fontSize = 11.sp
+            color = foreground.copy(alpha = 0.72f), fontSize = 13.sp, lineHeight = 19.sp
         )
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
