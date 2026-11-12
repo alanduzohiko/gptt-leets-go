@@ -24,8 +24,8 @@ class QuranInlinePlaybackTrackingTest {
         assertEquals(emptyList<Int>(), quranPlaybackTrackAyahs(audioType = 0, startingAyah = 1, ayahCount = 0))
     }
 
-    // These mathematical estimates remain for non-Mushaf legacy audio controls.
-    // The Mushaf no longer uses them to seek or highlight a verse in one full MP3.
+    // A full MP3 has no embedded ayah timecodes. The Mushaf therefore shares
+    // one weighted timeline between selected-ayah seek and live verse highlighting.
     @Test
     fun everySelectedFullSurahSeekLandsInsideTheSameWeightedAyahInterval() {
         val weights = listOf(10, 20, 30, 40)
