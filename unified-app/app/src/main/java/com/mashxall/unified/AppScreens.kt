@@ -1738,6 +1738,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     var inlinePlaybackSurah by rememberSaveable { mutableIntStateOf(initialSurah.coerceIn(1, 114)) }
     var inlinePlaybackStartAyah by rememberSaveable { mutableIntStateOf(initialAyah.coerceAtLeast(1)) }
+    var inlinePlaybackInitialSeekAyah by rememberSaveable { mutableIntStateOf(initialAyah.coerceAtLeast(1)) }
+    var inlinePlaybackManualSeekTargetAyah by remember { mutableStateOf<Int?>(null) }
     var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
     var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
@@ -1757,7 +1759,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         inlinePlaybackUsesAyahClips,
         inlinePlaybackSurah,
         inlinePlaybackStartAyah,
-        inlinePlaybackAyahWeights
+        inlinePlaybackAyahWeights,
+        inlinePlaybackManualSeekTargetAyah
     ) {
         if (inlinePlaybackVisible) {
             while (true) {
@@ -1776,18 +1779,29 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         durationMs = duration,
                         ayahWeights = inlinePlaybackAyahWeights
                     )
-                    val target = inlinePlaybackSurah to estimatedAyah
-                    if (estimatedAyah > 0 && inlinePlaybackActiveVerse != target) {
-                        inlinePlaybackActiveVerse = target
-                        selected = inlinePlaybackSurah
-                        onSurah(inlinePlaybackSurah)
-                        onOpenVerse(inlinePlaybackSurah, estimatedAyah)
-                        prefs.edit()
-                            .putInt("last_surah", inlinePlaybackSurah)
-                            .putInt("last_ayah_number", estimatedAyah)
-                            .putInt("quran_progress_ayah_$inlinePlaybackSurah", estimatedAyah)
-                            .apply()
-                        readingProgressRevision++
+                    val initialSeekPending = AudioController.isInitialSequenceSeekPending()
+                    if (shouldPublishFullSurahAyahPosition(
+                            initialSeekPending = initialSeekPending,
+                            expectedAyah = inlinePlaybackManualSeekTargetAyah,
+                            estimatedAyah = estimatedAyah
+                        )
+                    ) {
+                        // Do not let the pre-seek position overwrite the verse selected
+                        // by the user. Clear the guard only after the clock reaches it.
+                        inlinePlaybackManualSeekTargetAyah = null
+                        val target = inlinePlaybackSurah to estimatedAyah
+                        if (estimatedAyah > 0 && inlinePlaybackActiveVerse != target) {
+                            inlinePlaybackActiveVerse = target
+                            selected = inlinePlaybackSurah
+                            onSurah(inlinePlaybackSurah)
+                            onOpenVerse(inlinePlaybackSurah, estimatedAyah)
+                            prefs.edit()
+                                .putInt("last_surah", inlinePlaybackSurah)
+                                .putInt("last_ayah_number", estimatedAyah)
+                                .putInt("quran_progress_ayah_$inlinePlaybackSurah", estimatedAyah)
+                                .apply()
+                            readingProgressRevision++
+                        }
                     }
                 }
                 delay(33L)
@@ -1872,6 +1886,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackRepeatCurrent = false
                 inlinePlaybackSurah = surahNumber
                 inlinePlaybackStartAyah = startAyah
+                inlinePlaybackInitialSeekAyah = requestedAyahInSurah
+                inlinePlaybackManualSeekTargetAyah =
+                    if (chosen.audioType != 0 && requestedAyahInSurah > 1) requestedAyahInSurah else null
                 inlinePlaybackReciterId = chosen.id
                 inlinePlaybackUsesAyahClips = chosen.audioType == 0
                 inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
@@ -1944,6 +1961,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 trackIndex = AudioController.currentSequenceTrackIndex()
             ).coerceIn(1, ayahCount)
         }
+        if (AudioController.isInitialSequenceSeekPending()) {
+            return inlinePlaybackManualSeekTargetAyah
+                ?: inlinePlaybackInitialSeekAyah.coerceIn(1, ayahCount)
+        }
+        inlinePlaybackManualSeekTargetAyah?.let { return it.coerceIn(1, ayahCount) }
         val (position, duration) = AudioController.playbackPosition()
         return quranPlaybackAyahAtPosition(
             startingAyah = inlinePlaybackStartAyah,
@@ -1970,7 +1992,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             durationMs = duration,
             ayahWeights = weights
         )
-        if (!AudioController.seekTo(targetPosition)) return
+        inlinePlaybackManualSeekTargetAyah = target
+        if (!AudioController.seekTo(targetPosition)) {
+            inlinePlaybackManualSeekTargetAyah = null
+            return
+        }
         inlinePlaybackActiveVerse = inlinePlaybackSurah to target
         selected = inlinePlaybackSurah
         onSurah(inlinePlaybackSurah)
@@ -7540,30 +7566,40 @@ private fun TasbihFooterAction(
 ) {
     Row(
         modifier = modifier
-            .heightIn(min = 64.dp)
+            .heightIn(min = 72.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(Brush.horizontalGradient(
                 listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
             ))
             .border(1.dp, accent.copy(alpha = 0.48f), RoundedCornerShape(18.dp))
             .premiumClickable(role = Role.Button, pressedScale = 0.956f, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(horizontal = 9.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Box(
-            Modifier.size(30.dp).clip(RoundedCornerShape(10.dp))
+            Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
                 .background(accent.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
         }
-        Spacer(Modifier.width(7.dp))
-        Text(
-            label, color = foreground, fontSize = 11.sp, lineHeight = 15.sp,
-            fontWeight = FontWeight.Bold, maxLines = 2, textAlign = TextAlign.Center,
-            modifier = Modifier.weight(1f)
-        )
+        Box(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                color = foreground,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                softWrap = true,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
@@ -8208,15 +8244,26 @@ internal fun isFeaturedAdhanVoice(
     if (id in featuredAdhanVoiceIds) return true
     val searchable = "$titleArabic $titleEnglish $sourceFilename".lowercase(Locale.ROOT)
     return listOf(
-        "أحمد النفيس", "احمد النفيس", "ahmad al nafees", "ahmad al nufais",
-        "ناصر القطامي", "nasser al qatami", "nasser alqatami",
-        "ياسر الدوسري", "yasser al-dosari", "yasser al dosari",
-        "مشاري العفاسي", "mishary alafasy", "عبد الباسط", "abdulbasit",
-        "أحمد الكردي", "احمد الكردي", "ahmad al kurdi",
-        "علي بن أحمد ملا", "ali ibn ahmad mala",
-        "الحرم المكي", "الحرم المدني", "haram al makki", "haram al madani"
+        "أحمد النفيس", "احمد النفيس", "ahmad al nafees", "ahmad al nufais", "ahmed alnufais",
+        "ناصر القطامي", "nasser al qatami", "nasser alqatami", "nasser el-katamy",
+        "منصور السالمي", "mansour alsalmy", "mansour al salmi",
+        "إسلام صبحي", "اسلام صبحي", "islam sobhi", "islam sobhey",
+        "ياسر الدوسري", "yasser al-dosari", "yasser al dosari", "yasser aldosary",
+        "مشاري العفاسي", "mishary alafasy", "meshary alafasy",
+        "عبد الباسط", "abdulbasit", "سعد الغامدي", "saad alghamdy",
+        "أحمد الكردي", "احمد الكردي", "ahmad al kurdi", "ahmed el kourdi",
+        "علي بن أحمد ملا", "ali ibn ahmad mala", "عبد المجيد السريحي",
+        "عبدالمجيد السريحي", "abdul majed sarehy",
+        "الحرم المكي", "الحرم المدني", "makkah azan", "madinah azan",
+        "haram al makki", "haram al madani"
     ).any { searchable.contains(it) }
 }
+
+internal fun shouldPublishFullSurahAyahPosition(
+    initialSeekPending: Boolean,
+    expectedAyah: Int?,
+    estimatedAyah: Int
+): Boolean = !initialSeekPending && (expectedAyah == null || expectedAyah == estimatedAyah)
 
 internal fun matchesAdhanLibraryFilter(filter: String, featured: Boolean, downloaded: Boolean): Boolean = when (filter) {
     "featured" -> featured
@@ -8275,7 +8322,7 @@ fun AudioScreen(
     LaunchedEffect(Unit) {
         ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
         audio = ContentRepository.loadAudioItems(context)
-        onlineAdhan = ContentRepository.loadOnlineAdhan(context)
+        onlineAdhan = ContentRepository.loadOnlineMuezzin(context)
         val loadedReciters = ContentRepository.loadReciters(context)
         reciters = loadedReciters
         surahs = ContentRepository.loadSurahs(context)
@@ -8589,7 +8636,9 @@ fun AudioScreen(
             val searchTerm = audioQuery.trim()
             val bundledAdhan = remember(audio) {
                 audio.mapNotNull { item ->
-                    bundledAdhanCategory(item)?.let { category -> BundledAdhanTrack(item, category) }
+                    bundledAdhanCategory(item)
+                        ?.takeIf { category -> category == "muezzin" }
+                        ?.let { category -> BundledAdhanTrack(item, category) }
                 }
             }
             val visibleBundledAdhan = remember(bundledAdhan, searchTerm, adhanLibraryFilter) {
@@ -9287,9 +9336,9 @@ internal fun adhanAudioActionDescription(language: AppLanguage, isPlaying: Boole
 }
 
 internal fun audioCatalogSourceNotice(language: AppLanguage): String = when (language) {
-    AppLanguage.EN -> "Source catalog: Kiwifu/adhan-mp3 • recordings stay online until you choose Download."
-    AppLanguage.AR -> "كتالوج المصدر: Kiwifu/adhan-mp3 • تبقى التسجيلات عبر الإنترنت حتى تختار تنزيلها."
-    AppLanguage.CKB -> "کاتەلۆگی سەرچاوە: Kiwifu/adhan-mp3 • تۆمارەکان ئۆنلاین دەمێننەوە تا داگرتن هەڵدەبژێریت."
+    AppLanguage.EN -> "Muezzin voice index: bilalelsayed97/adhan_sounds • streams from the original source; recordings are not bundled."
+    AppLanguage.AR -> "فهرس أصوات المؤذنين: bilalelsayed97/adhan_sounds • بث من المصدر الأصلي دون تضمين التسجيلات داخل التطبيق."
+    AppLanguage.CKB -> "کاتەلۆگی دەنگی بانگبێژان: bilalelsayed97/adhan_sounds • لە سەرچاوەی ڕەسەنەوە پەخش دەکرێن و لەناو ئەپدا دانانرێن."
 }
 
 internal fun audioPlaybackFailureMessage(language: AppLanguage, failure: AudioPlaybackFailure): String = when (language) {
@@ -9308,6 +9357,12 @@ internal fun audioPlaybackFailureMessage(language: AppLanguage, failure: AudioPl
         AudioPlaybackFailure.LOCAL_ASSET -> "نەتوانرا فایلە دەنگییەکە بکرێتەوە؛ تۆمارێکی تر تاقی بکەرەوە."
         AudioPlaybackFailure.STREAM -> "پەخشکردنی فایلە دەنگییەکە بەردەست نییە؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەرەوە."
     }
+}
+
+internal fun fullSurahSeekUnavailableMessage(language: AppLanguage): String = when (language) {
+    AppLanguage.EN -> "This recording did not provide a seekable duration. Try another reciter or verse-by-verse audio."
+    AppLanguage.AR -> "لم يوفّر هذا التسجيل مدة قابلة للقفز إلى الآية المحددة. جرّب قارئًا آخر أو وضع آيةً بآية."
+    AppLanguage.CKB -> "ئەم تۆمارە ماوەیەکی گونجاوی بۆ بازدان بۆ ئایەتی دیاریکراو نەدا. قورئان‌خوێنێکی تر یان شێوازی ئایەت بە ئایەت تاقی بکەرەوە."
 }
 
 internal fun audioSequencePartialPlaybackMessage(language: AppLanguage, unavailableTrackCount: Int): String {
@@ -9574,6 +9629,8 @@ internal object AudioController {
     private var repeatCurrentTrack: Boolean = false
     private var sequenceTrackCallback: ((Int) -> Unit)? = null
     private var initialSequenceSeekPositionProvider: ((Long) -> Long)? = null
+    private var initialSequenceSeekPending: Boolean = false
+    private var initialSequenceSeekFailure: Boolean = false
     private var initialSequenceSeekFallbackJob: Job? = null
     private var playbackCallback: ((Boolean) -> Unit)? = null
     private var singlePlaybackStarted: Boolean = false
@@ -9586,6 +9643,7 @@ internal object AudioController {
     fun isActive(): Boolean = playbackActive
     fun isPreparing(): Boolean = playbackPreparing
     fun isPaused(): Boolean = playbackPaused
+    fun isInitialSequenceSeekPending(): Boolean = initialSequenceSeekPending
 
     /** Media3 owns the active playlist index, including gapless item transitions. */
     fun currentSequenceTrackIndex(): Int {
@@ -9817,12 +9875,17 @@ internal object AudioController {
             .getOrDefault(0L)
             .coerceIn(0L, (rawDuration - 1L).coerceAtLeast(0L))
         if (requestedPosition > 0L) {
-            runCatching { engine.seekTo(requestedPosition) }
-                .onFailure {
-                    android.util.Log.w("MashxallQuranAudio", "Could not seek to the selected ayah offset", it)
-                }
+            val seekSucceeded = runCatching {
+                engine.seekTo(requestedPosition)
+                true
+            }.getOrElse {
+                android.util.Log.w("MashxallQuranAudio", "Could not seek to the selected ayah offset", it)
+                false
+            }
+            if (!seekSucceeded) return false
         }
         initialSequenceSeekPositionProvider = null
+        initialSequenceSeekPending = false
         initialSequenceSeekFallbackJob?.cancel()
         initialSequenceSeekFallbackJob = null
         engine.playWhenReady = true
@@ -9897,6 +9960,8 @@ internal object AudioController {
         repeatCurrentTrack = false
         sequenceTrackCallback = null
         initialSequenceSeekPositionProvider = null
+        initialSequenceSeekPending = false
+        initialSequenceSeekFailure = false
         initialSequenceSeekFallbackJob?.cancel()
         initialSequenceSeekFallbackJob = null
         playbackCallback = null
@@ -9920,9 +9985,16 @@ internal object AudioController {
         val callback = playbackCallback
         val missingCount = sequenceUnavailableCount
         val hadPlayback = sequenceHadStarted
+        val selectedAyahSeekFailed = initialSequenceSeekFailure
         releasePlayerAndResetState(context)
         callback?.invoke(false)
-        if (context != null && missingCount > 0) {
+        if (context != null && selectedAyahSeekFailed) {
+            Toast.makeText(
+                context,
+                fullSurahSeekUnavailableMessage(AppLanguage.from(languageHint(context))),
+                Toast.LENGTH_LONG
+            ).show()
+        } else if (context != null && missingCount > 0) {
             val language = AppLanguage.from(languageHint(context))
             val message = if (hadPlayback) {
                 audioSequencePartialPlaybackMessage(language, missingCount)
@@ -9969,6 +10041,8 @@ internal object AudioController {
         repeatCurrentTrack = false
         sequenceTrackCallback = onTrackStarted
         initialSequenceSeekPositionProvider = initialSeekPositionProvider
+        initialSequenceSeekPending = initialSeekPositionProvider != null
+        initialSequenceSeekFailure = false
         playbackCallback = callback
         playbackFinished = false
         singlePlaybackFailure = failure
@@ -9993,25 +10067,22 @@ internal object AudioController {
             engine.prepare()
             if (initialSeekPositionProvider != null) {
                 initialSequenceSeekFallbackJob = preparationScope.launch {
-                    delay(3_000L)
+                    delay(20_000L)
                     if (isCurrentPlayer(engine, generation) &&
                         !sequenceHadStarted &&
+                        initialSequenceSeekPending &&
                         initialSequenceSeekPositionProvider != null
                     ) {
                         android.util.Log.w(
                             "MashxallQuranAudio",
-                            "The selected-ayah seek was unavailable; starting the full-surah recording safely"
+                            "The selected-ayah seek did not receive a seekable duration; refusing to restart from ayah one"
                         )
+                        initialSequenceSeekFailure = true
+                        initialSequenceSeekPending = false
                         initialSequenceSeekPositionProvider = null
                         initialSequenceSeekFallbackJob = null
-                        engine.playWhenReady = true
-                        if (engine.playbackState == Player.STATE_READY) {
-                            playerPrepared = true
-                            playbackPreparing = false
-                            playbackActive = true
-                            playbackPaused = false
-                            announceSequenceTrack(engine, generation, engine.currentMediaItemIndex)
-                        }
+                        sequenceUnavailableCount = maxOf(sequenceUnavailableCount, 1)
+                        finishSequence(generation)
                     }
                 }
             }
@@ -12327,15 +12398,17 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         // Only actual Adhan/mosque recordings are selectable for scheduled alerts.
         // Generic Quran recitation and unrelated source audio must never become an adhan by fallback.
         val bundledAssets = filterSelectableAdhanAssets(ContentRepository.loadAudioItems(context))
-        val onlineCatalog = ContentRepository.loadOnlineAdhan(context)
-        onlineAdhanCount = onlineCatalog.size
+        val curatedMuezzins = ContentRepository.loadOnlineMuezzin(context)
+        val legacyAdhanCatalog = ContentRepository.loadOnlineAdhan(context)
+        val onlineCatalog = (legacyAdhanCatalog + curatedMuezzins).distinctBy { it.id }
+        onlineAdhanCount = curatedMuezzins.size
         val downloadedOnlineAssets = onlineCatalog.mapNotNull { item ->
             val file = onlineAdhanOfflineFile(context, item)
             if (isValidReciterAudioFile(file)) {
                 AudioItem(
                     assetPath = "local:${file.absolutePath}",
                     title = item.titleArabic.ifBlank { item.titleEnglish },
-                    group = if (language == AppLanguage.EN) "Downloaded online adhan" else if (language == AppLanguage.AR) "أذان منزّل للاستماع دون إنترنت" else "بانگی داگیراو بۆ بەبێ ئینتەرنێت"
+                    group = if (language == AppLanguage.EN) "Downloaded muezzin voice" else if (language == AppLanguage.AR) "صوت مؤذن منزّل للاستماع دون إنترنت" else "دەنگی بانگبێژی داگیراو بۆ بەبێ ئینتەرنێت"
                 )
             } else null
         }
@@ -12984,9 +13057,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 PremiumActionButton(
                     label = when (language) {
-                        AppLanguage.EN -> "Browse full adhan & mosque library"
-                        AppLanguage.AR -> "فتح مكتبة الأذان وأصوات المساجد الكاملة"
-                        AppLanguage.CKB -> "کردنەوەی کتێبخانەی تەواوی بانگ و دەنگی مزگەوت"
+                        AppLanguage.EN -> "Browse famous muezzin voices"
+                        AppLanguage.AR -> "فتح مكتبة أصوات المؤذنين المشهورين"
+                        AppLanguage.CKB -> "کردنەوەی کتێبخانەی دەنگی بانگبێژە بەناوبانگەکان"
                     },
                     icon = Icons.Outlined.GraphicEq,
                     accent = Gold,
@@ -13274,18 +13347,18 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                     Column(Modifier.fillMaxWidth().padding(10.dp)) {
                         Text(
                             when (language) {
-                                AppLanguage.EN -> "Full online Adhan & mosque library"
-                                AppLanguage.AR -> "مكتبة الأذان والمساجد الكاملة عبر الإنترنت"
-                                AppLanguage.CKB -> "کتێبخانەی تەواوی بانگ و مزگەوت بە ئۆنلاین"
+                                AppLanguage.EN -> "Online muezzin voice library"
+                                AppLanguage.AR -> "مكتبة أصوات المؤذنين عبر الإنترنت"
+                                AppLanguage.CKB -> "کتێبخانەی دەنگی بانگبێژان بە ئۆنلاین"
                             },
                             color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
                             when (language) {
-                                AppLanguage.EN -> onlineAdhanCount.toString() + " source-linked recordings • 175 muezzins and 56 mosque/location recordings. Download a track in the online library, return here, and select its saved copy for alerts."
-                                AppLanguage.AR -> onlineAdhanCount.toString() + " تسجيلًا من المصدر الأصلي • 175 مؤذنًا و56 تسجيل مسجد/موقع. نزّل التسجيل من المكتبة ثم ارجع واختر النسخة المحفوظة للتنبيهات."
-                                AppLanguage.CKB -> onlineAdhanCount.toString() + " تۆماری بە سەرچاوەوە بەستراو • ١٧٥ موئەزین و٥٦ تۆماری مزگەوت/شوێن. لە کتێبخانەکە دایبگرە، بگەڕێوە و وەشانی پارێزراو بۆ ئاگادارکردنەوە هەڵبژێرە."
+                                AppLanguage.EN -> onlineAdhanCount.toString() + " curated muezzin voice recordings. Download a voice, then select its saved copy for prayer alerts."
+                                AppLanguage.AR -> onlineAdhanCount.toString() + " تسجيلاً مختارًا لأصوات مؤذنين معروفين. نزّل الصوت ثم اختر نسخته المحفوظة لتنبيهات الصلاة."
+                                AppLanguage.CKB -> onlineAdhanCount.toString() + " تۆماری هەڵبژێردراوی دەنگی بانگبێژانی بەناوبانگ. دەنگەکە دابگرە، پاشان وەشانی پارێزراوی بۆ ئاگادارکردنەوەی نوێژ هەڵبژێرە."
                             },
                             color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp, lineHeight = 15.sp
                         )
