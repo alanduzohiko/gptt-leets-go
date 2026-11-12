@@ -89,7 +89,7 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn(".heightIn(min = 72.dp)", sorani)
         self.assertIn(".heightIn(min = 64.dp)", other_languages)
         self.assertIn("modifier = Modifier.weight(1f)", other_languages)
-        self.assertEqual(2, APP_SCREENS.count("language = language,\\n                label = when (language) {"))
+        self.assertEqual(2, APP_SCREENS.count("TasbihFooterAction(\\n                language = language,"))
 
     def test_quran_welcome_uses_live_motion_and_real_reader_actions(self):
         welcome = APP_SCREENS.split("private fun QuranSurahWelcomeCard(", 1)[1].split(
