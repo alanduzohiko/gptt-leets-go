@@ -1750,11 +1750,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var pendingInlineRecitationTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackPreparing by remember { mutableStateOf(false) }
 
-    // Cache verse timing weights once per surah and sample the audio clock at 10 Hz.
-    val inlinePlaybackAyahWeights = remember(inlinePlaybackSurah, verses, surahs) {
-        val count = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
-        quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, count)
-    }
+    // These weights come from the full Arabic surah loaded specifically for audio
+    // timing. The graphic Mushaf deliberately does not populate the legacy text list.
+    var inlinePlaybackAyahWeights by remember { mutableStateOf(emptyList<Int>()) }
     LaunchedEffect(
         inlinePlaybackVisible,
         inlinePlaybackUsesAyahClips,
@@ -1856,22 +1854,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
         val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyah, ayahCount)
         val requestedAyahInSurah = requestedAyah.coerceIn(1, ayahCount)
-        val fullSurahAyahWeights = if (chosen.audioType != 0) {
-            quranPlaybackAyahWeights(verses.filter { it.surah == surahNumber }, ayahCount)
-        } else {
-            emptyList()
-        }
-        val initialSeekPositionProvider: ((Long) -> Long)? =
-            if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
-                { durationMs ->
-                    quranPlaybackPositionAtAyahStart(
-                        targetAyah = requestedAyahInSurah,
-                        ayahCount = ayahCount,
-                        durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-                        ayahWeights = fullSurahAyahWeights
-                    ).toLong()
-                }
-            } else null
         val initialReaderAyah = if (chosen.audioType == 0) startAyah else requestedAyahInSurah
         inlinePlaybackPreparing = true
         inlinePlaybackDurationMs = 0
@@ -1884,6 +1866,34 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
                     return@launch
                 }
+                // Always read the complete Arabic surah directly from the Quran
+                // database for full-file timing, including while either Mushaf
+                // edition is open. Never rely on the text reader's visible state.
+                val fullSurahAyahWeights = if (chosen.audioType != 0) {
+                    withContext(Dispatchers.IO) {
+                        val sourceAyahs = ContentRepository.loadAyahs(
+                            context = context,
+                            surah = surahNumber,
+                            language = "ar",
+                            translationKey = "none"
+                        )
+                        quranPlaybackAyahWeights(sourceAyahs, ayahCount)
+                    }
+                } else {
+                    emptyList()
+                }
+                inlinePlaybackAyahWeights = fullSurahAyahWeights
+                val initialSeekPositionProvider: ((Long) -> Long)? =
+                    if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
+                        { durationMs ->
+                            quranPlaybackPositionAtAyahStart(
+                                targetAyah = requestedAyahInSurah,
+                                ayahCount = ayahCount,
+                                durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                                ayahWeights = fullSurahAyahWeights
+                            ).toLong()
+                        }
+                    } else null
                 inlinePlaybackVisible = true
                 inlinePlaybackPaused = false
                 inlinePlaybackRepeatCurrent = false
@@ -1988,7 +1998,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             .takeIf { it > 0 } ?: inlinePlaybackDurationMs
         if (duration < 1) return
         val target = targetAyah.coerceIn(1, ayahCount)
-        val weights = quranPlaybackAyahWeights(verses.filter { it.surah == inlinePlaybackSurah }, ayahCount)
+        val weights = inlinePlaybackAyahWeights.takeIf { it.size == ayahCount }
+            ?: return
         val targetPosition = quranPlaybackPositionForAyah(
             targetAyah = target,
             startingAyah = inlinePlaybackStartAyah,
