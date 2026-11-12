@@ -1,0 +1,710 @@
+{
+  "schema_version": 1,
+  "collection_name": "Mashxall curated muezzin voices",
+  "source_repository": "https://github.com/bilalelsayed97/adhan_sounds",
+  "source_readme": "https://github.com/bilalelsayed97/adhan_sounds/blob/main/README.md",
+  "source_note": "Audio streams from the upstream repository's full-length preview files and is downloaded only when the user asks. The upstream repository has no declared audio licence; do not bundle or redistribute these recordings unless the recording rights are cleared.",
+  "record_count": 70,
+  "records": [
+    {
+      "id": "muezzin-120-mashary_2010",
+      "title_ar": "مشاري راشد",
+      "title_en": "Mashary Rashed",
+      "category": "muezzin",
+      "source_filename": "mashary_2010.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mashary_2010.mp3",
+      "size_bytes": 857299,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-121-mashary_fagr_2010",
+      "title_ar": "أذان الفجر - مشاري راشد",
+      "title_en": "Fajr Azan (Full) - Mashary Rashed",
+      "category": "muezzin",
+      "source_filename": "mashary_fagr_2010.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mashary_fagr_2010.mp3",
+      "size_bytes": 2701195,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-42-nasser_ktamy_1",
+      "title_ar": "ناصر القطامي 1",
+      "title_en": "Nasser El-Katamy V1",
+      "category": "muezzin",
+      "source_filename": "nasser_ktamy_1.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/nasser_ktamy_1.mp3",
+      "size_bytes": 358803,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-16-adhan_makkah",
+      "title_ar": "أذان مكة المكرمة",
+      "title_en": "Makkah Azan",
+      "category": "muezzin",
+      "source_filename": "adhan_makkah.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/adhan_makkah.mp3",
+      "size_bytes": 203440,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-25-ahmed_neenaa",
+      "title_ar": "احمد نعينع",
+      "title_en": "ahmed ne'ena'",
+      "category": "muezzin",
+      "source_filename": "ahmed_neenaa.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ahmed_neenaa.mp3",
+      "size_bytes": 2899613,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-13-fajr_mecca",
+      "title_ar": "اذان الفجر : مكة المكرمة",
+      "title_en": "Fajr mecca",
+      "category": "muezzin",
+      "source_filename": "fajr_mecca.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/fajr_mecca.mp3",
+      "size_bytes": 3130726,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-38-fares_abbad",
+      "title_ar": "فارس عباد",
+      "title_en": "Fares Abbad",
+      "category": "muezzin",
+      "source_filename": "fares_abbad.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/fares_abbad.mp3",
+      "size_bytes": 2833344,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-49-shaaban_alsayad",
+      "title_ar": "آذان الشيخ شعبان الصياد",
+      "title_en": "Azan Shaaban Alsayad",
+      "category": "muezzin",
+      "source_filename": "shaaban_alsayad.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/shaaban_alsayad.mp3",
+      "size_bytes": 2494367,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-48-mohamed_omran",
+      "title_ar": "آذان الشيخ محمد عمران",
+      "title_en": "Azan Mohammed Omran",
+      "category": "muezzin",
+      "source_filename": "mohamed_omran.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mohamed_omran.mp3",
+      "size_bytes": 4451402,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-70-taha_alfashn_2",
+      "title_ar": "طه الفشن 2",
+      "title_en": "Taha alfashn 2",
+      "category": "muezzin",
+      "source_filename": "taha_alfashn_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/taha_alfashn_2.mp3",
+      "size_bytes": 2696196,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-51-saad_alghamdy",
+      "title_ar": "سعد الغامدي",
+      "title_en": "Saad Alghamdy",
+      "category": "muezzin",
+      "source_filename": "saad_alghamdy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/saad_alghamdy.mp3",
+      "size_bytes": 2293350,
+      "source_parts": 4
+    },
+    {
+      "id": "muezzin-26-naqshbandy",
+      "title_ar": "سيد النقشبندي",
+      "title_en": "Sayed El-Naqshabandy",
+      "category": "muezzin",
+      "source_filename": "naqshbandy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/naqshbandy.mp3",
+      "size_bytes": 294549,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-60-hazzaa_albaloshy",
+      "title_ar": "هزاع البلوشي",
+      "title_en": "Hazzaa Albaloshy",
+      "category": "muezzin",
+      "source_filename": "hazzaa_albaloshy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/hazzaa_albaloshy.mp3",
+      "size_bytes": 3528344,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-50-islam_sobhey",
+      "title_ar": "آذان القارئ إسلام صبحي",
+      "title_en": "Azan Islam sobhey",
+      "category": "muezzin",
+      "source_filename": "islam_sobhey.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/islam_sobhey.mp3",
+      "size_bytes": 4156114,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-40-nasser_ktamy_2",
+      "title_ar": "ناصر القطامي 2",
+      "title_en": "Nasser El-Katamy V2",
+      "category": "muezzin",
+      "source_filename": "nasser_ktamy_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/nasser_ktamy_2.mp3",
+      "size_bytes": 1144575,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-24-abdul_majed_sarehy",
+      "title_ar": "عبد المجيد السريحي",
+      "title_en": "Abdul Majed Sarehy",
+      "category": "muezzin",
+      "source_filename": "abdul_majed_sarehy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdul_majed_sarehy.mp3",
+      "size_bytes": 3326117,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-20-mnshawi",
+      "title_ar": "محمد صديق المنشاوي",
+      "title_en": "Mohamed Seddik El-Menshawi",
+      "category": "muezzin",
+      "source_filename": "mnshawi.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mnshawi.mp3",
+      "size_bytes": 237238,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-2-ahmed_alagamy",
+      "title_ar": "احمد بن علي العجمي",
+      "title_en": "ahmed alagmy",
+      "category": "muezzin",
+      "source_filename": "ahmed_alagamy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ahmed_alagamy.mp3",
+      "size_bytes": 3161162,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-15-faroq_hadrawy",
+      "title_ar": "فاروق حضراوي",
+      "title_en": "Faroq 7adrawy",
+      "category": "muezzin",
+      "source_filename": "faroq_hadrawy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/faroq_hadrawy.mp3",
+      "size_bytes": 2948701,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-19-alhusary",
+      "title_ar": "محمود خليل الحصري",
+      "title_en": "Alhussary",
+      "category": "muezzin",
+      "source_filename": "alhusary.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/alhusary.mp3",
+      "size_bytes": 2041522,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-62-abdel_nasser_hark",
+      "title_ar": "عبد الناصر حرك",
+      "title_en": "Abdel Nasser Hark",
+      "category": "muezzin",
+      "source_filename": "abdel_nasser_hark.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdel_nasser_hark.mp3",
+      "size_bytes": 4504788,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-27-mohamed_refaat",
+      "title_ar": "محمد رفعت",
+      "title_en": "Mohamed Refaat",
+      "category": "muezzin",
+      "source_filename": "mohamed_refaat.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mohamed_refaat.mp3",
+      "size_bytes": 407680,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-57-sherif_moustafa",
+      "title_ar": "شريف مصطفى",
+      "title_en": "Sherif Moustafa",
+      "category": "muezzin",
+      "source_filename": "sherif_moustafa.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/sherif_moustafa.mp3",
+      "size_bytes": 4423058,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-17-mahmoud_ali_albanna",
+      "title_ar": "محمود علي البنا",
+      "title_en": "Mahmoud Ali Albanna",
+      "category": "muezzin",
+      "source_filename": "mahmoud_ali_albanna.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mahmoud_ali_albanna.mp3",
+      "size_bytes": 2634243,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-30-yasser_aldosary",
+      "title_ar": "ياسر الدوسري",
+      "title_en": "Yasser Aldosary",
+      "category": "muezzin",
+      "source_filename": "yasser_aldosary.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/yasser_aldosary.mp3",
+      "size_bytes": 2835079,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-52-meshary_alafasy_new",
+      "title_ar": "مشاري العفاسي جديد",
+      "title_en": "Meshary Alafasy new",
+      "category": "muezzin",
+      "source_filename": "meshary_alafasy_new.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/meshary_alafasy_new.mp3",
+      "size_bytes": 2783262,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-53-mansour_zahrani",
+      "title_ar": "منصور الزهراني",
+      "title_en": "Mansour alzahrani",
+      "category": "muezzin",
+      "source_filename": "mansour_zahrani.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mansour_zahrani.mp3",
+      "size_bytes": 1896422,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-33-mohamed_omran_fajr",
+      "title_ar": "اذان الفجر بصوت: محمد عمران",
+      "title_en": "alfajr Mohamed Omran",
+      "category": "muezzin",
+      "source_filename": "mohamed_omran_fajr.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mohamed_omran_fajr.mp3",
+      "size_bytes": 2844025,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-55-ibrahim_altayeb",
+      "title_ar": "اذان دكتور ابراهيم الطيب",
+      "title_en": "Dr.Ibrahim Altayeb",
+      "category": "muezzin",
+      "source_filename": "ibrahim_altayeb.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ibrahim_altayeb.mp3",
+      "size_bytes": 4945748,
+      "source_parts": 10
+    },
+    {
+      "id": "muezzin-63-mohamed_refaat_2",
+      "title_ar": "محمد رفعت 2",
+      "title_en": "Mohammed refaat 2",
+      "category": "muezzin",
+      "source_filename": "mohamed_refaat_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mohamed_refaat_2.mp3",
+      "size_bytes": 2461349,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-31-ahmed_alnufais",
+      "title_ar": "احمد النفيس",
+      "title_en": "Ahmed alnufais",
+      "category": "muezzin",
+      "source_filename": "ahmed_alnufais.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ahmed_alnufais.mp3",
+      "size_bytes": 5139154,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-35-nasr_aldeen_tobar_fajr",
+      "title_ar": "اذان الفجر بصوت : نصر الدين طوبار",
+      "title_en": "Fajr Nasr Aldeen Tobar",
+      "category": "muezzin",
+      "source_filename": "nasr_aldeen_tobar_fajr.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/nasr_aldeen_tobar_fajr.mp3",
+      "size_bytes": 4237316,
+      "source_parts": 10
+    },
+    {
+      "id": "muezzin-36-mecca_ali_mulla",
+      "title_ar": "الحرم المكي علي ملا",
+      "title_en": "Mecca Ali Mulla",
+      "category": "muezzin",
+      "source_filename": "mecca_ali_mulla.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mecca_ali_mulla.mp3",
+      "size_bytes": 3247002,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-39-saad_alghamdy_2",
+      "title_ar": "سعد الغامدى",
+      "title_en": "Saa'd Alghamdy",
+      "category": "muezzin",
+      "source_filename": "saad_alghamdy_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/saad_alghamdy_2.mp3",
+      "size_bytes": 1836972,
+      "source_parts": 4
+    },
+    {
+      "id": "muezzin-12-mansour_alsalmy",
+      "title_ar": "منصور السالمي",
+      "title_en": "Mansour Alsalmy",
+      "category": "muezzin",
+      "source_filename": "mansour_alsalmy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mansour_alsalmy.mp3",
+      "size_bytes": 2385843,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-43-muhammed_altablawy",
+      "title_ar": "محمد محمود الطبلاوي",
+      "title_en": "Muhammed Altablawy",
+      "category": "muezzin",
+      "source_filename": "muhammed_altablawy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/muhammed_altablawy.mp3",
+      "size_bytes": 3021978,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-22-abu_alainein_shesha",
+      "title_ar": "ابو العينين شعيشع",
+      "title_en": "Abu Alaineen she'sha'",
+      "category": "muezzin",
+      "source_filename": "abu_alainein_shesha.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abu_alainein_shesha.mp3",
+      "size_bytes": 3760623,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-10-yasser_aldosary_fajr",
+      "title_ar": "اذان الفجر بصوت : ياسر الدوسري",
+      "title_en": "Alfajr Yasser Aldosary",
+      "category": "muezzin",
+      "source_filename": "yasser_aldosary_fajr.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/yasser_aldosary_fajr.mp3",
+      "size_bytes": 2925889,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-67-ahmed_alnafees_2",
+      "title_ar": "احمد النفيس",
+      "title_en": "Ahmed Alnafees",
+      "category": "muezzin",
+      "source_filename": "ahmed_alnafees_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ahmed_alnafees_2.mp3",
+      "size_bytes": 3989969,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-59-mohammed_tarek",
+      "title_ar": "المنشد محمد طارق",
+      "title_en": "Mohammed tarek",
+      "category": "muezzin",
+      "source_filename": "mohammed_tarek.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mohammed_tarek.mp3",
+      "size_bytes": 2206564,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-18-abdel_basit",
+      "title_ar": "عبد الباسط عبد الصمد",
+      "title_en": "Abdel Basit Abdulsamad",
+      "category": "muezzin",
+      "source_filename": "abdel_basit.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdel_basit.mp3",
+      "size_bytes": 207723,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-34-ragheb_ghalosh",
+      "title_ar": "راغب مصطفي غلوش",
+      "title_en": "ragheb mostafa ghalosh",
+      "category": "muezzin",
+      "source_filename": "ragheb_ghalosh.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ragheb_ghalosh.mp3",
+      "size_bytes": 2133086,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-23-youssef_maaty",
+      "title_ar": "يوسف معاطي",
+      "title_en": "youssef Ma'aty",
+      "category": "muezzin",
+      "source_filename": "youssef_maaty.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/youssef_maaty.mp3",
+      "size_bytes": 3979431,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-7-mansour_alzahrany",
+      "title_ar": "منصور الزهراني",
+      "title_en": "Mansour Alzahrany",
+      "category": "muezzin",
+      "source_filename": "mansour_alzahrany.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mansour_alzahrany.mp3",
+      "size_bytes": 2604302,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-3-abdel_rahman_osey",
+      "title_ar": "عبد الرحمن العوسي",
+      "title_en": "abdel rahman el osey",
+      "category": "muezzin",
+      "source_filename": "abdel_rahman_osey.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdel_rahman_osey.mp3",
+      "size_bytes": 1888471,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-46-alafasy_fajr_mecca",
+      "title_ar": "العفاسي اذان فجر مكة",
+      "title_en": "Alafasy Fajr Mecca",
+      "category": "muezzin",
+      "source_filename": "alafasy_fajr_mecca.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/alafasy_fajr_mecca.mp3",
+      "size_bytes": 6157477,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-47-alafasy_azan_mecca",
+      "title_ar": "العفاسي آذان مكة",
+      "title_en": "Alafasy azan mecca",
+      "category": "muezzin",
+      "source_filename": "alafasy_azan_mecca.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/alafasy_azan_mecca.mp3",
+      "size_bytes": 5234051,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-8-azan_alquds",
+      "title_ar": "اذان القدس",
+      "title_en": "Azan Alquds",
+      "category": "muezzin",
+      "source_filename": "azan_alquds.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/azan_alquds.mp3",
+      "size_bytes": 2916956,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-44-ahmed_saqr",
+      "title_ar": "احمد صقر * صدقة جارية",
+      "title_en": "ahmed saqr (Sadqa Jareia)",
+      "category": "muezzin",
+      "source_filename": "ahmed_saqr.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/ahmed_saqr.mp3",
+      "size_bytes": 3211819,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-28-aly_mahmoud",
+      "title_ar": "الشيخ علي محمود",
+      "title_en": "Aly Mahmoud",
+      "category": "muezzin",
+      "source_filename": "aly_mahmoud.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/aly_mahmoud.mp3",
+      "size_bytes": 2393881,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-45-mohammed_mahmoud_ramadan",
+      "title_ar": "محمد محمود رمضان",
+      "title_en": "Mohammed Mahmoud Ramadan",
+      "category": "muezzin",
+      "source_filename": "mohammed_mahmoud_ramadan.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mohammed_mahmoud_ramadan.mp3",
+      "size_bytes": 6653459,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-5-edres_abkar",
+      "title_ar": "إدريس ابكر",
+      "title_en": "Edres abkar",
+      "category": "muezzin",
+      "source_filename": "edres_abkar.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/edres_abkar.mp3",
+      "size_bytes": 2012605,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-58-mahmoud_alkhosht",
+      "title_ar": "محمود محمد الخشت",
+      "title_en": "Mahmoud Alkhosht",
+      "category": "muezzin",
+      "source_filename": "mahmoud_alkhosht.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mahmoud_alkhosht.mp3",
+      "size_bytes": 2544849,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-64-abdel_azem_zaher",
+      "title_ar": "عبد العظيم زاهر",
+      "title_en": "Abdel Azem Zaher",
+      "category": "muezzin",
+      "source_filename": "abdel_azem_zaher.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdel_azem_zaher.mp3",
+      "size_bytes": 2288914,
+      "source_parts": 6
+    },
+    {
+      "id": "muezzin-37-nasr_eldeen_toubar",
+      "title_ar": "نصر الدين طوبار",
+      "title_en": "Nasr eldeen Toubar",
+      "category": "muezzin",
+      "source_filename": "nasr_eldeen_toubar.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/nasr_eldeen_toubar.mp3",
+      "size_bytes": 3534786,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-56-wadee_alyamani",
+      "title_ar": "وديع اليمني",
+      "title_en": "wadee Alyamani",
+      "category": "muezzin",
+      "source_filename": "wadee_alyamani.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/wadee_alyamani.mp3",
+      "size_bytes": 3909844,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-4-hamad_aldghriry",
+      "title_ar": "حمد الدغريري",
+      "title_en": "Hamad El-Daghriry",
+      "category": "muezzin",
+      "source_filename": "hamad_aldghriry.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/hamad_aldghriry.mp3",
+      "size_bytes": 900199,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-29-almadena_almonawra",
+      "title_ar": "اذان المدينة المنورة",
+      "title_en": "Azan Almadena",
+      "category": "muezzin",
+      "source_filename": "almadena_almonawra.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/almadena_almonawra.mp3",
+      "size_bytes": 3006248,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-68-abdel_rahman_alhendy",
+      "title_ar": "عبد الرحمن الهندي",
+      "title_en": "Abdel rahman alhendy",
+      "category": "muezzin",
+      "source_filename": "abdel_rahman_alhendy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdel_rahman_alhendy.mp3",
+      "size_bytes": 1019468,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-1-kamel_youssef_albahtemy",
+      "title_ar": "كامل يوسف البهتيمى",
+      "title_en": "kamel youssef albahtemy",
+      "category": "muezzin",
+      "source_filename": "kamel_youssef_albahtemy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/kamel_youssef_albahtemy.mp3",
+      "size_bytes": 1935398,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-54-abdul_majed_sarehy_2",
+      "title_ar": "عبد المجيد سريحي",
+      "title_en": "Abdul majed Sarehy",
+      "category": "muezzin",
+      "source_filename": "abdul_majed_sarehy_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdul_majed_sarehy_2.mp3",
+      "size_bytes": 5639701,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-21-mostafa_ismaeel",
+      "title_ar": "مصطفي اسماعيل",
+      "title_en": "Mostafa Ismaeel",
+      "category": "muezzin",
+      "source_filename": "mostafa_ismaeel.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mostafa_ismaeel.mp3",
+      "size_bytes": 2946002,
+      "source_parts": 7
+    },
+    {
+      "id": "muezzin-69-taha_alfashn_1",
+      "title_ar": "طه الفشن حجاز",
+      "title_en": "Taha alfashn 1",
+      "category": "muezzin",
+      "source_filename": "taha_alfashn_1.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/taha_alfashn_1.mp3",
+      "size_bytes": 1915493,
+      "source_parts": 5
+    },
+    {
+      "id": "muezzin-65-abdullah_alzelee",
+      "title_ar": "عبد الله الزيلعي",
+      "title_en": "Abdullah Alzelee",
+      "category": "muezzin",
+      "source_filename": "abdullah_alzelee.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/abdullah_alzelee.mp3",
+      "size_bytes": 4801569,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-130-azan_fagr_abdnaser_harak",
+      "title_ar": "أذان الفجر - عبد الناصر حارك",
+      "title_en": "Fajr Adhan - Abdnaser Harak",
+      "category": "muezzin",
+      "source_filename": "azan_fagr_abdnaser_harak.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/notifications/azan_fagr_abdnaser_harak.mp3",
+      "size_bytes": 1226154,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-131-azan_saad_ghamdy",
+      "title_ar": "أذان سعد الغامدي",
+      "title_en": "Adhan Saad Ghamdy",
+      "category": "muezzin",
+      "source_filename": "azan_saad_ghamdy.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/notifications/azan_saad_ghamdy.mp3",
+      "size_bytes": 954891,
+      "source_parts": 4
+    },
+    {
+      "id": "muezzin-258-fajr_mecca_2",
+      "title_ar": "أذان الفجر: مكة المكرمة 2",
+      "title_en": "Makkah Fajr Adhan 2",
+      "category": "muezzin",
+      "source_filename": "fajr_mecca_2.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/fajr_mecca_2.mp3",
+      "size_bytes": 2029869,
+      "source_parts": 9
+    },
+    {
+      "id": "muezzin-259-mecca",
+      "title_ar": "أذان مكة المكرمة 2",
+      "title_en": "Makkah Adhan 2",
+      "category": "muezzin",
+      "source_filename": "mecca.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mecca.mp3",
+      "size_bytes": 819632,
+      "source_parts": 8
+    },
+    {
+      "id": "muezzin-260-longTakbiratLowVolume",
+      "title_ar": "تكبيرات طويلة بصوت منخفض",
+      "title_en": "Long takbeer, low volume",
+      "category": "muezzin",
+      "source_filename": "longTakbiratLowVolume.mp3",
+      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/longTakbiratLowVolume.mp3",
+      "size_bytes": 1467117,
+      "source_parts": 4
+    },
+    {
+      "id": "muezzin-kurdish-ahmed-el-kourdi",
+      "title_ar": "أحمد الكوردي",
+      "title_en": "Ahmed El Kourdi",
+      "category": "muezzin",
+      "source_filename": "Ahmed_El_Kourdi_(أحمد_الكردي).mp3",
+      "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmed_El_Kourdi_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%83%D8%B1%D8%AF%D9%8A).mp3",
+      "size_bytes": 3164421,
+      "source_parts": 0
+    }
+  ]
+}
