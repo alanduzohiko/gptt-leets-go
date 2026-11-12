@@ -123,8 +123,10 @@ internal object QuranAudioTimingRepository {
             ) ?: return@withContext null
             val reads = parseTimingReads(readsPayload)
             val normalizedBase = normalizeFolder(reciter.baseUrl)
-            val read = reads.firstOrNull { readId != null && it.id == readId }
-                ?: reads.firstOrNull { normalizeFolder(it.folderUrl) == normalizedBase }
+            // Match the actual server folder first; a catalogue's numeric suffix
+            // is only a fallback because moshaf IDs are not universally read IDs.
+            val read = reads.firstOrNull { normalizeFolder(it.folderUrl) == normalizedBase }
+                ?: reads.firstOrNull { readId != null && it.id == readId }
                 ?: return@withContext null
 
             val timingPayload = cachedApiText(
