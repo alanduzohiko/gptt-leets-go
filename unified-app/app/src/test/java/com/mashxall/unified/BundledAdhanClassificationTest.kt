@@ -21,16 +21,14 @@ class BundledAdhanClassificationTest {
 
     @Test
     fun recognizesSoraniDownloadedAdhanAsASelectablePrayerAlertAsset() {
-        assertEquals(
-            "muezzin",
-            bundledAdhanCategory(
-                AudioItem(
-                    "local:/data/user/0/com.mashxall/files/adhan-audio/adhan-068.mp3",
-                    "أحمد النفيس",
-                    "بانگی داگیراو بۆ بەبێ ئینتەرنێت"
-                )
-            )
+        val downloadedCatalogAdhan = AudioItem(
+            "local:/data/user/0/com.mashxall/files/adhan-audio/adhan-068.mp3",
+            "أحمد النفيس",
+            "بانگی داگیراو بۆ بەبێ ئینتەرنێت"
         )
+        assertEquals("muezzin", bundledAdhanCategory(downloadedCatalogAdhan))
+        assertTrue(filterSelectableAdhanAssets(listOf(downloadedCatalogAdhan)).contains(downloadedCatalogAdhan))
+        assertTrue(hasSelectableAdhanAsset(downloadedCatalogAdhan.assetPath, listOf(downloadedCatalogAdhan)))
         val downloadedSoraniAdhan = AudioItem(
             "local:/data/user/0/com.mashxall/files/adhan-audio/kurdish.mp3",
             "دەنگی بانگ",
