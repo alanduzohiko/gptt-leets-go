@@ -1807,29 +1807,40 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         val configuredMode = ReaderPlaybackSettings.normalize(
             prefs.getString("reciter_playback_mode", readerPlaybackMode)
         )
+        // When the selected full-surah recording has a verified ayah-by-ayah
+        // edition by the same reciter and recitation, use that source as a
+        // continuous playlist. This gives real verse boundaries without
+        // guessing them from the duration of one long MP3.
+        val matchingSegmentReciterId = if (chosen.audioType != 0) {
+            quranAyahSegmentReciterId(chosen.id, chosen.sourceId)
+        } else null
+        val segmentReciter = matchingSegmentReciterId?.let { matchingId ->
+            readerReciters.firstOrNull {
+                it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
+            }
+        }
+        val playbackReciter = segmentReciter ?: chosen
         val effectiveMode = when {
-            chosen.audioType != 0 -> "full"
+            playbackReciter.audioType != 0 -> "full"
             continueFromCurrentAyah -> "verse"
             else -> configuredMode
         }
         val requestedAyahInSurah = requestedAyah.coerceIn(1, ayahCount)
         val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyahInSurah, ayahCount)
-        // A single full-surah MP3 has no reliable marker for an individual ayah.
-        // It therefore starts at ayah 1 only; exact verse starts use segment audio.
-        val initialReaderAyah = if (chosen.audioType == 0) startAyah else requestedAyahInSurah
+        val initialReaderAyah = if (playbackReciter.audioType == 0) startAyah else requestedAyahInSurah
         inlinePlaybackPreparing = true
         inlinePlaybackDurationMs = 0
         scope.launch {
             try {
                 val sequence = withContext(Dispatchers.IO) {
-                    reciterAudioSequence(context, chosen, surahNumber, startAyah, ayahCount)
+                    reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
                 }
-                val fullSurahAyahWeights = if (chosen.audioType != 0) {
+                val fullSurahAyahWeights = if (playbackReciter.audioType != 0) {
                     val sourceAyahs = ContentRepository.loadAyahs(context, surahNumber, "ar")
                     quranPlaybackAyahWeights(sourceAyahs, ayahCount)
                 } else emptyList()
                 val initialSeekPositionProvider: ((Long) -> Long)? =
-                    if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
+                    if (playbackReciter.audioType != 0 && requestedAyahInSurah > 1) {
                         { durationMs ->
                             quranFullSurahSeekPositionForAyah(
                                 targetAyah = requestedAyahInSurah,
@@ -1849,8 +1860,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackSurah = surahNumber
                 inlinePlaybackStartAyah = startAyah
                 inlinePlaybackReciterId = chosen.id
-                inlinePlaybackUsesAyahClips = chosen.audioType == 0
-                inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
+                inlinePlaybackUsesAyahClips = playbackReciter.audioType == 0
+                inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(playbackReciter.audioType, startAyah, ayahCount)
                 inlinePlaybackActiveVerse = surahNumber to initialReaderAyah
                 selected = surahNumber
                 selectedAyahForSheet = null
@@ -1872,9 +1883,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     showNotification = true,
                     initialSeekPositionProvider = initialSeekPositionProvider,
                     onTrackStarted = { trackIndex ->
-                        val activeAyah = if (chosen.audioType == 0) {
+                        val activeAyah = if (playbackReciter.audioType == 0) {
                             quranPlaybackAyahForTrack(
-                                audioType = chosen.audioType,
+                                audioType = playbackReciter.audioType,
                                 startingAyah = startAyah,
                                 trackIndex = trackIndex
                             ).coerceIn(1, ayahCount)
@@ -7935,6 +7946,41 @@ internal fun quranPlaybackTrackAyahs(audioType: Int, startingAyah: Int, ayahCoun
 /** Ignore the playlist index until the player confirms that track is ready to play. */
 internal fun quranPlaybackCommittedTrackIndex(committedTrackIndex: Int, trackCount: Int): Int =
     committedTrackIndex.takeIf { trackCount > 0 && it in 0 until trackCount } ?: -1
+
+/** Map only full-surah entries verified to have the same reciter/recitation as ayah clips. */
+internal fun quranAyahSegmentReciterId(fullReciterId: Int, sourceId: String = ""): Int? =
+    when (sourceId.trim()) {
+        // MP3Quran catalog editions with a matching ayah-by-ayah source in the bundled Quran catalog.
+        "51-51" -> 4       // Abdulbasit - Mujawwad
+        "51-53" -> 1       // Abdulbasit - Hafs Murattal
+        "92-92" -> 33       // Yasser Al-Dosari - Hafs Murattal
+        "102-102" -> 17     // Maher Al-Meaqli - Hafs Murattal
+        "112-112" -> 58     // Al-Minshawi - Hafs Murattal
+        "112-113" -> 25     // Al-Minshawi - Mujawwad
+        "118-118" -> 76     // Al-Husary - Hafs Murattal
+        "118-119" -> 19     // Al-Husary - Mujawwad
+        else -> when (fullReciterId) {
+            2 -> 4
+            3 -> 1
+            6 -> 5
+            9 -> 8
+            18 -> 76
+            24 -> 23
+            26 -> 58
+            32 -> 31
+            34 -> 33
+            36 -> 50
+            46 -> 79
+            47 -> 35
+            52 -> 21
+            57 -> 17
+            71 -> 25
+            72 -> 77
+            73 -> 28
+            78 -> 19
+            else -> null
+        }
+    }
 
 
 /** Full-surah files have no embedded verse timestamps; estimate duration using articulation and pause marks. */
