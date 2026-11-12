@@ -1861,7 +1861,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 trackIndex = trackIndex
                             ).coerceIn(1, ayahCount)
                         } else {
-                            requestedAyahInSurah
+                            initialReaderAyah
                         }
                         inlinePlaybackActiveVerse = surahNumber to activeAyah
                         inlinePlaybackSurah = surahNumber
@@ -2525,7 +2525,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val activeAyah = currentInlineAudioAyah()
                 val inlineSurah = surahs.firstOrNull { it.number == inlinePlaybackSurah }
                 val inlineReciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId }
-                val inlineAyahCount = inlineSurah?.ayahCount ?: 0
                 val sequenceNavigationReady = !AudioController.isPreparingNextSequenceTrack()
                 val hasPreviousTrack = if (inlinePlaybackUsesAyahClips) {
                     activeAyah > inlinePlaybackStartAyah && sequenceNavigationReady
@@ -7606,7 +7605,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     AppLanguage.AR -> "العدد المستهدف في المصدر: $target تكرارًا"
                     AppLanguage.CKB -> "ژمارەی ئامانجی سەرچاوە: $target جار"
                 },
-                color = foreground.copy(alpha = 0.65f), fontSize = 11.sp
+                color = foreground.copy(alpha = 0.72f), fontSize = 13.sp, lineHeight = 19.sp
             )
             AnimatedVisibility(
                 visible = count >= target,
@@ -7629,7 +7628,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             AppLanguage.AR -> "تم بلوغ العدد المستهدف"
                             AppLanguage.CKB -> "گەیشتن بە ژمارەی ئامانج"
                         },
-                        color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                        color = Gold, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }
