@@ -1819,9 +1819,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
             return
         }
-        inlinePlaybackSurah = surahNumber
-        inlinePlaybackStartAyah = ayahNumber.coerceIn(1, count)
-        pendingInlineRecitationTarget = surahNumber to inlinePlaybackStartAyah
+        // This is only the pending picker target. Do not mutate the active
+        // playback session until the user chooses a reciter and the new stream
+        // is ready; otherwise the old track's progress ticker can navigate the
+        // Mushaf using the new target while the old audio is still playing.
+        pendingInlineRecitationTarget = surahNumber to ayahNumber.coerceIn(1, count)
         inlineReciterSearch = ""
         showInlineReciterPicker = true
     }
@@ -3675,7 +3677,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     if (language == AppLanguage.EN) "Search all reciters…" else if (language == AppLanguage.AR) "ابحث في جميع القرّاء…" else "لە هەموو قورئان‌خوێنەکان بگەڕێ…"
                 )
                 Spacer(Modifier.height(7.dp))
-                val targetSurahForReciter = inlinePlaybackSurah.coerceIn(1, 114)
+                val targetSurahForReciter = (pendingInlineRecitationTarget?.first ?: inlinePlaybackSurah).coerceIn(1, 114)
                 val inlineReciterResults = remember(readerReciters, inlineReciterSearch, targetSurahForReciter) {
                     readerReciters.filter { reciter ->
                         reciter.surahTotal >= targetSurahForReciter &&
