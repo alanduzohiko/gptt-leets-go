@@ -509,6 +509,8 @@ private fun QuranInlinePlaybackBar(
     isPrepared: Boolean,
     repeatCurrent: Boolean,
     usesAyahClips: Boolean,
+    timedAyahRanges: List<QuranAyahTimeRange> = emptyList(),
+    onTimedAyahChanged: (Int) -> Unit = {},
     hasPrevious: Boolean,
     hasNext: Boolean,
     onChooseReciter: () -> Unit,
@@ -523,16 +525,23 @@ private fun QuranInlinePlaybackBar(
     // recompose and made the visible progress bar feel behind the recitation.
     var playbackPositionMs by remember { mutableIntStateOf(0) }
     var playbackDurationMs by remember { mutableIntStateOf(0) }
-    LaunchedEffect(usesAyahClips, isPrepared, isPaused) {
+    LaunchedEffect(usesAyahClips, isPrepared, isPaused, timedAyahRanges, activeAyah) {
+        var lastTimedAyah = activeAyah
         while (true) {
-            // Media3 reports the live position/duration of the active file.
-            // For ayah playlists this is the current verse clip; the ayah
-            // counter advances separately only after the next clip is READY.
+            // Media3's actual position drives both the progress bar and the verse
+            // marker. MP3Quran's validated offsets are absolute milliseconds in
+            // this same continuous surah recording, not text-length estimates.
             val (position, duration) = AudioController.playbackPosition()
             playbackPositionMs = position.coerceAtLeast(0)
             playbackDurationMs = duration.coerceAtLeast(0)
+            if (!usesAyahClips && timedAyahRanges.isNotEmpty()) {
+                val playingAyah = quranAyahAtPositionMs(timedAyahRanges, position.toLong())
+                if (playingAyah != null && playingAyah != lastTimedAyah) {
+                    lastTimedAyah = playingAyah
+                    onTimedAyahChanged(playingAyah)
+                }
+            }
             if (isPrepared && !isPaused) {
-                // Follow the device display clock for smooth, frame-aligned updates.
                 withFrameNanos { }
             } else {
                 delay(100L)
@@ -589,7 +598,7 @@ private fun QuranInlinePlaybackBar(
                     color = foreground, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1
                 )
                 Text(
-                    "$surahName  •  " + if (usesAyahClips) {
+                    "$surahName  •  " + if (usesAyahClips || timedAyahRanges.isNotEmpty()) {
                         when (language) {
                             AppLanguage.EN -> "Ayah $activeAyah / $ayahCount"
                             AppLanguage.AR -> "الآية $activeAyah / $ayahCount"
@@ -1738,6 +1747,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
     var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
+    var inlinePlaybackTimedAyahs by remember { mutableStateOf<List<QuranAyahTimeRange>>(emptyList()) }
     var inlinePlaybackDurationMs by remember { mutableIntStateOf(0) }
     var showInlineReciterPicker by remember { mutableStateOf(false) }
     var inlineReciterSearch by rememberSaveable { mutableStateOf("") }
@@ -1800,35 +1810,43 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         if (inlinePlaybackPreparing) return
 
         val requestedAyahInSurah = requestedAyah.coerceIn(1, ayahCount)
-        // A single full-surah MP3 is best for a clean, continuous read from
-        // ayah 1. If the user starts in the middle, switch only to a verified
-        // matching ayah edition; never guess an offset from text length.
-        val matchingSegmentReciterId = if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
-            quranAyahSegmentReciterId(chosen.id, chosen.sourceId)
-        } else null
-        val segmentReciter = matchingSegmentReciterId?.let { matchingId ->
-            readerReciters.firstOrNull {
-                it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
-            }
-        }
-        val playbackReciter = segmentReciter ?: chosen
-        val playbackPlan = quranPlaybackStartPlan(
-            audioType = playbackReciter.audioType,
-            requestedAyah = requestedAyahInSurah,
-            ayahCount = ayahCount
-        )
-        if (!playbackPlan.isSupported) {
-            Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
-            return
-        }
-        val startAyah = playbackPlan.startingAyah
-        val initialReaderAyah = startAyah
         inlinePlaybackPreparing = true
         inlinePlaybackDurationMs = 0
         scope.launch {
             try {
-                val sequence = withContext(Dispatchers.IO) {
-                    reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
+                // Prefer the same full-surah MP3 with its provider-supplied exact
+                // verse timestamps. Only use a paired ayah-file edition when the
+                // selected full-surah source has no complete verified timeline.
+                val fullSurahTiming = if (chosen.audioType != 0) {
+                    QuranAudioTimingRepository.load(context, chosen, surahNumber, ayahCount)
+                } else null
+                val matchingSegmentReciterId = if (
+                    chosen.audioType != 0 && fullSurahTiming == null && requestedAyahInSurah > 1
+                ) quranAyahSegmentReciterId(chosen.id, chosen.sourceId) else null
+                val segmentReciter = matchingSegmentReciterId?.let { matchingId ->
+                    readerReciters.firstOrNull {
+                        it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
+                    }
+                }
+                val playbackReciter = if (fullSurahTiming != null) chosen else segmentReciter ?: chosen
+                val playbackPlan = quranPlaybackStartPlan(
+                    audioType = playbackReciter.audioType,
+                    requestedAyah = requestedAyahInSurah,
+                    ayahCount = ayahCount,
+                    hasAyahTimings = fullSurahTiming != null
+                )
+                if (!playbackPlan.isSupported) {
+                    Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                val startAyah = playbackPlan.startingAyah
+                val initialReaderAyah = startAyah
+                val sequence = if (fullSurahTiming != null) {
+                    listOf(fullSurahTiming.audioUrl)
+                } else {
+                    withContext(Dispatchers.IO) {
+                        reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
+                    }
                 }
                 if (sequence.isEmpty()) {
                     Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
@@ -1842,6 +1860,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackReciterId = chosen.id
                 inlinePlaybackUsesAyahClips = playbackReciter.audioType == 0
                 inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(playbackReciter.audioType, startAyah, ayahCount)
+                inlinePlaybackTimedAyahs = fullSurahTiming?.ayahs.orEmpty()
                 inlinePlaybackActiveVerse = surahNumber to initialReaderAyah
                 selected = surahNumber
                 selectedAyahForSheet = null
@@ -1861,6 +1880,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                     showNotification = true,
+                    initialSeekPositionProvider = fullSurahTiming
+                        ?.takeIf { startAyah > 1 }
+                        ?.let { timing -> { _: Long -> timing.startMsForAyah(startAyah) } },
+                    durationFallbackMs = fullSurahTiming?.durationMs,
                     onTrackStarted = { trackIndex ->
                         val activeAyah = if (playbackReciter.audioType == 0) {
                             quranPlaybackAyahForTrack(
@@ -1910,8 +1933,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 trackIndex = AudioController.currentSequenceTrackIndex()
             ).coerceIn(1, ayahCount)
         }
-        // A single full-surah MP3 has no per-ayah timecodes. Keep the
-        // selected starting verse stable instead of inventing drifting markers.
+        // With timing metadata, the bar updates this state from the actual
+        // playback position in the full-surah recording.
         return inlinePlaybackActiveVerse
             ?.takeIf { it.first == inlinePlaybackSurah }
             ?.second
@@ -2562,6 +2585,22 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     isPrepared = AudioController.isPrepared(),
                     repeatCurrent = inlinePlaybackRepeatCurrent,
                     usesAyahClips = inlinePlaybackUsesAyahClips,
+                    timedAyahRanges = inlinePlaybackTimedAyahs,
+                    onTimedAyahChanged = { ayah ->
+                        val target = inlinePlaybackSurah to ayah
+                        if (inlinePlaybackTimedAyahs.isNotEmpty() && inlinePlaybackActiveVerse != target) {
+                            inlinePlaybackActiveVerse = target
+                            selected = inlinePlaybackSurah
+                            onSurah(inlinePlaybackSurah)
+                            onOpenVerse(inlinePlaybackSurah, ayah)
+                            prefs.edit()
+                                .putInt("last_surah", inlinePlaybackSurah)
+                                .putInt("last_ayah_number", ayah)
+                                .putInt("quran_progress_ayah_${inlinePlaybackSurah}", ayah)
+                                .apply()
+                            readingProgressRevision++
+                        }
+                    },
                     hasPrevious = hasPreviousTrack,
                     hasNext = hasNextTrack,
                     onChooseReciter = {
@@ -7975,12 +8014,14 @@ internal data class QuranPlaybackStartPlan(
 internal fun quranPlaybackStartPlan(
     audioType: Int,
     requestedAyah: Int,
-    ayahCount: Int
+    ayahCount: Int,
+    hasAyahTimings: Boolean = false
 ): QuranPlaybackStartPlan {
     if (ayahCount < 1) return QuranPlaybackStartPlan(false, 1, audioType == 0)
     val target = requestedAyah.coerceIn(1, ayahCount)
     return when {
         audioType == 0 -> QuranPlaybackStartPlan(true, target, true)
+        hasAyahTimings -> QuranPlaybackStartPlan(true, target, false)
         target == 1 -> QuranPlaybackStartPlan(true, 1, false)
         else -> QuranPlaybackStartPlan(false, 1, false)
     }
@@ -8221,18 +8262,24 @@ fun AudioScreen(
             val surahNumber = initialSurah.coerceIn(1, 114)
             val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
             val requestedAyah = initialAyah.coerceIn(1, ayahCount)
-            val matchingSegmentReciterId = if (preferred.audioType != 0 && requestedAyah > 1) {
-                quranAyahSegmentReciterId(preferred.id, preferred.sourceId)
+            val fullSurahTiming = if (preferred.audioType != 0) {
+                QuranAudioTimingRepository.load(context, preferred, surahNumber, ayahCount)
             } else null
-            val playbackReciter = matchingSegmentReciterId?.let { matchingId ->
-                reciters.firstOrNull {
-                    it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
-                }
-            } ?: preferred
+            val matchingSegmentReciterId = if (
+                preferred.audioType != 0 && fullSurahTiming == null && requestedAyah > 1
+            ) quranAyahSegmentReciterId(preferred.id, preferred.sourceId) else null
+            val playbackReciter = if (fullSurahTiming != null) preferred else {
+                matchingSegmentReciterId?.let { matchingId ->
+                    reciters.firstOrNull {
+                        it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
+                    }
+                } ?: preferred
+            }
             val playbackPlan = quranPlaybackStartPlan(
                 audioType = playbackReciter.audioType,
                 requestedAyah = requestedAyah,
-                ayahCount = ayahCount
+                ayahCount = ayahCount,
+                hasAyahTimings = fullSurahTiming != null
             )
             if (!playbackPlan.isSupported) {
                 Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
@@ -8244,8 +8291,12 @@ fun AudioScreen(
             val modeStartAyah = resolveReciterStartAyah(playbackMode, requestedAyah, ayahCount)
             val selectionSeekAyah = if (preferred.audioType != 0) requestedAyah else modeStartAyah
             val key = "${preferred.id}|${surahNumber}|${modeStartAyah}|${playbackMode}|${selectionSeekAyah}"
-            val sources = withContext(Dispatchers.IO) {
-                reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
+            val sources = if (fullSurahTiming != null) {
+                listOf(fullSurahTiming.audioUrl)
+            } else {
+                withContext(Dispatchers.IO) {
+                    reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
+                }
             }
             // A slow navigation auto-play request must not replace a reciter that
             // the user selected manually while the audio source was loading.
@@ -8258,7 +8309,11 @@ fun AudioScreen(
                     sources = sources,
                     notificationTitle = playbackReciter.nameArabic.ifBlank { playbackReciter.nameEnglish },
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
-                    showNotification = true
+                    showNotification = true,
+                    initialSeekPositionProvider = fullSurahTiming
+                        ?.takeIf { startAyah > 1 }
+                        ?.let { timing -> { _: Long -> timing.startMsForAyah(startAyah) } },
+                    durationFallbackMs = fullSurahTiming?.durationMs
                 ) { state ->
                     if (!state) {
                         playing = ""
@@ -8984,33 +9039,49 @@ fun AudioScreen(
                                                 AudioController.stop()
                                                 playing = ""
                                             } else {
-                                                val matchingSegmentReciterId = if (reciter.audioType != 0 && seekAyah > 1) {
-                                                    quranAyahSegmentReciterId(reciter.id, reciter.sourceId)
-                                                } else null
-                                                val playbackReciter = matchingSegmentReciterId?.let { matchingId ->
-                                                    reciters.firstOrNull {
-                                                        it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
-                                                    }
-                                                } ?: reciter
-                                                val playbackPlan = quranPlaybackStartPlan(
-                                                    audioType = playbackReciter.audioType,
-                                                    requestedAyah = seekAyah,
-                                                    ayahCount = surahAyahCount
-                                                )
-                                                if (!playbackPlan.isSupported) {
-                                                    Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
-                                                } else {
-                                                    playbackPreparingKey = playKey
-                                                    // Reserve the manual choice before asynchronous source lookup.
-                                                    // A slower navigation auto-play must not replace this request.
-                                                    autoPlayKey = playKey
-                                                    AudioController.stop()
-                                                    playing = ""
-                                                    audioPaused = false
-                                                    scope.launch {
-                                                        try {
-                                                            val sources = withContext(Dispatchers.IO) {
-                                                                reciterAudioSequence(context, playbackReciter, surahNumber, playbackPlan.startingAyah, surahAyahCount)
+                                                playbackPreparingKey = playKey
+                                                // Reserve the manual choice before source/timing lookup.
+                                                // A slower navigation auto-play must not replace this selection.
+                                                autoPlayKey = playKey
+                                                AudioController.stop()
+                                                playing = ""
+                                                audioPaused = false
+                                                scope.launch {
+                                                    try {
+                                                        val fullSurahTiming = if (reciter.audioType != 0) {
+                                                            QuranAudioTimingRepository.load(context, reciter, surahNumber, surahAyahCount)
+                                                        } else null
+                                                        val matchingSegmentReciterId = if (
+                                                            reciter.audioType != 0 && fullSurahTiming == null && seekAyah > 1
+                                                        ) quranAyahSegmentReciterId(reciter.id, reciter.sourceId) else null
+                                                        val playbackReciter = if (fullSurahTiming != null) reciter else {
+                                                            matchingSegmentReciterId?.let { matchingId ->
+                                                                reciters.firstOrNull {
+                                                                    it.id == matchingId && it.audioType == 0 && it.surahTotal >= surahNumber
+                                                                }
+                                                            } ?: reciter
+                                                        }
+                                                        val playbackPlan = quranPlaybackStartPlan(
+                                                            audioType = playbackReciter.audioType,
+                                                            requestedAyah = seekAyah,
+                                                            ayahCount = surahAyahCount,
+                                                            hasAyahTimings = fullSurahTiming != null
+                                                        )
+                                                        if (!playbackPlan.isSupported) {
+                                                            Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
+                                                        } else {
+                                                            val sources = if (fullSurahTiming != null) {
+                                                                listOf(fullSurahTiming.audioUrl)
+                                                            } else {
+                                                                withContext(Dispatchers.IO) {
+                                                                    reciterAudioSequence(
+                                                                        context,
+                                                                        playbackReciter,
+                                                                        surahNumber,
+                                                                        playbackPlan.startingAyah,
+                                                                        surahAyahCount
+                                                                    )
+                                                                }
                                                             }
                                                             if (sources.isEmpty()) {
                                                                 Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
@@ -9027,18 +9098,22 @@ fun AudioScreen(
                                                                     sources = sources,
                                                                     notificationTitle = playbackReciter.nameArabic.ifBlank { playbackReciter.nameEnglish },
                                                                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
-                                                                    showNotification = true
+                                                                    showNotification = true,
+                                                                    initialSeekPositionProvider = fullSurahTiming
+                                                                        ?.takeIf { playbackPlan.startingAyah > 1 }
+                                                                        ?.let { timing -> { _: Long -> timing.startMsForAyah(playbackPlan.startingAyah) } },
+                                                                    durationFallbackMs = fullSurahTiming?.durationMs
                                                                 ) { state ->
                                                                     audioPaused = false
                                                                     if (!state) playing = ""
                                                                 }
                                                             }
-                                                        } catch (error: Exception) {
-                                                            if (error is CancellationException) throw error
-                                                            Toast.makeText(context, audioPlaybackFailureMessage(language, AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
-                                                        } finally {
-                                                            if (playbackPreparingKey == playKey) playbackPreparingKey = ""
                                                         }
+                                                    } catch (error: Exception) {
+                                                        if (error is CancellationException) throw error
+                                                        Toast.makeText(context, audioPlaybackFailureMessage(language, AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
+                                                    } finally {
+                                                        if (playbackPreparingKey == playKey) playbackPreparingKey = ""
                                                     }
                                                 }
                                             }
@@ -9484,6 +9559,7 @@ internal object AudioController {
     private var repeatCurrentTrack: Boolean = false
     private var sequenceTrackCallback: ((Int) -> Unit)? = null
     private var initialSequenceSeekPositionProvider: ((Long) -> Long)? = null
+    private var sequenceDurationFallbackMs: Long? = null
     private var initialSequenceSeekPending: Boolean = false
     private var initialSequenceSeekFailure: Boolean = false
     private var initialSequenceSeekFallbackJob: Job? = null
@@ -9516,7 +9592,11 @@ internal object AudioController {
         return try {
             val position = active.currentPosition.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             val rawDuration = active.duration
-            val duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0L) 0L else rawDuration
+            val duration = if (rawDuration == C.TIME_UNSET || rawDuration <= 0L) {
+                sequenceDurationFallbackMs ?: 0L
+            } else {
+                rawDuration
+            }
             position to duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         } catch (_: Exception) {
             0 to 0
@@ -9728,11 +9808,16 @@ internal object AudioController {
         if (!isCurrentPlayer(engine, generation)) return false
         val seekProvider = initialSequenceSeekPositionProvider ?: return true
         val rawDuration = engine.duration
-        if (rawDuration == C.TIME_UNSET || rawDuration <= 0L) return false
+        val seekDuration = if (rawDuration == C.TIME_UNSET || rawDuration <= 0L) {
+            sequenceDurationFallbackMs ?: return false
+        } else {
+            rawDuration
+        }
+        if (seekDuration <= 0L) return false
 
-        val requestedPosition = runCatching { seekProvider.invoke(rawDuration) }
+        val requestedPosition = runCatching { seekProvider.invoke(seekDuration) }
             .getOrDefault(0L)
-            .coerceIn(0L, (rawDuration - 1L).coerceAtLeast(0L))
+            .coerceIn(0L, (seekDuration - 1L).coerceAtLeast(0L))
         if (requestedPosition > 0L) {
             val seekSucceeded = runCatching {
                 engine.seekTo(requestedPosition)
@@ -9819,6 +9904,7 @@ internal object AudioController {
         repeatCurrentTrack = false
         sequenceTrackCallback = null
         initialSequenceSeekPositionProvider = null
+        sequenceDurationFallbackMs = null
         initialSequenceSeekPending = false
         initialSequenceSeekFailure = false
         initialSequenceSeekFallbackJob?.cancel()
@@ -9883,6 +9969,7 @@ internal object AudioController {
         showNotification: Boolean = false,
         initialSeekPositionProvider: ((Long) -> Long)? = null,
         onTrackStarted: (Int) -> Unit = {},
+        durationFallbackMs: Long? = null,
         callback: (Boolean) -> Unit
     ) {
         stop()
@@ -9900,6 +9987,7 @@ internal object AudioController {
         repeatCurrentTrack = false
         sequenceTrackCallback = onTrackStarted
         initialSequenceSeekPositionProvider = initialSeekPositionProvider
+        sequenceDurationFallbackMs = durationFallbackMs?.takeIf { it > 0L }
         initialSequenceSeekPending = initialSeekPositionProvider != null
         initialSequenceSeekFailure = false
         playbackCallback = callback

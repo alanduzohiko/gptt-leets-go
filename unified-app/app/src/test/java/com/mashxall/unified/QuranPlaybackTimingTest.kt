@@ -22,6 +22,19 @@ class QuranPlaybackTimingTest {
     }
 
     @Test
+    fun continuousFullSurahWithVerifiedAyahTimesCanSeekToItsChosenVerse() {
+        val plan = quranPlaybackStartPlan(
+            audioType = 1,
+            requestedAyah = 43,
+            ayahCount = 114,
+            hasAyahTimings = true
+        )
+        assertTrue(plan.isSupported)
+        assertFalse(plan.usesAyahClips)
+        assertEquals(43, plan.startingAyah)
+    }
+
+    @Test
     fun exactAyahEditionStartsAtTheSelectedVerseAndContinuesToTheEnd() {
         val plan = quranPlaybackStartPlan(audioType = 0, requestedAyah = 43, ayahCount = 114)
         assertTrue(plan.isSupported)
