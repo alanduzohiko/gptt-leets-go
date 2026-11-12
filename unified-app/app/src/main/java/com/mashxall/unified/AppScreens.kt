@@ -9372,7 +9372,7 @@ internal class QuranPlaybackActionReceiver : BroadcastReceiver() {
     }
 }
 
-@OptIn(UnstableApi::class)
+@UnstableApi
 internal object AudioController {
     private var player: ExoPlayer? = null
     private var playbackGeneration: Int = 0
@@ -9497,7 +9497,7 @@ internal object AudioController {
         return MediaItem.fromUri(uri)
     }
 
-    @OptIn(UnstableApi::class)
+    @UnstableApi
     private fun createPlayer(context: Context, generation: Int): ExoPlayer {
         val appContext = context.applicationContext
         val httpFactory = DefaultHttpDataSource.Factory()
