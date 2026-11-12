@@ -8239,7 +8239,11 @@ fun AudioScreen(
                 return@LaunchedEffect
             }
             val startAyah = playbackPlan.startingAyah
-            val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}|${requestedAyah}"
+            // Keep the UI request identity stable even when a full-file entry
+            // resolves to its verified verse-segment edition for this start.
+            val modeStartAyah = resolveReciterStartAyah(playbackMode, requestedAyah, ayahCount)
+            val selectionSeekAyah = if (preferred.audioType != 0) requestedAyah else modeStartAyah
+            val key = "${preferred.id}|${surahNumber}|${modeStartAyah}|${playbackMode}|${selectionSeekAyah}"
             val sources = withContext(Dispatchers.IO) {
                 reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
             }
