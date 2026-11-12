@@ -17,8 +17,9 @@ class AudioPlaybackCopyTest {
 
     @Test
     fun catalogNoticeAndPlaybackErrorsRespectSelectedLanguage() {
-        assertTrue(audioCatalogSourceNotice(AppLanguage.AR).contains("حتى تختار تنزيلها"))
-        assertTrue(audioCatalogSourceNotice(AppLanguage.CKB).contains("کاتەلۆگی سەرچاوە"))
+        assertTrue(audioCatalogSourceNotice(AppLanguage.EN).contains("bilalelsayed97/adhan_sounds"))
+        assertTrue(audioCatalogSourceNotice(AppLanguage.AR).contains("فهرس أصوات المؤذنين"))
+        assertTrue(audioCatalogSourceNotice(AppLanguage.CKB).contains("کاتەلۆگی دەنگی بانگبێژان"))
         assertTrue(audioPlaybackFailureMessage(AppLanguage.CKB, AudioPlaybackFailure.STREAM).contains("پەخشکردنی فایلە دەنگییەکە"))
         assertTrue(audioPlaybackFailureMessage(AppLanguage.AR, AudioPlaybackFailure.STREAM).contains("تعذّر بث الملف الصوتي"))
         assertTrue(audioPlaybackFailureMessage(AppLanguage.EN, AudioPlaybackFailure.STREAM).contains("audio stream"))
