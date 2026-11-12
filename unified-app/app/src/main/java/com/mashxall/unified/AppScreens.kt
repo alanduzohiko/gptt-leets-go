@@ -49,7 +49,16 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.ParcelFileDescriptor
 import android.content.Intent
-import android.media.MediaPlayer
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import android.media.session.PlaybackState
 import android.media.session.MediaSession
 import android.media.MediaMetadata
@@ -7807,60 +7816,6 @@ private fun isReciterSurahOffline(context: Context, reciter: Reciter, surah: Int
     }
 }
 
-private fun setReciterAudioSource(context: Context, player: MediaPlayer, source: String) {
-    if (source.startsWith("local:")) {
-        player.setDataSource(source.removePrefix("local:"))
-    } else {
-        // Some MP3 hosts reject a bare MediaPlayer URL even though the same
-        // file is downloadable. Supply normal audio/browser headers when the
-        // cache path is unavailable and the player must stream the source.
-        val headers = mapOf(
-            "User-Agent" to "Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
-            "Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8"
-        )
-        player.setDataSource(context, Uri.parse(source), headers)
-    }
-}
-
-/** Cache when possible, but never make a network download a prerequisite for listening. */
-private suspend fun cacheReciterStreamSource(context: Context, source: String): String =
-    withContext(Dispatchers.IO) {
-        if (source.startsWith("local:")) {
-            val localFile = File(source.removePrefix("local:"))
-            require(isValidReciterAudioFile(localFile)) { "The saved recitation file is missing or is not a valid MP3." }
-            return@withContext source
-        }
-        require(source.startsWith("https://") || source.startsWith("http://")) {
-            "The recitation source is not a supported audio URL."
-        }
-        val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray())
-        val key = digest.take(12).joinToString("") { "%02x".format(it) }
-        // v2 deliberately invalidates files cached by older builds. Those files
-        // were trusted based on size alone and could be HTML/error responses.
-        val cacheDirectory = File(context.cacheDir, "reciter-stream-cache-v3")
-        val targetFile = File(cacheDirectory, key + ".mp3")
-        try {
-            // v3 invalidates old large HTML/JSON error responses that were cached by size alone.
-            if (!isValidReciterAudioFile(targetFile)) {
-                targetFile.delete()
-                downloadReciterFile(source, targetFile)
-            }
-            require(isValidReciterAudioFile(targetFile)) {
-                "The recitation source did not return a valid MP3 file."
-            }
-            "local:" + targetFile.absolutePath
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            android.util.Log.w(
-                "MashxallQuranAudio",
-                "Could not cache the recitation from ${Uri.parse(source).host}; trying direct stream playback.",
-                error
-            )
-            source
-        }
-    }
-
 private fun reciterAudioSequence(
     context: Context,
     reciter: Reciter,
@@ -9417,14 +9372,10 @@ internal class QuranPlaybackActionReceiver : BroadcastReceiver() {
     }
 }
 
+@OptIn(UnstableApi::class)
 internal object AudioController {
-    private var player: MediaPlayer? = null
-    private var preloadedPlayer: MediaPlayer? = null
-    private var preloadedTrackIndex: Int = -1
-    private var preloadedPlayerPrepared: Boolean = false
+    private var player: ExoPlayer? = null
     private var playbackGeneration: Int = 0
-    // Compose observes this state from the now-playing control. It also flips
-    // false between consecutive files, so pause cannot target a completed player.
     private var playerPrepared by mutableStateOf(false)
     private var playbackPreparing by mutableStateOf(false)
     private var playbackPaused by mutableStateOf(false)
@@ -9434,32 +9385,42 @@ internal object AudioController {
     private var activeNotificationSubtitle: String = "Mashxall"
     private var activeNotificationEnabled: Boolean = false
     private var preparationJob: Job? = null
-    private var sequenceTrackIndex: Int = 0
+
+    private var isSequencePlayback: Boolean = false
+    private var sequenceTrackIndex: Int = -1
     private var sequenceTrackCount: Int = 0
-    private var sequenceTrackRequest: ((Int) -> Unit)? = null
+    private var sequenceHadStarted: Boolean = false
+    private var sequencePendingTransition: Boolean = false
+    private var sequenceUnavailableCount: Int = 0
+    private var sequenceFailedIndices: MutableSet<Int> = mutableSetOf()
     private var repeatCurrentTrack: Boolean = false
+    private var sequenceTrackCallback: ((Int) -> Unit)? = null
+    private var playbackCallback: ((Boolean) -> Unit)? = null
+    private var singlePlaybackStarted: Boolean = false
+    private var singlePlaybackFailure: AudioPlaybackFailure = AudioPlaybackFailure.LOCAL_ASSET
+    private var playbackFinished: Boolean = false
+
     private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     fun isPrepared(): Boolean = playerPrepared && player != null
-
     fun isActive(): Boolean = playbackActive
-
     fun isPreparing(): Boolean = playbackPreparing
-
     fun isPaused(): Boolean = playbackPaused
 
-    /** Track that is actually audible; the prepared next clip counts once it starts gaplessly. */
+    /** Media3 owns the active playlist index, including gapless item transitions. */
     fun currentSequenceTrackIndex(): Int {
-        val queued = preloadedPlayer
-        val preloadHasStarted = preloadedPlayerPrepared &&
-            runCatching { queued?.isPlaying == true }.getOrDefault(false)
-        return resolveActiveAudioSequenceIndex(sequenceTrackIndex, preloadedTrackIndex, preloadHasStarted)
+        val current = player?.currentMediaItemIndex ?: -1
+        return current.takeIf { isSequencePlayback && it in 0 until sequenceTrackCount }
+            ?: sequenceTrackIndex.coerceAtLeast(0)
     }
 
     fun playbackPosition(): Pair<Int, Int> {
         val active = player ?: return 0 to 0
         return try {
-            active.currentPosition.coerceAtLeast(0) to active.duration.coerceAtLeast(0)
+            val position = active.currentPosition.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            val rawDuration = active.duration
+            val duration = if (rawDuration == C.TIME_UNSET || rawDuration < 0L) 0L else rawDuration
+            position to duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         } catch (_: Exception) {
             0 to 0
         }
@@ -9469,46 +9430,40 @@ internal object AudioController {
         val active = player ?: return false
         if (!playerPrepared) return false
         return try {
-            val duration = active.duration.coerceAtLeast(0)
-            active.seekTo(positionMs.coerceIn(0, duration))
+            val duration = active.duration
+            val requested = positionMs.coerceAtLeast(0).toLong()
+            val target = if (duration != C.TIME_UNSET && duration > 0L) requested.coerceAtMost(duration) else requested
+            active.seekTo(target)
             true
         } catch (_: Exception) {
             false
         }
     }
 
-    fun isPreparingNextSequenceTrack(): Boolean =
-        preloadedPlayer != null && !preloadedPlayerPrepared
+    /** ExoPlayer buffers the next playlist item itself; no hand-built second player is needed. */
+    fun isPreparingNextSequenceTrack(): Boolean = false
 
-    fun hasNextSequenceTrack(): Boolean =
-        sequenceTrackRequest != null && currentSequenceTrackIndex() < sequenceTrackCount - 1
+    fun hasNextSequenceTrack(): Boolean {
+        val active = player ?: return false
+        return isSequencePlayback && active.currentMediaItemIndex in 0 until (sequenceTrackCount - 1)
+    }
 
     fun skipNextSequenceTrack(): Boolean {
-        if (playbackPreparing || !playerPrepared || isPreparingNextSequenceTrack()) return false
-        val request = sequenceTrackRequest ?: return false
-        val next = adjacentAudioSequenceIndex(currentSequenceTrackIndex(), sequenceTrackCount, forward = true) ?: return false
-        request(next)
-        return true
+        val active = player ?: return false
+        if (!isSequencePlayback || playbackPreparing || !playerPrepared || !hasNextSequenceTrack()) return false
+        return runCatching { active.seekToNextMediaItem(); true }.getOrDefault(false)
     }
 
     fun skipPreviousSequenceTrack(): Boolean {
-        if (playbackPreparing || !playerPrepared || isPreparingNextSequenceTrack()) return false
-        val request = sequenceTrackRequest ?: return false
-        val previous = adjacentAudioSequenceIndex(currentSequenceTrackIndex(), sequenceTrackCount, forward = false) ?: return false
-        request(previous)
-        return true
+        val active = player ?: return false
+        if (!isSequencePlayback || playbackPreparing || !playerPrepared) return false
+        if (active.currentMediaItemIndex <= 0) return false
+        return runCatching { active.seekToPreviousMediaItem(); true }.getOrDefault(false)
     }
 
     fun toggleRepeatCurrentTrack(): Boolean {
         repeatCurrentTrack = !repeatCurrentTrack
-        if (repeatCurrentTrack) {
-            val queued = preloadedPlayer
-            preloadedPlayer = null
-            preloadedTrackIndex = -1
-            preloadedPlayerPrepared = false
-            runCatching { player?.setNextMediaPlayer(null) }
-            releaseMediaPlayer(queued)
-        }
+        player?.repeatMode = if (repeatCurrentTrack) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         return repeatCurrentTrack
     }
 
@@ -9517,14 +9472,15 @@ internal object AudioController {
         if (!playerPrepared) return null
         return try {
             if (playbackPaused) {
-                active.start()
+                active.play()
                 playbackPaused = false
+                playbackPreparing = active.playbackState == Player.STATE_BUFFERING
             } else {
                 active.pause()
                 playbackPaused = true
             }
             if (activeNotificationEnabled) {
-                QuranPlaybackNotification.updatePaused(activeContext ?: return null, playbackPaused)
+                activeContext?.let { QuranPlaybackNotification.updatePaused(it, playbackPaused) }
             }
             playbackPaused
         } catch (_: Exception) {
@@ -9532,36 +9488,223 @@ internal object AudioController {
         }
     }
 
-    private fun releaseMediaPlayer(target: MediaPlayer?) {
-        if (target == null) return
-        runCatching { target.setNextMediaPlayer(null) }
-        runCatching { target.stop() }
-        runCatching { target.release() }
+    private fun mediaItemForReciterSource(source: String): MediaItem {
+        val uri = if (source.startsWith("local:")) {
+            Uri.fromFile(File(source.removePrefix("local:")))
+        } else {
+            Uri.parse(source)
+        }
+        return MediaItem.fromUri(uri)
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun createPlayer(context: Context, generation: Int): ExoPlayer {
+        val appContext = context.applicationContext
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mashxall/1.0 (Android)")
+            .setConnectTimeoutMs(20_000)
+            .setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(
+                mapOf("Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8")
+            )
+        val dataSourceFactory = DefaultDataSource.Factory(appContext, httpFactory)
+        val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        val engine = ExoPlayer.Builder(appContext)
+            .setMediaSourceFactory(sourceFactory)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+        engine.setAudioAttributes(AudioAttributes.DEFAULT, true)
+        engine.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (!isCurrentPlayer(engine, generation)) return
+                when (state) {
+                    Player.STATE_BUFFERING -> {
+                        playerPrepared = false
+                        playbackPreparing = true
+                        if (!isSequencePlayback || !sequenceHadStarted) playbackActive = false
+                    }
+                    Player.STATE_READY -> {
+                        playerPrepared = true
+                        playbackPreparing = false
+                        playbackActive = true
+                        if (engine.playWhenReady) playbackPaused = false
+                        if (isSequencePlayback) {
+                            if (!sequenceHadStarted || sequencePendingTransition) {
+                                sequencePendingTransition = false
+                                announceSequenceTrack(engine, generation, engine.currentMediaItemIndex)
+                            }
+                        } else if (!singlePlaybackStarted) {
+                            singlePlaybackStarted = true
+                            playbackCallback?.invoke(true)
+                        }
+                    }
+                    Player.STATE_ENDED -> {
+                        if (isSequencePlayback) finishSequence(generation)
+                        else finishSinglePlayback(generation)
+                    }
+                    Player.STATE_IDLE -> {
+                        playerPrepared = false
+                    }
+                }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (!isCurrentPlayer(engine, generation) || !isSequencePlayback || !sequenceHadStarted) return
+                if (engine.playbackState == Player.STATE_READY) {
+                    announceSequenceTrack(engine, generation, engine.currentMediaItemIndex)
+                } else {
+                    sequencePendingTransition = true
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isCurrentPlayer(engine, generation)) return
+                if (isPlaying) {
+                    playbackPaused = false
+                    playbackPreparing = false
+                    playbackActive = true
+                } else if (engine.playbackState == Player.STATE_READY && !engine.playWhenReady && playerPrepared) {
+                    playbackPaused = true
+                }
+                if (activeNotificationEnabled) {
+                    activeContext?.let { QuranPlaybackNotification.updatePaused(it, playbackPaused) }
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (!isCurrentPlayer(engine, generation)) return
+                android.util.Log.w("MashxallQuranAudio", "Media3 playback failure", error)
+                if (isSequencePlayback) {
+                    handleSequencePlayerError(engine, generation)
+                } else {
+                    val context = activeContext
+                    if (context != null) {
+                        Toast.makeText(
+                            context,
+                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), singlePlaybackFailure),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    finishSinglePlayback(generation)
+                }
+            }
+        })
+        return engine
+    }
+
+    private fun isCurrentPlayer(engine: ExoPlayer, generation: Int): Boolean =
+        generation == playbackGeneration && player === engine && !playbackFinished
+
+    private fun announceSequenceTrack(engine: ExoPlayer, generation: Int, trackIndex: Int) {
+        if (!isCurrentPlayer(engine, generation) || trackIndex !in 0 until sequenceTrackCount) return
+        if (sequenceHadStarted && sequenceTrackIndex == trackIndex) return
+        sequenceTrackIndex = trackIndex
+        sequenceHadStarted = true
+        playerPrepared = engine.playbackState == Player.STATE_READY
+        playbackPreparing = !playerPrepared
+        playbackActive = true
+        playbackPaused = !engine.playWhenReady && playerPrepared
+        if (activeNotificationEnabled) {
+            activeContext?.let {
+                QuranPlaybackNotification.show(
+                    it,
+                    activeNotificationTitle,
+                    activeNotificationSubtitle,
+                    isPaused = playbackPaused
+                )
+            }
+        }
+        sequenceTrackCallback?.invoke(trackIndex)
+        playbackCallback?.invoke(true)
+    }
+
+    private fun handleSequencePlayerError(engine: ExoPlayer, generation: Int) {
+        if (!isCurrentPlayer(engine, generation)) return
+        val failedIndex = engine.currentMediaItemIndex
+            .takeIf { it in 0 until sequenceTrackCount }
+            ?: sequenceTrackIndex.coerceAtLeast(0)
+        if (sequenceFailedIndices.add(failedIndex)) sequenceUnavailableCount += 1
+        val nextIndex = ((failedIndex + 1) until sequenceTrackCount)
+            .firstOrNull { it !in sequenceFailedIndices }
+        if (nextIndex == null) {
+            finishSequence(generation)
+            return
+        }
+        playbackPreparing = true
+        playerPrepared = false
+        sequencePendingTransition = true
+        runCatching {
+            engine.seekTo(nextIndex, 0L)
+            engine.prepare()
+            engine.play()
+        }.onFailure {
+            android.util.Log.w("MashxallQuranAudio", "Could not continue after an unavailable recitation segment", it)
+            finishSequence(generation)
+        }
+    }
+
+    private fun releasePlayerAndResetState(context: Context?) {
+        val oldPlayer = player
+        player = null
+        runCatching { oldPlayer?.release() }
+        if (activeNotificationEnabled) QuranPlaybackNotification.hide(context ?: activeContext)
+        playerPrepared = false
+        playbackPreparing = false
+        playbackPaused = false
+        playbackActive = false
+        activeContext = null
+        activeNotificationEnabled = false
+        sequenceTrackIndex = -1
+        sequenceTrackCount = 0
+        sequenceHadStarted = false
+        sequencePendingTransition = false
+        sequenceUnavailableCount = 0
+        sequenceFailedIndices = mutableSetOf()
+        repeatCurrentTrack = false
+        sequenceTrackCallback = null
+        playbackCallback = null
+        isSequencePlayback = false
+        singlePlaybackStarted = false
     }
 
     fun stop() {
         playbackGeneration += 1
         preparationJob?.cancel()
         preparationJob = null
-        playerPrepared = false
-        playbackPreparing = false
-        playbackPaused = false
-        playbackActive = false
-        QuranPlaybackNotification.hide(activeContext)
-        activeContext = null
-        activeNotificationEnabled = false
-        sequenceTrackIndex = 0
-        sequenceTrackCount = 0
-        sequenceTrackRequest = null
-        repeatCurrentTrack = false
-        val active = player
-        val queued = preloadedPlayer
-        player = null
-        preloadedPlayer = null
-        preloadedTrackIndex = -1
-        preloadedPlayerPrepared = false
-        releaseMediaPlayer(active)
-        releaseMediaPlayer(queued)
+        playbackFinished = true
+        releasePlayerAndResetState(activeContext)
+        playbackFinished = false
+    }
+
+    private fun finishSequence(generation: Int) {
+        if (generation != playbackGeneration || playbackFinished) return
+        playbackFinished = true
+        val context = activeContext
+        val callback = playbackCallback
+        val missingCount = sequenceUnavailableCount
+        val hadPlayback = sequenceHadStarted
+        releasePlayerAndResetState(context)
+        callback?.invoke(false)
+        if (context != null && missingCount > 0) {
+            val language = AppLanguage.from(languageHint(context))
+            val message = if (hadPlayback) {
+                audioSequencePartialPlaybackMessage(language, missingCount)
+            } else {
+                audioPlaybackFailureMessage(language, AudioPlaybackFailure.RECITATION_SEGMENT)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+        playbackFinished = false
+    }
+
+    private fun finishSinglePlayback(generation: Int) {
+        if (generation != playbackGeneration || playbackFinished) return
+        playbackFinished = true
+        val callback = playbackCallback
+        releasePlayerAndResetState(activeContext)
+        callback?.invoke(false)
+        playbackFinished = false
     }
 
     fun playSequence(
@@ -9579,357 +9722,90 @@ internal object AudioController {
         activeNotificationTitle = notificationTitle
         activeNotificationSubtitle = notificationSubtitle
         activeNotificationEnabled = showNotification
+        isSequencePlayback = true
+        sequenceTrackIndex = -1
+        sequenceTrackCount = sources.size
+        sequenceHadStarted = false
+        sequencePendingTransition = false
+        sequenceUnavailableCount = 0
+        sequenceFailedIndices = mutableSetOf()
+        repeatCurrentTrack = false
+        sequenceTrackCallback = onTrackStarted
+        playbackCallback = callback
+        playbackFinished = false
+        singlePlaybackFailure = failure
+
         if (sources.isEmpty()) {
-            activeContext = null
-            activeNotificationEnabled = false
             playbackPreparing = false
+            playbackCallback = null
             callback(false)
             return
         }
+
         playbackPreparing = true
+        playerPrepared = false
+        playbackPaused = false
+        playbackActive = false
         val generation = playbackGeneration
-        var hasStartedPlayback = false
-        var unavailableTrackCount = 0
-        var fallbackTrackIndex: Int? = null
-        sequenceTrackCount = sources.size
-        sequenceTrackIndex = 0
-        repeatCurrentTrack = false
-
-        fun discardQueuedPlayer() {
-            val queued = preloadedPlayer
-            preloadedPlayer = null
-            preloadedTrackIndex = -1
-            preloadedPlayerPrepared = false
-            runCatching { player?.setNextMediaPlayer(null) }
-            releaseMediaPlayer(queued)
+        try {
+            val engine = createPlayer(context, generation)
+            player = engine
+            engine.setMediaItems(sources.map(::mediaItemForReciterSource), true)
+            engine.playWhenReady = true
+            engine.prepare()
+        } catch (error: Exception) {
+            android.util.Log.w("MashxallQuranAudio", "Could not initialize the recitation playlist", error)
+            if (generation == playbackGeneration) finishSequence(generation)
         }
+    }
 
-        fun notifyPartialSequenceIfNeeded() {
-            if (hasStartedPlayback && unavailableTrackCount > 0 && generation == playbackGeneration) {
-                Toast.makeText(
-                    context,
-                    audioSequencePartialPlaybackMessage(
-                        AppLanguage.from(languageHint(context)),
-                        unavailableTrackCount
-                    ),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-
-        lateinit var playAt: (Int) -> Unit
-        lateinit var preloadNext: (Int, MediaPlayer) -> Unit
-        lateinit var completeTrack: (MediaPlayer, Int) -> Unit
-
-        fun finishSequence() {
-            discardQueuedPlayer()
-            val active = player
-            player = null
-            releaseMediaPlayer(active)
-            playerPrepared = false
-            playbackPreparing = false
-            playbackPaused = false
-            playbackActive = false
-            sequenceTrackRequest = null
-            sequenceTrackCount = 0
-            if (activeNotificationEnabled) QuranPlaybackNotification.hide(context)
-            activeContext = null
-            activeNotificationEnabled = false
-            notifyPartialSequenceIfNeeded()
-            callback(false)
-        }
-
-        fun handleTrackFailure(index: Int) {
-            if (generation != playbackGeneration) return
-            unavailableTrackCount += 1
-            val nextIndex = (index + 1).takeIf { it in sources.indices }
-            if (nextIndex != null) {
-                Handler(Looper.getMainLooper()).post { playAt(nextIndex) }
-            } else {
-                if (!hasStartedPlayback) {
+    private fun beginSinglePlayback(
+        context: Context,
+        mediaItem: MediaItem,
+        failure: AudioPlaybackFailure,
+        callback: (Boolean) -> Unit
+    ) {
+        stop()
+        activeContext = context.applicationContext
+        playbackCallback = callback
+        singlePlaybackFailure = failure
+        isSequencePlayback = false
+        singlePlaybackStarted = false
+        playbackPreparing = true
+        playerPrepared = false
+        playbackPaused = false
+        playbackActive = false
+        val generation = playbackGeneration
+        try {
+            val engine = createPlayer(context, generation)
+            player = engine
+            engine.setMediaItem(mediaItem)
+            engine.playWhenReady = true
+            engine.prepare()
+        } catch (error: Exception) {
+            android.util.Log.w("MashxallAudio", "Could not initialize audio playback", error)
+            if (generation == playbackGeneration) {
+                val target = activeContext
+                finishSinglePlayback(generation)
+                if (target != null) {
                     Toast.makeText(
-                        context,
-                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), failure),
+                        target,
+                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(target)), failure),
                         Toast.LENGTH_LONG
                     ).show()
                 }
-                finishSequence()
             }
         }
-
-        fun announceActiveTrack(active: MediaPlayer, index: Int) {
-            player = active
-            sequenceTrackIndex = index
-            playerPrepared = true
-            playbackPreparing = false
-            playbackPaused = false
-            playbackActive = true
-            if (!hasStartedPlayback) hasStartedPlayback = true
-            if (activeNotificationEnabled) {
-                QuranPlaybackNotification.show(
-                    context,
-                    activeNotificationTitle,
-                    activeNotificationSubtitle,
-                    isPaused = false
-                )
-            }
-            onTrackStarted(index)
-            callback(true)
-        }
-
-        completeTrack = completion@{ completed, completedIndex ->
-            if (generation != playbackGeneration) {
-                runCatching { completed.release() }
-                return@completion
-            }
-            if (preloadedPlayer === completed && preloadedTrackIndex == completedIndex) {
-                preloadedPlayer = null
-                preloadedTrackIndex = -1
-                preloadedPlayerPrepared = false
-                announceActiveTrack(completed, completedIndex)
-            }
-            if (player !== completed) {
-                runCatching { completed.release() }
-                return@completion
-            }
-            if (repeatCurrentTrack) {
-                discardQueuedPlayer()
-                player = null
-                playerPrepared = false
-                playbackPreparing = false
-                playbackPaused = false
-                runCatching { completed.release() }
-                Handler(Looper.getMainLooper()).post { playAt(completedIndex) }
-                return@completion
-            }
-            val queued = preloadedPlayer
-            val queuedIndex = preloadedTrackIndex
-            if (queued != null && preloadedPlayerPrepared && queuedIndex == completedIndex + 1) {
-                preloadedPlayer = null
-                preloadedTrackIndex = -1
-                preloadedPlayerPrepared = false
-                runCatching { completed.setNextMediaPlayer(null) }
-                runCatching { completed.release() }
-                announceActiveTrack(queued, queuedIndex)
-                preloadNext(queuedIndex, queued)
-            } else {
-                val nextIndex = fallbackTrackIndex?.takeIf { it > completedIndex + 1 }
-                    ?: (completedIndex + 1)
-                fallbackTrackIndex = null
-                discardQueuedPlayer()
-                player = null
-                playerPrepared = false
-                playbackPreparing = true
-                playbackPaused = false
-                runCatching { completed.release() }
-                Handler(Looper.getMainLooper()).post { playAt(nextIndex) }
-            }
-        }
-
-        preloadNext = preload@{ currentIndex, currentPlayer ->
-            val nextIndex = currentIndex + 1
-            if (generation != playbackGeneration || repeatCurrentTrack ||
-                nextIndex !in sources.indices || preloadedPlayer != null
-            ) return@preload
-            val queued = MediaPlayer()
-            preloadedPlayer = queued
-            preloadedTrackIndex = nextIndex
-            preloadedPlayerPrepared = false
-            preparationScope.launch {
-                try {
-                    val source = cacheReciterStreamSource(context.applicationContext, sources[nextIndex])
-                    if (generation != playbackGeneration || player !== currentPlayer ||
-                        preloadedPlayer !== queued || repeatCurrentTrack
-                    ) {
-                        if (preloadedPlayer === queued) {
-                            preloadedPlayer = null
-                            preloadedTrackIndex = -1
-                            preloadedPlayerPrepared = false
-                        }
-                        runCatching { queued.release() }
-                        return@launch
-                    }
-                    setReciterAudioSource(context.applicationContext, queued, source)
-                    queued.setOnPreparedListener { prepared ->
-                        if (generation != playbackGeneration || player !== currentPlayer ||
-                            preloadedPlayer !== prepared || repeatCurrentTrack
-                        ) {
-                            if (preloadedPlayer === prepared) {
-                                preloadedPlayer = null
-                                preloadedTrackIndex = -1
-                                preloadedPlayerPrepared = false
-                            }
-                            runCatching { prepared.release() }
-                            return@setOnPreparedListener
-                        }
-                        try {
-                            currentPlayer.setNextMediaPlayer(prepared)
-                            preloadedPlayerPrepared = true
-                        } catch (_: Exception) {
-                            preloadedPlayer = null
-                            preloadedTrackIndex = -1
-                            preloadedPlayerPrepared = false
-                            fallbackTrackIndex = nextIndex + 1
-                            unavailableTrackCount += 1
-                            runCatching { prepared.release() }
-                        }
-                    }
-                    val onStartedAsNext: (MediaPlayer, Int) -> Boolean = { eventPlayer, what ->
-                        val nextPlayer = preloadedPlayer
-                        if (
-                            what == MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT &&
-                            generation == playbackGeneration &&
-                            nextPlayer === queued &&
-                            (eventPlayer === currentPlayer || eventPlayer === nextPlayer) &&
-                            preloadedTrackIndex == nextIndex &&
-                            preloadedPlayerPrepared &&
-                            player === currentPlayer
-                        ) {
-                            preloadedPlayer = null
-                            preloadedTrackIndex = -1
-                            preloadedPlayerPrepared = false
-                            announceActiveTrack(nextPlayer, nextIndex)
-                            preloadNext(nextIndex, nextPlayer)
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    currentPlayer.setOnInfoListener { eventPlayer, what, _ ->
-                        onStartedAsNext(eventPlayer, what)
-                    }
-                    queued.setOnInfoListener { eventPlayer, what, _ ->
-                        onStartedAsNext(eventPlayer, what)
-                    }
-                    queued.setOnCompletionListener { completed -> completeTrack(completed, nextIndex) }
-                    queued.setOnErrorListener { failed, _, _ ->
-                        if (generation == playbackGeneration && preloadedPlayer === failed) {
-                            preloadedPlayer = null
-                            preloadedTrackIndex = -1
-                            preloadedPlayerPrepared = false
-                            fallbackTrackIndex = nextIndex + 1
-                            unavailableTrackCount += 1
-                            runCatching { failed.release() }
-                        } else if (generation == playbackGeneration && player === failed) {
-                            player = null
-                            playerPrepared = false
-                            playbackPreparing = false
-                            playbackPaused = false
-                            discardQueuedPlayer()
-                            handleTrackFailure(nextIndex)
-                        } else {
-                            runCatching { failed.release() }
-                        }
-                        true
-                    }
-                    queued.prepareAsync()
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    if (generation == playbackGeneration && preloadedPlayer === queued) {
-                        preloadedPlayer = null
-                        preloadedTrackIndex = -1
-                        preloadedPlayerPrepared = false
-                        fallbackTrackIndex = nextIndex + 1
-                        unavailableTrackCount += 1
-                    }
-                    runCatching { queued.release() }
-                }
-            }
-        }
-
-        playAt = play@{ index ->
-            if (generation != playbackGeneration) return@play
-            if (index >= sources.size) {
-                finishSequence()
-                return@play
-            }
-            discardQueuedPlayer()
-            sequenceTrackIndex = index
-            val current = MediaPlayer()
-            player = current
-            playerPrepared = false
-            playbackPreparing = true
-            playbackPaused = false
-            playbackActive = hasStartedPlayback
-            preparationScope.launch {
-                try {
-                    val source = cacheReciterStreamSource(context.applicationContext, sources[index])
-                    if (generation != playbackGeneration || player !== current) {
-                        runCatching { current.release() }
-                        return@launch
-                    }
-                    setReciterAudioSource(context.applicationContext, current, source)
-                    current.setOnPreparedListener { prepared ->
-                        if (generation != playbackGeneration || player !== prepared) {
-                            runCatching { prepared.release() }
-                            return@setOnPreparedListener
-                        }
-                        try {
-                            // A new MediaPlayer instance must always begin at the
-                            // start of the requested recording, never a stale position.
-                            prepared.seekTo(0)
-                            prepared.start()
-                            announceActiveTrack(prepared, index)
-                            preloadNext(index, prepared)
-                        } catch (_: Exception) {
-                            if (player === prepared) player = null
-                            playerPrepared = false
-                            playbackPreparing = false
-                            playbackPaused = false
-                            runCatching { prepared.release() }
-                            handleTrackFailure(index)
-                        }
-                    }
-                    current.setOnCompletionListener { completed -> completeTrack(completed, index) }
-                    current.setOnErrorListener { failed, _, _ ->
-                        if (generation == playbackGeneration && player === failed) {
-                            player = null
-                            playerPrepared = false
-                            playbackPreparing = false
-                            playbackPaused = false
-                            discardQueuedPlayer()
-                            handleTrackFailure(index)
-                        } else {
-                            runCatching { failed.release() }
-                        }
-                        true
-                    }
-                    current.prepareAsync()
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    if (generation == playbackGeneration) {
-                        if (player === current) player = null
-                        playerPrepared = false
-                        playbackPreparing = false
-                        playbackPaused = false
-                        runCatching { current.release() }
-                        handleTrackFailure(index)
-                    }
-                }
-            }
-        }
-
-        sequenceTrackRequest = { targetIndex ->
-            if (generation == playbackGeneration && targetIndex in sources.indices) {
-                sequenceTrackIndex = targetIndex
-                discardQueuedPlayer()
-                val active = player
-                player = null
-                playerPrepared = false
-                playbackPreparing = true
-                playbackPaused = false
-                runCatching { active?.release() }
-                Handler(Looper.getMainLooper()).post { playAt(targetIndex) }
-            }
-        }
-        playAt(0)
     }
 
     fun play(context: Context, assetPath: String, callback: (Boolean) -> Unit) {
         stop()
         val generation = playbackGeneration
+        activeContext = context.applicationContext
+        playbackCallback = callback
+        singlePlaybackFailure = AudioPlaybackFailure.LOCAL_ASSET
+        isSequencePlayback = false
+        playbackPreparing = true
         preparationJob = preparationScope.launch {
             try {
                 val copy = withContext(Dispatchers.IO) {
@@ -9960,141 +9836,44 @@ internal object AudioController {
                 }
                 if (generation != playbackGeneration) return@launch
                 preparationJob = null
-                val next = MediaPlayer()
-                player = next
-                playerPrepared = false
-                playbackPaused = false
-                next.setDataSource(copy.absolutePath)
-                next.setOnPreparedListener { prepared ->
-                    if (generation != playbackGeneration) {
-                        runCatching { prepared.release() }
-                        return@setOnPreparedListener
-                    }
-                    try {
-                        prepared.start()
-                        playerPrepared = true
-                        playbackPaused = false
-                        callback(true)
-                    } catch (_: Exception) {
-                        playerPrepared = false
-                        runCatching { prepared.release() }
-                        if (player === prepared) player = null
-                        callback(false)
-                    }
-                }
-                next.setOnCompletionListener { completed ->
-                    if (generation != playbackGeneration) {
-                        runCatching { completed.release() }
-                        return@setOnCompletionListener
-                    }
-                    runCatching { completed.release() }
-                    if (player === completed) player = null
-                    playerPrepared = false
-                    playbackPaused = false
-                    callback(false)
-                    stop()
-                }
-                next.setOnErrorListener { failed, _, _ ->
-                    if (generation == playbackGeneration) {
-                        runCatching { failed.release() }
-                        if (player === failed) player = null
-                        playerPrepared = false
-                        playbackPaused = false
-                        callback(false)
-                        Toast.makeText(
-                            context,
-                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.LOCAL_ASSET),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        stop()
-                    }
-                    true
-                }
-                next.prepareAsync()
+                val engine = createPlayer(context, generation)
+                player = engine
+                engine.setMediaItem(MediaItem.fromUri(Uri.fromFile(copy)))
+                engine.playWhenReady = true
+                engine.prepare()
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 if (generation == playbackGeneration) {
-                    preparationJob = null
-                    playerPrepared = false
-                    playbackPaused = false
-                    player?.release()
-                    player = null
-                    callback(false)
-                    Toast.makeText(
-                        context,
-                        audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.LOCAL_ASSET),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    android.util.Log.w("MashxallAudio", "Could not prepare bundled audio", error)
+                    val target = activeContext
+                    finishSinglePlayback(generation)
+                    if (target != null) {
+                        Toast.makeText(
+                            target,
+                            audioPlaybackFailureMessage(AppLanguage.from(languageHint(target)), AudioPlaybackFailure.LOCAL_ASSET),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
         }
     }
 
     fun playRemote(context: Context, url: String, callback: (Boolean) -> Unit) {
-        stop()
-        val generation = playbackGeneration
-        try {
-            val next = MediaPlayer()
-            player = next
-            playerPrepared = false
-            playbackPaused = false
-            next.setDataSource(url)
-            next.setOnPreparedListener { prepared ->
-                if (generation != playbackGeneration) {
-                    runCatching { prepared.release() }
-                    return@setOnPreparedListener
-                }
-                try {
-                    prepared.start()
-                    playerPrepared = true
-                    playbackPaused = false
-                    callback(true)
-                } catch (_: Exception) {
-                    playerPrepared = false
-                    runCatching { prepared.release() }
-                    if (player === prepared) player = null
-                    callback(false)
-                }
-            }
-            next.setOnCompletionListener { completed ->
-                if (generation != playbackGeneration) {
-                    runCatching { completed.release() }
-                    return@setOnCompletionListener
-                }
-                runCatching { completed.release() }
-                if (player === completed) player = null
-                playerPrepared = false
-                playbackPaused = false
-                callback(false)
-                stop()
-            }
-            next.setOnErrorListener { failed, _, _ ->
-                if (generation == playbackGeneration) {
-                    runCatching { failed.release() }
-                    if (player === failed) player = null
-                    playerPrepared = false
-                    playbackPaused = false
-                    callback(false)
-                    Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
-                    stop()
-                }
-                true
-            }
-            next.prepareAsync()
-        } catch (_: Exception) {
-            playerPrepared = false
-            playbackPaused = false
-            player?.release()
-            player = null
-            callback(false)
-            Toast.makeText(context, audioPlaybackFailureMessage(AppLanguage.from(languageHint(context)), AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
-        }
+        beginSinglePlayback(
+            context = context,
+            mediaItem = MediaItem.fromUri(Uri.parse(url)),
+            failure = AudioPlaybackFailure.STREAM,
+            callback = callback
+        )
     }
 
     private fun languageHint(context: Context): String =
-        context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE).getString("language", "ckb") ?: "ckb"
+        context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+            .getString("language", "ckb") ?: "ckb"
 }
+
 
 private val MASHXALL_BACKUP_PREFS = listOf(
     "mashxall_preferences",
