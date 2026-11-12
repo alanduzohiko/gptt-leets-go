@@ -8001,7 +8001,7 @@ internal fun quranPlaybackAyahAtPosition(
 }
 
 /** Approximate start offset of an ayah in a single full-surah recording without verse timestamps. */
-internal fun quranFullSurahSeekPositionForAyah(
+internal fun quranPlaybackPositionAtAyahStart(
     targetAyah: Int,
     ayahCount: Int,
     durationMs: Int,
