@@ -57,6 +57,20 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
+    fun fullSurahSourcesUseOnlyVerifiedSameReciterAyahEditions() {
+        assertEquals(4, quranAyahSegmentReciterId(2))
+        assertEquals(1, quranAyahSegmentReciterId(3))
+        assertEquals(76, quranAyahSegmentReciterId(18))
+        assertEquals(58, quranAyahSegmentReciterId(26))
+        assertEquals(28, quranAyahSegmentReciterId(73))
+        assertEquals(17, quranAyahSegmentReciterId(1_000_102, "102-102"))
+        assertEquals(25, quranAyahSegmentReciterId(1_000_112, "112-113"))
+        assertEquals(19, quranAyahSegmentReciterId(1_000_118, "118-119"))
+        assertEquals(null, quranAyahSegmentReciterId(1_000_1, "1-1"))
+        assertEquals(null, quranAyahSegmentReciterId(37))
+    }
+
+    @Test
     fun verseHighlightUsesOnlyTheTrackConfirmedReadyByThePlayer() {
         assertEquals(0, quranPlaybackCommittedTrackIndex(0, 6))
         assertEquals(3, quranPlaybackCommittedTrackIndex(3, 6))
