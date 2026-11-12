@@ -9501,7 +9501,7 @@ internal object AudioController {
     private fun createPlayer(context: Context, generation: Int): ExoPlayer {
         val appContext = context.applicationContext
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mashxall/1.0 (Android)")
+            .setUserAgent("Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36")
             .setConnectTimeoutMs(20_000)
             .setReadTimeoutMs(30_000)
             .setAllowCrossProtocolRedirects(true)
@@ -9736,9 +9736,9 @@ internal object AudioController {
         singlePlaybackFailure = failure
 
         if (sources.isEmpty()) {
-            playbackPreparing = false
-            playbackCallback = null
-            callback(false)
+            val emptyCallback = playbackCallback
+            releasePlayerAndResetState(activeContext)
+            emptyCallback?.invoke(false)
             return
         }
 
@@ -9755,7 +9755,11 @@ internal object AudioController {
             engine.prepare()
         } catch (error: Exception) {
             android.util.Log.w("MashxallQuranAudio", "Could not initialize the recitation playlist", error)
-            if (generation == playbackGeneration) finishSequence(generation)
+            if (generation == playbackGeneration) {
+                sequenceUnavailableCount = maxOf(sequenceUnavailableCount, 1)
+                sequenceFailedIndices.add(0)
+                finishSequence(generation)
+            }
         }
     }
 
