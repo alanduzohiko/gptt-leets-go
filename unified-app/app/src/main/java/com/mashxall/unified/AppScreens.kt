@@ -7746,8 +7746,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         ).show()
                     }
                 }
-            )
-            }.graphicsLayer {
+            ).graphicsLayer {
                 scaleX = tapPulse.value
                 scaleY = tapPulse.value
             },
