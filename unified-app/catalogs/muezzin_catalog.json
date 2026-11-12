@@ -4,7 +4,7 @@
   "source_repository": "https://github.com/bilalelsayed97/adhan_sounds",
   "source_readme": "https://github.com/bilalelsayed97/adhan_sounds/blob/main/README.md",
   "source_note": "Audio streams from the upstream repository's full-length preview files and is downloaded only when the user asks. The upstream repository has no declared audio licence; do not bundle or redistribute these recordings unless the recording rights are cleared.",
-  "record_count": 69,
+  "record_count": 68,
   "records": [
     {
       "id": "muezzin-120-mashary_2010",
@@ -675,16 +675,6 @@
       "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/mecca.mp3",
       "size_bytes": 819632,
       "source_parts": 8
-    },
-    {
-      "id": "muezzin-260-longTakbiratLowVolume",
-      "title_ar": "تكبيرات طويلة بصوت منخفض",
-      "title_en": "Long takbeer, low volume",
-      "category": "muezzin",
-      "source_filename": "longTakbiratLowVolume.mp3",
-      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/longTakbiratLowVolume.mp3",
-      "size_bytes": 1467117,
-      "source_parts": 4
     },
     {
       "id": "muezzin-kurdish-ahmed-el-kourdi",
