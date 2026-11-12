@@ -56,6 +56,42 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
+    fun preSeekProgressCannotOverwriteTheAyahChosenByTheReader() {
+        assertEquals(
+            false,
+            shouldPublishFullSurahAyahPosition(
+                initialSeekPending = true,
+                expectedAyah = 8,
+                estimatedAyah = 1
+            )
+        )
+        assertEquals(
+            false,
+            shouldPublishFullSurahAyahPosition(
+                initialSeekPending = false,
+                expectedAyah = 8,
+                estimatedAyah = 7
+            )
+        )
+        assertEquals(
+            true,
+            shouldPublishFullSurahAyahPosition(
+                initialSeekPending = false,
+                expectedAyah = 8,
+                estimatedAyah = 8
+            )
+        )
+        assertEquals(
+            true,
+            shouldPublishFullSurahAyahPosition(
+                initialSeekPending = false,
+                expectedAyah = null,
+                estimatedAyah = 9
+            )
+        )
+    }
+
+    @Test
     fun fullSurahProgressAndSeekClampToTheAvailableAyahRange() {
         assertEquals(3, quranPlaybackAyahAtPosition(3, 7, 0, 10_000))
         assertEquals(7, quranPlaybackAyahAtPosition(3, 7, 100_000, 10_000))
