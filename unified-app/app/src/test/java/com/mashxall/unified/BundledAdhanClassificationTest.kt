@@ -3,6 +3,7 @@ package com.mashxall.unified
 import com.mashxall.unified.data.AudioItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BundledAdhanClassificationTest {
@@ -30,16 +31,14 @@ class BundledAdhanClassificationTest {
                 )
             )
         )
-        assertEquals(
-            "muezzin",
-            bundledAdhanCategory(
-                AudioItem(
-                    "local:/data/user/0/com.mashxall/files/adhan-audio/kurdish.mp3",
-                    "دەنگی بانگ",
-                    "موئەزینەکان"
-                )
-            )
+        val downloadedSoraniAdhan = AudioItem(
+            "local:/data/user/0/com.mashxall/files/adhan-audio/kurdish.mp3",
+            "دەنگی بانگ",
+            "موئەزینەکان"
         )
+        assertEquals("muezzin", bundledAdhanCategory(downloadedSoraniAdhan))
+        assertTrue(filterSelectableAdhanAssets(listOf(downloadedSoraniAdhan)).contains(downloadedSoraniAdhan))
+        assertTrue(hasSelectableAdhanAsset(downloadedSoraniAdhan.assetPath, listOf(downloadedSoraniAdhan)))
     }
 
     @Test
