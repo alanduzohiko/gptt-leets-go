@@ -45,7 +45,7 @@ class MuezzinCatalogTests(unittest.TestCase):
             self.assertIn(name.lower(), all_names)
 
     def test_non_haram_location_recordings_and_mosque_categories_are_excluded(self):
-        forbidden = ("الأقصى", "القدس", "دبي", "مصر", "aqsa", "quds", "jerusalem", "dubai", "egypt", "masjed_qeba")
+        forbidden = ("الأقصى", "القدس", "دبي", "مصر", "تكبيرات", "takbir", "lowvolume", "aqsa", "quds", "jerusalem", "dubai", "egypt", "masjed_qeba")
         for row in self.records:
             self.assertFalse(any(word in f'{row["title_ar"]} {row["title_en"]} {row["source_filename"]}'.lower()
                                  for word in forbidden))
