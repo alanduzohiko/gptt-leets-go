@@ -238,6 +238,13 @@ enum class AppScreen(val key: String) {
     AUDIO("audio"), RECITERS("reciters"), ADHAN("adhan"), LEXICON("lexicon"), WORD_BY_WORD("word_by_word"), FARMUDA("farmuda"), QIBLA("qibla"), BOOKMARKS("bookmarks"), SETTINGS("settings"), BACKUP("backup")
 }
 
+/** Keep compact labels readable while respecting any larger Android font setting. */
+internal const val MASHXALL_MIN_FONT_SCALE = 1.15f
+internal fun mashxallReadableFontScale(systemFontScale: Float): Float =
+    systemFontScale.takeIf { it.isFinite() && it > 0f }
+        ?.coerceAtLeast(MASHXALL_MIN_FONT_SCALE)
+        ?: MASHXALL_MIN_FONT_SCALE
+
 /** Freshness window for a newly requested GPS reading; saved prayer coordinates do not expire. */
 internal const val MAX_SAVED_GPS_FIX_AGE_MILLIS: Long = 30L * 60L * 1000L
 
@@ -1355,6 +1362,13 @@ private fun MashxallFirstRunSetupScreen(onComplete: () -> Unit) {
 @Composable
 fun MashxallApp(startScreen: String? = null) {
     val context = LocalContext.current
+    val platformDensity = androidx.compose.ui.platform.LocalDensity.current
+    val readableDensity = remember(platformDensity) {
+        androidx.compose.ui.unit.Density(
+            density = platformDensity.density,
+            fontScale = mashxallReadableFontScale(platformDensity.fontScale)
+        )
+    }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", 0) }
     val legacyUserState = !prefs.getBoolean("first_run_setup_started", false) &&
         (prefs.contains("language") || prefs.contains("last_surah") ||
@@ -1551,7 +1565,10 @@ fun MashxallApp(startScreen: String? = null) {
             surface = cardColor, onSurface = foreground, onBackground = foreground, surfaceVariant = surfaceVariant
         )
     ) {
-        CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection) {
+        CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection,
+            androidx.compose.ui.platform.LocalDensity provides readableDensity
+        ) {
             Surface(color = background, modifier = Modifier.fillMaxSize()) {
                 Scaffold(
                     containerColor = Color.Transparent,

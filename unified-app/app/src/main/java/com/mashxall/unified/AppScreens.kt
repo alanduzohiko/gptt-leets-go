@@ -87,6 +87,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -1740,6 +1741,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var inlinePlaybackStartAyah by rememberSaveable { mutableIntStateOf(initialAyah.coerceAtLeast(1)) }
     var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var inlinePlaybackAyahWeights by remember { mutableStateOf<List<Int>>(emptyList()) }
     var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
     var inlinePlaybackDurationMs by remember { mutableIntStateOf(0) }
     var showInlineReciterPicker by remember { mutableStateOf(false) }
@@ -1747,20 +1749,51 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var pendingInlineRecitationTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackPreparing by remember { mutableStateOf(false) }
 
-    // A one-file full-surah MP3 has an accurate track clock but no verse boundary
-    // metadata. Only ayah-by-ayah playlists may move the Mushaf's active verse.
-    // Never infer verse positions from text length or total file duration.
-    LaunchedEffect(inlinePlaybackVisible) {
-        if (inlinePlaybackVisible) {
-            while (true) {
-                val duration = AudioController.playbackPosition().second
-                if (duration > 0 && inlinePlaybackDurationMs != duration) {
-                    inlinePlaybackDurationMs = duration
-                }
-                delay(160L)
-            }
-        } else {
+    // One clock drives the full-surah elapsed bar and the verse anchor. The
+    // parent only changes when playback crosses an estimated ayah interval.
+    LaunchedEffect(
+        inlinePlaybackVisible,
+        inlinePlaybackUsesAyahClips,
+        inlinePlaybackSurah,
+        inlinePlaybackAyahWeights
+    ) {
+        if (!inlinePlaybackVisible) {
             inlinePlaybackDurationMs = 0
+            return@LaunchedEffect
+        }
+        val ayahCount = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
+        var lastPublishedAyah = inlinePlaybackActiveVerse
+            ?.takeIf { it.first == inlinePlaybackSurah }?.second ?: -1
+        while (true) {
+            if (AudioController.isInitialSequenceSeekPending() || !AudioController.isPrepared()) {
+                delay(140L)
+                continue
+            }
+            val (positionMs, durationMs) = AudioController.playbackPosition()
+            if (durationMs > 0) {
+                if (inlinePlaybackDurationMs != durationMs) {
+                    inlinePlaybackDurationMs = durationMs
+                }
+                if (!inlinePlaybackUsesAyahClips &&
+                    ayahCount > 0 &&
+                    inlinePlaybackAyahWeights.size == ayahCount
+                ) {
+                    val observedAyah = quranPlaybackAyahAtPosition(
+                        startingAyah = 1,
+                        ayahCount = ayahCount,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        ayahWeights = inlinePlaybackAyahWeights
+                    )
+                    if (observedAyah != lastPublishedAyah) {
+                        lastPublishedAyah = observedAyah
+                        inlinePlaybackActiveVerse = inlinePlaybackSurah to observedAyah
+                        onOpenVerse(inlinePlaybackSurah, observedAyah)
+                        readingProgressRevision++
+                    }
+                }
+            }
+            delay(140L)
         }
     }
 
@@ -1807,14 +1840,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             else -> configuredMode
         }
         val requestedAyahInSurah = requestedAyah.coerceIn(1, ayahCount)
-        if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
-            Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
-            return
-        }
         val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyahInSurah, ayahCount)
         // A single full-surah MP3 has no reliable marker for an individual ayah.
         // It therefore starts at ayah 1 only; exact verse starts use segment audio.
-        val initialReaderAyah = if (chosen.audioType == 0) startAyah else 1
+        val initialReaderAyah = if (chosen.audioType == 0) startAyah else requestedAyahInSurah
         inlinePlaybackPreparing = true
         inlinePlaybackDurationMs = 0
         scope.launch {
@@ -1822,6 +1851,21 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val sequence = withContext(Dispatchers.IO) {
                     reciterAudioSequence(context, chosen, surahNumber, startAyah, ayahCount)
                 }
+                val fullSurahAyahWeights = if (chosen.audioType != 0) {
+                    val sourceAyahs = ContentRepository.loadAyahs(context, surahNumber, "ar")
+                    quranPlaybackAyahWeights(sourceAyahs, ayahCount)
+                } else emptyList()
+                val initialSeekPositionProvider: ((Long) -> Long)? =
+                    if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
+                        { durationMs ->
+                            quranFullSurahSeekPositionForAyah(
+                                targetAyah = requestedAyahInSurah,
+                                ayahCount = ayahCount,
+                                durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                                ayahWeights = fullSurahAyahWeights
+                            ).toLong()
+                        }
+                    } else null
                 if (sequence.isEmpty()) {
                     Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
                     return@launch
@@ -1833,6 +1877,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackStartAyah = startAyah
                 inlinePlaybackReciterId = chosen.id
                 inlinePlaybackUsesAyahClips = chosen.audioType == 0
+                inlinePlaybackAyahWeights = fullSurahAyahWeights
                 inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
                 inlinePlaybackActiveVerse = surahNumber to initialReaderAyah
                 selected = surahNumber
@@ -1853,6 +1898,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                     showNotification = true,
+                    initialSeekPositionProvider = initialSeekPositionProvider,
                     onTrackStarted = { trackIndex ->
                         val activeAyah = if (chosen.audioType == 0) {
                             quranPlaybackAyahForTrack(
@@ -1902,9 +1948,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 trackIndex = AudioController.currentSequenceTrackIndex()
             ).coerceIn(1, ayahCount)
         }
-        // A complete MP3 is one continuous file with no trustworthy verse
-        // timestamps, so keep its reader anchor stable instead of guessing.
-        return inlinePlaybackStartAyah.coerceIn(1, ayahCount)
+        // Full-surah files do not ship verse timestamps. Use the current
+        // estimate published from the same player clock as the elapsed bar.
+        return inlinePlaybackActiveVerse
+            ?.takeIf { it.first == inlinePlaybackSurah }
+            ?.second
+            ?.coerceIn(1, ayahCount)
+            ?: inlinePlaybackStartAyah.coerceIn(1, ayahCount)
     }
 
     LaunchedEffect(inlinePlaybackActiveVerse, inlinePlaybackVisible, mushafMode, mushafEdition) {
@@ -2484,7 +2534,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         .apply()
                     pendingMushafFocusVerse = null
                 },
-                playbackVerse = inlinePlaybackActiveVerse.takeIf { inlinePlaybackUsesAyahClips },
+                playbackVerse = inlinePlaybackActiveVerse,
                 coloredTajweed = coloredTajweed,
                 surahAyahCounts = surahAyahCounts,
                 surahNames = surahs.associate { it.number to if (language == AppLanguage.EN) it.englishName else it.arabicName },
@@ -7516,6 +7566,7 @@ private fun TasbihFooterAction(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
@@ -7654,13 +7705,29 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             ).semantics {
                 contentDescription = counterLabel
                 stateDescription = counterValue
-            }.premiumClickable(
-                hapticFeedback = false,
+            }.combinedClickable(
                 role = Role.Button,
                 onLongClickLabel = when (language) {
                     AppLanguage.EN -> "Copy remembrance text"
                     AppLanguage.AR -> "نسخ نص الذكر"
                     AppLanguage.CKB -> "دەقی زیکر لەبەر بگرە"
+                },
+                onClick = {
+                    val result = nextTasbihTap(count, totalCount, targetCount)
+                    if (result.accepted) {
+                        tapBurstRevision += 1
+                        count = result.roundCount
+                        totalCount = result.totalCount
+                        prefs.edit()
+                            .putInt("tasbih_count_$selectedId", count)
+                            .putInt("tasbih_total_$selectedId", totalCount)
+                            .putInt("tasbih_count", count)
+                            .apply()
+                        haptic.performMashxallHaptic(
+                            if (targetCount > 0 && count >= targetCount) HapticFeedbackType.LongPress
+                            else HapticFeedbackType.TextHandleMove
+                        )
+                    }
                 },
                 onLongClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
@@ -7679,22 +7746,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         ).show()
                     }
                 }
-            ) {
-                val result = nextTasbihTap(count, totalCount, targetCount)
-                if (result.accepted) {
-                    tapBurstRevision += 1
-                    count = result.roundCount
-                    totalCount = result.totalCount
-                    prefs.edit()
-                        .putInt("tasbih_count_$selectedId", count)
-                        .putInt("tasbih_total_$selectedId", totalCount)
-                        .putInt("tasbih_count", count)
-                        .apply()
-                    haptic.performMashxallHaptic(
-                        if (targetCount > 0 && count >= targetCount) HapticFeedbackType.LongPress
-                        else HapticFeedbackType.TextHandleMove
-                    )
-                }
+            )
             }.graphicsLayer {
                 scaleX = tapPulse.value
                 scaleY = tapPulse.value
@@ -7949,7 +8001,7 @@ internal fun quranPlaybackAyahAtPosition(
 }
 
 /** Approximate start offset of an ayah in a single full-surah recording without verse timestamps. */
-internal fun quranPlaybackPositionAtAyahStart(
+internal fun quranFullSurahSeekPositionForAyah(
     targetAyah: Int,
     ayahCount: Int,
     durationMs: Int,
@@ -7986,6 +8038,20 @@ internal fun quranPlaybackPositionForAyah(
     return ((before * 2L + targetWeight) * durationMs.toLong() / (total * 2L))
         .toInt().coerceIn(0, durationMs)
 }
+
+/** Shared seek policy for one-file surah recordings: seek inside the selected ayah's estimated interval instead of its uncertain leading boundary. */
+internal fun quranFullSurahSeekPositionForAyah(
+    targetAyah: Int,
+    ayahCount: Int,
+    durationMs: Int,
+    ayahWeights: List<Int> = emptyList()
+): Int = quranPlaybackPositionForAyah(
+    targetAyah = targetAyah,
+    startingAyah = 1,
+    ayahCount = ayahCount,
+    durationMs = durationMs,
+    ayahWeights = ayahWeights
+)
 
 private suspend fun downloadReciterSurah(
     context: Context,
@@ -8232,7 +8298,7 @@ fun AudioScreen(
                     val sourceAyahs = ContentRepository.loadAyahs(context, surahNumber, "ar")
                     val weights = quranPlaybackAyahWeights(sourceAyahs, ayahCount)
                     val provider: (Long) -> Long = { durationMs ->
-                        quranPlaybackPositionAtAyahStart(
+                        quranFullSurahSeekPositionForAyah(
                             targetAyah = seekAyah,
                             ayahCount = ayahCount,
                             durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
@@ -8996,7 +9062,7 @@ fun AudioScreen(
                                                                 val sourceAyahs = ContentRepository.loadAyahs(context, surahNumber, "ar")
                                                                 val weights = quranPlaybackAyahWeights(sourceAyahs, surahAyahCount)
                                                                 val provider: (Long) -> Long = { durationMs ->
-                                                                    quranPlaybackPositionAtAyahStart(
+                                                                    quranFullSurahSeekPositionForAyah(
                                                                         targetAyah = seekAyah,
                                                                         ayahCount = surahAyahCount,
                                                                         durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),

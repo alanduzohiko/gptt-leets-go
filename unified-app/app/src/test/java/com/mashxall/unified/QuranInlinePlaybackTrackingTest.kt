@@ -27,6 +27,24 @@ class QuranInlinePlaybackTrackingTest {
     // These mathematical estimates remain for non-Mushaf legacy audio controls.
     // The Mushaf no longer uses them to seek or highlight a verse in one full MP3.
     @Test
+    fun everySelectedFullSurahSeekLandsInsideTheSameWeightedAyahInterval() {
+        val weights = listOf(10, 20, 30, 40)
+        val duration = 100_000
+        for (targetAyah in 1..4) {
+            val position = quranFullSurahSeekPositionForAyah(
+                targetAyah = targetAyah,
+                ayahCount = 4,
+                durationMs = duration,
+                ayahWeights = weights
+            )
+            assertEquals(
+                targetAyah,
+                quranPlaybackAyahAtPosition(1, 4, position, duration, weights)
+            )
+        }
+    }
+
+    @Test
     fun legacyFullSurahTimingEstimateUsesAvailableVerseWeights() {
         val weights = listOf(10, 20, 30)
         assertEquals(1, quranPlaybackAyahAtPosition(1, 3, 500, 6_000, weights))
