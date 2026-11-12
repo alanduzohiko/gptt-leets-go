@@ -9574,6 +9574,7 @@ internal object AudioController {
     private var repeatCurrentTrack: Boolean = false
     private var sequenceTrackCallback: ((Int) -> Unit)? = null
     private var initialSequenceSeekPositionProvider: ((Long) -> Long)? = null
+    private var initialSequenceSeekFallbackJob: Job? = null
     private var playbackCallback: ((Boolean) -> Unit)? = null
     private var singlePlaybackStarted: Boolean = false
     private var singlePlaybackFailure: AudioPlaybackFailure = AudioPlaybackFailure.LOCAL_ASSET
@@ -9704,16 +9705,12 @@ internal object AudioController {
                     }
                     Player.STATE_READY -> {
                         if (isSequencePlayback && initialSequenceSeekPositionProvider != null && !sequenceHadStarted) {
-                            val seekProvider = initialSequenceSeekPositionProvider
-                            initialSequenceSeekPositionProvider = null
-                            val rawDuration = engine.duration
-                            if (rawDuration != C.TIME_UNSET && rawDuration > 0L) {
-                                val requestedPosition = runCatching { seekProvider.invoke(rawDuration) }
-                                    .getOrDefault(0L)
-                                    .coerceIn(0L, (rawDuration - 1L).coerceAtLeast(0L))
-                                if (requestedPosition > 0L) runCatching { engine.seekTo(requestedPosition) }
+                            if (!applyInitialSequenceSeekIfReady(engine, generation)) {
+                                playerPrepared = false
+                                playbackPreparing = true
+                                playbackActive = false
+                                return
                             }
-                            engine.playWhenReady = true
                         }
                         playerPrepared = true
                         playbackPreparing = false
@@ -9736,6 +9733,25 @@ internal object AudioController {
                     Player.STATE_IDLE -> {
                         playerPrepared = false
                     }
+                }
+            }
+
+            override fun onTimelineChanged(
+                timeline: androidx.media3.common.Timeline,
+                reason: Int
+            ) {
+                if (!isCurrentPlayer(engine, generation) ||
+                    !isSequencePlayback ||
+                    sequenceHadStarted ||
+                    initialSequenceSeekPositionProvider == null ||
+                    engine.playbackState != Player.STATE_READY
+                ) return
+                if (applyInitialSequenceSeekIfReady(engine, generation)) {
+                    playerPrepared = true
+                    playbackPreparing = false
+                    playbackActive = true
+                    playbackPaused = false
+                    announceSequenceTrack(engine, generation, engine.currentMediaItemIndex)
                 }
             }
 
@@ -9785,6 +9801,33 @@ internal object AudioController {
 
     private fun isCurrentPlayer(engine: ExoPlayer, generation: Int): Boolean =
         generation == playbackGeneration && player === engine && !playbackFinished
+
+    /**
+     * Apply a pending full-surah seek only after Media3 has a real duration.
+     * Some progressive MP3 sources publish that duration with a later timeline
+     * update rather than the first READY callback.
+     */
+    private fun applyInitialSequenceSeekIfReady(engine: ExoPlayer, generation: Int): Boolean {
+        if (!isCurrentPlayer(engine, generation)) return false
+        val seekProvider = initialSequenceSeekPositionProvider ?: return true
+        val rawDuration = engine.duration
+        if (rawDuration == C.TIME_UNSET || rawDuration <= 0L) return false
+
+        val requestedPosition = runCatching { seekProvider.invoke(rawDuration) }
+            .getOrDefault(0L)
+            .coerceIn(0L, (rawDuration - 1L).coerceAtLeast(0L))
+        if (requestedPosition > 0L) {
+            runCatching { engine.seekTo(requestedPosition) }
+                .onFailure {
+                    android.util.Log.w("MashxallQuranAudio", "Could not seek to the selected ayah offset", it)
+                }
+        }
+        initialSequenceSeekPositionProvider = null
+        initialSequenceSeekFallbackJob?.cancel()
+        initialSequenceSeekFallbackJob = null
+        engine.playWhenReady = true
+        return true
+    }
 
     private fun announceSequenceTrack(engine: ExoPlayer, generation: Int, trackIndex: Int) {
         if (!isCurrentPlayer(engine, generation) || trackIndex !in 0 until sequenceTrackCount) return
@@ -9854,6 +9897,8 @@ internal object AudioController {
         repeatCurrentTrack = false
         sequenceTrackCallback = null
         initialSequenceSeekPositionProvider = null
+        initialSequenceSeekFallbackJob?.cancel()
+        initialSequenceSeekFallbackJob = null
         playbackCallback = null
         isSequencePlayback = false
         singlePlaybackStarted = false
@@ -9946,6 +9991,30 @@ internal object AudioController {
             engine.setMediaItems(sources.map(::mediaItemForReciterSource), true)
             engine.playWhenReady = initialSeekPositionProvider == null
             engine.prepare()
+            if (initialSeekPositionProvider != null) {
+                initialSequenceSeekFallbackJob = preparationScope.launch {
+                    delay(3_000L)
+                    if (isCurrentPlayer(engine, generation) &&
+                        !sequenceHadStarted &&
+                        initialSequenceSeekPositionProvider != null
+                    ) {
+                        android.util.Log.w(
+                            "MashxallQuranAudio",
+                            "The selected-ayah seek was unavailable; starting the full-surah recording safely"
+                        )
+                        initialSequenceSeekPositionProvider = null
+                        initialSequenceSeekFallbackJob = null
+                        engine.playWhenReady = true
+                        if (engine.playbackState == Player.STATE_READY) {
+                            playerPrepared = true
+                            playbackPreparing = false
+                            playbackActive = true
+                            playbackPaused = false
+                            announceSequenceTrack(engine, generation, engine.currentMediaItemIndex)
+                        }
+                    }
+                }
+            }
         } catch (error: Exception) {
             android.util.Log.w("MashxallQuranAudio", "Could not initialize the recitation playlist", error)
             if (generation == playbackGeneration) {
