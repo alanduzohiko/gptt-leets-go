@@ -4,7 +4,7 @@
   "source_repository": "https://github.com/bilalelsayed97/adhan_sounds",
   "source_readme": "https://github.com/bilalelsayed97/adhan_sounds/blob/main/README.md",
   "source_note": "Audio streams from the upstream repository's full-length preview files and is downloaded only when the user asks. The upstream repository has no declared audio licence; do not bundle or redistribute these recordings unless the recording rights are cleared.",
-  "record_count": 70,
+  "record_count": 69,
   "records": [
     {
       "id": "muezzin-120-mashary_2010",
@@ -474,16 +474,6 @@
       "source_filename": "alafasy_azan_mecca.mp3",
       "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/alafasy_azan_mecca.mp3",
       "size_bytes": 5234051,
-      "source_parts": 7
-    },
-    {
-      "id": "muezzin-8-azan_alquds",
-      "title_ar": "اذان القدس",
-      "title_en": "Azan Alquds",
-      "category": "muezzin",
-      "source_filename": "azan_alquds.mp3",
-      "url": "https://raw.githubusercontent.com/bilalelsayed97/adhan_sounds/main/azan_alquds.mp3",
-      "size_bytes": 2916956,
       "source_parts": 7
     },
     {
