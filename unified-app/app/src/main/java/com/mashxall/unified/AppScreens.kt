@@ -1740,6 +1740,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var inlinePlaybackStartAyah by rememberSaveable { mutableIntStateOf(initialAyah.coerceAtLeast(1)) }
     var inlinePlaybackInitialSeekAyah by rememberSaveable { mutableIntStateOf(initialAyah.coerceAtLeast(1)) }
     var inlinePlaybackManualSeekTargetAyah by remember { mutableStateOf<Int?>(null) }
+    var inlinePlaybackSeekDirection by remember { mutableIntStateOf(1) }
     var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
     var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
@@ -1783,12 +1784,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     if (shouldPublishFullSurahAyahPosition(
                             initialSeekPending = initialSeekPending,
                             expectedAyah = inlinePlaybackManualSeekTargetAyah,
-                            estimatedAyah = estimatedAyah
+                            estimatedAyah = estimatedAyah,
+                            seekDirection = inlinePlaybackSeekDirection
                         )
                     ) {
                         // Do not let the pre-seek position overwrite the verse selected
                         // by the user. Clear the guard only after the clock reaches it.
                         inlinePlaybackManualSeekTargetAyah = null
+                        inlinePlaybackSeekDirection = 1
                         val target = inlinePlaybackSurah to estimatedAyah
                         if (estimatedAyah > 0 && inlinePlaybackActiveVerse != target) {
                             inlinePlaybackActiveVerse = target
@@ -1889,6 +1892,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackInitialSeekAyah = requestedAyahInSurah
                 inlinePlaybackManualSeekTargetAyah =
                     if (chosen.audioType != 0 && requestedAyahInSurah > 1) requestedAyahInSurah else null
+                inlinePlaybackSeekDirection = 1
                 inlinePlaybackReciterId = chosen.id
                 inlinePlaybackUsesAyahClips = chosen.audioType == 0
                 inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
@@ -1992,9 +1996,14 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             durationMs = duration,
             ayahWeights = weights
         )
+        val previousAyah = inlinePlaybackActiveVerse
+            ?.takeIf { it.first == inlinePlaybackSurah }
+            ?.second ?: currentInlineAudioAyah()
+        inlinePlaybackSeekDirection = if (target < previousAyah) -1 else 1
         inlinePlaybackManualSeekTargetAyah = target
         if (!AudioController.seekTo(targetPosition)) {
             inlinePlaybackManualSeekTargetAyah = null
+            inlinePlaybackSeekDirection = 1
             return
         }
         inlinePlaybackActiveVerse = inlinePlaybackSurah to target
@@ -7557,6 +7566,7 @@ internal fun tasbihProgressFraction(count: Int, target: Int): Float =
 
 @Composable
 private fun TasbihFooterAction(
+    language: AppLanguage,
     label: String,
     icon: ImageVector,
     accent: Color,
@@ -7564,40 +7574,61 @@ private fun TasbihFooterAction(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Row(
-        modifier = modifier
-            .heightIn(min = 72.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Brush.horizontalGradient(
-                listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
-            ))
-            .border(1.dp, accent.copy(alpha = 0.48f), RoundedCornerShape(18.dp))
-            .premiumClickable(role = Role.Button, pressedScale = 0.956f, onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Box(
-            Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
-                .background(accent.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
+    if (language == AppLanguage.CKB) {
+        Row(
+            modifier = modifier
+                .heightIn(min = 72.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Brush.horizontalGradient(
+                    listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
+                ))
+                .border(1.dp, accent.copy(alpha = 0.48f), RoundedCornerShape(18.dp))
+                .premiumClickable(role = Role.Button, pressedScale = 0.956f, onClick = onClick)
+                .padding(horizontal = 9.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
+            Box(
+                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
+                    .background(accent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text(
+                    text = label, color = foreground, fontSize = 11.sp, lineHeight = 15.sp,
+                    fontWeight = FontWeight.Bold, maxLines = 2, softWrap = true,
+                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
-        Box(
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            contentAlignment = Alignment.Center
+    } else {
+        Row(
+            modifier = modifier
+                .heightIn(min = 64.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Brush.horizontalGradient(
+                    listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
+                ))
+                .border(1.dp, accent.copy(alpha = 0.48f), RoundedCornerShape(18.dp))
+                .premiumClickable(role = Role.Button, pressedScale = 0.956f, onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
+            Box(
+                Modifier.size(30.dp).clip(RoundedCornerShape(10.dp))
+                    .background(accent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(7.dp))
             Text(
-                text = label,
-                color = foreground,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                softWrap = true,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                label, color = foreground, fontSize = 11.sp, lineHeight = 15.sp,
+                fontWeight = FontWeight.Bold, maxLines = 2, textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -7856,6 +7887,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
             TasbihFooterAction(
+                language = language,
                 label = when (language) {
                     AppLanguage.EN -> "Reset"
                     AppLanguage.AR -> "إعادة"
@@ -7876,6 +7908,7 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
             }
             TasbihFooterAction(
+                language = language,
                 label = when (language) {
                     AppLanguage.EN -> "New round"
                     AppLanguage.AR -> "دورة جديدة"
@@ -8262,8 +8295,15 @@ internal fun isFeaturedAdhanVoice(
 internal fun shouldPublishFullSurahAyahPosition(
     initialSeekPending: Boolean,
     expectedAyah: Int?,
-    estimatedAyah: Int
-): Boolean = !initialSeekPending && (expectedAyah == null || expectedAyah == estimatedAyah)
+    estimatedAyah: Int,
+    seekDirection: Int = 1
+): Boolean {
+    if (initialSeekPending) return false
+    val target = expectedAyah ?: return true
+    // MP3 seeking can land slightly before or after the estimated verse
+    // boundary; crossing the target in the requested direction ends the guard.
+    return if (seekDirection < 0) estimatedAyah <= target else estimatedAyah >= target
+}
 
 internal fun matchesAdhanLibraryFilter(filter: String, featured: Boolean, downloaded: Boolean): Boolean = when (filter) {
     "featured" -> featured
