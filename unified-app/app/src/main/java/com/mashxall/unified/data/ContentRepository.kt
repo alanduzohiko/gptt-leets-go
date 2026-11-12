@@ -2865,6 +2865,40 @@ object ContentRepository {
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Dedicated curated muezzin catalogue for the public audio library.
+     * The legacy loadOnlineAdhan() remains unchanged for existing prayer alerts.
+     */
+    suspend fun loadOnlineMuezzin(context: Context): List<OnlineAdhan> = withContext(Dispatchers.IO) {
+        runCatching {
+            val rows = context.assets.open("muezzin_catalog.json")
+                .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()).getJSONArray("records") }
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val id = row.optString("id")
+                    val url = row.optString("url")
+                    if (id.isBlank() || !url.startsWith("https://") ||
+                        row.optString("category") != "muezzin"
+                    ) continue
+                    add(
+                        OnlineAdhan(
+                            id = id,
+                            titleArabic = row.optString("title_ar"),
+                            titleEnglish = row.optString("title_en"),
+                            category = "muezzin",
+                            sourceFilename = row.optString("source_filename"),
+                            url = url,
+                            sizeBytes = row.optLong("size_bytes", 0L).coerceAtLeast(0L)
+                        )
+                    )
+                }
+            }
+        }.onFailure { error ->
+            Log.w("MashxallAudio", "Could not load the curated muezzin catalogue", error)
+        }.getOrDefault(emptyList())
+    }
+
     internal fun secureReciterStreamBaseUrl(value: String): String {
         val trimmed = value.trim()
         return if (trimmed.startsWith("http://", ignoreCase = true)) {
