@@ -105,6 +105,19 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertNotIn("verses.filter", playback)
         self.assertIn("val weights = inlinePlaybackAyahWeights", manual_seek)
 
+    def test_pending_ayah_picker_does_not_mutate_the_active_audio_session(self):
+        request = APP_SCREENS.split("fun requestInlineRecitation(", 1)[1].split(
+            "fun startInlineRecitation(", 1
+        )[0]
+        picker = APP_SCREENS.split("if (showInlineReciterPicker) Dialog(", 1)[1].split(
+            "if (showReaderSettings)", 1
+        )[0]
+        self.assertIn("pendingInlineRecitationTarget = surahNumber to ayahNumber.coerceIn(1, count)", request)
+        self.assertNotIn("inlinePlaybackSurah = surahNumber", request)
+        self.assertNotIn("inlinePlaybackStartAyah =", request)
+        self.assertIn("pendingInlineRecitationTarget?.first ?: inlinePlaybackSurah", picker)
+        self.assertIn("val target = pendingInlineRecitationTarget", picker)
+
     def test_quran_welcome_uses_live_motion_and_real_reader_actions(self):
         welcome = APP_SCREENS.split("private fun QuranSurahWelcomeCard(", 1)[1].split(
             "@Composable\\nprivate fun QuranReadingProgressCard(", 1
