@@ -162,6 +162,9 @@ internal object QuranAudioTimingRepository {
                 val folder = item.optString("folder_url")
                     .ifBlank { item.optString("server") }
                     .trim()
+                    // MP3Quran has historically returned HTTP folder URLs for some reads.
+                    // The matching audio host also supports HTTPS; normalize before using it.
+                    .replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
                 if (id > 0 && folder.startsWith("https://", ignoreCase = true)) {
                     add(TimingRead(id, folder))
                 }
