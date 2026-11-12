@@ -559,7 +559,7 @@ private fun QuranInlinePlaybackBar(
                 .background(Brush.horizontalGradient(listOf(Gold.copy(alpha = 0.12f), cardColor)))
                 .padding(horizontal = 8.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Column(
                 Modifier.weight(1f).clip(RoundedCornerShape(11.dp))
@@ -636,6 +636,8 @@ private fun QuranInlinePlaybackBar(
                     AppLanguage.CKB -> if (usesAyahClips) "دووبارەکردنەوەی ئایەتی ئێستا" else "دووبارەکردنەوەی سوورەتی ئێستا"
                 },
                 selected = repeatCurrent,
+                accent = Gold,
+                size = 38.dp,
                 pressedScale = quranReaderActionPressScale("repeat_ayah"),
                 onClick = onRepeat
             )
@@ -648,6 +650,8 @@ private fun QuranInlinePlaybackBar(
                 },
                 enabled = hasPrevious && isPrepared,
                 rotationDegrees = quranAudioNavigationArrowRotation(isNext = false),
+                accent = Color(0xFFD9B768),
+                size = 38.dp,
                 pressedScale = quranReaderActionPressScale("previous_ayah"),
                 onClick = onPrevious
             )
@@ -659,11 +663,14 @@ private fun QuranInlinePlaybackBar(
                     } else {
                         if (language == AppLanguage.EN) "Pause recitation" else if (language == AppLanguage.AR) "إيقاف التلاوة مؤقتًا" else "وەستاندنی کاتیی خوێندنەوە"
                     },
+                    selected = !isPaused,
+                    accent = Color(0xFFF1C76B),
+                    size = 42.dp,
                     pressedScale = quranReaderActionPressScale("pause_recitation"),
                     onClick = onTogglePause
                 )
             } else {
-                PremiumLoadingIndicator(color = Gold, strokeWidth = 2.dp, modifier = Modifier.size(34.dp).padding(7.dp))
+                PremiumLoadingIndicator(color = Color(0xFFF1C76B), strokeWidth = 2.dp, modifier = Modifier.size(42.dp).padding(9.dp))
             }
             ReaderActionIcon(
                 icon = Icons.Outlined.ChevronRight,
@@ -674,12 +681,16 @@ private fun QuranInlinePlaybackBar(
                 },
                 enabled = hasNext && isPrepared,
                 rotationDegrees = quranAudioNavigationArrowRotation(isNext = true),
+                accent = Color(0xFFD9B768),
+                size = 38.dp,
                 pressedScale = quranReaderActionPressScale("next_ayah"),
                 onClick = onNext
             )
             ReaderActionIcon(
                 icon = Icons.Outlined.Close,
                 description = if (language == AppLanguage.EN) "Stop recitation" else if (language == AppLanguage.AR) "إيقاف التلاوة" else "وەستاندنی خوێندنەوە",
+                accent = Color(0xFFE58A82),
+                size = 38.dp,
                 pressedScale = quranReaderActionPressScale("stop_recitation"),
                 onClick = onStop
             )
@@ -696,13 +707,15 @@ private fun ReaderActionIcon(
     hapticFeedback: Boolean = true,
     pressedScale: Float = 0.968f,
     selected: Boolean = false,
+    accent: Color = Gold,
+    size: androidx.compose.ui.unit.Dp = 34.dp,
     onClick: () -> Unit
 ) {
     PremiumIconButton(
         icon = icon,
         contentDescription = description,
-        accent = Gold,
-        size = 34.dp,
+        accent = accent,
+        size = size,
         enabled = enabled,
         rotationDegrees = rotationDegrees,
         circular = true,
@@ -1825,6 +1838,24 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             else -> configuredMode
         }
         val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyah, ayahCount)
+        val requestedAyahInSurah = requestedAyah.coerceIn(1, ayahCount)
+        val fullSurahAyahWeights = if (chosen.audioType != 0) {
+            quranPlaybackAyahWeights(verses.filter { it.surah == surahNumber }, ayahCount)
+        } else {
+            emptyList()
+        }
+        val initialSeekPositionProvider: ((Long) -> Long)? =
+            if (chosen.audioType != 0 && requestedAyahInSurah > 1) {
+                { durationMs ->
+                    quranPlaybackPositionAtAyahStart(
+                        targetAyah = requestedAyahInSurah,
+                        ayahCount = ayahCount,
+                        durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                        ayahWeights = fullSurahAyahWeights
+                    ).toLong()
+                }
+            } else null
+        val initialReaderAyah = if (chosen.audioType == 0) startAyah else requestedAyahInSurah
         inlinePlaybackPreparing = true
         inlinePlaybackDurationMs = 0
         scope.launch {
@@ -1844,17 +1875,17 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackReciterId = chosen.id
                 inlinePlaybackUsesAyahClips = chosen.audioType == 0
                 inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(chosen.audioType, startAyah, ayahCount)
-                inlinePlaybackActiveVerse = surahNumber to (inlinePlaybackTrackAyahs.firstOrNull() ?: startAyah)
+                inlinePlaybackActiveVerse = surahNumber to initialReaderAyah
                 selected = surahNumber
                 selectedAyahForSheet = null
                 sheetAudioPlaying = false
                 onSurah(surahNumber)
-                onOpenVerse(surahNumber, startAyah)
+                onOpenVerse(surahNumber, initialReaderAyah)
                 prefs.edit()
                     .putInt("quran_inline_reciter_id", chosen.id)
                     .putInt("last_surah", surahNumber)
-                    .putInt("last_ayah_number", startAyah)
-                    .putInt("quran_progress_ayah_$surahNumber", startAyah)
+                    .putInt("last_ayah_number", initialReaderAyah)
+                    .putInt("quran_progress_ayah_$surahNumber", initialReaderAyah)
                     .apply()
                 readingProgressRevision++
                 AudioController.playSequence(
@@ -1863,12 +1894,17 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     notificationTitle = chosen.nameArabic.ifBlank { chosen.nameEnglish },
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                     showNotification = true,
+                    initialSeekPositionProvider = initialSeekPositionProvider,
                     onTrackStarted = { trackIndex ->
-                        val activeAyah = quranPlaybackAyahForTrack(
-                            audioType = chosen.audioType,
-                            startingAyah = startAyah,
-                            trackIndex = trackIndex
-                        ).coerceIn(1, ayahCount)
+                        val activeAyah = if (chosen.audioType == 0) {
+                            quranPlaybackAyahForTrack(
+                                audioType = chosen.audioType,
+                                startingAyah = startAyah,
+                                trackIndex = trackIndex
+                            ).coerceIn(1, ayahCount)
+                        } else {
+                            requestedAyahInSurah
+                        }
                         inlinePlaybackActiveVerse = surahNumber to activeAyah
                         inlinePlaybackSurah = surahNumber
                         selected = surahNumber
@@ -7494,6 +7530,44 @@ internal fun tasbihProgressFraction(count: Int, target: Int): Float =
     if (target <= 0) 0f else (count.toFloat() / target.toFloat()).coerceIn(0f, 1f)
 
 @Composable
+private fun TasbihFooterAction(
+    label: String,
+    icon: ImageVector,
+    accent: Color,
+    foreground: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Brush.horizontalGradient(
+                listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.065f))
+            ))
+            .border(1.dp, accent.copy(alpha = 0.48f), RoundedCornerShape(18.dp))
+            .premiumClickable(role = Role.Button, pressedScale = 0.956f, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            Modifier.size(30.dp).clip(RoundedCornerShape(10.dp))
+                .background(accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(7.dp))
+        Text(
+            label, color = foreground, fontSize = 11.sp, lineHeight = 15.sp,
+            fontWeight = FontWeight.Bold, maxLines = 2, textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
 fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val context = LocalContext.current
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
@@ -7745,12 +7819,15 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         )
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-            PremiumActionButton(
-                label = tr(language, "reset"),
+            TasbihFooterAction(
+                label = when (language) {
+                    AppLanguage.EN -> "Reset"
+                    AppLanguage.AR -> "إعادة"
+                    AppLanguage.CKB -> "سفر بکەرەوە"
+                },
                 icon = Icons.Outlined.Refresh,
                 accent = Color(0xFFE58A82),
                 foreground = foreground,
-                pressedScale = premiumActionButtonPressScale("tasbih_reset"),
                 modifier = Modifier.weight(1f)
             ) {
                 count = 0
@@ -7762,12 +7839,15 @@ fun TasbihScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                     .apply()
                 haptic.performMashxallHaptic(HapticFeedbackType.LongPress)
             }
-            PremiumActionButton(
-                label = if (language == AppLanguage.EN) "New round" else if (language == AppLanguage.AR) "دورة جديدة" else "خولێکی نوێ",
+            TasbihFooterAction(
+                label = when (language) {
+                    AppLanguage.EN -> "New round"
+                    AppLanguage.AR -> "دورة جديدة"
+                    AppLanguage.CKB -> "خولێکی نوێ"
+                },
                 icon = Icons.Outlined.Repeat,
                 accent = Gold,
                 foreground = foreground,
-                pressedScale = premiumActionButtonPressScale("tasbih_new_round"),
                 modifier = Modifier.weight(1f)
             ) {
                 count = 0
@@ -7912,6 +7992,24 @@ internal fun quranPlaybackAyahAtPosition(
         if (scaledPosition < durationMs.toLong() * consumed) return start + index
     }
     return ayahCount
+}
+
+/** Approximate start offset of an ayah in a single full-surah recording without verse timestamps. */
+internal fun quranPlaybackPositionAtAyahStart(
+    targetAyah: Int,
+    ayahCount: Int,
+    durationMs: Int,
+    ayahWeights: List<Int> = emptyList()
+): Int {
+    if (ayahCount < 1 || durationMs < 1) return 0
+    val target = targetAyah.coerceIn(1, ayahCount)
+    val weights = (1..ayahCount).map { number ->
+        ayahWeights.getOrNull(number - 1)?.coerceAtLeast(1)?.toLong() ?: 1L
+    }
+    val total = weights.sum().coerceAtLeast(1L)
+    val weightBeforeTarget = weights.take(target - 1).sum()
+    return (weightBeforeTarget * durationMs.toLong() / total)
+        .toInt().coerceIn(0, (durationMs - 1).coerceAtLeast(0))
 }
 
 /** Seek to the midpoint of a selected ayah's approximate slice in a one-file surah recording. */
@@ -8067,7 +8165,7 @@ internal fun bundledAdhanCategory(item: AudioItem): String? {
     val adhanRecording = Regex(
         """(?:^|[^a-z])(adhan|athan|azan|muezzin|muazzin|iqama|iqamah|takbir|takbeer|call to prayer|prayer call)(?:[^a-z]|$)"""
     ).containsMatchIn(searchable) || Regex(
-        """(?:^|[^\p{L}])(الأذان|الاذان|أذان|اذان|آذان|المؤذن|مؤذن|المؤذنون|مؤذنون|المؤذنين|مؤذنين|الموذن|موذن|الإقامة|الاقامة|إقامة|اقامة|التكبير|تكبير|نداء الصلاة)(?:[^\p{L}]|$)"""
+        """(?:^|[^\p{L}])(الأذان|الاذان|أذان|اذان|آذان|المؤذن|مؤذن|المؤذنون|مؤذنون|المؤذنين|مؤذنين|الموذن|موذن|الإقامة|الاقامة|إقامة|اقامة|التكبير|تكبير|نداء الصلاة|بانگ(?:ی|بێژ(?:ەکان)?)?|موئەزین(?:ەکان)?)(?:[^\p{L}]|$)"""
     ).containsMatchIn(searchable)
     return when {
         mosqueRecording -> "mosque"
@@ -8174,10 +8272,25 @@ fun AudioScreen(
             val surahNumber = initialSurah.coerceIn(1, 114)
             val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 1
             val startAyah = resolveReciterStartAyah(playbackMode, initialAyah, ayahCount)
-            val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}"
+            val seekAyah = if (preferred.audioType != 0) initialAyah.coerceIn(1, ayahCount) else startAyah
+            val key = "${preferred.id}|${surahNumber}|${startAyah}|${playbackMode}|${seekAyah}"
             val sources = withContext(Dispatchers.IO) {
                 reciterAudioSequence(context, preferred, surahNumber, startAyah, ayahCount)
             }
+            val initialSeekPositionProvider: ((Long) -> Long)? =
+                if (preferred.audioType != 0 && seekAyah > 1) {
+                    val sourceAyahs = ContentRepository.loadAyahs(context, surahNumber, "ar")
+                    val weights = quranPlaybackAyahWeights(sourceAyahs, ayahCount)
+                    val provider: (Long) -> Long = { durationMs ->
+                        quranPlaybackPositionAtAyahStart(
+                            targetAyah = seekAyah,
+                            ayahCount = ayahCount,
+                            durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                            ayahWeights = weights
+                        ).toLong()
+                    }
+                    provider
+                } else null
             // A slow navigation auto-play request must not replace a reciter that
             // the user selected manually while the audio source was loading.
             if (autoPlayKey != requestKeyAtStart) return@LaunchedEffect
@@ -8189,7 +8302,8 @@ fun AudioScreen(
                     sources = sources,
                     notificationTitle = preferred.nameArabic.ifBlank { preferred.nameEnglish },
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
-                    showNotification = true
+                    showNotification = true,
+                    initialSeekPositionProvider = initialSeekPositionProvider
                 ) { state ->
                     if (!state) {
                         playing = ""
@@ -8848,7 +8962,8 @@ fun AudioScreen(
                     val surahAyahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: 0
                     val requestedAyah = ayahText.toIntOrNull() ?: 1
                     val startingAyah = resolveReciterStartAyah(playbackMode, requestedAyah, surahAyahCount)
-                    val playKey = "${reciter.id}|${surahNumber}|${startingAyah}|${playbackMode}"
+                    val seekAyah = if (reciter.audioType != 0) requestedAyah.coerceIn(1, surahAyahCount.coerceAtLeast(1)) else startingAyah
+                    val playKey = "${reciter.id}|${surahNumber}|${startingAyah}|${playbackMode}|${seekAyah}"
                     val downloadKey = "${reciter.id}|${surahNumber}"
                     val downloadProgress = downloadingTracks[downloadKey]
                     var localComplete by remember(reciter.id, reciter.audioType, surahNumber) {
@@ -8951,6 +9066,20 @@ fun AudioScreen(
                                                         val sources = withContext(Dispatchers.IO) {
                                                             reciterAudioSequence(context, reciter, surahNumber, startingAyah, surahAyahCount)
                                                         }
+                                                        val initialSeekPositionProvider: ((Long) -> Long)? =
+                                                            if (reciter.audioType != 0 && seekAyah > 1) {
+                                                                val sourceAyahs = ContentRepository.loadAyahs(context, surahNumber, "ar")
+                                                                val weights = quranPlaybackAyahWeights(sourceAyahs, surahAyahCount)
+                                                                val provider: (Long) -> Long = { durationMs ->
+                                                                    quranPlaybackPositionAtAyahStart(
+                                                                        targetAyah = seekAyah,
+                                                                        ayahCount = surahAyahCount,
+                                                                        durationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                                                                        ayahWeights = weights
+                                                                    ).toLong()
+                                                                }
+                                                                provider
+                                                            } else null
                                                         if (sources.isEmpty()) {
                                                             Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
                                                         } else {
@@ -8966,7 +9095,8 @@ fun AudioScreen(
                                                                 sources = sources,
                                                                 notificationTitle = reciter.nameArabic.ifBlank { reciter.nameEnglish },
                                                                 notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
-                                                                showNotification = true
+                                                                showNotification = true,
+                                                                initialSeekPositionProvider = initialSeekPositionProvider
                                                             ) { state ->
                                                                 audioPaused = false
                                                                 if (!state) playing = ""
@@ -9415,6 +9545,7 @@ internal object AudioController {
     private var sequenceFailedIndices: MutableSet<Int> = mutableSetOf()
     private var repeatCurrentTrack: Boolean = false
     private var sequenceTrackCallback: ((Int) -> Unit)? = null
+    private var initialSequenceSeekPositionProvider: ((Long) -> Long)? = null
     private var playbackCallback: ((Boolean) -> Unit)? = null
     private var singlePlaybackStarted: Boolean = false
     private var singlePlaybackFailure: AudioPlaybackFailure = AudioPlaybackFailure.LOCAL_ASSET
@@ -9544,6 +9675,18 @@ internal object AudioController {
                         if (!isSequencePlayback || !sequenceHadStarted) playbackActive = false
                     }
                     Player.STATE_READY -> {
+                        if (isSequencePlayback && initialSequenceSeekPositionProvider != null && !sequenceHadStarted) {
+                            val seekProvider = initialSequenceSeekPositionProvider
+                            initialSequenceSeekPositionProvider = null
+                            val rawDuration = engine.duration
+                            if (rawDuration != C.TIME_UNSET && rawDuration > 0L) {
+                                val requestedPosition = runCatching { seekProvider.invoke(rawDuration) }
+                                    .getOrDefault(0L)
+                                    .coerceIn(0L, (rawDuration - 1L).coerceAtLeast(0L))
+                                if (requestedPosition > 0L) runCatching { engine.seekTo(requestedPosition) }
+                            }
+                            engine.playWhenReady = true
+                        }
                         playerPrepared = true
                         playbackPreparing = false
                         playbackActive = true
@@ -9682,6 +9825,7 @@ internal object AudioController {
         sequenceFailedIndices = mutableSetOf()
         repeatCurrentTrack = false
         sequenceTrackCallback = null
+        initialSequenceSeekPositionProvider = null
         playbackCallback = null
         isSequencePlayback = false
         singlePlaybackStarted = false
@@ -9733,6 +9877,7 @@ internal object AudioController {
         notificationTitle: String = "Quran recitation",
         notificationSubtitle: String = "Mashxall",
         showNotification: Boolean = false,
+        initialSeekPositionProvider: ((Long) -> Long)? = null,
         onTrackStarted: (Int) -> Unit = {},
         callback: (Boolean) -> Unit
     ) {
@@ -9750,6 +9895,7 @@ internal object AudioController {
         sequenceFailedIndices = mutableSetOf()
         repeatCurrentTrack = false
         sequenceTrackCallback = onTrackStarted
+        initialSequenceSeekPositionProvider = initialSeekPositionProvider
         playbackCallback = callback
         playbackFinished = false
         singlePlaybackFailure = failure
@@ -9770,7 +9916,7 @@ internal object AudioController {
             val engine = createPlayer(context, generation)
             player = engine
             engine.setMediaItems(sources.map(::mediaItemForReciterSource), true)
-            engine.playWhenReady = true
+            engine.playWhenReady = initialSeekPositionProvider == null
             engine.prepare()
         } catch (error: Exception) {
             android.util.Log.w("MashxallQuranAudio", "Could not initialize the recitation playlist", error)
