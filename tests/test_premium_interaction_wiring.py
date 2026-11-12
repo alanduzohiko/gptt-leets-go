@@ -91,6 +91,20 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn("modifier = Modifier.weight(1f)", other_languages)
         self.assertEqual(2, APP_SCREENS.count("TasbihFooterAction(\\n                language = language,"))
 
+    def test_full_surah_mushaf_sync_loads_complete_arabic_ayah_timing_data(self):
+        playback = APP_SCREENS.split("fun startInlineRecitation(", 1)[1].split(
+            "fun currentInlineAudioAyah()", 1
+        )[0]
+        manual_seek = APP_SCREENS.split("fun moveInlineFullSurahToAyah(", 1)[1].split(
+            "LaunchedEffect(inlinePlaybackActiveVerse", 1
+        )[0]
+        self.assertIn("ContentRepository.loadAyahs(", playback)
+        self.assertIn('language = "ar"', playback)
+        self.assertIn('translationKey = "none"', playback)
+        self.assertIn("inlinePlaybackAyahWeights = fullSurahAyahWeights", playback)
+        self.assertNotIn("verses.filter", playback)
+        self.assertIn("val weights = inlinePlaybackAyahWeights", manual_seek)
+
     def test_quran_welcome_uses_live_motion_and_real_reader_actions(self):
         welcome = APP_SCREENS.split("private fun QuranSurahWelcomeCard(", 1)[1].split(
             "@Composable\\nprivate fun QuranReadingProgressCard(", 1
