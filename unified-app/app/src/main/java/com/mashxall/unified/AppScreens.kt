@@ -8189,9 +8189,37 @@ internal fun adhanSourceRequiredMessage(language: AppLanguage): String = when (l
     AppLanguage.CKB -> "سەرەتا تۆمارێکی ڕاستەقینەی بانگ یان مزگەوت هەڵبژێرە؛ کتێبخانەی ئۆنلاین بکەرەوە، دەنگێک دابگرە و بگەڕێوە لێرە هەڵیبژێرە."
 }
 
-internal fun matchesAdhanLibraryFilter(filter: String, category: String, downloaded: Boolean): Boolean = when (filter) {
-    "muezzin" -> category == "muezzin"
-    "mosque" -> category == "mosque"
+internal val featuredAdhanVoiceIds = setOf(
+    "adhan-004", "adhan-005", "adhan-006", "adhan-013",
+    "adhan-017", "adhan-018", "adhan-019", "adhan-020", "adhan-021",
+    "adhan-031", "adhan-032", "adhan-037", "adhan-038",
+    "adhan-068", "adhan-082", "adhan-093", "adhan-094", "adhan-095",
+    "adhan-096", "adhan-097", "adhan-098", "adhan-099",
+    "adhan-155", "adhan-156", "adhan-157",
+    "adhan-198", "adhan-199", "adhan-200", "adhan-229"
+)
+
+internal fun isFeaturedAdhanVoice(
+    id: String,
+    titleArabic: String,
+    titleEnglish: String = "",
+    sourceFilename: String = ""
+): Boolean {
+    if (id in featuredAdhanVoiceIds) return true
+    val searchable = "$titleArabic $titleEnglish $sourceFilename".lowercase(Locale.ROOT)
+    return listOf(
+        "أحمد النفيس", "احمد النفيس", "ahmad al nafees", "ahmad al nufais",
+        "ناصر القطامي", "nasser al qatami", "nasser alqatami",
+        "ياسر الدوسري", "yasser al-dosari", "yasser al dosari",
+        "مشاري العفاسي", "mishary alafasy", "عبد الباسط", "abdulbasit",
+        "أحمد الكردي", "احمد الكردي", "ahmad al kurdi",
+        "علي بن أحمد ملا", "ali ibn ahmad mala",
+        "الحرم المكي", "الحرم المدني", "haram al makki", "haram al madani"
+    ).any { searchable.contains(it) }
+}
+
+internal fun matchesAdhanLibraryFilter(filter: String, featured: Boolean, downloaded: Boolean): Boolean = when (filter) {
+    "featured" -> featured
     "downloaded" -> downloaded
     else -> true
 }
@@ -8233,7 +8261,7 @@ fun AudioScreen(
     var audioPaused by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var audioQuery by rememberSaveable { mutableStateOf("") }
-    var adhanCategory by rememberSaveable { mutableStateOf("all") }
+    var adhanLibraryFilter by rememberSaveable { mutableStateOf("all") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
     val playbackMode = ReaderPlaybackSettings.mode
@@ -8318,9 +8346,9 @@ fun AudioScreen(
         PremiumSectionHero(
             title = if (focusAdhan) {
                 when (language) {
-                    AppLanguage.EN -> "Adhan & mosque audio"
-                    AppLanguage.AR -> "الأذان وأصوات المساجد"
-                    AppLanguage.CKB -> "بانگ و دەنگی مزگەوت"
+                    AppLanguage.EN -> "Muezzin voices"
+                    AppLanguage.AR -> "أصوات المؤذنين"
+                    AppLanguage.CKB -> "بانگبێژەکان"
                 }
             } else {
                 when (language) {
@@ -8331,9 +8359,9 @@ fun AudioScreen(
             },
             subtitle = if (focusAdhan) {
                 when (language) {
-                    AppLanguage.EN -> "A dedicated collection of muezzin recordings and mosque audio."
-                    AppLanguage.AR -> "مكتبة مستقلة لتسجيلات المؤذنين وأصوات المساجد."
-                    AppLanguage.CKB -> "کتێبخانەیەکی جیاواز بۆ تۆمارەکانی موئەزین و دەنگی مزگەوت."
+                    AppLanguage.EN -> "A broad library of well-known Adhan voices, including international callers and Haramain recordings."
+                    AppLanguage.AR -> "مكتبة واسعة لأصوات المؤذنين المشهورين، تضم أصواتًا عالمية وتسجيلات الحرمين."
+                    AppLanguage.CKB -> "کتێبخانەیەکی فراوان بۆ دەنگی بانگبێژە بەناوبانگەکان، لەوانە دەنگی جیهانی و تۆمارەکانی حەرەمەین."
                 }
             } else {
                 when (language) {
@@ -8347,9 +8375,9 @@ fun AudioScreen(
             accent = Color(0xFFE9B17B),
             metric = if (focusAdhan) {
                 when (language) {
-                    AppLanguage.EN -> "MUEZZINS + MOSQUES"
-                    AppLanguage.AR -> "المؤذنون + المساجد"
-                    AppLanguage.CKB -> "موئەزین + مزگەوت"
+                    AppLanguage.EN -> "FAMOUS MUEZZINS"
+                    AppLanguage.AR -> "أصوات مؤذنين مشهورة"
+                    AppLanguage.CKB -> "بانگبێژە بەناوبانگەکان"
                 }
             } else {
                 when (language) {
@@ -8360,9 +8388,9 @@ fun AudioScreen(
             },
             eyebrow = if (focusAdhan) {
                 when (language) {
-                    AppLanguage.EN -> "ADHAN LIBRARY"
-                    AppLanguage.AR -> "مكتبة الأذان"
-                    AppLanguage.CKB -> "کتێبخانەی بانگ"
+                    AppLanguage.EN -> "ADHAN VOICES"
+                    AppLanguage.AR -> "أصوات الأذان"
+                    AppLanguage.CKB -> "دەنگەکانی بانگ"
                 }
             } else {
                 when (language) {
@@ -8564,49 +8592,63 @@ fun AudioScreen(
                     bundledAdhanCategory(item)?.let { category -> BundledAdhanTrack(item, category) }
                 }
             }
-            val visibleBundledAdhan = remember(bundledAdhan, searchTerm, adhanCategory) {
+            val visibleBundledAdhan = remember(bundledAdhan, searchTerm, adhanLibraryFilter) {
                 bundledAdhan.filter { track ->
                     val matchesSearch = searchTerm.isBlank() ||
                         matchesAudioCatalogSearch(searchTerm, track.item.title, track.item.assetPath, track.item.group)
-                    matchesSearch && matchesAdhanLibraryFilter(adhanCategory, track.category, downloaded = true)
+                    val featured = isFeaturedAdhanVoice(
+                        id = track.item.assetPath,
+                        titleArabic = track.item.title,
+                        sourceFilename = track.item.assetPath
+                    )
+                    matchesSearch && matchesAdhanLibraryFilter(
+                        adhanLibraryFilter,
+                        featured = featured,
+                        downloaded = true
+                    )
+                }.sortedByDescending { track ->
+                    isFeaturedAdhanVoice(track.item.assetPath, track.item.title, sourceFilename = track.item.assetPath)
                 }
             }
             val categoryCounts = remember(onlineAdhan, bundledAdhan, offlineAdhanRevision) {
+                val featuredOnline = onlineAdhan.count { item ->
+                    isFeaturedAdhanVoice(item.id, item.titleArabic, item.titleEnglish, item.sourceFilename)
+                }
+                val featuredBundled = bundledAdhan.count { track ->
+                    isFeaturedAdhanVoice(track.item.assetPath, track.item.title, sourceFilename = track.item.assetPath)
+                }
                 mapOf(
                     "all" to onlineAdhan.size + bundledAdhan.size,
-                    "muezzin" to onlineAdhan.count { it.category == "muezzin" } + bundledAdhan.count { it.category == "muezzin" },
-                    "mosque" to onlineAdhan.count { it.category == "mosque" } + bundledAdhan.count { it.category == "mosque" },
+                    "featured" to featuredOnline + featuredBundled,
                     "downloaded" to bundledAdhan.size + onlineAdhan.count { item ->
                         isValidReciterAudioFile(onlineAdhanOfflineFile(context, item))
                     }
                 )
             }
-            val visibleAdhan = remember(onlineAdhan, searchTerm, adhanCategory, offlineAdhanRevision) {
+            val visibleAdhan = remember(onlineAdhan, searchTerm, adhanLibraryFilter, offlineAdhanRevision) {
                 onlineAdhan.filter { item ->
                     val matchesSearch = searchTerm.isBlank() ||
                         matchesAudioCatalogSearch(searchTerm, item.titleArabic, item.titleEnglish, item.sourceFilename, item.id)
                     val file = onlineAdhanOfflineFile(context, item)
+                    val featured = isFeaturedAdhanVoice(item.id, item.titleArabic, item.titleEnglish, item.sourceFilename)
                     matchesSearch && matchesAdhanLibraryFilter(
-                        adhanCategory,
-                        item.category,
-                        isValidReciterAudioFile(file)
+                        adhanLibraryFilter,
+                        featured = featured,
+                        downloaded = isValidReciterAudioFile(file)
                     )
+                }.sortedByDescending { item ->
+                    isFeaturedAdhanVoice(item.id, item.titleArabic, item.titleEnglish, item.sourceFilename)
                 }
             }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp), contentPadding = PaddingValues(vertical = 3.dp)) {
-                items(listOf("all", "muezzin", "mosque", "downloaded"), key = { it }) { category ->
-                    val count = categoryCounts[category] ?: 0
+                items(listOf("all", "featured", "downloaded"), key = { it }) { filter ->
+                    val count = categoryCounts[filter] ?: 0
                     PremiumChoicePill(
-                        label = when (category) {
-                            "muezzin" -> when (language) {
-                                AppLanguage.EN -> "Muezzins ($count)"
-                                AppLanguage.AR -> "المؤذنون ($count)"
-                                AppLanguage.CKB -> "موئەزینەکان ($count)"
-                            }
-                            "mosque" -> when (language) {
-                                AppLanguage.EN -> "Mosques ($count)"
-                                AppLanguage.AR -> "المساجد ($count)"
-                                AppLanguage.CKB -> "مزگەوتەکان ($count)"
+                        label = when (filter) {
+                            "featured" -> when (language) {
+                                AppLanguage.EN -> "Popular voices ($count)"
+                                AppLanguage.AR -> "الأصوات المشهورة ($count)"
+                                AppLanguage.CKB -> "دەنگە بەناوبانگەکان ($count)"
                             }
                             "downloaded" -> when (language) {
                                 AppLanguage.EN -> "Downloaded ($count)"
@@ -8614,22 +8656,22 @@ fun AudioScreen(
                                 AppLanguage.CKB -> "داگیراوەکان ($count)"
                             }
                             else -> when (language) {
-                                AppLanguage.EN -> "All ($count)"
-                                AppLanguage.AR -> "الكل ($count)"
-                                AppLanguage.CKB -> "هەموو ($count)"
+                                AppLanguage.EN -> "All voices ($count)"
+                                AppLanguage.AR -> "جميع الأصوات ($count)"
+                                AppLanguage.CKB -> "هەموو دەنگەکان ($count)"
                             }
                         },
-                        selected = adhanCategory == category,
+                        selected = adhanLibraryFilter == filter,
                         accent = Gold,
                         foreground = foreground
-                    ) { adhanCategory = category }
+                    ) { adhanLibraryFilter = filter }
                 }
             }
             Text(
                 when (language) {
-                    AppLanguage.EN -> "${visibleAdhan.size + visibleBundledAdhan.size} recordings shown • ${categoryCounts["muezzin"]} muezzin tracks • ${categoryCounts["mosque"]} mosque/location recordings"
-                    AppLanguage.AR -> "المعروض ${visibleAdhan.size + visibleBundledAdhan.size} تسجيلًا • ${categoryCounts["muezzin"]} للمؤذنين • ${categoryCounts["mosque"]} للمساجد والمواقع"
-                    AppLanguage.CKB -> "${visibleAdhan.size + visibleBundledAdhan.size} تۆمار پیشان دەدرێت • ${categoryCounts["muezzin"]} دەنگی موئەزین • ${categoryCounts["mosque"]} دەنگی مزگەوت و شوێن"
+                    AppLanguage.EN -> "${visibleAdhan.size + visibleBundledAdhan.size} Adhan recordings shown • ${categoryCounts["featured"]} popular voices"
+                    AppLanguage.AR -> "المعروض ${visibleAdhan.size + visibleBundledAdhan.size} تسجيل أذان • ${categoryCounts["featured"]} من الأصوات المشهورة"
+                    AppLanguage.CKB -> "${visibleAdhan.size + visibleBundledAdhan.size} تۆماری بانگ پیشان دەدرێت • ${categoryCounts["featured"]} دەنگی بەناوبانگ"
                 },
                 color = foreground.copy(alpha = 0.58f), fontSize = 10.sp, lineHeight = 14.sp
             )
@@ -8717,17 +8759,10 @@ fun AudioScreen(
                                         fontSize = 12.sp, maxLines = 2, lineHeight = 16.sp
                                     )
                                     Text(
-                                        when (track.category) {
-                                            "mosque" -> when (language) {
-                                                AppLanguage.EN -> "Bundled mosque/location recording"
-                                                AppLanguage.AR -> "تسجيل مسجد/موقع من ملفات المصدر"
-                                                AppLanguage.CKB -> "تۆماری مزگەوت/شوێن لە فایلەکانی سەرچاوە"
-                                            }
-                                            else -> when (language) {
-                                                AppLanguage.EN -> "Bundled muezzin/adhan recording"
-                                                AppLanguage.AR -> "تسجيل مؤذن/أذان من ملفات المصدر"
-                                                AppLanguage.CKB -> "تۆماری موئەزین/بانگ لە فایلەکانی سەرچاوە"
-                                            }
+                                        when (language) {
+                                            AppLanguage.EN -> "Original Adhan recording included with the app"
+                                            AppLanguage.AR -> "تسجيل أذان أصلي مضمّن مع التطبيق"
+                                            AppLanguage.CKB -> "تۆماری بانگی ڕەسەن لەگەڵ ئەپدا"
                                         },
                                         color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, lineHeight = 13.sp
                                     )
@@ -8759,17 +8794,10 @@ fun AudioScreen(
                     val downloadProgress = downloadingAdhan[item.id]
                     val playKey = "online-adhan-${item.id}"
                     val title = if (language == AppLanguage.EN) item.titleEnglish else item.titleArabic.ifBlank { item.titleEnglish }
-                    val categoryLabel = when (item.category) {
-                        "mosque" -> when (language) {
-                            AppLanguage.EN -> "Mosque / location adhan"
-                            AppLanguage.AR -> "أذان مسجد / موقع"
-                            AppLanguage.CKB -> "بانگی مزگەوت / شوێن"
-                        }
-                        else -> when (language) {
-                            AppLanguage.EN -> "Muezzin recording"
-                            AppLanguage.AR -> "تسجيل مؤذن"
-                            AppLanguage.CKB -> "تۆماری موئەزین"
-                        }
+                    val categoryLabel = when (language) {
+                        AppLanguage.EN -> "Adhan voice recording"
+                        AppLanguage.AR -> "تسجيل صوت أذان"
+                        AppLanguage.CKB -> "تۆماری دەنگی بانگ"
                     }
                     Card(
                         modifier = Modifier.fillMaxWidth()
