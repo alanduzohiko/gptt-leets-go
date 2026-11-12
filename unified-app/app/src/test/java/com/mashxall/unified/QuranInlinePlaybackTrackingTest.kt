@@ -25,35 +25,24 @@ class QuranInlinePlaybackTrackingTest {
         assertEquals(emptyList<Int>(), quranPlaybackTrackAyahs(audioType = 0, startingAyah = 1, ayahCount = 0))
     }
 
-    // A full MP3 has no embedded ayah timecodes. The Mushaf therefore shares
-    // one weighted timeline between selected-ayah seek and live verse highlighting.
     @Test
-    fun everySelectedFullSurahSeekLandsInsideTheSameWeightedAyahInterval() {
-        val weights = listOf(10, 20, 30, 40)
-        val duration = 100_000
-        for (targetAyah in 1..4) {
-            val position = quranFullSurahSeekPositionForAyah(
-                targetAyah = targetAyah,
-                ayahCount = 4,
-                durationMs = duration,
-                ayahWeights = weights
-            )
-            assertEquals(
-                targetAyah,
-                quranPlaybackAyahAtPosition(1, 4, position, duration, weights)
-            )
-        }
+    fun oneFileFullSurahCanOnlyStartAtItsFirstAyah() {
+        val first = quranPlaybackStartPlan(audioType = 1, requestedAyah = 1, ayahCount = 7)
+        assertEquals(true, first.isSupported)
+        assertEquals(1, first.startingAyah)
+        assertEquals(false, first.usesAyahClips)
+
+        val later = quranPlaybackStartPlan(audioType = 1, requestedAyah = 5, ayahCount = 7)
+        assertEquals(false, later.isSupported)
+        assertEquals(1, later.startingAyah)
     }
 
     @Test
-    fun legacyFullSurahTimingEstimateUsesAvailableVerseWeights() {
-        val weights = listOf(10, 20, 30)
-        assertEquals(1, quranPlaybackAyahAtPosition(1, 3, 500, 6_000, weights))
-        assertEquals(2, quranPlaybackAyahAtPosition(1, 3, 1_500, 6_000, weights))
-        assertEquals(3, quranPlaybackAyahAtPosition(1, 3, 3_500, 6_000, weights))
-        val targetPosition = quranPlaybackPositionForAyah(2, 1, 3, 6_000, weights)
-        assertEquals(2_000, targetPosition)
-        assertEquals(2, quranPlaybackAyahAtPosition(1, 3, targetPosition, 6_000, weights))
+    fun ayahClipPlaylistStartsExactlyAtTheRequestedAyah() {
+        val plan = quranPlaybackStartPlan(audioType = 0, requestedAyah = 5, ayahCount = 7)
+        assertEquals(true, plan.isSupported)
+        assertEquals(true, plan.usesAyahClips)
+        assertEquals(5, plan.startingAyah)
     }
 
     @Test
@@ -97,12 +86,8 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
-    fun legacyTimingEstimateClampsToTheAvailableAyahRange() {
-        assertEquals(3, quranPlaybackAyahAtPosition(3, 7, 0, 10_000))
-        assertEquals(7, quranPlaybackAyahAtPosition(3, 7, 100_000, 10_000))
-        assertEquals(4, quranPlaybackPositionForAyah(1, 4, 7, 9_000).let {
-            quranPlaybackAyahAtPosition(4, 7, it, 9_000)
-        })
-        assertEquals(0, quranPlaybackPositionForAyah(4, 4, 7, 0))
+    fun invalidSurahCountCannotProduceAPlaybackPlan() {
+        val plan = quranPlaybackStartPlan(audioType = 0, requestedAyah = 3, ayahCount = 0)
+        assertEquals(false, plan.isSupported)
     }
 }
