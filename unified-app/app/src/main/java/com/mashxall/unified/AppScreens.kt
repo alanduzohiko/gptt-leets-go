@@ -8559,7 +8559,7 @@ fun AudioScreen(
                                 AppLanguage.CKB -> "هەموو دەنگەکان ($count)"
                             }
                         },
-                        selected = adhanLibraryFilter == filter,
+                        selected = if (filter == "all") adhanLibraryFilter != "downloaded" else adhanLibraryFilter == filter,
                         accent = Gold,
                         foreground = foreground
                     ) { adhanLibraryFilter = filter }
