@@ -56,6 +56,32 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
+    fun verseHighlightUsesOnlyTheTrackConfirmedReadyByThePlayer() {
+        assertEquals(0, quranPlaybackCommittedTrackIndex(0, 6))
+        assertEquals(3, quranPlaybackCommittedTrackIndex(3, 6))
+        assertEquals(-1, quranPlaybackCommittedTrackIndex(-1, 6))
+        assertEquals(-1, quranPlaybackCommittedTrackIndex(6, 6))
+        assertEquals(-1, quranPlaybackCommittedTrackIndex(1, 0))
+    }
+
+    @Test
+    fun pagePlaybackBeginsAtTheFirstVerseOnTheVisibleMushafPage() {
+        assertEquals(
+            2 to 35,
+            quranMushafPagePlaybackTarget(
+                listOf(MushafPageVerse(2, 35), MushafPageVerse(2, 36), MushafPageVerse(2, 37))
+            )
+        )
+        assertEquals(
+            18 to 1,
+            quranMushafPagePlaybackTarget(
+                listOf(MushafPageVerse(18, 1), MushafPageVerse(18, 2))
+            )
+        )
+        assertEquals(null, quranMushafPagePlaybackTarget(emptyList()))
+    }
+
+    @Test
     fun legacyTimingEstimateClampsToTheAvailableAyahRange() {
         assertEquals(3, quranPlaybackAyahAtPosition(3, 7, 0, 10_000))
         assertEquals(7, quranPlaybackAyahAtPosition(3, 7, 100_000, 10_000))
