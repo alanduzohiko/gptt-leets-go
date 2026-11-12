@@ -76,6 +76,21 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         )
 
 
+    def test_sorani_tasbih_footer_has_a_dedicated_responsive_layout(self):
+        footer = APP_SCREENS.split("private fun TasbihFooterAction(", 1)[1].split(
+            "@Composable\\nfun TasbihScreen(", 1
+        )[0]
+        self.assertIn("if (language == AppLanguage.CKB)", footer)
+        sorani = footer.split("if (language == AppLanguage.CKB)", 1)[1].split("} else {", 1)[0]
+        other_languages = footer.split("} else {", 1)[1]
+        self.assertIn("maxLines = 2", sorani)
+        self.assertIn("softWrap = true", sorani)
+        self.assertIn("Modifier.fillMaxWidth()", sorani)
+        self.assertIn(".heightIn(min = 72.dp)", sorani)
+        self.assertIn(".heightIn(min = 64.dp)", other_languages)
+        self.assertIn("modifier = Modifier.weight(1f)", other_languages)
+        self.assertEqual(2, APP_SCREENS.count("language = language,\\n                label = when (language) {"))
+
     def test_quran_welcome_uses_live_motion_and_real_reader_actions(self):
         welcome = APP_SCREENS.split("private fun QuranSurahWelcomeCard(", 1)[1].split(
             "@Composable\\nprivate fun QuranReadingProgressCard(", 1
