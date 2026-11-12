@@ -12905,9 +12905,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 }
                 PremiumActionButton(
                     label = when (language) {
-                        AppLanguage.EN -> "Browse famous muezzin voices"
-                        AppLanguage.AR -> "فتح مكتبة أصوات المؤذنين المشهورين"
-                        AppLanguage.CKB -> "کردنەوەی کتێبخانەی دەنگی بانگبێژە بەناوبانگەکان"
+                        AppLanguage.EN -> "Browse all Adhan voices"
+                        AppLanguage.AR -> "فتح مكتبة جميع أصوات الأذان"
+                        AppLanguage.CKB -> "کردنەوەی کتێبخانەی هەموو دەنگەکانی بانگ"
                     },
                     icon = Icons.Outlined.GraphicEq,
                     accent = Gold,
@@ -13204,9 +13204,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                         Spacer(Modifier.height(3.dp))
                         Text(
                             when (language) {
-                                AppLanguage.EN -> onlineAdhanCount.toString() + " curated muezzin voice recordings. Download a voice, then select its saved copy for prayer alerts."
-                                AppLanguage.AR -> onlineAdhanCount.toString() + " تسجيلاً مختارًا لأصوات مؤذنين معروفين. نزّل الصوت ثم اختر نسخته المحفوظة لتنبيهات الصلاة."
-                                AppLanguage.CKB -> onlineAdhanCount.toString() + " تۆماری هەڵبژێردراوی دەنگی بانگبێژانی بەناوبانگ. دەنگەکە دابگرە، پاشان وەشانی پارێزراوی بۆ ئاگادارکردنەوەی نوێژ هەڵبژێرە."
+                                AppLanguage.EN -> onlineAdhanCount.toString() + " Adhan voice recordings from different callers and mosques. Download a voice, then select its saved copy for prayer alerts."
+                                AppLanguage.AR -> onlineAdhanCount.toString() + " تسجيلاً لأصوات الأذان من مؤذنين ومساجد متعددة. نزّل الصوت ثم اختر نسخته المحفوظة لتنبيهات الصلاة."
+                                AppLanguage.CKB -> onlineAdhanCount.toString() + " تۆماری دەنگی بانگ لە بانگبێژ و مزگەوتی جیاوازەوە. دەنگەکە دابگرە، پاشان وەشانی پارێزراوی بۆ ئاگادارکردنەوەی نوێژ هەڵبژێرە."
                             },
                             color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp, lineHeight = 15.sp
                         )
