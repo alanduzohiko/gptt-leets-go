@@ -1871,12 +1871,23 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 // edition is open. Never rely on the text reader's visible state.
                 val fullSurahAyahWeights = if (chosen.audioType != 0) {
                     withContext(Dispatchers.IO) {
-                        val sourceAyahs = ContentRepository.loadAyahs(
-                            context = context,
-                            surah = surahNumber,
-                            language = "ar",
-                            translationKey = "none"
-                        )
+                        val sourceAyahs = try {
+                            ContentRepository.loadAyahs(
+                                context = context,
+                                surah = surahNumber,
+                                language = "ar",
+                                translationKey = "none"
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            android.util.Log.w(
+                                "MashxallQuranAudio",
+                                "Could not load Arabic verse lengths for playback timing; using a safe uniform estimate",
+                                error
+                            )
+                            emptyList()
+                        }
                         quranPlaybackAyahWeights(sourceAyahs, ayahCount)
                     }
                 } else {
@@ -1999,7 +2010,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         if (duration < 1) return
         val target = targetAyah.coerceIn(1, ayahCount)
         val weights = inlinePlaybackAyahWeights.takeIf { it.size == ayahCount }
-            ?: return
+            ?: emptyList()
         val targetPosition = quranPlaybackPositionForAyah(
             targetAyah = target,
             startingAyah = inlinePlaybackStartAyah,
