@@ -78,7 +78,7 @@ class PremiumInteractionWiringTests(unittest.TestCase):
 
     def test_sorani_tasbih_footer_has_a_dedicated_responsive_layout(self):
         footer = APP_SCREENS.split("private fun TasbihFooterAction(", 1)[1].split(
-            "@Composable\\nfun TasbihScreen(", 1
+            "fun TasbihScreen(", 1
         )[0]
         self.assertIn("if (language == AppLanguage.CKB)", footer)
         sorani = footer.split("if (language == AppLanguage.CKB)", 1)[1].split("} else {", 1)[0]
@@ -89,7 +89,14 @@ class PremiumInteractionWiringTests(unittest.TestCase):
         self.assertIn(".heightIn(min = 72.dp)", sorani)
         self.assertIn(".heightIn(min = 64.dp)", other_languages)
         self.assertIn("modifier = Modifier.weight(1f)", other_languages)
-        self.assertEqual(2, APP_SCREENS.count("TasbihFooterAction(\\n                language = language,"))
+        app_lines = APP_SCREENS.splitlines()
+        footer_calls = [
+            index for index, line in enumerate(app_lines)
+            if line.strip() == "TasbihFooterAction("
+        ]
+        self.assertEqual(2, len(footer_calls))
+        for index in footer_calls:
+            self.assertEqual("language = language,", app_lines[index + 1].strip())
 
     def test_full_surah_mushaf_sync_loads_complete_arabic_ayah_timing_data(self):
         playback = APP_SCREENS.split("fun startInlineRecitation(", 1)[1].split(
