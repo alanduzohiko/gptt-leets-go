@@ -1,5 +1,6 @@
 package com.mashxall.unified
 
+import com.mashxall.unified.data.MushafPageVerse
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
