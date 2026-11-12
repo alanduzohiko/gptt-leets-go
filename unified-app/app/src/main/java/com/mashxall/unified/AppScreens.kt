@@ -534,7 +534,14 @@ private fun QuranInlinePlaybackBar(
             val (position, duration) = AudioController.playbackPosition()
             playbackPositionMs = position.coerceAtLeast(0)
             playbackDurationMs = duration.coerceAtLeast(0)
-            if (!usesAyahClips && timedAyahRanges.isNotEmpty()) {
+            if (
+                isPrepared &&
+                !AudioController.isInitialSequenceSeekPending() &&
+                !usesAyahClips &&
+                timedAyahRanges.isNotEmpty()
+            ) {
+                // Do not treat the pre-seek position (usually zero) as the
+                // active verse while the selected-ayah seek is still pending.
                 val playingAyah = quranAyahAtPositionMs(timedAyahRanges, position.toLong())
                 if (playingAyah != null && playingAyah != lastTimedAyah) {
                     lastTimedAyah = playingAyah
