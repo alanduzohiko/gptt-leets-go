@@ -56,7 +56,7 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
-    fun preSeekProgressCannotOverwriteTheAyahChosenByTheReader() {
+    fun initialFullSurahSeekWaitsUntilPlaybackCrossesTheSelectedAyah() {
         assertEquals(
             false,
             shouldPublishFullSurahAyahPosition(
@@ -70,7 +70,8 @@ class QuranInlinePlaybackTrackingTest {
             shouldPublishFullSurahAyahPosition(
                 initialSeekPending = false,
                 expectedAyah = 8,
-                estimatedAyah = 7
+                estimatedAyah = 7,
+                seekDirection = 1
             )
         )
         assertEquals(
@@ -78,16 +79,33 @@ class QuranInlinePlaybackTrackingTest {
             shouldPublishFullSurahAyahPosition(
                 initialSeekPending = false,
                 expectedAyah = 8,
-                estimatedAyah = 8
+                estimatedAyah = 9,
+                seekDirection = 1
             )
+        )
+    }
+
+    @Test
+    fun forwardAndBackwardManualSeeksReleaseTheVerseGuardOnCrossing() {
+        assertEquals(
+            false,
+            shouldPublishFullSurahAyahPosition(false, expectedAyah = 4, estimatedAyah = 3, seekDirection = 1)
         )
         assertEquals(
             true,
-            shouldPublishFullSurahAyahPosition(
-                initialSeekPending = false,
-                expectedAyah = null,
-                estimatedAyah = 9
-            )
+            shouldPublishFullSurahAyahPosition(false, expectedAyah = 4, estimatedAyah = 5, seekDirection = 1)
+        )
+        assertEquals(
+            false,
+            shouldPublishFullSurahAyahPosition(false, expectedAyah = 4, estimatedAyah = 5, seekDirection = -1)
+        )
+        assertEquals(
+            true,
+            shouldPublishFullSurahAyahPosition(false, expectedAyah = 4, estimatedAyah = 3, seekDirection = -1)
+        )
+        assertEquals(
+            true,
+            shouldPublishFullSurahAyahPosition(false, expectedAyah = null, estimatedAyah = 9)
         )
     }
 
