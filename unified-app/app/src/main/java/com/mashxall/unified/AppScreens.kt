@@ -510,8 +510,6 @@ private fun QuranInlinePlaybackBar(
     usesAyahClips: Boolean,
     hasPrevious: Boolean,
     hasNext: Boolean,
-    progress: Float,
-    timeLabel: String,
     onChooseReciter: () -> Unit,
     onRepeat: () -> Unit,
     onPrevious: () -> Unit,
@@ -519,6 +517,37 @@ private fun QuranInlinePlaybackBar(
     onNext: () -> Unit,
     onStop: () -> Unit
 ) {
+    // Keep the high-frequency audio clock inside this small composable. Updating
+    // the old parent-level state every 50 ms forced the whole Mushaf screen to
+    // recompose and made the visible progress bar feel behind the recitation.
+    var playbackPositionMs by remember { mutableIntStateOf(0) }
+    var playbackDurationMs by remember { mutableIntStateOf(0) }
+    LaunchedEffect(usesAyahClips, isPrepared, isPaused) {
+        if (usesAyahClips) {
+            playbackPositionMs = 0
+            playbackDurationMs = 0
+            return@LaunchedEffect
+        }
+        while (true) {
+            val (position, duration) = AudioController.playbackPosition()
+            playbackPositionMs = position.coerceAtLeast(0)
+            playbackDurationMs = duration.coerceAtLeast(0)
+            if (isPrepared && !isPaused) {
+                // Follow the device display clock for smooth, frame-aligned updates.
+                withFrameNanos { }
+            } else {
+                delay(100L)
+            }
+        }
+    }
+    val progress = if (playbackDurationMs > 0) {
+        (playbackPositionMs.toFloat() / playbackDurationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val timeLabel = if (playbackDurationMs > 0) {
+        "${formatAudioClock(playbackPositionMs)} / ${formatAudioClock(playbackDurationMs)}"
+    } else {
+        "${formatAudioClock(playbackPositionMs)} / —"
+    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -1699,7 +1728,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     var inlinePlaybackActiveVerse by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var inlinePlaybackTrackAyahs by remember { mutableStateOf<List<Int>>(emptyList()) }
     var inlinePlaybackUsesAyahClips by remember { mutableStateOf(true) }
-    var inlinePlaybackPositionMs by remember { mutableIntStateOf(0) }
     var inlinePlaybackDurationMs by remember { mutableIntStateOf(0) }
     var showInlineReciterPicker by remember { mutableStateOf(false) }
     var inlineReciterSearch by rememberSaveable { mutableStateOf("") }
@@ -1721,8 +1749,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         if (inlinePlaybackVisible) {
             while (true) {
                 val (position, duration) = AudioController.playbackPosition()
-                inlinePlaybackPositionMs = position.coerceAtLeast(0)
-                inlinePlaybackDurationMs = duration.coerceAtLeast(0)
+                // The duration is needed for ayah navigation, but the rapidly
+                // changing position now belongs to QuranInlinePlaybackBar.
+                if (duration > 0 && inlinePlaybackDurationMs != duration) {
+                    inlinePlaybackDurationMs = duration
+                }
                 if (!inlinePlaybackUsesAyahClips && duration > 0) {
                     val count = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
                     val estimatedAyah = quranPlaybackAyahAtPosition(
@@ -1746,10 +1777,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         readingProgressRevision++
                     }
                 }
-                delay(50L)
+                delay(33L)
             }
         } else {
-            inlinePlaybackPositionMs = 0
             inlinePlaybackDurationMs = 0
         }
     }
@@ -1796,6 +1826,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
         val startAyah = resolveReciterStartAyah(effectiveMode, requestedAyah, ayahCount)
         inlinePlaybackPreparing = true
+        inlinePlaybackDurationMs = 0
         scope.launch {
             try {
                 val sequence = withContext(Dispatchers.IO) {
@@ -1904,7 +1935,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             ayahWeights = weights
         )
         if (!AudioController.seekTo(targetPosition)) return
-        inlinePlaybackPositionMs = targetPosition
         inlinePlaybackActiveVerse = inlinePlaybackSurah to target
         selected = inlinePlaybackSurah
         onSurah(inlinePlaybackSurah)
@@ -2549,14 +2579,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     inlinePlaybackDurationMs > 0 &&
                         (activeAyah < inlineAyahCount || inlinePlaybackSurah < (inlineReciter?.surahTotal ?: 114))
                 }
-                val trackProgress = if (inlinePlaybackDurationMs > 0) {
-                    inlinePlaybackPositionMs.toFloat() / inlinePlaybackDurationMs.toFloat()
-                } else 0f
-                val trackTimeLabel = if (inlinePlaybackDurationMs > 0) {
-                    "${formatAudioClock(inlinePlaybackPositionMs)} / ${formatAudioClock(inlinePlaybackDurationMs)}"
-                } else {
-                    "${formatAudioClock(inlinePlaybackPositionMs)} / —"
-                }
                 QuranInlinePlaybackBar(
                     language = language,
                     foreground = foreground,
@@ -2573,8 +2595,6 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     usesAyahClips = inlinePlaybackUsesAyahClips,
                     hasPrevious = hasPreviousTrack,
                     hasNext = hasNextTrack,
-                    progress = trackProgress,
-                    timeLabel = trackTimeLabel,
                     onChooseReciter = {
                         pendingInlineRecitationTarget = inlinePlaybackActiveVerse
                             ?: (inlinePlaybackSurah to inlinePlaybackStartAyah)
