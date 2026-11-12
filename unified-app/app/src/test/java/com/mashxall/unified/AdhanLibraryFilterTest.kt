@@ -28,6 +28,16 @@ class AdhanLibraryFilterTest {
     }
 
     @Test
+    fun newCuratedMuezzinVoicesAreRecognizedAsFeatured() {
+        assertTrue(isFeaturedAdhanVoice("muezzin-12-mansour_alsalmy", "منصور السالمي", "Mansour Alsalmy"))
+        assertTrue(isFeaturedAdhanVoice("muezzin-50-islam_sobhey", "إسلام صبحي", "Islam Sobhey"))
+        assertTrue(isFeaturedAdhanVoice("muezzin-31-ahmed_alnufais", "أحمد النفيس", "Ahmed Alnufais"))
+        assertTrue(isFeaturedAdhanVoice("muezzin-42-nasser_ktamy_1", "ناصر القطامي", "Nasser El-Katamy"))
+        assertTrue(isFeaturedAdhanVoice("muezzin-30-yasser_aldosary", "ياسر الدوسري", "Yasser Aldosary"))
+        assertTrue(isFeaturedAdhanVoice("muezzin-kurdish-ahmed-el-kourdi", "أحمد الكوردي", "Ahmed El Kourdi"))
+    }
+
+    @Test
     fun wellKnownVerifiedCatalogVoicesAreFeatured() {
         assertTrue(isFeaturedAdhanVoice("adhan-068", "أحمد النفيس"))
         assertTrue(isFeaturedAdhanVoice("adhan-198", "ناصر القطامي"))
