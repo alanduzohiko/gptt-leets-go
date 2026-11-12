@@ -49,15 +49,15 @@ internal fun validateQuranAyahTimings(
 ): List<QuranAyahTimeRange>? {
     if (expectedAyahCount < 1 || rows.size != expectedAyahCount) return null
     val result = ArrayList<QuranAyahTimeRange>(expectedAyahCount)
-    var previousStart = -1L
+    var previousEnd = -1L
     rows.forEachIndexed { index, row ->
         if (row.ayah != index + 1 ||
             row.startMs < 0L ||
             row.endMs <= row.startMs ||
-            row.startMs < previousStart
+            row.startMs < previousEnd
         ) return null
         result += QuranAyahTimeRange(row.ayah, row.startMs, row.endMs)
-        previousStart = row.startMs
+        previousEnd = row.endMs
     }
     return result
 }
