@@ -73,6 +73,23 @@ class QuranAudioTimingTest {
         assertEquals("https://server13.mp3quran.net/husr/", reads[1].folderUrl)
     }
 
+
+    @Test
+    fun legacyHttpAndModernHttpsReciterFoldersMatchTheSameTimingRead() {
+        assertEquals(
+            "https://server7.mp3quran.net/basit",
+            normalizeQuranTimingFolder("http://SERVER7.MP3QURAN.NET/basit/")
+        )
+        assertEquals(
+            normalizeQuranTimingFolder("http://server7.mp3quran.net/basit/"),
+            normalizeQuranTimingFolder("https://server7.mp3quran.net/basit")
+        )
+        assertEquals(
+            normalizeQuranTimingFolder("http://www.mp3quran.net/audio/"),
+            normalizeQuranTimingFolder("https://mp3quran.net/audio")
+        )
+    }
+
     @Test
     fun rejectsUnknownTimingResponseEnvelopeInsteadOfPretendingItContainsData() {
         assertNull(parseQuranTimingRows("""{"status":"ok","message":"no timing array"}"""))

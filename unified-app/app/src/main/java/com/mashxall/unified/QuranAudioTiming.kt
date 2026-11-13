@@ -29,6 +29,12 @@ internal data class QuranTimingRead(
     val id: Int,
     val folderUrl: String
 )
+internal fun normalizeQuranTimingFolder(value: String): String =
+    value.trim()
+        .replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
+        .trimEnd('/')
+        .lowercase(Locale.ROOT)
+        .replace("://www.mp3quran.net", "://mp3quran.net")
 
 /**
  * MP3Quran has returned both a top-level JSON array and wrapped arrays
@@ -300,6 +306,5 @@ internal object QuranAudioTimingRepository {
     }
 
     private fun normalizeFolder(value: String): String =
-        value.trim().trimEnd('/').lowercase(Locale.ROOT)
-            .replace("://www.mp3quran.net", "://mp3quran.net")
+        normalizeQuranTimingFolder(value)
 }
