@@ -342,13 +342,13 @@ internal fun filterRecitersForPlaybackMode(
     matchesSearch && reciterMatchesPlaybackMode(mode, reciter.audioType)
 }
 
-/** In the unified Quran picker both recording types are shown together; coverage still filters the chosen surah. */
+/** The Mushaf's Play action lists only ayah-by-ayah sources; full-surah audio has its own library. */
 internal fun filterRecitersForUnifiedPicker(
     reciters: List<Reciter>,
     query: String,
     surahNumber: Int
 ): List<Reciter> = reciters.filter { reciter ->
-    reciter.surahTotal >= surahNumber &&
+    reciter.audioType == 0 && reciter.surahTotal >= surahNumber &&
         matchesAudioCatalogSearch(
             query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
         )
@@ -358,10 +358,10 @@ internal fun filterRecitersForUnifiedPicker(
 internal fun quranReciterShowsAyahNavigation(audioType: Int): Boolean = audioType == 0
 
 internal object ReaderPlaybackSettings {
-    var mode by mutableStateOf("full")
+    var mode by mutableStateOf("verse")
 
-    /** Full-surah playback is the first-use default; keep verse mode when it was explicitly selected. */
-    fun normalize(value: String?): String = if (value == "verse") "verse" else "full"
+    /** Ayah-by-ayah is the first-use default; full-surah playback remains an explicit library choice. */
+    fun normalize(value: String?): String = if (value == "full") "full" else "verse"
 
     /** Full-surah mode must not list editions whose source metadata says their coverage is incomplete. */
     fun supportsAllSurahs(reciter: Reciter): Boolean = reciter.surahTotal == 114
@@ -1767,7 +1767,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
     }
     val readerPlaybackMode = ReaderPlaybackSettings.mode
     LaunchedEffect(Unit) {
-        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
+        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
         readerReciters = ContentRepository.loadReciters(context)
         if (preferredReaderReciterId > 0 && readerReciters.none { it.id == preferredReaderReciterId }) {
             preferredReaderReciterId = -1
@@ -1864,7 +1864,7 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
             return
         }
-        val chosen = reciterOverride?.takeIf { it.surahTotal >= surahNumber }
+        val chosen = reciterOverride?.takeIf { it.audioType == 0 && it.surahTotal >= surahNumber }
         if (chosen == null) {
             requestInlineRecitation(surahNumber, requestedAyah)
             return
@@ -3696,9 +3696,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
                 Text(
                     when (language) {
-                        AppLanguage.EN -> "All Quran reciters • full-surah and ayah-by-ayah in one list"
-                        AppLanguage.AR -> "جميع قرّاء القرآن • السورة كاملة وآية بآية في قائمة واحدة"
-                        AppLanguage.CKB -> "هەموو قورئان‌خوێنەکان • سوورەتی تەواو و ئایەت بە ئایەت لە یەک لیستدا"
+                        AppLanguage.EN -> "Verified ayah-by-ayah reciters for synchronized verse playback"
+                        AppLanguage.AR -> "قرّاء موثّقون بملفات آية بآية لتزامن الآيات"
+                        AppLanguage.CKB -> "قورئان‌خوێنە پشتڕاستکراوەکانی ئایەت بە ئایەت بۆ هاوکاتی ئایەتەکان"
                     },
                     color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
                 )
@@ -8433,6 +8433,10 @@ fun AudioScreen(
     var adhanLibraryFilter by rememberSaveable { mutableStateOf("all") }
     var surahText by rememberSaveable { mutableStateOf(initialSurah.coerceIn(1, 114).toString()) }
     var ayahText by rememberSaveable { mutableStateOf(initialAyah.coerceAtLeast(1).toString()) }
+    var fullSurahListReciterId by rememberSaveable { mutableIntStateOf(-1) }
+    var fullSurahPlayerReciterId by rememberSaveable { mutableIntStateOf(-1) }
+    var fullSurahPlayerNumber by rememberSaveable { mutableIntStateOf(0) }
+    var fullSurahRepeatCurrent by rememberSaveable { mutableStateOf(false) }
     val playbackMode = ReaderPlaybackSettings.mode
     LaunchedEffect(initialSurah, initialAyah, focusReciters, focusAdhan) {
         surahText = initialSurah.coerceIn(1, 114).toString()
@@ -8442,7 +8446,7 @@ fun AudioScreen(
         audioPaused = false
     }
     LaunchedEffect(Unit) {
-        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "full"))
+        ReaderPlaybackSettings.mode = ReaderPlaybackSettings.normalize(prefs.getString("reciter_playback_mode", "verse"))
         audio = ContentRepository.loadAudioItems(context)
         onlineAdhan = ContentRepository.loadOnlineMuezzin(context)
         val loadedReciters = ContentRepository.loadReciters(context)
@@ -8518,6 +8522,51 @@ fun AudioScreen(
             }
         }
     }
+    fun playFullSurah(reciter: Reciter, surah: Surah) {
+        if (reciter.audioType == 0 || surah.number !in 1..reciter.surahTotal || playbackPreparingKey.isNotBlank()) return
+        val playKey = "${reciter.id}|${surah.number}|1|full|1"
+        fullSurahListReciterId = -1
+        fullSurahPlayerReciterId = reciter.id
+        fullSurahPlayerNumber = surah.number
+        fullSurahRepeatCurrent = false
+        playbackPreparingKey = playKey
+        AudioController.stop()
+        playing = ""
+        audioPaused = false
+        scope.launch {
+            try {
+                val sources = withContext(Dispatchers.IO) {
+                    reciterAudioSequence(context, reciter, surah.number, 1, surah.ayahCount)
+                }
+                if (sources.isEmpty()) {
+                    fullSurahPlayerReciterId = -1
+                    fullSurahPlayerNumber = 0
+                    Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                if (playbackPreparingKey != playKey) return@launch
+                playing = playKey
+                autoPlayKey = playKey
+                AudioController.playSequence(
+                    context = context, sources = sources,
+                    notificationTitle = reciter.nameArabic.ifBlank { reciter.nameEnglish },
+                    notificationSubtitle = surah.arabicName,
+                    showNotification = true
+                ) { state ->
+                    audioPaused = false
+                    if (!state) playing = ""
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                fullSurahPlayerReciterId = -1
+                fullSurahPlayerNumber = 0
+                Toast.makeText(context, audioPlaybackFailureMessage(language, AudioPlaybackFailure.STREAM), Toast.LENGTH_LONG).show()
+            } finally {
+                if (playbackPreparingKey == playKey) playbackPreparingKey = ""
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (focusAdhan || focusReciters) {
         PremiumSectionHero(
@@ -9101,6 +9150,9 @@ fun AudioScreen(
                     AudioController.stop()
                     playing = ""
                     autoPlayKey = ""
+                    fullSurahListReciterId = -1
+                    fullSurahPlayerReciterId = -1
+                    fullSurahPlayerNumber = 0
                 }
                 PremiumChoicePill(
                     modifier = Modifier.weight(1f),
@@ -9114,6 +9166,9 @@ fun AudioScreen(
                     AudioController.stop()
                     playing = ""
                     autoPlayKey = ""
+                    fullSurahListReciterId = -1
+                    fullSurahPlayerReciterId = -1
+                    fullSurahPlayerNumber = 0
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -9132,6 +9187,13 @@ fun AudioScreen(
                     else -> "لەو کاتەلۆگەدا قورئان‌خوێنی فایلە جیاوازەکانی ئایەت بەردەست نییە."
                 }
                 LoadingOrEmpty(false, language, foreground, emptyMessage)
+            } else if (playbackMode == "full") {
+                FullSurahReciterList(
+                    reciters = visibleReciters,
+                    foreground = foreground,
+                    cardColor = cardColor,
+                    onReciterSelected = { fullSurahListReciterId = it.id }
+                )
             } else LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 4.dp),
@@ -9419,8 +9481,322 @@ fun AudioScreen(
             }
         }
     }
+
+    val fullSurahListReciter = reciters.firstOrNull { it.id == fullSurahListReciterId }
+    if (fullSurahListReciter != null) {
+        FullSurahListDialog(
+            language = language, foreground = foreground, cardColor = cardColor,
+            reciter = fullSurahListReciter, surahs = surahs,
+            downloadingTracks = downloadingTracks, offlineRevision = offlineRevision,
+            onDismiss = { fullSurahListReciterId = -1 },
+            onPlaySurah = { surah -> playFullSurah(fullSurahListReciter, surah) },
+            onDownloadSurah = { surah ->
+                val downloadKey = "${fullSurahListReciter.id}|${surah.number}"
+                if (downloadingTracks[downloadKey] == null) {
+                    downloadingTracks = downloadingTracks + (downloadKey to "0")
+                    scope.launch {
+                        try {
+                            downloadReciterSurah(context, fullSurahListReciter, surah.number, surah.ayahCount) { done, total ->
+                                downloadingTracks = downloadingTracks + (downloadKey to "${done}/${total}")
+                            }
+                            offlineRevision++
+                            audioNotice = if (language == AppLanguage.EN) "${surah.englishName} is saved for offline playback."
+                                else if (language == AppLanguage.AR) "تم حفظ ${surah.arabicName} للتشغيل دون إنترنت."
+                                else "سوورەتی ${surah.arabicName} بۆ لێدانی بەبێ ئینتەرنێت پاشەکەوت کرا."
+                        } catch (_: Exception) {
+                            audioNotice = if (language == AppLanguage.EN) "Download failed. Check the connection and try again."
+                                else if (language == AppLanguage.AR) "تعذّر التنزيل. تحقّق من الاتصال ثم حاول مجددًا."
+                                else "داگرتن سەرکەوتوو نەبوو؛ پەیوەندی بپشکنە و دووبارە هەوڵ بدەوە."
+                        } finally {
+                            downloadingTracks = downloadingTracks - downloadKey
+                        }
+                    }
+                }
+            }
+        )
+    }
+    val fullSurahPlayerReciter = reciters.firstOrNull { it.id == fullSurahPlayerReciterId }
+    val fullSurahPlayerSurah = surahs.firstOrNull { it.number == fullSurahPlayerNumber }
+    if (fullSurahPlayerReciter != null && fullSurahPlayerSurah != null) {
+        FullSurahPlaybackDialog(
+            language = language, foreground = foreground, cardColor = cardColor,
+            reciter = fullSurahPlayerReciter, surah = fullSurahPlayerSurah,
+            isPrepared = AudioController.isPrepared(), isPreparing = AudioController.isPreparing(),
+            isPaused = audioPaused, repeatCurrent = fullSurahRepeatCurrent,
+            onDismiss = { fullSurahPlayerReciterId = -1; fullSurahPlayerNumber = 0 },
+            onPause = { AudioController.togglePause()?.let { audioPaused = it } },
+            onSeek = { AudioController.seekTo(it) },
+            onSeekBy = { AudioController.seekBy(it) },
+            onRepeat = { fullSurahRepeatCurrent = AudioController.toggleRepeatCurrentTrack() },
+            onStop = {
+                AudioController.stop()
+                playing = ""
+                autoPlayKey = ""
+                audioPaused = false
+                fullSurahRepeatCurrent = false
+                fullSurahPlayerReciterId = -1
+                fullSurahPlayerNumber = 0
+            }
+        )
+    }
+
 }
 
+
+
+@Composable
+private fun FullSurahReciterList(
+    reciters: List<Reciter>,
+    foreground: Color,
+    cardColor: Color,
+    onReciterSelected: (Reciter) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        itemsIndexed(reciters, key = { _, reciter -> reciter.id }) { index, reciter ->
+            Card(
+                modifier = Modifier.fillMaxWidth().staggeredEntrance(itemKey = reciter.id, index = index, enabled = index < 7),
+                colors = CardDefaults.cardColors(containerColor = cardColor),
+                shape = RoundedCornerShape(17.dp),
+                border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.18f))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().premiumClickable(hapticFeedback = true) { onReciterSelected(reciter) }
+                        .padding(horizontal = 11.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
+                        .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF1B5A45)))),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Outlined.GraphicEq, null, tint = Gold, modifier = Modifier.size(22.dp)) }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(reciter.nameEnglish, color = foreground.copy(alpha = 0.62f), fontSize = 9.sp, maxLines = 1)
+                        Text(
+                            reciter.recitation.ifBlank { "MP3Quran • full-surah recording" } + " • ${reciter.surahTotal}/114",
+                            color = Gold.copy(alpha = 0.86f), fontSize = 9.sp, maxLines = 2
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Icon(Icons.Outlined.ChevronRight, null, tint = Gold, modifier = Modifier.size(23.dp))
+                        Text("${reciter.surahTotal} surahs", color = foreground.copy(alpha = 0.52f), fontSize = 8.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullSurahListDialog(
+    language: AppLanguage, foreground: Color, cardColor: Color,
+    reciter: Reciter, surahs: List<Surah>, downloadingTracks: Map<String, String>, offlineRevision: Int,
+    onDismiss: () -> Unit, onPlaySurah: (Surah) -> Unit, onDownloadSurah: (Surah) -> Unit
+) {
+    val context = LocalContext.current
+    val available = remember(surahs, reciter.id, reciter.surahTotal) { surahs.filter { it.number in 1..reciter.surahTotal } }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.98f).heightIn(min = 420.dp, max = 700.dp),
+            shape = RoundedCornerShape(24.dp), color = cardColor,
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.34f)), shadowElevation = 20.dp
+        ) {
+            Column(Modifier.fillMaxSize().padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            when (language) { AppLanguage.EN -> "Choose a surah"; AppLanguage.AR -> "اختر السورة"; AppLanguage.CKB -> "سوورەتێک هەڵبژێرە" },
+                            color = foreground, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(reciter.nameArabic, color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("${available.size}/114 • ${reciter.recitation.ifBlank { "Full-surah recitations" }}",
+                            color = foreground.copy(alpha = 0.56f), fontSize = 9.sp, maxLines = 2)
+                    }
+                    PremiumIconButton(
+                        icon = Icons.Outlined.Close,
+                        contentDescription = if (language == AppLanguage.EN) "Close surah list" else if (language == AppLanguage.AR) "إغلاق قائمة السور" else "داخستنی لیستی سوورەتەکان",
+                        accent = Gold, size = 36.dp, onClick = onDismiss
+                    )
+                }
+                Spacer(Modifier.height(9.dp))
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 3.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    itemsIndexed(available, key = { _, item -> item.number }) { _, surah ->
+                        val key = "${reciter.id}|${surah.number}"
+                        val progress = downloadingTracks[key]
+                        var saved by remember(reciter.id, surah.number, offlineRevision) { mutableStateOf(false) }
+                        LaunchedEffect(reciter.id, surah.number, offlineRevision) {
+                            saved = withContext(Dispatchers.IO) { isReciterSurahOffline(context, reciter, surah.number, surah.ayahCount) }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+                                .background(foreground.copy(alpha = 0.035f))
+                                .border(1.dp, Gold.copy(alpha = 0.10f), RoundedCornerShape(13.dp))
+                                .premiumClickable(hapticFeedback = true) { onPlaySurah(surah) }
+                                .padding(start = 10.dp, end = 5.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.size(33.dp).clip(RoundedCornerShape(10.dp)).background(DeepGreen), contentAlignment = Alignment.Center) {
+                                Text(surah.number.toString(), color = PaleGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.width(9.dp))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                Text(surah.arabicName, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text("${surah.englishName} • ${surah.ayahCount} " +
+                                    when (language) { AppLanguage.EN -> "ayahs"; AppLanguage.AR -> "آية"; AppLanguage.CKB -> "ئایەت" },
+                                    color = foreground.copy(alpha = 0.58f), fontSize = 9.sp, maxLines = 1)
+                            }
+                            PremiumIconButton(
+                                icon = when { progress != null -> Icons.Outlined.Refresh; saved -> Icons.Outlined.CheckCircle; else -> Icons.Outlined.Download },
+                                contentDescription = when {
+                                    progress != null -> if (language == AppLanguage.EN) "Downloading" else if (language == AppLanguage.AR) "جارٍ التنزيل" else "دادەگیرێت"
+                                    saved -> if (language == AppLanguage.EN) "Saved offline" else if (language == AppLanguage.AR) "محفوظ دون اتصال" else "بەبێ ئینتەرنێت پاشەکەوت کراوە"
+                                    else -> if (language == AppLanguage.EN) "Download surah" else if (language == AppLanguage.AR) "تنزيل السورة" else "داگرتنی سوورەت"
+                                },
+                                accent = if (saved) Color(0xFF62C995) else Gold, size = 34.dp,
+                                enabled = progress == null && !saved, onClick = { onDownloadSurah(surah) }
+                            )
+                            Icon(Icons.Outlined.PlayCircle, null, tint = Gold, modifier = Modifier.size(25.dp))
+                        }
+                    }
+                }
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Tap a surah to open its dedicated audio player. Download saves it for offline listening."
+                        AppLanguage.AR -> "اضغط على السورة لفتح مشغّلها الصوتي. التنزيل يحفظها للاستماع دون إنترنت."
+                        AppLanguage.CKB -> "لەسەر سوورەتێک دابگرە بۆ کردنەوەی یاری‌کەری تایبەتی؛ داگرتن بۆ گوێگرتنی بەبێ ئینتەرنێتە."
+                    },
+                    color = foreground.copy(alpha = 0.52f), fontSize = 9.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullSurahPlaybackDialog(
+    language: AppLanguage, foreground: Color, cardColor: Color,
+    reciter: Reciter, surah: Surah, isPrepared: Boolean, isPreparing: Boolean,
+    isPaused: Boolean, repeatCurrent: Boolean,
+    onDismiss: () -> Unit, onPause: () -> Unit, onSeek: (Int) -> Unit,
+    onSeekBy: (Long) -> Unit, onRepeat: () -> Unit, onStop: () -> Unit
+) {
+    var position by remember(reciter.id, surah.number) { mutableIntStateOf(0) }
+    var duration by remember(reciter.id, surah.number) { mutableIntStateOf(0) }
+    var scrub by remember(reciter.id, surah.number) { mutableStateOf<Float?>(null) }
+    LaunchedEffect(reciter.id, surah.number) {
+        while (true) {
+            val (p, d) = AudioController.playbackPosition()
+            if (scrub == null) position = p.coerceAtLeast(0)
+            duration = d.coerceAtLeast(0)
+            delay(220L)
+        }
+    }
+    val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val shownProgress = scrub ?: progress
+    val shownPosition = if (scrub != null && duration > 0) (duration * shownProgress).toInt() else position
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.98f), shape = RoundedCornerShape(26.dp),
+            color = cardColor, border = BorderStroke(1.dp, Gold.copy(alpha = 0.40f)), shadowElevation = 22.dp
+        ) {
+            Column(
+                Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Gold.copy(alpha = 0.10f), cardColor, cardColor)))
+                    .padding(horizontal = 17.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (language) { AppLanguage.EN -> "FULL SURAH PLAYER"; AppLanguage.AR -> "مشغّل السورة الكاملة"; AppLanguage.CKB -> "یاری‌کەری سوورەتی تەواو" },
+                            color = Gold, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp
+                        )
+                        Text(reciter.nameArabic, color = foreground, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    PremiumIconButton(icon = Icons.Outlined.Close,
+                        contentDescription = if (language == AppLanguage.EN) "Close player" else if (language == AppLanguage.AR) "إغلاق المشغّل" else "داخستنی یاری‌کەر",
+                        accent = Gold, size = 36.dp, onClick = onDismiss)
+                }
+                Spacer(Modifier.height(22.dp))
+                Box(Modifier.size(88.dp).clip(RoundedCornerShape(26.dp))
+                    .background(Brush.linearGradient(listOf(DeepGreen, Color(0xFF1B6048))))
+                    .border(1.dp, Gold.copy(alpha = 0.42f), RoundedCornerShape(26.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PremiumAudioWaveform(active = isPrepared && !isPaused, accent = Gold,
+                        contentDescription = if (language == AppLanguage.EN) "Full surah playing" else if (language == AppLanguage.AR) "تلاوة السورة قيد التشغيل" else "خوێندنەوەی سوورەت لەکارە")
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(surah.arabicName, color = foreground, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                Text("${surah.englishName} • ${surah.ayahCount} " +
+                    when (language) { AppLanguage.EN -> "ayahs"; AppLanguage.AR -> "آية"; AppLanguage.CKB -> "ئایەت" },
+                    color = foreground.copy(alpha = 0.58f), fontSize = 10.sp)
+                Spacer(Modifier.height(20.dp))
+                Slider(
+                    value = shownProgress,
+                    onValueChange = { scrub = it },
+                    onValueChangeFinished = {
+                        if (duration > 0) onSeek((duration * (scrub ?: progress)).toInt())
+                        scrub = null
+                    },
+                    enabled = isPrepared && duration > 0,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatAudioClock(shownPosition), color = foreground.copy(alpha = 0.7f), fontSize = 10.sp)
+                    Text(
+                        if (duration > 0) formatAudioClock(duration) else if (isPreparing) {
+                            when (language) { AppLanguage.EN -> "Loading audio…"; AppLanguage.AR -> "جارٍ تحميل الصوت…"; AppLanguage.CKB -> "دەنگ بار دەکرێت…" }
+                        } else "—:—",
+                        color = foreground.copy(alpha = 0.7f), fontSize = 10.sp
+                    )
+                }
+                Spacer(Modifier.height(15.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    ReaderActionIcon(icon = Icons.Outlined.Repeat,
+                        description = if (language == AppLanguage.EN) "Repeat surah" else if (language == AppLanguage.AR) "تكرار السورة" else "دووبارەکردنەوەی سوورەت",
+                        selected = repeatCurrent, accent = Gold, size = 42.dp, onClick = onRepeat)
+                    Spacer(Modifier.width(7.dp))
+                    ReaderActionIcon(icon = Icons.Outlined.ChevronRight,
+                        description = if (language == AppLanguage.EN) "Back 10 seconds" else if (language == AppLanguage.AR) "رجوع 10 ثوانٍ" else "گەڕانەوە 10 چرکە",
+                        enabled = isPrepared, rotationDegrees = 180f, accent = Gold, size = 42.dp, onClick = { onSeekBy(-10_000L) })
+                    Spacer(Modifier.width(7.dp))
+                    ReaderActionIcon(
+                        icon = if (isPaused || !isPrepared) Icons.Outlined.PlayCircle else Icons.Outlined.PauseCircle,
+                        description = if (isPaused || !isPrepared) {
+                            if (language == AppLanguage.EN) "Play or resume" else if (language == AppLanguage.AR) "تشغيل أو استئناف" else "لێدان یان بەردەوامبوون"
+                        } else if (language == AppLanguage.EN) "Pause" else if (language == AppLanguage.AR) "إيقاف مؤقت" else "وەستاندنی کاتی",
+                        selected = isPrepared && !isPaused, accent = Color(0xFFF1C76B), size = 50.dp,
+                        enabled = isPrepared, onClick = onPause)
+                    Spacer(Modifier.width(7.dp))
+                    ReaderActionIcon(icon = Icons.Outlined.ChevronRight,
+                        description = if (language == AppLanguage.EN) "Forward 10 seconds" else if (language == AppLanguage.AR) "تقديم 10 ثوانٍ" else "پێشچوون 10 چرکە",
+                        enabled = isPrepared, accent = Gold, size = 42.dp, onClick = { onSeekBy(10_000L) })
+                    Spacer(Modifier.width(7.dp))
+                    ReaderActionIcon(icon = Icons.Outlined.Close,
+                        description = if (language == AppLanguage.EN) "Stop playback" else if (language == AppLanguage.AR) "إيقاف التشغيل" else "وەستاندنی لێدان",
+                        accent = Color(0xFFE07870), size = 42.dp, onClick = onStop)
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    when (language) {
+                        AppLanguage.EN -> "Drag the timeline to any second in the recording."
+                        AppLanguage.AR -> "حرّك شريط التقدّم إلى أي ثانية تريدها في التسجيل."
+                        AppLanguage.CKB -> "شریتی پێشکەوتن بۆ هەر چرکەیەک کە دەتەوێت ڕایبکێشە."
+                    },
+                    color = foreground.copy(alpha = 0.52f), fontSize = 9.sp, textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
 
 internal enum class AudioPlaybackFailure {
     RECITATION_SEGMENT,

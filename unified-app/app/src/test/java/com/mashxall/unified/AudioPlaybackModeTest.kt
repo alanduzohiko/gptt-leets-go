@@ -6,10 +6,10 @@ import org.junit.Test
 
 class AudioPlaybackModeTest {
     @Test
-    fun defaultsToFullSurahButHonoursExplicitVerseMode() {
-        assertEquals("full", ReaderPlaybackSettings.normalize(null))
+    fun defaultsToAyahByAyahAndHonoursExplicitFullSurahLibraryMode() {
+        assertEquals("verse", ReaderPlaybackSettings.normalize(null))
         assertEquals("full", ReaderPlaybackSettings.normalize("full"))
-        assertEquals("full", ReaderPlaybackSettings.normalize("unknown"))
+        assertEquals("verse", ReaderPlaybackSettings.normalize("unknown"))
         assertEquals("verse", ReaderPlaybackSettings.normalize("verse"))
     }
 
@@ -44,7 +44,7 @@ class AudioPlaybackModeTest {
     }
 
     @Test
-    fun unifiedQuranPickerShowsBothFullSurahAndVerseByVerseRecitersTogether() {
+    fun quranInlinePickerShowsOnlyAyahByAyahReaders() {
         val full = com.mashxall.unified.data.Reciter(
             80, "قارئ السورة", "Full Surah Reader", 1, "https://example.invalid/full/", 1,
             surahTotal = 2
@@ -53,10 +53,7 @@ class AudioPlaybackModeTest {
             81, "قارئ الآيات", "Ayah Reader", 0, "https://example.invalid/verse/", 2,
             surahTotal = 2
         )
-        assertEquals(
-            listOf(full, verse),
-            filterRecitersForUnifiedPicker(listOf(full, verse), "", 2)
-        )
+        assertEquals(listOf(verse), filterRecitersForUnifiedPicker(listOf(full, verse), "", 2))
         assertEquals(listOf(verse), filterRecitersForUnifiedPicker(listOf(full, verse), "Ayah", 2))
         assertEquals(emptyList<com.mashxall.unified.data.Reciter>(), filterRecitersForUnifiedPicker(listOf(full, verse), "", 3))
     }
