@@ -8333,10 +8333,10 @@ internal fun hasSelectableAdhanAsset(assetPath: String, availableAssets: List<Au
     }
 
 internal fun importedAdhanAssetRecord(absolutePath: String, title: String): String =
-    absolutePath.trim() + "\t" + title.replace("\\t", " ").replace("\\n", " ").trim()
+    absolutePath.trim() + "\t" + title.replace('\t', ' ').replace('\n', ' ').trim()
 
 internal fun importedAdhanAudioItem(record: String, isUsableFile: (String) -> Boolean): AudioItem? {
-    val separator = record.indexOf('\\t')
+    val separator = record.indexOf('\t')
     if (separator <= 0 || separator == record.lastIndex) return null
     val path = record.substring(0, separator).trim()
     val title = record.substring(separator + 1).trim()
