@@ -57,6 +57,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp3.Mp3Extractor
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import android.media.session.PlaybackState
@@ -9786,7 +9788,13 @@ internal object AudioController {
                 mapOf("Accept" to "audio/mpeg,audio/*;q=0.9,*/*;q=0.8")
             )
         val dataSourceFactory = DefaultDataSource.Factory(appContext, httpFactory)
-        val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        // MP3Quran streams commonly have no embedded Xing/Info duration header.
+        // Let Media3 derive duration and seek points from the known MP3 bitrate
+        // and HTTP content length when the file is constant-bitrate. This gives
+        // the inline bar a real duration instead of remaining indeterminate.
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setMp3ExtractorFlags(Mp3Extractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING)
+        val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
         val engine = ExoPlayer.Builder(appContext)
             .setMediaSourceFactory(sourceFactory)
             .setHandleAudioBecomingNoisy(true)
