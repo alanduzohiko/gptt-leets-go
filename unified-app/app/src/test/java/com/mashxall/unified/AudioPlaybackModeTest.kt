@@ -46,10 +46,12 @@ class AudioPlaybackModeTest {
     @Test
     fun unifiedQuranPickerShowsBothFullSurahAndVerseByVerseRecitersTogether() {
         val full = com.mashxall.unified.data.Reciter(
-            80, "قارئ السورة", "Full Surah Reader", 1, "https://example.invalid/full/", 1
+            80, "قارئ السورة", "Full Surah Reader", 1, "https://example.invalid/full/", 1,
+            surahTotal = 2
         )
         val verse = com.mashxall.unified.data.Reciter(
-            81, "قارئ الآيات", "Ayah Reader", 0, "https://example.invalid/verse/", 2
+            81, "قارئ الآيات", "Ayah Reader", 0, "https://example.invalid/verse/", 2,
+            surahTotal = 2
         )
         assertEquals(
             listOf(full, verse),
