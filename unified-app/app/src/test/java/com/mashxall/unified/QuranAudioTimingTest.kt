@@ -39,6 +39,46 @@ class QuranAudioTimingTest {
         }, 4))
     }
 
+
+    @Test
+    fun parsesTopLevelAndWrappedMp3QuranTimingArrays() {
+        val wrapped = """{"value":[
+            {"ayah":0,"start_time":0,"end_time":2731},
+            {"ayah":1,"start_time":2731,"end_time":5720},
+            {"ayah":2,"start_time":"5720","end_time":"9100"}
+        ]}"""
+        val rows = parseQuranTimingRows(wrapped)
+        assertEquals(
+            listOf(
+                QuranTimingApiRow(1, 2_731L, 5_720L),
+                QuranTimingApiRow(2, 5_720L, 9_100L)
+            ),
+            rows
+        )
+        assertEquals(2, parseQuranTimingRows("""{"data":{"value":[
+            {"ayah":1,"start_time":0,"end_time":1000},
+            {"ayah":2,"start_time":1000,"end_time":2000}
+        ]}}""")?.size)
+    }
+
+    @Test
+    fun parsesWrappedTimingReadListsAndNormalizesHttpFolders() {
+        val reads = parseQuranTimingReads("""{"data":{"value":[
+            {"id":53,"folder_url":"http://server7.mp3quran.net/basit/"},
+            {"id":118,"folder_url":"https://server13.mp3quran.net/husr/"}
+        ]}}""")
+        assertEquals(2, reads.size)
+        assertEquals(53, reads[0].id)
+        assertEquals("https://server7.mp3quran.net/basit/", reads[0].folderUrl)
+        assertEquals("https://server13.mp3quran.net/husr/", reads[1].folderUrl)
+    }
+
+    @Test
+    fun rejectsUnknownTimingResponseEnvelopeInsteadOfPretendingItContainsData() {
+        assertNull(parseQuranTimingRows("""{"status":"ok","message":"no timing array"}"""))
+        assertTrue(parseQuranTimingReads("""{"status":"ok"}""").isEmpty())
+    }
+
     @Test
     fun activeAyahFollowsTheActualMediaPositionAcrossVerseBoundaries() {
         val timings = validateQuranAyahTimings(completeRows, 4)!!

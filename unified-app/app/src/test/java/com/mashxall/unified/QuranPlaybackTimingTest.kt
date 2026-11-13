@@ -34,6 +34,66 @@ class QuranPlaybackTimingTest {
         assertEquals(43, plan.startingAyah)
     }
 
+
+    @Test
+    fun timedContinuousRecordingUsesPreviousAndNextAyahControls() {
+        val navigation = quranInlineNavigationAvailability(
+            usesAyahClips = false,
+            timedAyahCount = 286,
+            activeAyah = 43,
+            startingAyah = 43,
+            ayahCount = 286,
+            surahNumber = 2,
+            availableSurahs = 114
+        )
+        assertTrue(navigation.navigatesByAyah)
+        assertTrue(navigation.hasPrevious)
+        assertTrue(navigation.hasNext)
+    }
+
+    @Test
+    fun fullSurahNavigationDoesNotDependOnPlayerDurationBeingKnown() {
+        val navigation = quranInlineNavigationAvailability(
+            usesAyahClips = false,
+            timedAyahCount = 0,
+            activeAyah = 1,
+            startingAyah = 1,
+            ayahCount = 286,
+            surahNumber = 2,
+            availableSurahs = 114
+        )
+        assertFalse(navigation.navigatesByAyah)
+        assertTrue(navigation.hasPrevious)
+        assertTrue(navigation.hasNext)
+    }
+
+    @Test
+    fun ayahClipNavigationRemainsInsideItsLoadedSequence() {
+        val first = quranInlineNavigationAvailability(
+            usesAyahClips = true,
+            timedAyahCount = 0,
+            activeAyah = 43,
+            startingAyah = 43,
+            ayahCount = 286,
+            surahNumber = 2,
+            availableSurahs = 114
+        )
+        assertFalse(first.hasPrevious)
+        assertTrue(first.hasNext)
+
+        val later = quranInlineNavigationAvailability(
+            usesAyahClips = true,
+            timedAyahCount = 0,
+            activeAyah = 44,
+            startingAyah = 43,
+            ayahCount = 286,
+            surahNumber = 2,
+            availableSurahs = 114
+        )
+        assertTrue(later.hasPrevious)
+        assertTrue(later.hasNext)
+    }
+
     @Test
     fun exactAyahEditionStartsAtTheSelectedVerseAndContinuesToTheEnd() {
         val plan = quranPlaybackStartPlan(audioType = 0, requestedAyah = 43, ayahCount = 114)

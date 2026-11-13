@@ -25,6 +25,86 @@ internal data class QuranTimingApiRow(
     val endMs: Long
 )
 
+internal data class QuranTimingRead(
+    val id: Int,
+    val folderUrl: String
+)
+
+/**
+ * MP3Quran has returned both a top-level JSON array and wrapped arrays
+ * (for example { "value": [...] } or { "data": { "value": [...] } }).
+ * Unwrap known response envelopes without treating a missing array as valid data.
+ */
+internal fun unwrapQuranApiArray(
+    payload: String,
+    wrapperKeys: List<String>
+): JSONArray? {
+    runCatching { JSONArray(payload) }.getOrNull()?.let { return it }
+    val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
+
+    fun findArray(value: Any?, depth: Int): JSONArray? {
+        if (value is JSONArray) return value
+        if (value !is JSONObject || depth <= 0) return null
+        for (key in wrapperKeys) {
+            val nested = value.opt(key)
+            findArray(nested, depth - 1)?.let { return it }
+        }
+        return null
+    }
+    return findArray(root, 4)
+}
+
+private fun JSONObject.longValueOrNull(key: String): Long? =
+    when (val value = opt(key)) {
+        is Number -> value.toLong()
+        is String -> value.trim().toLongOrNull()
+        else -> null
+    }
+
+internal fun parseQuranTimingRows(payload: String): List<QuranTimingApiRow>? {
+    val array = unwrapQuranApiArray(
+        payload,
+        listOf("value", "data", "ayat_timing", "timings", "result", "response", "payload")
+    ) ?: return null
+    return buildList {
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val ayah = item.optInt("ayah", -1)
+            // The API may include ayah zero for the basmala; it is not a Quran verse.
+            if (ayah <= 0) continue
+            add(
+                QuranTimingApiRow(
+                    ayah = ayah,
+                    startMs = item.longValueOrNull("start_time") ?: -1L,
+                    endMs = item.longValueOrNull("end_time") ?: -1L
+                )
+            )
+        }
+    }
+}
+
+internal fun parseQuranTimingReads(payload: String): List<QuranTimingRead> {
+    val array = unwrapQuranApiArray(
+        payload,
+        listOf("value", "reads", "data", "reciters", "result", "response", "payload")
+    ) ?: return emptyList()
+    return buildList {
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val id = item.optInt("id", -1)
+            val folder = item.optString("folder_url")
+                .ifBlank { item.optString("server") }
+                .trim()
+                // MP3Quran has historically returned HTTP folder URLs for some reads.
+                // The matching audio host also supports HTTPS; normalize before using it.
+                .replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
+            if (id > 0 && folder.startsWith("https://", ignoreCase = true)) {
+                add(QuranTimingRead(id, folder))
+            }
+        }
+    }.distinctBy { it.id }
+}
+
 internal data class QuranSurahAudioTiming(
     val readId: Int,
     val audioUrl: String,
@@ -94,11 +174,6 @@ internal object QuranAudioTimingRepository {
     private const val READS_TTL_MS = 24L * 60L * 60L * 1000L
     private const val TIMING_TTL_MS = 30L * 24L * 60L * 60L * 1000L
 
-    private data class TimingRead(
-        val id: Int,
-        val folderUrl: String
-    )
-
     suspend fun load(
         context: Context,
         reciter: Reciter,
@@ -121,13 +196,17 @@ internal object QuranAudioTimingRepository {
                 url = "$API_BASE/ayat_timing/reads",
                 ttlMs = READS_TTL_MS
             ) ?: return@withContext null
-            val reads = parseTimingReads(readsPayload)
+            val reads = parseQuranTimingReads(readsPayload)
             val normalizedBase = normalizeFolder(reciter.baseUrl)
-            // Match the actual server folder first; a catalogue's numeric suffix
-            // is only a fallback because moshaf IDs are not universally read IDs.
             val read = reads.firstOrNull { normalizeFolder(it.folderUrl) == normalizedBase }
                 ?: reads.firstOrNull { readId != null && it.id == readId }
-                ?: return@withContext null
+                ?: run {
+                    Log.w(
+                        "MashxallQuranTiming",
+                        "No timing read matches reciter ${reciter.id} folder '${reciter.baseUrl}' (sourceId=${reciter.sourceId}, reads=${reads.size})"
+                    )
+                    return@withContext null
+                }
 
             val timingPayload = cachedApiText(
                 context = context,
@@ -135,9 +214,20 @@ internal object QuranAudioTimingRepository {
                 url = "$API_BASE/ayat_timing?surah=$surah&read=${read.id}",
                 ttlMs = TIMING_TTL_MS
             ) ?: return@withContext null
-            val rows = parseTimingRows(timingPayload) ?: return@withContext null
-            val ayahs = validateQuranAyahTimings(rows, expectedAyahCount)
-                ?: return@withContext null
+            val rows = parseQuranTimingRows(timingPayload) ?: run {
+                Log.w(
+                    "MashxallQuranTiming",
+                    "Timing response did not contain a recognized ayah array (read=${read.id}, surah=$surah)"
+                )
+                return@withContext null
+            }
+            val ayahs = validateQuranAyahTimings(rows, expectedAyahCount) ?: run {
+                Log.w(
+                    "MashxallQuranTiming",
+                    "Timing rows were incomplete or invalid (read=${read.id}, surah=$surah, rows=${rows.size}, expected=$expectedAyahCount)"
+                )
+                return@withContext null
+            }
             val folder = read.folderUrl.trim().trimEnd('/') + "/"
             if (!folder.startsWith("https://", ignoreCase = true)) return@withContext null
             val audioUrl = folder + String.format(Locale.US, "%03d.mp3", surah)
@@ -147,45 +237,6 @@ internal object QuranAudioTimingRepository {
         } catch (error: Exception) {
             Log.w("MashxallQuranTiming", "Could not load exact verse timing for reciter ${reciter.id}, surah $surah", error)
             null
-        }
-    }
-
-    private fun parseTimingReads(payload: String): List<TimingRead> {
-        val array = runCatching { JSONArray(payload) }.getOrElse {
-            val wrapper = JSONObject(payload)
-            wrapper.optJSONArray("reads")
-                ?: wrapper.optJSONArray("data")
-                ?: JSONArray()
-        }
-        return buildList {
-            for (index in 0 until array.length()) {
-                val item = array.optJSONObject(index) ?: continue
-                val id = item.optInt("id", -1)
-                val folder = item.optString("folder_url")
-                    .ifBlank { item.optString("server") }
-                    .trim()
-                    // MP3Quran has historically returned HTTP folder URLs for some reads.
-                    // The matching audio host also supports HTTPS; normalize before using it.
-                    .replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
-                if (id > 0 && folder.startsWith("https://", ignoreCase = true)) {
-                    add(TimingRead(id, folder))
-                }
-            }
-        }.distinctBy { it.id }
-    }
-
-    private fun parseTimingRows(payload: String): List<QuranTimingApiRow>? {
-        val array = runCatching { JSONArray(payload) }.getOrNull() ?: return null
-        return buildList {
-            for (index in 0 until array.length()) {
-                val item = array.optJSONObject(index) ?: continue
-                val ayah = item.optInt("ayah", -1)
-                // Some timing feeds include an ayah-zero prelude; it is not a Quran verse.
-                if (ayah <= 0) continue
-                val start = item.optLong("start_time", -1L)
-                val end = item.optLong("end_time", -1L)
-                add(QuranTimingApiRow(ayah, start, end))
-            }
         }
     }
 

@@ -496,6 +496,40 @@ internal fun quranReaderSettingsCategoryPressScale(categoryKey: String): Float =
 internal fun quranAudioNavigationArrowRotation(isNext: Boolean): Float =
     if (isNext) 180f else 0f
 
+internal data class QuranInlineNavigationAvailability(
+    val navigatesByAyah: Boolean,
+    val hasPrevious: Boolean,
+    val hasNext: Boolean
+)
+
+internal fun quranInlineNavigationAvailability(
+    usesAyahClips: Boolean,
+    timedAyahCount: Int,
+    activeAyah: Int,
+    startingAyah: Int,
+    ayahCount: Int,
+    surahNumber: Int,
+    availableSurahs: Int
+): QuranInlineNavigationAvailability {
+    val timedFullSurah = !usesAyahClips && timedAyahCount > 0
+    val navigatesByAyah = usesAyahClips || timedFullSurah
+    val hasPrevious = when {
+        timedFullSurah -> activeAyah > 1
+        usesAyahClips -> activeAyah > startingAyah
+        else -> surahNumber > 1
+    }
+    val hasNext = if (navigatesByAyah) {
+        activeAyah < ayahCount
+    } else {
+        surahNumber < availableSurahs
+    }
+    return QuranInlineNavigationAvailability(
+        navigatesByAyah = navigatesByAyah,
+        hasPrevious = hasPrevious,
+        hasNext = hasNext
+    )
+}
+
 @Composable
 private fun QuranInlinePlaybackBar(
     language: AppLanguage,
@@ -525,6 +559,7 @@ private fun QuranInlinePlaybackBar(
     // recompose and made the visible progress bar feel behind the recitation.
     var playbackPositionMs by remember { mutableIntStateOf(0) }
     var playbackDurationMs by remember { mutableIntStateOf(0) }
+    val navigatesByAyah = usesAyahClips || timedAyahRanges.isNotEmpty()
     LaunchedEffect(usesAyahClips, isPrepared, isPaused, timedAyahRanges, activeAyah) {
         var lastTimedAyah = activeAyah
         while (true) {
@@ -548,11 +583,10 @@ private fun QuranInlinePlaybackBar(
                     onTimedAyahChanged(playingAyah)
                 }
             }
-            if (isPrepared && !isPaused) {
-                withFrameNanos { }
-            } else {
-                delay(100L)
-            }
+            // Poll the player clock directly. Do not suspend the progress
+            // tracker on Compose frame delivery; it must keep updating while
+            // the reader is animating or a page transition is settling.
+            delay(if (isPrepared && !isPaused) 60L else 120L)
         }
     }
     val progress = if (playbackDurationMs > 0) {
@@ -656,7 +690,7 @@ private fun QuranInlinePlaybackBar(
             )
             ReaderActionIcon(
                 icon = Icons.Outlined.ChevronRight,
-                description = if (usesAyahClips) {
+                description = if (navigatesByAyah) {
                     if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو"
                 } else {
                     if (language == AppLanguage.EN) "Previous surah" else if (language == AppLanguage.AR) "السورة السابقة" else "سوورەتی پێشوو"
@@ -687,7 +721,7 @@ private fun QuranInlinePlaybackBar(
             }
             ReaderActionIcon(
                 icon = Icons.Outlined.ChevronRight,
-                description = if (usesAyahClips) {
+                description = if (navigatesByAyah) {
                     if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر"
                 } else {
                     if (language == AppLanguage.EN) "Next surah" else if (language == AppLanguage.AR) "السورة التالية" else "سوورەتی دواتر"
@@ -2568,16 +2602,19 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val inlineSurah = surahs.firstOrNull { it.number == inlinePlaybackSurah }
                 val inlineReciter = readerReciters.firstOrNull { it.id == inlinePlaybackReciterId }
                 val sequenceNavigationReady = !AudioController.isPreparingNextSequenceTrack()
-                val hasPreviousTrack = if (inlinePlaybackUsesAyahClips) {
-                    activeAyah > inlinePlaybackStartAyah && sequenceNavigationReady
-                } else {
-                    inlinePlaybackDurationMs > 0 && inlinePlaybackSurah > 1
-                }
-                val hasNextTrack = if (inlinePlaybackUsesAyahClips) {
-                    activeAyah < (inlinePlaybackTrackAyahs.lastOrNull() ?: activeAyah) && sequenceNavigationReady
-                } else {
-                    inlinePlaybackDurationMs > 0 && inlinePlaybackSurah < (inlineReciter?.surahTotal ?: 114)
-                }
+                val navigation = quranInlineNavigationAvailability(
+                    usesAyahClips = inlinePlaybackUsesAyahClips,
+                    timedAyahCount = inlinePlaybackTimedAyahs.size,
+                    activeAyah = activeAyah,
+                    startingAyah = inlinePlaybackStartAyah,
+                    ayahCount = inlineSurah?.ayahCount ?: 0,
+                    surahNumber = inlinePlaybackSurah,
+                    availableSurahs = inlineReciter?.surahTotal ?: 114
+                )
+                val hasPreviousTrack = navigation.hasPrevious &&
+                    (!inlinePlaybackUsesAyahClips || sequenceNavigationReady)
+                val hasNextTrack = navigation.hasNext &&
+                    (!inlinePlaybackUsesAyahClips || sequenceNavigationReady)
                 QuranInlinePlaybackBar(
                     language = language,
                     foreground = foreground,
@@ -2620,20 +2657,46 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                         inlinePlaybackRepeatCurrent = AudioController.toggleRepeatCurrentTrack()
                     },
                     onPrevious = {
-                        if (inlinePlaybackUsesAyahClips) {
-                            AudioController.skipPreviousSequenceTrack()
-                        } else if (inlinePlaybackSurah > 1 && inlineReciter != null) {
-                            startInlineRecitation(inlinePlaybackSurah - 1, 1, reciterOverride = inlineReciter)
+                        if (inlineReciter != null) {
+                            when {
+                                inlinePlaybackUsesAyahClips && activeAyah > inlinePlaybackStartAyah ->
+                                    AudioController.skipPreviousSequenceTrack()
+                                navigation.navigatesByAyah && activeAyah > 1 ->
+                                    startInlineRecitation(
+                                        inlinePlaybackSurah,
+                                        activeAyah - 1,
+                                        reciterOverride = inlineReciter
+                                    )
+                                !navigation.navigatesByAyah && inlinePlaybackSurah > 1 ->
+                                    startInlineRecitation(
+                                        inlinePlaybackSurah - 1,
+                                        1,
+                                        reciterOverride = inlineReciter
+                                    )
+                            }
                         }
                     },
                     onTogglePause = {
                         AudioController.togglePause()?.let { inlinePlaybackPaused = it }
                     },
                     onNext = {
-                        if (inlinePlaybackUsesAyahClips) {
-                            AudioController.skipNextSequenceTrack()
-                        } else if (inlineReciter != null && inlinePlaybackSurah < inlineReciter.surahTotal) {
-                            startInlineRecitation(inlinePlaybackSurah + 1, 1, reciterOverride = inlineReciter)
+                        if (inlineReciter != null) {
+                            when {
+                                inlinePlaybackUsesAyahClips ->
+                                    AudioController.skipNextSequenceTrack()
+                                navigation.navigatesByAyah && activeAyah < (inlineSurah?.ayahCount ?: 0) ->
+                                    startInlineRecitation(
+                                        inlinePlaybackSurah,
+                                        activeAyah + 1,
+                                        reciterOverride = inlineReciter
+                                    )
+                                !navigation.navigatesByAyah && inlinePlaybackSurah < inlineReciter.surahTotal ->
+                                    startInlineRecitation(
+                                        inlinePlaybackSurah + 1,
+                                        1,
+                                        reciterOverride = inlineReciter
+                                    )
+                            }
                         }
                     },
                     onStop = {
