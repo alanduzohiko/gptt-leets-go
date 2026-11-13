@@ -10075,25 +10075,18 @@ internal object AudioController {
         if (!isCurrentPlayer(engine, generation)) return
         val failedIndex = engine.currentMediaItemIndex
             .takeIf { it in 0 until sequenceTrackCount }
-            ?: sequenceTrackIndex.coerceAtLeast(0)
+            ?: sequenceTrackIndex.takeIf { it in 0 until sequenceTrackCount }
+            ?: 0
         if (sequenceFailedIndices.add(failedIndex)) sequenceUnavailableCount += 1
-        val nextIndex = ((failedIndex + 1) until sequenceTrackCount)
-            .firstOrNull { it !in sequenceFailedIndices }
-        if (nextIndex == null) {
-            finishSequence(generation)
-            return
-        }
-        playbackPreparing = true
-        playerPrepared = false
-        sequencePendingTransition = true
-        runCatching {
-            engine.seekTo(nextIndex, 0L)
-            engine.prepare()
-            engine.play()
-        }.onFailure {
-            android.util.Log.w("MashxallQuranAudio", "Could not continue after an unavailable recitation segment", it)
-            finishSequence(generation)
-        }
+        // A Quran verse is not optional. Silently skipping a missing/corrupt
+        // ayah clip makes the Mushaf highlight jump over verses while the audio
+        // continues as if nothing happened. Stop and report a partial recitation
+        // instead of advancing to the next media item.
+        android.util.Log.w(
+            "MashxallQuranAudio",
+            "Stopping recitation at unavailable segment " + (failedIndex + 1) + "/" + sequenceTrackCount
+        )
+        finishSequence(generation)
     }
 
     private fun releasePlayerAndResetState(context: Context?) {
