@@ -518,13 +518,9 @@ internal fun quranInlineNavigationAvailability(
     val hasPrevious = when {
         timedFullSurah -> activeAyah > 1
         usesAyahClips -> activeAyah > startingAyah
-        else -> surahNumber > 1
+        else -> true // Untimed full-surah controls rewind inside the current track.
     }
-    val hasNext = if (navigatesByAyah) {
-        activeAyah < ayahCount
-    } else {
-        surahNumber < availableSurahs
-    }
+    val hasNext = if (navigatesByAyah) activeAyah < ayahCount else true
     return QuranInlineNavigationAvailability(
         navigatesByAyah = navigatesByAyah,
         hasPrevious = hasPrevious,
@@ -562,8 +558,10 @@ private fun QuranInlinePlaybackBar(
     var playbackPositionMs by remember { mutableIntStateOf(0) }
     var playbackDurationMs by remember { mutableIntStateOf(0) }
     val navigatesByAyah = usesAyahClips || timedAyahRanges.isNotEmpty()
-    LaunchedEffect(usesAyahClips, isPrepared, isPaused, timedAyahRanges, activeAyah) {
-        var lastTimedAyah = activeAyah
+    val latestActiveAyah = rememberUpdatedState(activeAyah)
+    val latestTimedAyahChanged = rememberUpdatedState(onTimedAyahChanged)
+    LaunchedEffect(usesAyahClips, isPrepared, isPaused, timedAyahRanges, reciter?.id, surahName) {
+        var lastTimedAyah = latestActiveAyah.value
         while (true) {
             // Media3's actual position drives both the progress bar and the verse
             // marker. MP3Quran's validated offsets are absolute milliseconds in
@@ -577,17 +575,14 @@ private fun QuranInlinePlaybackBar(
                 !usesAyahClips &&
                 timedAyahRanges.isNotEmpty()
             ) {
-                // Do not treat the pre-seek position (usually zero) as the
-                // active verse while the selected-ayah seek is still pending.
+                // Keep the selected verse stable until Media3 confirms its seek;
+                // the old zero position must not reset it to the start of the surah.
                 val playingAyah = quranAyahAtPositionMs(timedAyahRanges, position.toLong())
                 if (playingAyah != null && playingAyah != lastTimedAyah) {
                     lastTimedAyah = playingAyah
-                    onTimedAyahChanged(playingAyah)
+                    latestTimedAyahChanged.value(playingAyah)
                 }
             }
-            // Poll the player clock directly. Do not suspend the progress
-            // tracker on Compose frame delivery; it must keep updating while
-            // the reader is animating or a page transition is settling.
             delay(if (isPrepared && !isPaused) 60L else 120L)
         }
     }
@@ -695,7 +690,7 @@ private fun QuranInlinePlaybackBar(
                 description = if (navigatesByAyah) {
                     if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو"
                 } else {
-                    if (language == AppLanguage.EN) "Previous surah" else if (language == AppLanguage.AR) "السورة السابقة" else "سوورەتی پێشوو"
+                    if (language == AppLanguage.EN) "Back 10 seconds" else if (language == AppLanguage.AR) "إرجاع 10 ثوانٍ" else "١٠ چرکە دواوە"
                 },
                 enabled = hasPrevious && isPrepared,
                 rotationDegrees = quranAudioNavigationArrowRotation(isNext = false),
@@ -726,7 +721,7 @@ private fun QuranInlinePlaybackBar(
                 description = if (navigatesByAyah) {
                     if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر"
                 } else {
-                    if (language == AppLanguage.EN) "Next surah" else if (language == AppLanguage.AR) "السورة التالية" else "سوورەتی دواتر"
+                    if (language == AppLanguage.EN) "Forward 10 seconds" else if (language == AppLanguage.AR) "تقديم 10 ثوانٍ" else "١٠ چرکە پێشەوە"
                 },
                 enabled = hasNext && isPrepared,
                 rotationDegrees = quranAudioNavigationArrowRotation(isNext = true),
@@ -2650,10 +2645,16 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     surahNumber = inlinePlaybackSurah,
                     availableSurahs = inlineReciter?.surahTotal ?: 114
                 )
-                val hasPreviousTrack = navigation.hasPrevious &&
-                    (!inlinePlaybackUsesAyahClips || sequenceNavigationReady)
-                val hasNextTrack = navigation.hasNext &&
-                    (!inlinePlaybackUsesAyahClips || sequenceNavigationReady)
+                val hasPreviousTrack = navigation.hasPrevious && when {
+                    inlinePlaybackUsesAyahClips -> sequenceNavigationReady
+                    navigation.navigatesByAyah -> true
+                    else -> AudioController.canSeekBy(-10_000L)
+                }
+                val hasNextTrack = navigation.hasNext && when {
+                    inlinePlaybackUsesAyahClips -> sequenceNavigationReady
+                    navigation.navigatesByAyah -> true
+                    else -> AudioController.canSeekBy(10_000L)
+                }
                 QuranInlinePlaybackBar(
                     language = language,
                     foreground = foreground,
@@ -2698,12 +2699,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             reciterOverride = inlineReciter
                                         )
                                     }
-                                !navigation.navigatesByAyah && inlinePlaybackSurah > 1 ->
-                                    startInlineRecitation(
-                                        inlinePlaybackSurah - 1,
-                                        1,
-                                        reciterOverride = inlineReciter
-                                    )
+                                !navigation.navigatesByAyah ->
+                                    AudioController.seekBy(-10_000L)
                             }
                         }
                     },
@@ -2723,12 +2720,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             reciterOverride = inlineReciter
                                         )
                                     }
-                                !navigation.navigatesByAyah && inlinePlaybackSurah < inlineReciter.surahTotal ->
-                                    startInlineRecitation(
-                                        inlinePlaybackSurah + 1,
-                                        1,
-                                        reciterOverride = inlineReciter
-                                    )
+                                !navigation.navigatesByAyah ->
+                                    AudioController.seekBy(10_000L)
                             }
                         }
                     },
@@ -9664,6 +9657,7 @@ internal object AudioController {
     private var initialSequenceSeekPositionProvider: ((Long) -> Long)? = null
     private var sequenceDurationFallbackMs: Long? = null
     private var initialSequenceSeekPending: Boolean = false
+    private var pendingSequenceSeekPositionMs: Long? = null
     private var initialSequenceSeekFailure: Boolean = false
     private var initialSequenceSeekFallbackJob: Job? = null
     private var playbackCallback: ((Boolean) -> Unit)? = null
@@ -9677,7 +9671,25 @@ internal object AudioController {
     fun isActive(): Boolean = playbackActive
     fun isPreparing(): Boolean = playbackPreparing
     fun isPaused(): Boolean = playbackPaused
-    fun isInitialSequenceSeekPending(): Boolean = initialSequenceSeekPending
+
+    /** Keep timing synchronization blocked until Media3 confirms the destination. */
+    fun isInitialSequenceSeekPending(): Boolean {
+        confirmPendingSequenceSeekFromPosition()
+        return initialSequenceSeekPending || pendingSequenceSeekPositionMs != null
+    }
+
+    private fun clearPendingSequenceSeek() {
+        pendingSequenceSeekPositionMs = null
+        initialSequenceSeekPending = false
+        initialSequenceSeekFallbackJob?.cancel()
+        initialSequenceSeekFallbackJob = null
+    }
+
+    private fun confirmPendingSequenceSeekFromPosition() {
+        val target = pendingSequenceSeekPositionMs ?: return
+        val actual = runCatching { player?.currentPosition }.getOrNull() ?: return
+        if (quranSeekPositionReached(target, actual)) clearPendingSequenceSeek()
+    }
 
     /**
      * Return only the last track confirmed by STATE_READY. Media3 can publish
@@ -9695,11 +9707,8 @@ internal object AudioController {
         return try {
             val position = active.currentPosition.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             val rawDuration = active.duration
-            val duration = if (rawDuration == C.TIME_UNSET || rawDuration <= 0L) {
-                sequenceDurationFallbackMs ?: 0L
-            } else {
-                rawDuration
-            }
+            val verifiedDuration = sequenceDurationFallbackMs.takeIf { isSequencePlayback }
+            val duration = quranPlaybackDurationMs(rawDuration, verifiedDuration)
             position to duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         } catch (_: Exception) {
             0 to 0
@@ -9709,15 +9718,50 @@ internal object AudioController {
     fun seekTo(positionMs: Int): Boolean {
         val active = player ?: return false
         if (!playerPrepared) return false
+        val requested = positionMs.coerceAtLeast(0).toLong()
+        val verifiedDuration = sequenceDurationFallbackMs.takeIf { isSequencePlayback }
+        val duration = quranPlaybackDurationMs(active.duration, verifiedDuration)
+        val target = if (duration > 0L) requested.coerceAtMost(duration) else requested
         return try {
-            val duration = active.duration
-            val requested = positionMs.coerceAtLeast(0).toLong()
-            val target = if (duration != C.TIME_UNSET && duration > 0L) requested.coerceAtMost(duration) else requested
+            if (isSequencePlayback) {
+                pendingSequenceSeekPositionMs = target
+                initialSequenceSeekPending = true
+                initialSequenceSeekFallbackJob?.cancel()
+                initialSequenceSeekFallbackJob = null
+            }
             active.seekTo(target)
             true
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (isSequencePlayback) clearPendingSequenceSeek()
+            android.util.Log.w("MashxallQuranAudio", "Could not seek within the active recitation", error)
             false
         }
+    }
+
+    fun canSeekBy(deltaMs: Long): Boolean {
+        val active = player ?: return false
+        if (!playerPrepared || deltaMs == 0L) return false
+        val current = active.currentPosition.coerceAtLeast(0L)
+        val duration = quranPlaybackDurationMs(
+            active.duration,
+            sequenceDurationFallbackMs.takeIf { isSequencePlayback }
+        )
+        val requested = (current + deltaMs).coerceAtLeast(0L)
+        val target = if (duration > 0L) requested.coerceAtMost(duration) else requested
+        return target != current
+    }
+
+    fun seekBy(deltaMs: Long): Boolean {
+        val active = player ?: return false
+        if (!canSeekBy(deltaMs)) return false
+        val current = active.currentPosition.coerceAtLeast(0L)
+        val duration = quranPlaybackDurationMs(
+            active.duration,
+            sequenceDurationFallbackMs.takeIf { isSequencePlayback }
+        )
+        val requested = (current + deltaMs).coerceAtLeast(0L)
+        val target = if (duration > 0L) requested.coerceAtMost(duration) else requested
+        return seekTo(target.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
     }
 
     /** ExoPlayer buffers the next playlist item itself; no hand-built second player is needed. */
@@ -9870,6 +9914,18 @@ internal object AudioController {
                 }
             }
 
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                if (!isCurrentPlayer(engine, generation)) return
+                val target = pendingSequenceSeekPositionMs ?: return
+                if (quranSeekPositionReached(target, newPosition.positionMs)) {
+                    clearPendingSequenceSeek()
+                }
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!isCurrentPlayer(engine, generation)) return
                 if (isPlaying) {
@@ -9916,18 +9972,15 @@ internal object AudioController {
     private fun applyInitialSequenceSeekIfReady(engine: ExoPlayer, generation: Int): Boolean {
         if (!isCurrentPlayer(engine, generation)) return false
         val seekProvider = initialSequenceSeekPositionProvider ?: return true
-        val rawDuration = engine.duration
-        val seekDuration = if (rawDuration == C.TIME_UNSET || rawDuration <= 0L) {
-            sequenceDurationFallbackMs ?: return false
-        } else {
-            rawDuration
-        }
+        val seekDuration = quranPlaybackDurationMs(engine.duration, sequenceDurationFallbackMs)
         if (seekDuration <= 0L) return false
 
         val requestedPosition = runCatching { seekProvider.invoke(seekDuration) }
             .getOrDefault(0L)
             .coerceIn(0L, (seekDuration - 1L).coerceAtLeast(0L))
         if (requestedPosition > 0L) {
+            pendingSequenceSeekPositionMs = requestedPosition
+            initialSequenceSeekPending = true
             val seekSucceeded = runCatching {
                 engine.seekTo(requestedPosition)
                 true
@@ -9935,10 +9988,14 @@ internal object AudioController {
                 android.util.Log.w("MashxallQuranAudio", "Could not seek to the selected ayah offset", it)
                 false
             }
-            if (!seekSucceeded) return false
+            if (!seekSucceeded) {
+                pendingSequenceSeekPositionMs = null
+                return false
+            }
+        } else {
+            clearPendingSequenceSeek()
         }
         initialSequenceSeekPositionProvider = null
-        initialSequenceSeekPending = false
         initialSequenceSeekFallbackJob?.cancel()
         initialSequenceSeekFallbackJob = null
         engine.playWhenReady = true
@@ -10014,6 +10071,7 @@ internal object AudioController {
         sequenceTrackCallback = null
         initialSequenceSeekPositionProvider = null
         sequenceDurationFallbackMs = null
+        pendingSequenceSeekPositionMs = null
         initialSequenceSeekPending = false
         initialSequenceSeekFailure = false
         initialSequenceSeekFallbackJob?.cancel()
@@ -10097,6 +10155,7 @@ internal object AudioController {
         sequenceTrackCallback = onTrackStarted
         initialSequenceSeekPositionProvider = initialSeekPositionProvider
         sequenceDurationFallbackMs = durationFallbackMs?.takeIf { it > 0L }
+        pendingSequenceSeekPositionMs = null
         initialSequenceSeekPending = initialSeekPositionProvider != null
         initialSequenceSeekFailure = false
         playbackCallback = callback

@@ -68,6 +68,22 @@ class QuranPlaybackTimingTest {
     }
 
     @Test
+    fun untimedFullSurahControlsStayInsideTheCurrentTrack() {
+        val navigation = quranInlineNavigationAvailability(
+            usesAyahClips = false,
+            timedAyahCount = 0,
+            activeAyah = 1,
+            startingAyah = 1,
+            ayahCount = 286,
+            surahNumber = 2,
+            availableSurahs = 114
+        )
+        assertFalse(navigation.navigatesByAyah)
+        assertTrue(navigation.hasPrevious)
+        assertTrue(navigation.hasNext)
+    }
+
+    @Test
     fun ayahClipNavigationRemainsInsideItsLoadedSequence() {
         val first = quranInlineNavigationAvailability(
             usesAyahClips = true,

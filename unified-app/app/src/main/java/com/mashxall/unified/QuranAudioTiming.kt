@@ -99,12 +99,13 @@ internal fun resolveQuranTimingRead(
     readId: Int?,
     audioFolder: String
 ): QuranTimingRead? {
-    val normalizedAudioFolder = normalizeQuranTimingFolder(audioFolder)
     if (readId != null) {
-        return reads.firstOrNull {
-            it.id == readId && normalizeQuranTimingFolder(it.folderUrl) == normalizedAudioFolder
-        }
+        // The second source_id component is MP3Quran's unique moshaf/read ID.
+        // Use its official folder for both audio and timestamps; server mirrors
+        // can legitimately differ from the URL stored in the bundled catalogue.
+        return reads.firstOrNull { it.id == readId }
     }
+    val normalizedAudioFolder = normalizeQuranTimingFolder(audioFolder)
     val folderMatches = reads.filter {
         normalizeQuranTimingFolder(it.folderUrl) == normalizedAudioFolder
     }
@@ -192,6 +193,24 @@ internal fun quranAyahAtPositionMs(
         }
     }
     return ayahs[answer].ayah
+}
+
+/** Prefer provider-verified duration over Media3's bitrate-derived estimate. */
+internal fun quranPlaybackDurationMs(
+    playerDurationMs: Long,
+    verifiedSurahDurationMs: Long?
+): Long = verifiedSurahDurationMs?.takeIf { it > 0L }
+    ?: playerDurationMs.takeIf { it > 0L }
+    ?: 0L
+
+/** True only when Media3 reports a position close to the requested seek destination. */
+internal fun quranSeekPositionReached(
+    targetMs: Long,
+    actualMs: Long,
+    toleranceMs: Long = 150L
+): Boolean {
+    if (targetMs < 0L || actualMs < 0L) return false
+    return kotlin.math.abs(targetMs - actualMs) <= toleranceMs.coerceAtLeast(0L)
 }
 
 /**

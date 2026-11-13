@@ -90,6 +90,34 @@ class QuranAudioTimingTest {
     }
 
     @Test
+    fun selectedReadIdWinsWhenItsOfficialServerDiffersFromTheCatalogueMirror() {
+        val reads = listOf(
+            QuranTimingRead(53, "https://server7.mp3quran.net/basit/"),
+            QuranTimingRead(51, "https://server7.mp3quran.net/basit/Almusshaf-Al-Mojawwad/")
+        )
+        assertEquals(
+            51,
+            resolveQuranTimingRead(reads, 51, "https://another-mirror.example/basit/")?.id
+        )
+    }
+
+    @Test
+    fun verifiedTimingDurationOverridesAnApproximatePlayerDuration() {
+        assertEquals(18_000L, quranPlaybackDurationMs(19_200L, 18_000L))
+        assertEquals(19_200L, quranPlaybackDurationMs(19_200L, null))
+        assertEquals(18_000L, quranPlaybackDurationMs(-1L, 18_000L))
+        assertEquals(0L, quranPlaybackDurationMs(-1L, null))
+    }
+
+    @Test
+    fun aSeekIsNotConfirmedUntilThePlayerReachesItsRequestedPosition() {
+        assertFalse(quranSeekPositionReached(42_000L, 0L))
+        assertFalse(quranSeekPositionReached(42_000L, 40_000L))
+        assertTrue(quranSeekPositionReached(42_000L, 42_100L))
+        assertFalse(quranSeekPositionReached(42_000L, -1L))
+    }
+
+    @Test
     fun resolvesAReadOnlyWhenItsIdAndFolderBelongToTheSelectedMoshaf() {
         val reads = listOf(
             QuranTimingRead(53, "https://server7.mp3quran.net/basit/"),
@@ -99,7 +127,10 @@ class QuranAudioTimingTest {
             53,
             resolveQuranTimingRead(reads, 53, "https://server7.mp3quran.net/basit/")?.id
         )
-        assertNull(resolveQuranTimingRead(reads, 51, "https://server7.mp3quran.net/basit/"))
+        assertEquals(
+            51,
+            resolveQuranTimingRead(reads, 51, "https://server7.mp3quran.net/basit/")?.id
+        )
         assertEquals(
             53,
             resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/")?.id
