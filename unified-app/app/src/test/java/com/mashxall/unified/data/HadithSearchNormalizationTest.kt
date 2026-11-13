@@ -112,4 +112,59 @@ class HadithSearchNormalizationTest {
             )
         )
     }
+
+    @Test
+    fun incompleteSingleWordFindsTheFullHadithWord() {
+        assertEquals(
+            1,
+            hadithSearchMatchScore(
+                "إنم",
+                listOf("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ")
+            )
+        )
+    }
+
+    @Test
+    fun incompleteLastWordFindsTheHadithFromAPartialPhrase() {
+        assertEquals(
+            2,
+            hadithSearchMatchScore(
+                "إنما الأعم",
+                listOf("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ")
+            )
+        )
+    }
+
+    @Test
+    fun incompleteFragmentsInSeveralWordsStillFindTheSameHadith() {
+        assertEquals(
+            2,
+            hadithSearchMatchScore(
+                "إنم الأعم",
+                listOf("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ")
+            )
+        )
+    }
+
+    @Test
+    fun partialEndingOfHadithWordMatchesWithoutCompletingIt() {
+        assertEquals(
+            1,
+            hadithSearchMatchScore(
+                "بالني",
+                listOf("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ")
+            )
+        )
+    }
+
+    @Test
+    fun broadSqlCandidateGapCannotOverrideStrictFinalRelevanceCheck() {
+        assertEquals(
+            null,
+            hadithSearchMatchScore(
+                "الصدقة الصلاة",
+                listOf("الصدقة، ثم طال المجلس وتكلم الناس، وفي آخر الليل أقيمت الصلاة")
+            )
+        )
+    }
 }
