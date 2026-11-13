@@ -107,6 +107,12 @@ data class HadithSearchPage(
     val totalCount: Int,
     val items: List<HadithItem>
 )
+
+private data class CachedHadithSearchRow(
+    val item: HadithItem,
+    val normalizedFields: List<String>
+)
+
 data class AzkarItem(
     val id: Int, val titleCkb: String, val titleAr: String, val titleEn: String,
     val arabic: String, val ckb: String, val english: String, val count: Int, val referenceCkb: String,
@@ -627,28 +633,50 @@ internal fun hadithSearchGlobPatterns(query: String): List<String> =
  * Zero means the normalized query is a continuous phrase. Larger values are
  * the smallest word-window containing every search term. Null means unrelated.
  */
+private val HADITH_SEARCH_HTML_TAGS = Regex("""<[^>]*>""")
+private val HADITH_SEARCH_NBSP_ENTITIES = Regex("""&(?:nbsp|#160|#xA0);""", RegexOption.IGNORE_CASE)
+private val HADITH_SEARCH_HTML_ENTITIES = Regex("""&(?:amp|quot|apos|lt|gt);""", RegexOption.IGNORE_CASE)
+
+/** Normalize one source field once when the in-memory Hadith search index is built. */
+internal fun normalizeHadithSearchField(rawField: String): String {
+    val searchText = stripHadithLatinSourceMarkers(rawField)
+        .replace(HADITH_SEARCH_HTML_TAGS, " ")
+        .replace(HADITH_SEARCH_NBSP_ENTITIES, " ")
+        .replace(HADITH_SEARCH_HTML_ENTITIES, " ")
+        .trim()
+    return normalizeArabicSearchText(searchText)
+}
+
+/** Compatibility wrapper used by tests and one-off callers with raw source text. */
 internal fun hadithSearchMatchScore(query: String, textFields: List<String>): Int? {
     val tokens = normalizeArabicSearchText(query)
         .split(' ')
         .filter(String::isNotBlank)
         .distinct()
     if (tokens.isEmpty()) return null
+    return hadithSearchMatchScoreInNormalizedFields(
+        tokens,
+        textFields.map(::normalizeHadithSearchField)
+    )
+}
 
+/**
+ * Match a normalized query against already-normalized language fields. This is the
+ * hot path for interactive search: neither Arabic normalization nor HTML cleanup
+ * is repeated for every keystroke.
+ */
+internal fun hadithSearchMatchScoreInNormalizedFields(
+    tokens: List<String>,
+    normalizedFields: List<String>
+): Int? {
+    if (tokens.isEmpty()) return null
     val phrase = tokens.joinToString(" ")
     var bestWindow = Int.MAX_VALUE
     // Permit one or two intervening words for a partial phrase, but do not
     // turn scattered keywords across a long narration into a false positive.
     val maximumWindow = tokens.size + minOf(2, tokens.size.coerceAtLeast(1))
 
-    for (rawField in textFields) {
-        // Keep ranking pure JVM code: display rendering may use Android Html,
-        // but search normalization must also run in ordinary local unit tests.
-        val searchText = stripHadithLatinSourceMarkers(rawField)
-            .replace(Regex("""<[^>]*>"""), " ")
-            .replace(Regex("""&(?:nbsp|#160|#xA0);""", RegexOption.IGNORE_CASE), " ")
-            .replace(Regex("""&(?:amp|quot|apos|lt|gt);""", RegexOption.IGNORE_CASE), " ")
-            .trim()
-        val normalized = normalizeArabicSearchText(searchText)
+    for (normalized in normalizedFields) {
         if (normalized.isBlank()) continue
 
         // Exact phrase is the strongest possible result, independent of tashkeel.
@@ -889,6 +917,8 @@ object ContentRepository {
     @Volatile private var cachedMushafIndex: Map<Int, MushafSvgMeta>? = null
     private data class AssetSignature(val sizeBytes: Long, val sha256: String)
     @Volatile private var cachedAssetSignatures: Map<String, AssetSignature>? = null
+    @Volatile private var cachedHadithSearchRows: List<CachedHadithSearchRow>? = null
+    private val hadithSearchIndexLock = Any()
 
     val quranTranslations = listOf(
         QuranTranslation("puxta", "پوختە", "كردي (پۇختە)", "Sorani — Puxta"),
@@ -1899,6 +1929,85 @@ object ContentRepository {
         }
     }
 
+    /**
+     * Read the Hadith rows once and cache both display records and normalized
+     * search text. The immutable bundled database is copied/verified by openDb;
+     * this cache lives only for the current process and never writes to source data.
+     */
+    private fun hadithSearchRows(context: Context): List<CachedHadithSearchRow> {
+        cachedHadithSearchRows?.let { return it }
+        synchronized(hadithSearchIndexLock) {
+            cachedHadithSearchRows?.let { return it }
+            val rows = queryDb(context, HADITH_DB, emptyList()) { db ->
+                db.rawQuery(
+                    """
+                    SELECT h.id,h.sort,h.sort_in_book,h.text_ar,h.text,h.text_en,h.book_id,
+                           COALESCE(b.name,'') AS book_name,
+                           COALESCE(b.name_ar,'') AS book_name_ar,
+                           COALESCE(b.name_en,'') AS book_name_en,
+                           COALESCE(k.title,'') AS kitab_name,
+                           COALESCE(k.title_ar,'') AS kitab_name_ar,
+                           COALESCE(k.title_en,'') AS kitab_name_en,
+                           COALESCE(ch.title,'') AS chapter_name,
+                           COALESCE(ch.title_ar,'') AS chapter_name_ar,
+                           COALESCE(ch.title_en,'') AS chapter_name_en,
+                           h.note,h.footnote
+                    FROM hadiths h
+                    LEFT JOIN book b ON b.id=h.book_id
+                    LEFT JOIN kitab k ON k.id=h.kitab_id
+                    LEFT JOIN chapters ch ON ch.id=h.chapter_id
+                    ORDER BY h.book_id,h.sort,h.id
+                    """.trimIndent(),
+                    null
+                ).use { c ->
+                    buildList {
+                        while (c.moveToNext()) {
+                            val item = HadithItem(
+                                id = c.int("id"),
+                                sort = c.int("sort"),
+                                sortInBook = c.string("sort_in_book"),
+                                arabic = c.string("text_ar"),
+                                sorani = c.string("text"),
+                                english = c.string("text_en"),
+                                bookId = c.int("book_id"),
+                                bookName = c.string("book_name"),
+                                bookNameAr = c.string("book_name_ar"),
+                                bookNameEn = c.string("book_name_en"),
+                                kitabName = c.string("kitab_name"),
+                                kitabNameAr = c.string("kitab_name_ar"),
+                                kitabNameEn = c.string("kitab_name_en"),
+                                chapterName = c.string("chapter_name"),
+                                chapterNameAr = c.string("chapter_name_ar"),
+                                chapterNameEn = c.string("chapter_name_en"),
+                                note = c.string("note"),
+                                footnote = c.string("footnote")
+                            )
+                            add(
+                                CachedHadithSearchRow(
+                                    item = item,
+                                    normalizedFields = listOf(
+                                        normalizeHadithSearchField(item.arabic),
+                                        normalizeHadithSearchField(item.sorani),
+                                        normalizeHadithSearchField(item.english)
+                                    )
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+            if (rows.isNotEmpty()) cachedHadithSearchRows = rows
+            return rows
+        }
+    }
+
+    /** Warm the one-time index while the Hadith screen is being opened. */
+    suspend fun prepareHadithSearchIndex(context: Context) {
+        withContext(Dispatchers.IO) {
+            hadithSearchRows(context)
+        }
+    }
+
     private fun hadithSearchFilter(query: String, bookId: Int? = null, hadithIds: Set<Int>? = null): String {
         // Search the actual Hadith wording only. Matching book names, chapter titles,
         // notes or numeric IDs used to introduce unrelated narrations into the results.
@@ -1962,70 +2071,33 @@ object ContentRepository {
             return@withContext HadithSearchPage(total, rows)
         }
 
-        queryDb(context, HADITH_DB, HadithSearchPage(0, emptyList())) { db ->
-            val filter = hadithSearchFilter(query, bookId, hadithIds)
-            val args = hadithSearchArgs(query, bookId).takeIf { it.isNotEmpty() }
-            val sql = """
-                SELECT h.id,h.sort,h.sort_in_book,h.text_ar,h.text,h.text_en,h.book_id,h.note,h.footnote,
-                       COALESCE(b.name,'') AS book_name,
-                       COALESCE(b.name_ar,'') AS book_name_ar,
-                       COALESCE(b.name_en,'') AS book_name_en,
-                       COALESCE(k.title,'') AS kitab_name,
-                       COALESCE(k.title_ar,'') AS kitab_name_ar,
-                       COALESCE(k.title_en,'') AS kitab_name_en,
-                       COALESCE(ch.title,'') AS chapter_name,
-                       COALESCE(ch.title_ar,'') AS chapter_name_ar,
-                       COALESCE(ch.title_en,'') AS chapter_name_en
-                FROM hadiths h
-                LEFT JOIN book b ON b.id=h.book_id
-                LEFT JOIN kitab k ON k.id=h.kitab_id
-                LEFT JOIN chapters ch ON ch.id=h.chapter_id
-                $filter
-                ORDER BY h.book_id,h.sort,h.id
-            """.trimIndent()
+        val tokens = normalizeArabicSearchText(query)
+            .split(' ')
+            .filter(String::isNotBlank)
+            .distinct()
+        if (tokens.isEmpty()) return@withContext HadithSearchPage(0, emptyList())
 
-            data class RankedRow(val score: Int, val sourceOrder: Int, val item: HadithItem)
-            val ranked = db.rawQuery(sql, args).use { c ->
-                buildList {
-                    var sourceOrder = 0
-                    while (c.moveToNext()) {
-                        val item = HadithItem(
-                            id = c.int("id"),
-                            sort = c.int("sort"),
-                            sortInBook = c.string("sort_in_book"),
-                            arabic = c.string("text_ar"),
-                            sorani = c.string("text"),
-                            english = c.string("text_en"),
-                            bookId = c.int("book_id"),
-                            bookName = c.string("book_name"),
-                            bookNameAr = c.string("book_name_ar"),
-                            bookNameEn = c.string("book_name_en"),
-                            kitabName = c.string("kitab_name"),
-                            kitabNameAr = c.string("kitab_name_ar"),
-                            kitabNameEn = c.string("kitab_name_en"),
-                            chapterName = c.string("chapter_name"),
-                            chapterNameAr = c.string("chapter_name_ar"),
-                            chapterNameEn = c.string("chapter_name_en"),
-                            note = c.string("note"),
-                            footnote = c.string("footnote")
-                        )
-                        val score = hadithSearchMatchScore(
-                            query,
-                            listOf(item.arabic, item.sorani, item.english)
-                        )
-                        if (score != null) add(RankedRow(score, sourceOrder, item))
-                        sourceOrder++
-                    }
-                }
+        val index = hadithSearchRows(context)
+        if (index.isEmpty()) return@withContext HadithSearchPage(0, emptyList())
+
+        data class RankedRow(val score: Int, val sourceOrder: Int, val item: HadithItem)
+        val ranked = buildList {
+            index.forEachIndexed { sourceOrder, row ->
+                val item = row.item
+                if (bookId != null && item.bookId != bookId) return@forEachIndexed
+                if (hadithIds != null && item.id !in hadithIds) return@forEachIndexed
+
+                val score = hadithSearchMatchScoreInNormalizedFields(tokens, row.normalizedFields)
+                if (score != null) add(RankedRow(score, sourceOrder, item))
             }
-            val ordered = ranked.sortedWith(
-                compareBy<RankedRow> { it.score }.thenBy { it.sourceOrder }
-            )
-            HadithSearchPage(
-                totalCount = ordered.size,
-                items = ordered.drop(safeOffset).take(safeLimit).map { it.item }
-            )
         }
+        val ordered = ranked.sortedWith(
+            compareBy<RankedRow> { it.score }.thenBy { it.sourceOrder }
+        )
+        HadithSearchPage(
+            totalCount = ordered.size,
+            items = ordered.drop(safeOffset).take(safeLimit).map { it.item }
+        )
     }
 
     suspend fun loadHadithCount(
