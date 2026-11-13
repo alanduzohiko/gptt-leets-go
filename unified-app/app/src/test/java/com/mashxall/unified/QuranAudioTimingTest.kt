@@ -100,7 +100,12 @@ class QuranAudioTimingTest {
             resolveQuranTimingRead(reads, 53, "https://server7.mp3quran.net/basit/")?.id
         )
         assertNull(resolveQuranTimingRead(reads, 51, "https://server7.mp3quran.net/basit/"))
-        assertNull(resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/"))
+        assertEquals(
+            53,
+            resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/")?.id
+        )
+        val ambiguousFolderReads = reads + QuranTimingRead(54, "https://server7.mp3quran.net/basit/")
+        assertNull(resolveQuranTimingRead(ambiguousFolderReads, null, "https://server7.mp3quran.net/basit/"))
         assertEquals(
             51,
             resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/Almusshaf-Al-Mojawwad/")?.id
