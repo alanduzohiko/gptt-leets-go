@@ -44,6 +44,29 @@ class AudioPlaybackModeTest {
     }
 
     @Test
+    fun unifiedQuranPickerShowsBothFullSurahAndVerseByVerseRecitersTogether() {
+        val full = com.mashxall.unified.data.Reciter(
+            80, "قارئ السورة", "Full Surah Reader", 1, "https://example.invalid/full/", 1
+        )
+        val verse = com.mashxall.unified.data.Reciter(
+            81, "قارئ الآيات", "Ayah Reader", 0, "https://example.invalid/verse/", 2
+        )
+        assertEquals(
+            listOf(full, verse),
+            filterRecitersForUnifiedPicker(listOf(full, verse), "", 2)
+        )
+        assertEquals(listOf(verse), filterRecitersForUnifiedPicker(listOf(full, verse), "Ayah", 2))
+        assertEquals(emptyList<com.mashxall.unified.data.Reciter>(), filterRecitersForUnifiedPicker(listOf(full, verse), "", 3))
+    }
+
+    @Test
+    fun onlyVerseByVerseReadersShowPreviousAndNextAyahButtons() {
+        assertEquals(true, quranReciterShowsAyahNavigation(0))
+        assertEquals(false, quranReciterShowsAyahNavigation(1))
+        assertEquals(false, quranReciterShowsAyahNavigation(2))
+    }
+
+    @Test
     fun fullSurahAlwaysStartsAtTheFirstAyah() {
         assertEquals(1, resolveReciterStartAyah("full", 17, 286))
         assertEquals(1, resolveReciterStartAyah("full", 1, 7))
