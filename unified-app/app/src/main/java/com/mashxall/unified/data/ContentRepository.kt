@@ -601,6 +601,42 @@ private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.R
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
 }
 
+/** Search every displayed field of an Adhkar item with Arabic/Sorani-friendly normalization. */
+internal fun normalizeAzkarSearchText(value: String): String = buildString {
+    value.lowercase(Locale.ROOT).forEach { original ->
+        if (original in '\u064B'..'\u065F' || original == '\u0670' || original == '\u0640') {
+            return@forEach
+        }
+        val ch = when (original) {
+            'أ', 'إ', 'آ', 'ٱ' -> 'ا'
+            'ى', 'ئ', 'ی' -> 'ي'
+            'ؤ' -> 'و'
+            'ک' -> 'ك'
+            else -> original
+        }
+        if (ch.isLetterOrDigit()) {
+            append(ch)
+        } else if (isNotEmpty() && last() != ' ') {
+            append(' ')
+        }
+    }
+}.trim().replace(Regex("\\s+"), " ")
+
+internal fun azkarSearchMatches(query: String, item: AzkarItem): Boolean {
+    val normalizedQuery = normalizeAzkarSearchText(query)
+    if (normalizedQuery.isBlank()) return true
+    val searchableText = normalizeAzkarSearchText(
+        listOf(
+            item.titleCkb, item.titleAr, item.titleEn,
+            item.arabic, item.ckb, item.english, item.referenceCkb,
+            item.categoryCkb, item.categoryArabic, item.categoryEnglish
+        ).joinToString(" ")
+    )
+    val tokens = normalizedQuery.split(' ').filter(String::isNotBlank)
+    return tokens.all(searchableText::contains) ||
+        searchableText.replace(" ", "").contains(normalizedQuery.replace(" ", ""))
+}
+
 internal fun quranSearchMatches(
     query: String,
     arabic: String,
@@ -2024,7 +2060,10 @@ object ContentRepository {
                    OR cat.ckb LIKE ? OR cat.ar LIKE ? OR cat.en LIKE ?
                 ORDER BY cat._id,ch._id,it._id
             """.trimIndent()
-            val term = if (query.isBlank()) "%" else "%${query.trim()}%"
+            // Search is applied after translations from both source databases are merged.
+            // Loading the full source rows here prevents translated Sorani/English text
+            // from being missed just because the original database lacks that translation.
+            val term = "%"
             db.rawQuery(sql, arrayOf(term, term, term, term, term, term, term, term, term)).use { c ->
                 buildList {
                     while (c.moveToNext()) add(
@@ -2064,7 +2103,7 @@ object ContentRepository {
                 referenceCkb = extra.reference.ifBlank { item.referenceCkb }
             )
         }
-        val salawatiItems = loadSalawatiAzkarItems(context, query)
+        val salawatiItems = loadSalawatiAzkarItems(context, "")
         // The same Arabic remembrance can legitimately appear in multiple chapters
         // (for example, a morning and an evening section). De-duplicate only the
         // same Arabic text in the same normalized category and chapter, not by text
@@ -2079,7 +2118,8 @@ object ContentRepository {
             val key = identity(item)
             key == "||" || seenEntries.add(key)
         }
-        (enrichedNoor + uniqueSalawati).distinctBy { it.id }
+        val combined = (enrichedNoor + uniqueSalawati).distinctBy { it.id }
+        if (query.isBlank()) combined else combined.filter { azkarSearchMatches(query, it) }
     }
 
     suspend fun loadTasbihPresets(context: Context): List<TasbihPreset> = withContext(Dispatchers.IO) {
