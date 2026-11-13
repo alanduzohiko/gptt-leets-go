@@ -6178,10 +6178,11 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         } else {
             val bookFilter = selectedCollectionId.takeIf { it > 0 }
             val idFilter = if (savedOnly) favoriteHadithIds else null
-            totalMatches = ContentRepository.loadHadithCount(context, appliedQuery, bookFilter, idFilter)
-            hadithItems = ContentRepository.loadHadiths(
+            val searchPage = ContentRepository.searchHadithPage(
                 context, appliedQuery, offset = 0, limit = 100, bookId = bookFilter, hadithIds = idFilter
             )
+            totalMatches = searchPage.totalCount
+            hadithItems = searchPage.items
             articles = emptyList()
             offset = hadithItems.size
             hasMore = hadithItems.size == 100 && offset < totalMatches
@@ -6502,14 +6503,14 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                         if (!loadingMore) scope.launch {
                             loadingMore = true
                             try {
-                                val nextPage = ContentRepository.loadHadiths(
+                                val nextPage = ContentRepository.searchHadithPage(
                                     context,
                                     appliedQuery,
                                     offset,
                                     100,
                                     selectedCollectionId.takeIf { it > 0 },
                                     if (savedOnly) favoriteHadithIds else null
-                                )
+                                ).items
                                 hadithItems = hadithItems + nextPage
                                 offset += nextPage.size
                                 hasMore = nextPage.size == 100 && offset < totalMatches
