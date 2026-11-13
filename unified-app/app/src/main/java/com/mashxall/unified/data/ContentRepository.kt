@@ -579,10 +579,15 @@ internal fun normalizeArabicSearchText(value: String): String {
     return folded.trim().replace(Regex("\\s+"), " ")
 }
 
-/** Optional Quranic/Arabic marks may occur between adjacent letters, but not arbitrary text. */
-private const val HADITH_SEARCH_MARKS_GLOB = "[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08FF\u0640]*"
+/**
+ * Broad SQLite candidate-gap pattern. SQLite GLOB cannot express an optional
+ * repetition of a character class, so the wildcard can span arbitrary source
+ * markup/text here. This is only a prefilter: hadithSearchMatchScore performs
+ * strict normalized-word proximity matching before a row is ever shown.
+ */
+private const val HADITH_SEARCH_MARKS_GLOB = "[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u08D3-\\u08FF\\u0640]*"
 
-/** A search token must match as a continuous word, allowing only Arabic marks between letters. */
+/** Build a broad candidate pattern; Kotlin validation below is authoritative. */
 internal fun hadithSearchGlobPattern(query: String): String {
     val letters = normalizeArabicSearchText(query).filterNot(Char::isWhitespace)
     if (letters.isBlank()) return ""
@@ -631,7 +636,9 @@ internal fun hadithSearchMatchScore(query: String, textFields: List<String>): In
 
     val phrase = tokens.joinToString(" ")
     var bestWindow = Int.MAX_VALUE
-    val maximumWindow = tokens.size + minOf(4, tokens.size.coerceAtLeast(2))
+    // Permit one or two intervening words for a partial phrase, but do not
+    // turn scattered keywords across a long narration into a false positive.
+    val maximumWindow = tokens.size + minOf(2, tokens.size.coerceAtLeast(1))
 
     for (rawField in textFields) {
         // Keep ranking pure JVM code: display rendering may use Android Html,
@@ -655,6 +662,8 @@ internal fun hadithSearchMatchScore(query: String, textFields: List<String>): In
         for (right in words.indices) {
             val currentWord = words[right]
             tokens.forEachIndexed { tokenIndex, token ->
+                // Exact words and incomplete prefixes/interior fragments are valid.
+                // Single-character fragments must match a whole word to avoid noisy results.
                 val matched = if (token.length == 1) currentWord == token else currentWord.contains(token)
                 if (matched) {
                     if (counts[tokenIndex] == 0) covered++
