@@ -9947,8 +9947,11 @@ internal object AudioController {
                 // applied. MP3 frame seeking can land outside a tiny 150 ms window;
                 // requiring that exact estimate left the ayah tracker frozen forever.
                 if (
-                    reason == Player.DISCONTINUITY_REASON_SEEK ||
-                    quranSeekPositionReached(target, newPosition.positionMs, toleranceMs = 1_500L)
+                    quranSeekCompletionConfirmed(
+                        targetMs = target,
+                        actualMs = newPosition.positionMs,
+                        isSeekDiscontinuity = reason == Player.DISCONTINUITY_REASON_SEEK
+                    )
                 ) {
                     clearPendingSequenceSeek()
                 }
