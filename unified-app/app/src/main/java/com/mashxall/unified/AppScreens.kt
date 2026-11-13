@@ -8070,6 +8070,18 @@ internal fun quranPlaybackTrackAyahs(audioType: Int, startingAyah: Int, ayahCoun
 internal fun quranPlaybackCommittedTrackIndex(committedTrackIndex: Int, trackCount: Int): Int =
     committedTrackIndex.takeIf { trackCount > 0 && it in 0 until trackCount } ?: -1
 
+/** Compute navigation from the last track confirmed READY, never the early
+ * currentMediaItemIndex that Media3 may publish while the next clip buffers. */
+internal fun quranPlaybackSequenceTargetIndex(
+    committedTrackIndex: Int,
+    trackCount: Int,
+    next: Boolean
+): Int? {
+    if (committedTrackIndex !in 0 until trackCount) return null
+    val target = committedTrackIndex + if (next) 1 else -1
+    return target.takeIf { it in 0 until trackCount }
+}
+
 /** Map only full-surah entries verified to have the same reciter/recitation as ayah clips. */
 internal fun quranAyahSegmentReciterId(fullReciterId: Int, sourceId: String = ""): Int? =
     when (sourceId.trim()) {
@@ -9789,22 +9801,29 @@ internal object AudioController {
     /** ExoPlayer buffers the next playlist item itself; no hand-built second player is needed. */
     fun isPreparingNextSequenceTrack(): Boolean = false
 
-    fun hasNextSequenceTrack(): Boolean {
-        val active = player ?: return false
-        return isSequencePlayback && active.currentMediaItemIndex in 0 until (sequenceTrackCount - 1)
-    }
+    fun hasNextSequenceTrack(): Boolean =
+        isSequencePlayback &&
+            quranPlaybackSequenceTargetIndex(sequenceTrackIndex, sequenceTrackCount, next = true) != null
 
     fun skipNextSequenceTrack(): Boolean {
         val active = player ?: return false
-        if (!isSequencePlayback || playbackPreparing || !playerPrepared || !hasNextSequenceTrack()) return false
-        return runCatching { active.seekToNextMediaItem(); true }.getOrDefault(false)
+        if (!isSequencePlayback || playbackPreparing || !playerPrepared) return false
+        val targetIndex = quranPlaybackSequenceTargetIndex(
+            sequenceTrackIndex, sequenceTrackCount, next = true
+        ) ?: return false
+        // Seek by the committed track index. seekToNextMediaItem() can skip an
+        // ayah if Media3 has already advanced currentMediaItemIndex while the
+        // newly selected clip is still buffering.
+        return runCatching { active.seekTo(targetIndex, 0L); true }.getOrDefault(false)
     }
 
     fun skipPreviousSequenceTrack(): Boolean {
         val active = player ?: return false
         if (!isSequencePlayback || playbackPreparing || !playerPrepared) return false
-        if (active.currentMediaItemIndex <= 0) return false
-        return runCatching { active.seekToPreviousMediaItem(); true }.getOrDefault(false)
+        val targetIndex = quranPlaybackSequenceTargetIndex(
+            sequenceTrackIndex, sequenceTrackCount, next = false
+        ) ?: return false
+        return runCatching { active.seekTo(targetIndex, 0L); true }.getOrDefault(false)
     }
 
     fun toggleRepeatCurrentTrack(): Boolean {
