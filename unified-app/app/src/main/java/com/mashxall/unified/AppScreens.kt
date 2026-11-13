@@ -742,7 +742,7 @@ private fun QuranInlinePlaybackBar(
             } else {
                 PremiumLoadingIndicator(color = Color(0xFFF1C76B), strokeWidth = 2.dp, modifier = Modifier.size(42.dp).padding(9.dp))
             }
-            if (usesAyahClips) {
+            if (quranReciterShowsAyahNavigation(if (usesAyahClips) 0 else 1)) {
                 ReaderActionIcon(
                     icon = Icons.Outlined.ChevronRight,
                     description = if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر",
@@ -6856,6 +6856,7 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     LaunchedEffect(Unit) { categories = ContentRepository.loadAzkarCategories(context) }
     LaunchedEffect(query, language) {
         loading = true
+        delay(180L)
         allItems = ContentRepository.loadAzkar(context, language.key, query.trim())
         loading = false
     }
@@ -6921,7 +6922,13 @@ fun AzkarScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                 eyebrow = when (language) { AppLanguage.EN -> "DAILY REMEMBRANCE"; AppLanguage.AR -> "الأذكار اليومية"; AppLanguage.CKB -> "زیکری ڕۆژانە" }
             )
             Spacer(Modifier.height(10.dp))
-            SearchBox(language, query, { query = it; if (it.isNotBlank()) selectedCategory = 0 }, tr(language, "search_azkar"))
+            SearchBox(language, query, {
+                query = it
+                if (it.isNotBlank()) {
+                    selectedCategory = 0
+                    selectedTab = 0
+                }
+            }, tr(language, "search_azkar"))
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(listOf(0, 1, 2, 3)) { index ->
@@ -8346,14 +8353,17 @@ private fun copyImportedAdhanFile(context: Context, uri: Uri): AudioItem {
     require(extension in setOf("mp3", "m4a", "aac", "ogg", "opus", "wav", "flac")) {
         "Choose an audio file such as MP3, M4A, AAC, OGG or WAV."
     }
-    val safeName = displayName.substringBeforeLast('.', displayName)
-        .replace(Regex("[^A-Za-z0-9_ -]"), "_")
+    val displayTitle = displayName.substringBeforeLast('.', displayName)
         .trim()
         .take(72)
         .ifBlank { "Muezzin recording" }
+    val safeFileName = displayTitle
+        .replace(Regex("[^A-Za-z0-9_ -]"), "_")
+        .trim()
+        .ifBlank { "Muezzin recording" }
     val directory = File(context.filesDir, "adhan-custom")
     check(directory.exists() || directory.mkdirs()) { "Could not create the private audio folder." }
-    val destination = File(directory, "${System.currentTimeMillis()}-$safeName.$extension")
+    val destination = File(directory, "${System.currentTimeMillis()}-$safeFileName.$extension")
     try {
         val input = resolver.openInputStream(uri) ?: error("Could not open the selected audio file.")
         input.use { source ->
@@ -8368,7 +8378,7 @@ private fun copyImportedAdhanFile(context: Context, uri: Uri): AudioItem {
     }
     return AudioItem(
         assetPath = "local:${destination.absolutePath}",
-        title = safeName,
+        title = displayTitle,
         group = "Muezzin imported from this phone"
     )
 }
