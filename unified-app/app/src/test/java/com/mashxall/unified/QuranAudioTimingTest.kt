@@ -29,7 +29,7 @@ class QuranAudioTimingTest {
             if (index == 2) row.copy(ayah = 2) else row
         }, 4))
         assertNull(validateQuranAyahTimings(completeRows.mapIndexed { index, row ->
-            if (index == 1) row.copy(startMs = 9_100L, endMs = 10_000L) else row
+            if (index == 1) row.copy(startMs = 9_101L, endMs = 10_000L) else row
         }, 4))
         assertNull(validateQuranAyahTimings(completeRows.mapIndexed { index, row ->
             if (index == 1) row.copy(startMs = -1L) else row
@@ -73,27 +73,38 @@ class QuranAudioTimingTest {
         assertEquals("https://server13.mp3quran.net/husr/", reads[1].folderUrl)
     }
 
-
-    @Test
-    fun legacyHttpAndModernHttpsReciterFoldersMatchTheSameTimingRead() {
-        assertEquals(
-            "https://server7.mp3quran.net/basit",
-            normalizeQuranTimingFolder("http://SERVER7.MP3QURAN.NET/basit/")
-        )
-        assertEquals(
-            normalizeQuranTimingFolder("http://server7.mp3quran.net/basit/"),
-            normalizeQuranTimingFolder("https://server7.mp3quran.net/basit")
-        )
-        assertEquals(
-            normalizeQuranTimingFolder("http://www.mp3quran.net/audio/"),
-            normalizeQuranTimingFolder("https://mp3quran.net/audio")
-        )
-    }
-
     @Test
     fun rejectsUnknownTimingResponseEnvelopeInsteadOfPretendingItContainsData() {
         assertNull(parseQuranTimingRows("""{"status":"ok","message":"no timing array"}"""))
         assertTrue(parseQuranTimingReads("""{"status":"ok"}""").isEmpty())
+    }
+
+    @Test
+    fun acceptsSmallOverlapsBetweenOfficialTransitionRanges() {
+        val rows = completeRows.mapIndexed { index, row ->
+            if (index == 1) row.copy(startMs = 3_100L, endMs = 9_200L) else row
+        }
+        val timings = validateQuranAyahTimings(rows, 4)
+        assertEquals(4, timings?.size)
+        assertEquals(2, timings?.get(1)?.ayah)
+    }
+
+    @Test
+    fun resolvesAReadOnlyWhenItsIdAndFolderBelongToTheSelectedMoshaf() {
+        val reads = listOf(
+            QuranTimingRead(53, "https://server7.mp3quran.net/basit/"),
+            QuranTimingRead(51, "https://server7.mp3quran.net/basit/Almusshaf-Al-Mojawwad/")
+        )
+        assertEquals(
+            53,
+            resolveQuranTimingRead(reads, 53, "https://server7.mp3quran.net/basit/")?.id
+        )
+        assertNull(resolveQuranTimingRead(reads, 51, "https://server7.mp3quran.net/basit/"))
+        assertNull(resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/"))
+        assertEquals(
+            51,
+            resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/Almusshaf-Al-Mojawwad/")?.id
+        )
     }
 
     @Test

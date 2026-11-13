@@ -89,6 +89,28 @@ internal fun parseQuranTimingRows(payload: String): List<QuranTimingApiRow>? {
     }
 }
 
+/**
+ * Resolve a timing read to the exact selected full-surah audio edition.
+ * A known moshaf/read ID must match exactly; only legacy readers without an
+ * ID may fall back to a unique exact server-folder match.
+ */
+internal fun resolveQuranTimingRead(
+    reads: List<QuranTimingRead>,
+    readId: Int?,
+    audioFolder: String
+): QuranTimingRead? {
+    val normalizedAudioFolder = normalizeQuranTimingFolder(audioFolder)
+    if (readId != null) {
+        return reads.firstOrNull {
+            it.id == readId && normalizeQuranTimingFolder(it.folderUrl) == normalizedAudioFolder
+        }
+    }
+    val folderMatches = reads.filter {
+        normalizeQuranTimingFolder(it.folderUrl) == normalizedAudioFolder
+    }
+    return folderMatches.singleOrNull()
+}
+
 internal fun parseQuranTimingReads(payload: String): List<QuranTimingRead> {
     val array = unwrapQuranApiArray(
         payload,
@@ -135,15 +157,18 @@ internal fun validateQuranAyahTimings(
 ): List<QuranAyahTimeRange>? {
     if (expectedAyahCount < 1 || rows.size != expectedAyahCount) return null
     val result = ArrayList<QuranAyahTimeRange>(expectedAyahCount)
-    var previousEnd = -1L
+    var previousStart = -1L
     rows.forEachIndexed { index, row ->
+        // The official MP3Quran timing feed may have tiny overlapping
+        // transition windows. It only guarantees monotonically increasing
+        // ayah starts; requiring end(i) <= start(i+1) rejects valid reads.
         if (row.ayah != index + 1 ||
             row.startMs < 0L ||
             row.endMs <= row.startMs ||
-            row.startMs < previousEnd
+            row.startMs < previousStart
         ) return null
         result += QuranAyahTimeRange(row.ayah, row.startMs, row.endMs)
-        previousEnd = row.endMs
+        previousStart = row.startMs
     }
     return result
 }
@@ -200,13 +225,15 @@ internal object QuranAudioTimingRepository {
                 context = context,
                 fileName = "mp3quran_timing_reads.json",
                 url = "$API_BASE/ayat_timing/reads",
-                ttlMs = READS_TTL_MS
+                ttlMs = READS_TTL_MS,
+                isValid = { parseQuranTimingReads(it).isNotEmpty() }
             ) ?: return@withContext null
             val reads = parseQuranTimingReads(readsPayload)
             val normalizedBase = normalizeFolder(reciter.baseUrl)
-            val read = reads.firstOrNull { normalizeFolder(it.folderUrl) == normalizedBase }
-                ?: reads.firstOrNull { readId != null && it.id == readId }
-                ?: run {
+            // The second component of our MP3Quran source_id is the concrete
+            // moshaf/read id. Match it first and require the folder to agree;
+            // a reciter may have several editions sharing a server hostname.
+            val read = resolveQuranTimingRead(reads, readId, normalizedBase) ?: run {
                     Log.w(
                         "MashxallQuranTiming",
                         "No timing read matches reciter ${reciter.id} folder '${reciter.baseUrl}' (sourceId=${reciter.sourceId}, reads=${reads.size})"
@@ -218,7 +245,11 @@ internal object QuranAudioTimingRepository {
                 context = context,
                 fileName = "mp3quran_timing_${read.id}_${surah}.json",
                 url = "$API_BASE/ayat_timing?surah=$surah&read=${read.id}",
-                ttlMs = TIMING_TTL_MS
+                ttlMs = TIMING_TTL_MS,
+                isValid = { payload ->
+                    val parsed = parseQuranTimingRows(payload)
+                    parsed != null && validateQuranAyahTimings(parsed, expectedAyahCount) != null
+                }
             ) ?: return@withContext null
             val rows = parseQuranTimingRows(timingPayload) ?: run {
                 Log.w(
@@ -250,19 +281,27 @@ internal object QuranAudioTimingRepository {
         context: Context,
         fileName: String,
         url: String,
-        ttlMs: Long
+        ttlMs: Long,
+        isValid: (String) -> Boolean
     ): String? {
         val directory = File(context.cacheDir, "quran-audio-timing")
         val cacheFile = File(directory, fileName)
         val cached = runCatching {
             cacheFile.takeIf { it.isFile && it.length() in 1..2_000_000L }?.readText(Charsets.UTF_8)
         }.getOrNull()
-        if (!cached.isNullOrBlank() && System.currentTimeMillis() - cacheFile.lastModified() < ttlMs) {
+        if (!cached.isNullOrBlank() && isValid(cached) &&
+            System.currentTimeMillis() - cacheFile.lastModified() < ttlMs
+        ) {
             return cached
         }
 
+        // Earlier builds cached any non-empty HTTP body, including an error or
+        // an unsupported JSON envelope. Discard invalid entries and fetch again.
+        if (!cached.isNullOrBlank() && !runCatching { isValid(cached) }.getOrDefault(false)) {
+            runCatching { cacheFile.delete() }
+        }
         val fresh = runCatching { fetchText(url) }.getOrNull()
-        if (!fresh.isNullOrBlank()) {
+        if (!fresh.isNullOrBlank() && runCatching { isValid(fresh) }.getOrDefault(false)) {
             runCatching {
                 directory.mkdirs()
                 val temporary = File(directory, fileName + ".tmp")
@@ -273,12 +312,15 @@ internal object QuranAudioTimingRepository {
                     temporary.delete()
                 }
             }.onFailure {
-                Log.w("MashxallQuranTiming", "Could not cache Quran timing response", it)
+                Log.w("MashxallQuranTiming", "Could not cache verified Quran timing response", it)
             }
             return fresh
         }
-        // A previously verified timeline remains useful while the phone is offline.
-        return cached
+        if (!fresh.isNullOrBlank()) {
+            Log.w("MashxallQuranTiming", "Rejected invalid timing API response from $url")
+        }
+        // Only return the old body if it still validates. Never reuse malformed cached data.
+        return cached?.takeIf { runCatching { isValid(it) }.getOrDefault(false) }
     }
 
     private fun fetchText(url: String): String {

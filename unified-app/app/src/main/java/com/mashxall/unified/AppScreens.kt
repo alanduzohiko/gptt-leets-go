@@ -1964,6 +1964,43 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
     }
 
+    fun commitInlineActiveVerse(surahNumber: Int, ayahNumber: Int) {
+        val ayahCount = surahs.firstOrNull { it.number == surahNumber }?.ayahCount ?: return
+        val ayah = ayahNumber.coerceIn(1, ayahCount)
+        val target = surahNumber to ayah
+        if (inlinePlaybackActiveVerse == target) return
+        inlinePlaybackActiveVerse = target
+        inlinePlaybackSurah = surahNumber
+        selected = surahNumber
+        onSurah(surahNumber)
+        onOpenVerse(surahNumber, ayah)
+        prefs.edit()
+            .putInt("last_surah", surahNumber)
+            .putInt("last_ayah_number", ayah)
+            .putInt("quran_progress_ayah_$surahNumber", ayah)
+            .apply()
+        readingProgressRevision++
+    }
+
+    /**
+     * Move inside the already-playing full-surah MP3. Re-creating ExoPlayer for
+     * every previous/next tap caused the Mushaf to jump/re-open while the audio
+     * was still preparing, so timed recordings now seek the current player.
+     */
+    fun seekInlineRecitationToAyah(ayahNumber: Int): Boolean {
+        if (!inlinePlaybackVisible || inlinePlaybackUsesAyahClips ||
+            inlinePlaybackTimedAyahs.isEmpty() ||
+            !AudioController.isPrepared()
+        ) return false
+        val timing = inlinePlaybackTimedAyahs.getOrNull(
+            ayahNumber.coerceIn(1, inlinePlaybackTimedAyahs.size) - 1
+        ) ?: return false
+        val position = timing.startMs.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+        if (!AudioController.seekTo(position)) return false
+        commitInlineActiveVerse(inlinePlaybackSurah, timing.ayah)
+        return true
+    }
+
     fun currentInlineAudioAyah(): Int {
         val ayahCount = surahs.firstOrNull { it.number == inlinePlaybackSurah }?.ayahCount ?: 0
         if (ayahCount < 1) return inlinePlaybackStartAyah.coerceAtLeast(1)
@@ -2631,18 +2668,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     usesAyahClips = inlinePlaybackUsesAyahClips,
                     timedAyahRanges = inlinePlaybackTimedAyahs,
                     onTimedAyahChanged = { ayah ->
-                        val target = inlinePlaybackSurah to ayah
-                        if (inlinePlaybackTimedAyahs.isNotEmpty() && inlinePlaybackActiveVerse != target) {
-                            inlinePlaybackActiveVerse = target
-                            selected = inlinePlaybackSurah
-                            onSurah(inlinePlaybackSurah)
-                            onOpenVerse(inlinePlaybackSurah, ayah)
-                            prefs.edit()
-                                .putInt("last_surah", inlinePlaybackSurah)
-                                .putInt("last_ayah_number", ayah)
-                                .putInt("quran_progress_ayah_${inlinePlaybackSurah}", ayah)
-                                .apply()
-                            readingProgressRevision++
+                        if (inlinePlaybackTimedAyahs.isNotEmpty()) {
+                            commitInlineActiveVerse(inlinePlaybackSurah, ayah)
                         }
                     },
                     hasPrevious = hasPreviousTrack,
@@ -2662,11 +2689,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 inlinePlaybackUsesAyahClips && activeAyah > inlinePlaybackStartAyah ->
                                     AudioController.skipPreviousSequenceTrack()
                                 navigation.navigatesByAyah && activeAyah > 1 ->
-                                    startInlineRecitation(
-                                        inlinePlaybackSurah,
-                                        activeAyah - 1,
-                                        reciterOverride = inlineReciter
-                                    )
+                                    if (!seekInlineRecitationToAyah(activeAyah - 1)) {
+                                        startInlineRecitation(
+                                            inlinePlaybackSurah,
+                                            activeAyah - 1,
+                                            reciterOverride = inlineReciter
+                                        )
+                                    }
                                 !navigation.navigatesByAyah && inlinePlaybackSurah > 1 ->
                                     startInlineRecitation(
                                         inlinePlaybackSurah - 1,
@@ -2685,11 +2714,13 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                 inlinePlaybackUsesAyahClips ->
                                     AudioController.skipNextSequenceTrack()
                                 navigation.navigatesByAyah && activeAyah < (inlineSurah?.ayahCount ?: 0) ->
-                                    startInlineRecitation(
-                                        inlinePlaybackSurah,
-                                        activeAyah + 1,
-                                        reciterOverride = inlineReciter
-                                    )
+                                    if (!seekInlineRecitationToAyah(activeAyah + 1)) {
+                                        startInlineRecitation(
+                                            inlinePlaybackSurah,
+                                            activeAyah + 1,
+                                            reciterOverride = inlineReciter
+                                        )
+                                    }
                                 !navigation.navigatesByAyah && inlinePlaybackSurah < inlineReciter.surahTotal ->
                                     startInlineRecitation(
                                         inlinePlaybackSurah + 1,
