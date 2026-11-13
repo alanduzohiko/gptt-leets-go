@@ -1863,9 +1863,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         inlinePlaybackDurationMs = 0
         scope.launch {
             try {
-                // Prefer the same full-surah MP3 with its provider-supplied exact
-                // verse timestamps. Only use a paired ayah-file edition when the
-                // selected full-surah source has no complete verified timeline.
+                // Full-surah mode uses one continuous recording. Verse mode uses
+                // the selected reciter's ayah clips; the modes are never substituted.
                 val fullSurahTiming = if (chosen.audioType != 0) {
                     QuranAudioTimingRepository.load(context, chosen, surahNumber, ayahCount)
                 } else null
@@ -8401,6 +8400,7 @@ fun AudioScreen(
     }
     LaunchedEffect(reciters, surahs, focusReciters, autoPlayRequested, initialSurah, initialAyah, preferredReciterId, playbackMode) {
         val preferred = reciters.firstOrNull { it.id == preferredReciterId }
+            ?.takeIf { resolveCompatibleReciterId(playbackMode, preferredReciterId, reciters) != null }
         if (autoPlayRequested && focusReciters && preferred != null && surahs.isNotEmpty()) {
             val requestKeyAtStart = autoPlayKey
             val surahNumber = initialSurah.coerceIn(1, 114)
@@ -9219,7 +9219,7 @@ fun AudioScreen(
                                                                 AudioController.playSequence(
                                                                     context = context,
                                                                     sources = sources,
-                                                                    notificationTitle = playbackReciter.nameArabic.ifBlank { playbackReciter.nameEnglish },
+                                                                    notificationTitle = preferred.nameArabic.ifBlank { preferred.nameEnglish },
                                                                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                                                                     showNotification = true,
                                                                     initialSeekPositionProvider = fullSurahTiming
