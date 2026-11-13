@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -21,6 +22,46 @@ jobs:
     steps:
       - name: Checkout Mashxall
         uses: actions/checkout@v4
+
+      - name: Restore the exact offline Mashxall intro resource
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          OUTPUT="unified-app/app/src/main/res/raw/mashxall_intro.mp4"
+          mkdir -p "$(dirname "$OUTPUT")"
+          EXPECTED_OUTPUT_SHA="847849e9bc36887d8516ee0113d3ddcc50ddc71d91ae55c5716603e0c81dfd0d"
+          PREVIOUS_RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow build-unified-mashxall.yml --branch "$GITHUB_REF_NAME" \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId // ""')"
+          PREVIOUS_RUN_NUMBER="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow build-unified-mashxall.yml --branch "$GITHUB_REF_NAME" \
+            --status success --limit 1 --json number --jq '.[0].number // ""')"
+          REUSED_INTRO=false
+          if [[ -n "$PREVIOUS_RUN_ID" && -n "$PREVIOUS_RUN_NUMBER" ]]; then
+            PREVIOUS_DIR="$RUNNER_TEMP/mashxall-previous-build"
+            mkdir -p "$PREVIOUS_DIR"
+            if gh run download "$PREVIOUS_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "mashxall-unified-android11-apk-$PREVIOUS_RUN_NUMBER" --dir "$PREVIOUS_DIR"; then
+              PREVIOUS_APK="$PREVIOUS_DIR/Mashxall-Unified-debug.apk"
+              if [[ -s "$PREVIOUS_APK" ]]; then
+                unzip -p "$PREVIOUS_APK" res/raw/mashxall_intro.mp4 > "$OUTPUT" || true
+                ACTUAL_OUTPUT_SHA="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+                if [[ "$ACTUAL_OUTPUT_SHA" == "$EXPECTED_OUTPUT_SHA" ]]; then
+                  REUSED_INTRO=true
+                  echo "Reused the exact intro from successful build $PREVIOUS_RUN_NUMBER."
+                fi
+              fi
+            fi
+          fi
+          if [[ "$REUSED_INTRO" != true ]]; then
+            echo "No previously verified APK intro resource was available."
+            exit 1
+          fi
+          FINAL_SHA="$(sha256sum "$OUTPUT" | awk '{print $1}')"
+          test "$FINAL_SHA" = "$EXPECTED_OUTPUT_SHA"
+          echo "Verified offline Mashxall intro SHA-256: $FINAL_SHA"
 
       - name: Prepare Android SDK
         uses: android-actions/setup-android@v3
