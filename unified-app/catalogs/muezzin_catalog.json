@@ -4,7 +4,7 @@
   "source_repository": "https://github.com/bilalelsayed97/adhan_sounds",
   "source_readme": "https://github.com/bilalelsayed97/adhan_sounds/blob/main/README.md",
   "source_note": "Audio streams from the upstream repository's full-length preview files and is downloaded only when the user asks. The upstream repository has no declared audio licence; do not bundle or redistribute these recordings unless the recording rights are cleared.",
-  "record_count": 68,
+  "record_count": 69,
   "records": [
     {
       "id": "muezzin-120-mashary_2010",
@@ -685,6 +685,18 @@
       "url": "https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ahmed_El_Kourdi_(%D8%A3%D8%AD%D9%85%D8%AF_%D8%A7%D9%84%D9%83%D8%B1%D8%AF%D9%8A).mp3",
       "size_bytes": 3164421,
       "source_parts": 0
+    },
+    {
+      "id": "muezzin-200-marwan_qassas_madina",
+      "title_ar": "الشيخ محمد مروان قصاص — أذان المدينة",
+      "title_en": "Sheikh Muhammad Marwan Qassas — Madinah Adhan",
+      "category": "muezzin",
+      "source_filename": "adhan_madina.mp3",
+      "url": "https://raw.githubusercontent.com/Ham-Souleymane/slati/097cda2994b23961ca710d4df3f45d1d22cf10fb/assets/audio/adhan_madina.mp3",
+      "size_bytes": 4991463,
+      "source_parts": 1,
+      "source_repository": "https://github.com/Ham-Souleymane/slati/tree/097cda2994b23961ca710d4df3f45d1d22cf10fb",
+      "source_note": "The source project identifies this recording as Sheikh Muhammad Marwan Qassas. The audio is streamed from the pinned upstream file and is downloaded only when the user asks; no recording licence was found in that repository."
     }
   ]
 }
