@@ -66,6 +66,7 @@ import android.media.session.MediaSession
 import android.media.MediaMetadata
 import android.net.Uri
 import android.provider.Settings
+import android.provider.OpenableColumns
 import android.widget.Toast
 import coil.compose.SubcomposeAsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -107,6 +108,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.filled.Bookmark
@@ -8320,9 +8322,82 @@ internal fun filterSelectableAdhanAssets(items: List<AudioItem>): List<AudioItem
 
 /** A selected path is valid only when it matches a source-classified Adhan/mosque catalogue entry. */
 internal fun hasSelectableAdhanAsset(assetPath: String, availableAssets: List<AudioItem>): Boolean =
-    assetPath.isNotBlank() && availableAssets.any {
-        it.assetPath == assetPath && bundledAdhanCategory(it) != null
+    assetPath.isNotBlank() && availableAssets.any { item ->
+        item.assetPath == assetPath && (
+            bundledAdhanCategory(item) != null ||
+                (assetPath.startsWith("local:") && runCatching {
+                    val file = File(assetPath.removePrefix("local:"))
+                    file.isFile && file.length() > 512L
+                }.getOrDefault(false))
+            )
     }
+
+internal fun importedAdhanAssetRecord(absolutePath: String, title: String): String =
+    absolutePath.trim() + "\t" + title.replace("\\t", " ").replace("\\n", " ").trim()
+
+internal fun importedAdhanAudioItem(record: String, isUsableFile: (String) -> Boolean): AudioItem? {
+    val separator = record.indexOf('\\t')
+    if (separator <= 0 || separator == record.lastIndex) return null
+    val path = record.substring(0, separator).trim()
+    val title = record.substring(separator + 1).trim()
+    if (path.isBlank() || title.isBlank() || !isUsableFile(path)) return null
+    return AudioItem(
+        assetPath = "local:$path",
+        title = title,
+        group = "Muezzin imported from this phone"
+    )
+}
+
+private fun loadImportedAdhanAssets(context: Context): List<AudioItem> {
+    val prefs = context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE)
+    val records = prefs.getStringSet("custom_adhan_tracks", emptySet()).orEmpty()
+    return records.mapNotNull { record ->
+        importedAdhanAudioItem(record) { path ->
+            runCatching {
+                val file = File(path)
+                file.isFile && file.length() > 512L
+            }.getOrDefault(false)
+        }
+    }
+}
+
+private fun copyImportedAdhanFile(context: Context, uri: Uri): AudioItem {
+    val resolver = context.contentResolver
+    val displayName = runCatching {
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+    }.getOrNull().orEmpty().ifBlank { "Muezzin recording.mp3" }
+    val extension = displayName.substringAfterLast('.', "mp3").lowercase(Locale.ROOT)
+    require(extension in setOf("mp3", "m4a", "aac", "ogg", "opus", "wav", "flac")) {
+        "Choose an audio file such as MP3, M4A, AAC, OGG or WAV."
+    }
+    val safeName = displayName.substringBeforeLast('.', displayName)
+        .replace(Regex("[^A-Za-z0-9_ -]"), "_")
+        .trim()
+        .take(72)
+        .ifBlank { "Muezzin recording" }
+    val directory = File(context.filesDir, "adhan-custom")
+    check(directory.exists() || directory.mkdirs()) { "Could not create the private audio folder." }
+    val destination = File(directory, "${System.currentTimeMillis()}-$safeName.$extension")
+    try {
+        val input = resolver.openInputStream(uri) ?: error("Could not open the selected audio file.")
+        input.use { source ->
+            destination.outputStream().use { output -> source.copyTo(output) }
+        }
+        require(destination.isFile && destination.length() > 512L) {
+            "The selected audio file is empty or incomplete."
+        }
+    } catch (error: Exception) {
+        destination.delete()
+        throw error
+    }
+    return AudioItem(
+        assetPath = "local:${destination.absolutePath}",
+        title = safeName,
+        group = "Muezzin imported from this phone"
+    )
+}
 
 internal fun adhanSourceRequiredMessage(language: AppLanguage): String = when (language) {
     AppLanguage.EN -> "Choose an actual Adhan or mosque recording first. Open the online library, download a track, then return and select it here."
@@ -12183,6 +12258,7 @@ internal fun prayerTimetableStatusLabel(
 @Composable
 fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, selectedCity: String, use24Hour: Boolean = false, onCity: (City) -> Unit, onQibla: () -> Unit, onBrowseAdhanLibrary: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val motionAllowed = remember(context, MashxallMotionPreferences.reduceMotion) { systemAllowsDecorativeMotion(context) }
     val prefs = remember { context.getSharedPreferences("mashxall_preferences", Context.MODE_PRIVATE) }
     var cities by remember { mutableStateOf<List<City>>(emptyList()) }
@@ -12257,11 +12333,20 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         }
     }
 
+    val latestPreviewingAdhan = rememberUpdatedState(previewingAdhan)
+    DisposableEffect(Unit) {
+        onDispose {
+            if (latestPreviewingAdhan.value.isNotBlank()) {
+                AdhanPlaybackService.stopPlayback(context)
+            }
+        }
+    }
+
     fun stopCurrentAdhanPlayback() {
-        context.startService(
-            Intent(context, AdhanPlaybackService::class.java)
-                .setAction(AdhanPlaybackService.ACTION_STOP)
-        )
+        if (previewingAdhan.isNotBlank()) {
+            AdhanPlaybackService.stopPlayback(context)
+            previewingAdhan = ""
+        }
     }
 
     fun assignAdhanSound(assetPath: String) {
@@ -12293,6 +12378,38 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
             }
             .apply()
     }
+
+    val importAdhanLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val imported = withContext(Dispatchers.IO) { copyImportedAdhanFile(context, uri) }
+                    val records = prefs.getStringSet("custom_adhan_tracks", emptySet()).orEmpty().toMutableSet()
+                    val absolutePath = imported.assetPath.removePrefix("local:")
+                    records += importedAdhanAssetRecord(absolutePath, imported.title)
+                    prefs.edit().putStringSet("custom_adhan_tracks", records).apply()
+                    adhanAssets = (adhanAssets + imported).distinctBy { it.assetPath }
+                    assignAdhanSound(imported.assetPath)
+                    adhanMessage = when (language) {
+                        AppLanguage.EN -> "${imported.title} was added and selected for ${if (activeAdhanPrayerCode == "all") "all prayers" else "this prayer"}."
+                        AppLanguage.AR -> "تمت إضافة ${imported.title} واختياره ${if (activeAdhanPrayerCode == "all") "لكل الصلوات" else "لهذه الصلاة"}."
+                        AppLanguage.CKB -> "${imported.title} زیادکرا و بۆ ${if (activeAdhanPrayerCode == "all") "هەموو نوێژەکان" else "ئەم نوێژە"} هەڵبژێردرا."
+                    }
+                    Toast.makeText(context, adhanMessage, Toast.LENGTH_LONG).show()
+                } catch (error: Exception) {
+                    adhanMessage = when (language) {
+                        AppLanguage.EN -> error.message ?: "Could not import this audio file."
+                        AppLanguage.AR -> error.message ?: "تعذّر استيراد الملف الصوتي."
+                        AppLanguage.CKB -> error.message ?: "نەتوانرا ئەم فایلە دەنگییە زیاد بکرێت."
+                    }
+                    Toast.makeText(context, adhanMessage, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
 
     val onFix: (Location) -> Unit = { fix ->
         // A cached point can immediately populate the timetable, but it is not reported
@@ -12568,7 +12685,10 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 )
             } else null
         }
-        val availableAssets = filterSelectableAdhanAssets(bundledAssets + downloadedOnlineAssets)
+        val importedAssets = loadImportedAdhanAssets(context)
+        val availableAssets = (
+            filterSelectableAdhanAssets(bundledAssets + downloadedOnlineAssets) + importedAssets
+        ).distinctBy { it.assetPath }
         adhanAssets = availableAssets
         adhanAssetsLoaded = true
         if (availableAssets.none { it.assetPath == selectedAdhanAsset }) {
@@ -13471,8 +13591,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
     )
     if (chooseAdhanSound) AlertDialog(
         onDismissRequest = {
-            AudioController.stop()
-            previewingAdhan = ""
+            stopCurrentAdhanPlayback()
             chooseAdhanSound = false
         },
         title = { Text(if (language == AppLanguage.EN) "Choose adhan sound" else if (language == AppLanguage.AR) "اختر صوت الأذان" else "دەنگی بانگ هەڵبژێرە") },
@@ -13531,12 +13650,26 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             pressedScale = premiumActionButtonPressScale("browse_online_adhan"),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            AudioController.stop()
-                            previewingAdhan = ""
+                            stopCurrentAdhanPlayback()
                             chooseAdhanSound = false
                             onBrowseAdhanLibrary()
                         }
                     }
+                }
+                Spacer(Modifier.height(5.dp))
+                PremiumActionButton(
+                    label = when (language) {
+                        AppLanguage.EN -> "Add a Muezzin audio file from this phone"
+                        AppLanguage.AR -> "إضافة ملف مؤذن من الهاتف"
+                        AppLanguage.CKB -> "زیادکردنی فایلی دەنگی بانگبێژ لەم مۆبایلە"
+                    },
+                    icon = Icons.Outlined.Add,
+                    accent = Gold,
+                    foreground = foreground,
+                    pressedScale = premiumActionButtonPressScale("import_custom_adhan"),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    importAdhanLauncher.launch(arrayOf("audio/*"))
                 }
                 Spacer(Modifier.height(5.dp))
                 LazyColumn(Modifier.height(260.dp)) {
@@ -13556,9 +13689,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                 items(visibleAdhanAssets, key = { it.assetPath }) { sound ->
                     Row(
                         Modifier.fillMaxWidth().premiumClickable {
-                            AudioController.stop()
-                            AdhanPlaybackService.stopPlayback(context)
-                            previewingAdhan = ""
+                            stopCurrentAdhanPlayback()
                             assignAdhanSound(sound.assetPath)
                             adhanMessage = ""
                             chooseAdhanSound = false
@@ -13576,9 +13707,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                                 prayerAudioSelections[activeAdhanPrayerCode] == sound.assetPath
                             }
                         ) {
-                            AudioController.stop()
-                            AdhanPlaybackService.stopPlayback(context)
-                            previewingAdhan = ""
+                            stopCurrentAdhanPlayback()
                             assignAdhanSound(sound.assetPath)
                             adhanMessage = ""
                             chooseAdhanSound = false
@@ -13595,10 +13724,9 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
                             selected = previewingAdhan == sound.assetPath,
                             onClick = {
                                 if (previewingAdhan == sound.assetPath) {
-                                    AdhanPlaybackService.stopPlayback(context)
-                                    previewingAdhan = ""
+                                    stopCurrentAdhanPlayback()
                                 } else {
-                                    AudioController.stop()
+                                    stopCurrentAdhanPlayback()
                                     previewingAdhan = sound.assetPath
                                     AdhanPlaybackService.startPreview(context, sound.assetPath, sound.title)
                                 }
@@ -13617,8 +13745,7 @@ fun PrayerScreen(language: AppLanguage, foreground: Color, cardColor: Color, sel
         },
         confirmButton = {
             PremiumTextButton(onClick = {
-                AudioController.stop()
-                previewingAdhan = ""
+                stopCurrentAdhanPlayback()
                 chooseAdhanSound = false
             }) { Text(tr(language, "back")) }
         }
