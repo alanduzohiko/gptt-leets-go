@@ -118,6 +118,13 @@ class QuranAudioTimingTest {
     }
 
     @Test
+    fun explicitMedia3SeekEventConfirmsEvenAnApproximateMp3FrameDestination() {
+        assertTrue(quranSeekCompletionConfirmed(42_000L, 41_100L, isSeekDiscontinuity = true))
+        assertTrue(quranSeekCompletionConfirmed(42_000L, 40_800L, isSeekDiscontinuity = false))
+        assertFalse(quranSeekCompletionConfirmed(42_000L, 38_000L, isSeekDiscontinuity = false))
+    }
+
+    @Test
     fun resolvesAReadOnlyWhenItsIdAndFolderBelongToTheSelectedMoshaf() {
         val reads = listOf(
             QuranTimingRead(53, "https://server7.mp3quran.net/basit/"),
@@ -137,6 +144,18 @@ class QuranAudioTimingTest {
         )
         val ambiguousFolderReads = reads + QuranTimingRead(54, "https://server7.mp3quran.net/basit/")
         assertNull(resolveQuranTimingRead(ambiguousFolderReads, null, "https://server7.mp3quran.net/basit/"))
+        // A stale legacy read ID may recover only from a unique exact folder.
+        assertEquals(
+            53,
+            resolveQuranTimingRead(reads, 999, "https://server7.mp3quran.net/basit/")?.id
+        )
+        assertNull(
+            resolveQuranTimingRead(
+                ambiguousFolderReads,
+                999,
+                "https://server7.mp3quran.net/basit/"
+            )
+        )
         assertEquals(
             51,
             resolveQuranTimingRead(reads, null, "https://server7.mp3quran.net/basit/Almusshaf-Al-Mojawwad/")?.id
