@@ -44,18 +44,44 @@ class AudioPlaybackModeTest {
     }
 
     @Test
-    fun quranInlinePickerShowsOnlyAyahByAyahReaders() {
-        val full = com.mashxall.unified.data.Reciter(
-            80, "قارئ السورة", "Full Surah Reader", 1, "https://example.invalid/full/", 1,
-            surahTotal = 2
-        )
+    fun quranInlinePickerIncludesOnlyFullSurahEditionsWithExactAyahMatches() {
         val verse = com.mashxall.unified.data.Reciter(
-            81, "قارئ الآيات", "Ayah Reader", 0, "https://example.invalid/verse/", 2,
-            surahTotal = 2
+            8, "أبو بكر الشاطري", "Abu Bakr Al-Shatri ayah source", 0,
+            "https://example.invalid/verse/", 2, surahTotal = 114, sourceId = "bundled-8"
         )
-        assertEquals(listOf(verse), filterRecitersForUnifiedPicker(listOf(full, verse), "", 2))
-        assertEquals(listOf(verse), filterRecitersForUnifiedPicker(listOf(full, verse), "Ayah", 2))
-        assertEquals(emptyList<com.mashxall.unified.data.Reciter>(), filterRecitersForUnifiedPicker(listOf(full, verse), "", 3))
+        val continuous = com.mashxall.unified.data.Reciter(
+            1_000_004, "أبو بكر الشاطري", "Abu Bakr Al-Shatri", 1,
+            "https://example.invalid/full/", 3, surahTotal = 114, sourceId = "4-4"
+        )
+        val unverifiedFull = com.mashxall.unified.data.Reciter(
+            1_000_999, "قارئ غير مطابق", "Unmapped full reader", 1,
+            "https://example.invalid/unmapped/", 4, surahTotal = 114, sourceId = "999-999"
+        )
+
+        assertEquals(
+            listOf(verse, continuous),
+            filterRecitersForUnifiedPicker(listOf(verse, continuous, unverifiedFull), "", 3)
+        )
+        assertEquals(
+            listOf(continuous),
+            filterRecitersForUnifiedPicker(listOf(verse, continuous, unverifiedFull), "Shatri", 3)
+        )
+        assertEquals(false, supportsMushafInlineReciter(unverifiedFull, 3, listOf(verse, continuous, unverifiedFull)))
+    }
+
+    @Test
+    fun continuousReciterFallsBackOnlyToItsMappedAyahSourceWhenTimingIsUnavailable() {
+        val verse = com.mashxall.unified.data.Reciter(
+            8, "أبو بكر الشاطري", "Abu Bakr Al-Shatri ayah source", 0,
+            "https://example.invalid/verse/", 2, surahTotal = 114, sourceId = "bundled-8"
+        )
+        val continuous = com.mashxall.unified.data.Reciter(
+            1_000_004, "أبو بكر الشاطري", "Abu Bakr Al-Shatri", 1,
+            "https://example.invalid/full/", 3, surahTotal = 114, sourceId = "4-4"
+        )
+        assertEquals(continuous, resolveMushafInlinePlaybackReciter(continuous, listOf(verse), 3, true))
+        assertEquals(verse, resolveMushafInlinePlaybackReciter(continuous, listOf(verse), 3, false))
+        assertEquals(verse, resolveMushafInlinePlaybackReciter(verse, listOf(verse), 3, false))
     }
 
     @Test

@@ -342,13 +342,41 @@ internal fun filterRecitersForPlaybackMode(
     matchesSearch && reciterMatchesPlaybackMode(mode, reciter.audioType)
 }
 
-/** The Mushaf's Play action lists only ayah-by-ayah sources; full-surah audio has its own library. */
+/** A continuous MP3 may appear in the Mushaf only when its exact ayah source is known. */
+internal fun supportsMushafInlineReciter(
+    reciter: Reciter,
+    surahNumber: Int,
+    availableReciters: List<Reciter>
+): Boolean {
+    if (surahNumber !in 1..114 || reciter.surahTotal < surahNumber) return false
+    if (reciter.audioType == 0) return true
+    val matchingAyahId = quranAyahSegmentReciterId(reciter.id, reciter.sourceId) ?: return false
+    return availableReciters.any {
+        it.id == matchingAyahId && it.audioType == 0 && it.surahTotal >= surahNumber
+    }
+}
+
+/** Keep the selected continuous edition when timed; otherwise use only its exact matching ayah set. */
+internal fun resolveMushafInlinePlaybackReciter(
+    selected: Reciter,
+    availableReciters: List<Reciter>,
+    surahNumber: Int,
+    hasContinuousTiming: Boolean
+): Reciter? {
+    if (surahNumber !in 1..114 || selected.surahTotal < surahNumber) return null
+    if (selected.audioType == 0 || hasContinuousTiming) return selected
+    val matchingAyahId = quranAyahSegmentReciterId(selected.id, selected.sourceId) ?: return null
+    return availableReciters.firstOrNull {
+        it.id == matchingAyahId && it.audioType == 0 && it.surahTotal >= surahNumber
+    }
+}
+
 internal fun filterRecitersForUnifiedPicker(
     reciters: List<Reciter>,
     query: String,
     surahNumber: Int
 ): List<Reciter> = reciters.filter { reciter ->
-    reciter.audioType == 0 && reciter.surahTotal >= surahNumber &&
+    supportsMushafInlineReciter(reciter, surahNumber, reciters) &&
         matchesAudioCatalogSearch(
             query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
         )
@@ -1864,7 +1892,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
             Toast.makeText(context, tr(language, "no_data"), Toast.LENGTH_SHORT).show()
             return
         }
-        val chosen = reciterOverride?.takeIf { it.audioType == 0 && it.surahTotal >= surahNumber }
+        val chosen = reciterOverride?.takeIf {
+            supportsMushafInlineReciter(it, surahNumber, readerReciters)
+        }
         if (chosen == null) {
             requestInlineRecitation(surahNumber, requestedAyah)
             return
@@ -1884,14 +1914,26 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 val fullSurahTiming = if (chosen.audioType != 0) {
                     QuranAudioTimingRepository.load(context, chosen, surahNumber, ayahCount)
                 } else null
-                // Keep the chosen recording type for the whole session. A full-surah
-                // source is never silently replaced with a playlist of ayah files.
-                val playbackReciter = chosen
+                // Prefer one continuous full-surah recording when its own ayah timings
+                // are available. If not, use only this edition's explicitly mapped
+                // ayah-by-ayah source so playback still starts at the tapped verse.
+                val playbackReciter = resolveMushafInlinePlaybackReciter(
+                    selected = chosen,
+                    availableReciters = readerReciters,
+                    surahNumber = surahNumber,
+                    hasContinuousTiming = fullSurahTiming != null
+                )
+                if (playbackReciter == null) {
+                    Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                val usesContinuousFullSurah = chosen.audioType != 0 &&
+                    playbackReciter.id == chosen.id && fullSurahTiming != null
                 val playbackPlan = quranPlaybackStartPlan(
                     audioType = playbackReciter.audioType,
                     requestedAyah = requestedAyahInSurah,
                     ayahCount = ayahCount,
-                    hasAyahTimings = fullSurahTiming != null
+                    hasAyahTimings = usesContinuousFullSurah
                 )
                 if (!playbackPlan.isSupported) {
                     Toast.makeText(context, fullSurahSeekUnavailableMessage(language), Toast.LENGTH_LONG).show()
@@ -1899,8 +1941,8 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
                 val startAyah = playbackPlan.startingAyah
                 val initialReaderAyah = startAyah
-                val sequence = if (fullSurahTiming != null) {
-                    listOf(fullSurahTiming.audioUrl)
+                val sequence = if (usesContinuousFullSurah) {
+                    listOf(fullSurahTiming!!.audioUrl)
                 } else {
                     withContext(Dispatchers.IO) {
                         reciterAudioSequence(context, playbackReciter, surahNumber, startAyah, ayahCount)
@@ -1915,10 +1957,12 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 inlinePlaybackRepeatCurrent = false
                 inlinePlaybackSurah = surahNumber
                 inlinePlaybackStartAyah = startAyah
-                inlinePlaybackReciterId = playbackReciter.id
+                // Keep the selected edition visible in the player; record separately
+                // whether playback uses timed continuous audio or its matching ayah clips.
+                inlinePlaybackReciterId = chosen.id
                 inlinePlaybackUsesAyahClips = playbackReciter.audioType == 0
                 inlinePlaybackTrackAyahs = quranPlaybackTrackAyahs(playbackReciter.audioType, startAyah, ayahCount)
-                inlinePlaybackTimedAyahs = fullSurahTiming?.ayahs.orEmpty()
+                inlinePlaybackTimedAyahs = if (usesContinuousFullSurah) fullSurahTiming?.ayahs.orEmpty() else emptyList()
                 inlinePlaybackActiveVerse = surahNumber to initialReaderAyah
                 selected = surahNumber
                 selectedAyahForSheet = null
@@ -1939,9 +1983,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                     showNotification = true,
                     initialSeekPositionProvider = fullSurahTiming
-                        ?.takeIf { startAyah > 1 }
+                        ?.takeIf { usesContinuousFullSurah && startAyah > 1 }
                         ?.let { timing -> { _: Long -> timing.startMsForAyah(startAyah) } },
-                    durationFallbackMs = fullSurahTiming?.durationMs,
+                    durationFallbackMs = fullSurahTiming?.takeIf { usesContinuousFullSurah }?.durationMs,
                     onTrackStarted = { trackIndex ->
                         val activeAyah = if (playbackReciter.audioType == 0) {
                             quranPlaybackAyahForTrack(
@@ -3696,9 +3740,9 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 }
                 Text(
                     when (language) {
-                        AppLanguage.EN -> "Verified ayah-by-ayah reciters for synchronized verse playback"
-                        AppLanguage.AR -> "قرّاء موثّقون بملفات آية بآية لتزامن الآيات"
-                        AppLanguage.CKB -> "قورئان‌خوێنە پشتڕاستکراوەکانی ئایەت بە ئایەت بۆ هاوکاتی ئایەتەکان"
+                        AppLanguage.EN -> "Continuous recitations with verse sync, plus verified ayah-by-ayah sources"
+                        AppLanguage.AR -> "تلاوات متصلة مع تزامن الآيات، إضافة إلى مصادر موثّقة آيةً بآية"
+                        AppLanguage.CKB -> "خوێندنەوەی بەردەوام لەگەڵ هاوکاتی ئایەتەکان، لەگەڵ سەرچاوەی پشتڕاستکراوی ئایەت بە ئایەت"
                     },
                     color = Gold, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
                 )
@@ -3790,11 +3834,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                                             reciter.audioType == 0 && language == AppLanguage.EN -> "Ayah by ayah • synchronized highlight"
                                             reciter.audioType == 0 && language == AppLanguage.AR -> "آيةً بآية • تمييز متزامن"
                                             reciter.audioType == 0 -> "ئایەت بە ئایەت • نیشاندەری هاوکات"
-                                            language == AppLanguage.EN -> "Full-surah file • no per-ayah timing"
-                                            language == AppLanguage.AR -> "ملف سورة كاملة • دون توقيت منفصل للآيات"
-                                            else -> "فایلی تەواوی سوورەت • بەبێ کاتی جیاوازی ئایەت"
+                                            language == AppLanguage.EN -> "Continuous surah • synchronized ayah tracking"
+                                            language == AppLanguage.AR -> "تلاوة متصلة • تتبّع متزامن للآيات"
+                                            else -> "خوێندنەوەی بەردەوام • شوێنکەوتنی هاوکاتی ئایەتەکان"
                                         },
-                                        color = if (reciter.audioType == 0) Gold else foreground.copy(alpha = 0.48f),
+                                        color = Gold,
                                         fontSize = 8.sp, maxLines = 1
                                     )
                                 }
@@ -9526,7 +9570,6 @@ fun AudioScreen(
             onDismiss = { fullSurahPlayerReciterId = -1; fullSurahPlayerNumber = 0 },
             onPause = { AudioController.togglePause()?.let { audioPaused = it } },
             onSeek = { AudioController.seekTo(it) },
-            onSeekBy = { AudioController.seekBy(it) },
             onRepeat = { fullSurahRepeatCurrent = AudioController.toggleRepeatCurrentTrack() },
             onStop = {
                 AudioController.stop()
@@ -9686,7 +9729,7 @@ private fun FullSurahPlaybackDialog(
     reciter: Reciter, surah: Surah, isPrepared: Boolean, isPreparing: Boolean,
     isPaused: Boolean, repeatCurrent: Boolean,
     onDismiss: () -> Unit, onPause: () -> Unit, onSeek: (Int) -> Unit,
-    onSeekBy: (Long) -> Unit, onRepeat: () -> Unit, onStop: () -> Unit
+    onRepeat: () -> Unit, onStop: () -> Unit
 ) {
     var position by remember(reciter.id, surah.number) { mutableIntStateOf(0) }
     var duration by remember(reciter.id, surah.number) { mutableIntStateOf(0) }
@@ -9759,30 +9802,24 @@ private fun FullSurahPlaybackDialog(
                     )
                 }
                 Spacer(Modifier.height(15.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     ReaderActionIcon(icon = Icons.Outlined.Repeat,
                         description = if (language == AppLanguage.EN) "Repeat surah" else if (language == AppLanguage.AR) "تكرار السورة" else "دووبارەکردنەوەی سوورەت",
-                        selected = repeatCurrent, accent = Gold, size = 42.dp, onClick = onRepeat)
-                    Spacer(Modifier.width(7.dp))
-                    ReaderActionIcon(icon = Icons.Outlined.ChevronRight,
-                        description = if (language == AppLanguage.EN) "Back 10 seconds" else if (language == AppLanguage.AR) "رجوع 10 ثوانٍ" else "گەڕانەوە 10 چرکە",
-                        enabled = isPrepared, rotationDegrees = 180f, accent = Gold, size = 42.dp, onClick = { onSeekBy(-10_000L) })
-                    Spacer(Modifier.width(7.dp))
+                        selected = repeatCurrent, accent = Gold, size = 44.dp, onClick = onRepeat)
                     ReaderActionIcon(
                         icon = if (isPaused || !isPrepared) Icons.Outlined.PlayCircle else Icons.Outlined.PauseCircle,
                         description = if (isPaused || !isPrepared) {
                             if (language == AppLanguage.EN) "Play or resume" else if (language == AppLanguage.AR) "تشغيل أو استئناف" else "لێدان یان بەردەوامبوون"
                         } else if (language == AppLanguage.EN) "Pause" else if (language == AppLanguage.AR) "إيقاف مؤقت" else "وەستاندنی کاتی",
-                        selected = isPrepared && !isPaused, accent = Color(0xFFF1C76B), size = 50.dp,
+                        selected = isPrepared && !isPaused, accent = Color(0xFFF1C76B), size = 52.dp,
                         enabled = isPrepared, onClick = onPause)
-                    Spacer(Modifier.width(7.dp))
-                    ReaderActionIcon(icon = Icons.Outlined.ChevronRight,
-                        description = if (language == AppLanguage.EN) "Forward 10 seconds" else if (language == AppLanguage.AR) "تقديم 10 ثوانٍ" else "پێشچوون 10 چرکە",
-                        enabled = isPrepared, accent = Gold, size = 42.dp, onClick = { onSeekBy(10_000L) })
-                    Spacer(Modifier.width(7.dp))
                     ReaderActionIcon(icon = Icons.Outlined.Close,
                         description = if (language == AppLanguage.EN) "Stop playback" else if (language == AppLanguage.AR) "إيقاف التشغيل" else "وەستاندنی لێدان",
-                        accent = Color(0xFFE07870), size = 42.dp, onClick = onStop)
+                        accent = Color(0xFFE07870), size = 44.dp, onClick = onStop)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
