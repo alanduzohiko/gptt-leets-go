@@ -343,14 +343,22 @@ internal fun filterRecitersForPlaybackMode(
 }
 
 // Full-surah entries are eligible here only when their exact matching ayah source exists.
-/** A continuous MP3 may appear in the Mushaf only when its exact ayah source is known. */
+/**
+ * MP3Quran's Ahmad Al-Nufais edition is read 259 on the ayat-timing API.
+ * Its continuous surah files have verified verse boundaries, so the Mushaf
+ * can track and seek individual ayahs without inventing separate clip URLs.
+ */
+internal fun quranHasVerifiedMushafTimingRead(reciter: Reciter): Boolean =
+    reciter.audioType != 0 && reciter.sourceId.trim() == "259-259"
+
+/** A continuous MP3 may appear in the Mushaf only when its exact ayah source or timing read is known. */
 internal fun supportsMushafInlineReciter(
     reciter: Reciter,
     surahNumber: Int,
     availableReciters: List<Reciter>
 ): Boolean {
     if (surahNumber !in 1..114 || reciter.surahTotal < surahNumber) return false
-    if (reciter.audioType == 0) return true
+    if (reciter.audioType == 0 || quranHasVerifiedMushafTimingRead(reciter)) return true
     val matchingAyahId = quranAyahSegmentReciterId(reciter.id, reciter.sourceId) ?: return false
     return availableReciters.any {
         it.id == matchingAyahId && it.audioType == 0 && it.surahTotal >= surahNumber

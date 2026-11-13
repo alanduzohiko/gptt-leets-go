@@ -72,6 +72,29 @@ class AudioPlaybackModeTest {
     }
 
     @Test
+    fun ahmadAlNufaisUsesVerifiedRead259ForSynchronizedAyahPlaybackInTheMushaf() {
+        val nufais = com.mashxall.unified.data.Reciter(
+            1_000_259,
+            "أحمد النفيس",
+            "Ahmad Al Nufais",
+            1,
+            "https://server16.mp3quran.net/nufais/Rewayat-Hafs-A-n-Assem/",
+            10_259,
+            surahTotal = 114,
+            recitation = "Rewayat Hafs A'n Assem - Murattal",
+            sourceId = "259-259"
+        )
+
+        assertEquals(true, quranHasVerifiedMushafTimingRead(nufais))
+        assertEquals(listOf(nufais), filterRecitersForUnifiedPicker(listOf(nufais), "", 3))
+        assertEquals(listOf(nufais), filterRecitersForUnifiedPicker(listOf(nufais), "Ahmad", 3))
+        // Use the one-file surah stream only when the provider returns its exact
+        // complete ayah timeline; never fall back to guessed verse boundaries.
+        assertEquals(nufais, resolveMushafInlinePlaybackReciter(nufais, emptyList(), 3, true))
+        assertNull(resolveMushafInlinePlaybackReciter(nufais, emptyList(), 3, false))
+    }
+
+    @Test
     fun continuousReciterFallsBackOnlyToItsMappedAyahSourceWhenTimingIsUnavailable() {
         val verse = com.mashxall.unified.data.Reciter(
             8, "أبو بكر الشاطري", "Abu Bakr Al-Shatri ayah source", 0,
