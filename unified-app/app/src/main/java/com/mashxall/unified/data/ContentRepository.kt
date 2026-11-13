@@ -599,7 +599,33 @@ internal fun hadithSearchGlobPattern(query: String): String {
     }
 }
 
-/** Each word gets its own tolerant pattern, so word order does not affect search. */
+/** Optional Quranic/Arabic marks may occur between adjacent letters, but not arbitrary text. */
+private const val HADITH_SEARCH_MARKS_GLOB = "[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u08D3-\\u08FF\\u0640]*"
+
+/** A search token must match as a continuous word, allowing only Arabic marks between letters. */
+internal fun hadithSearchGlobPattern(query: String): String {
+    val letters = normalizeArabicSearchText(query).filterNot(Char::isWhitespace)
+    if (letters.isBlank()) return ""
+    return buildString {
+        append('*')
+        letters.forEachIndexed { index, letter ->
+            append(
+                when (letter) {
+                    'ا' -> "[اأإآٱ]"
+                    'ي' -> "[يىئ]"
+                    'و' -> "[وؤ]"
+                    'ه' -> "[هة]"
+                    'ك' -> "[كک]"
+                    else -> letter.toString()
+                }
+            )
+            if (index < letters.lastIndex) append(HADITH_SEARCH_MARKS_GLOB)
+        }
+        append('*')
+    }
+}
+
+/** Each query word must be present, in any order, within one displayed Hadith text field. */
 internal fun hadithSearchGlobPatterns(query: String): List<String> =
     normalizeArabicSearchText(query)
         .split(' ')
@@ -1818,17 +1844,9 @@ object ContentRepository {
     }
 
     private fun hadithSearchFilter(query: String, bookId: Int? = null, hadithIds: Set<Int>? = null): String {
-        val searchableColumns = listOf(
-            "h.text", "h.text_ar", "h.text_en",
-            "b.name", "b.name_ar", "b.name_en",
-            "k.title", "k.title_ar", "k.title_en",
-            "ch.title", "ch.title_ar", "ch.title_en",
-            "h.note", "h.footnote", "h.sort_in_book",
-            "CAST(h.sort AS TEXT)", "CAST(h.id AS TEXT)"
-        )
-        val combinedSearchText = searchableColumns.joinToString(" || ' ' || ") {
-            "COALESCE($it,'')"
-        }
+        // Search the actual Hadith wording only. Matching book names, chapter titles,
+        // notes or numeric IDs used to introduce unrelated narrations into the results.
+        val contentColumns = listOf("h.text", "h.text_ar", "h.text_en")
         val searchPatterns = hadithSearchGlobPatterns(query)
         val conditions = buildList {
             if (bookId != null) add("h.book_id=?")
@@ -1841,10 +1859,15 @@ object ContentRepository {
                 if (searchPatterns.isEmpty()) {
                     add("0=1")
                 } else {
-                    val tokenConditions = searchPatterns.map {
-                        "LOWER(($combinedSearchText)) GLOB ?"
+                    // All words must match within the same language's Hadith text,
+                    // while the user may type the words in any order.
+                    val perLanguageMatches = contentColumns.map { column ->
+                        val tokenConditions = searchPatterns.map {
+                            "LOWER(COALESCE($column,'')) GLOB ?"
+                        }
+                        "(" + tokenConditions.joinToString(" AND ") + ")"
                     }
-                    add("(" + tokenConditions.joinToString(" AND ") + ")")
+                    add("(" + perLanguageMatches.joinToString(" OR ") + ")")
                 }
             }
         }
@@ -1854,7 +1877,8 @@ object ContentRepository {
     private fun hadithSearchArgs(query: String, bookId: Int? = null): Array<String> =
         buildList {
             if (bookId != null) add(bookId.toString())
-            addAll(hadithSearchGlobPatterns(query))
+            val patterns = hadithSearchGlobPatterns(query)
+            if (patterns.isNotEmpty()) repeat(3) { addAll(patterns) }
         }.toTypedArray()
 
     suspend fun loadHadithCount(
