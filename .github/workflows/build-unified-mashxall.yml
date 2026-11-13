@@ -22,6 +22,8 @@ on:
       - "tests/test_audit_apk_assets.py"
       - "tools/runtime-smoke-android11.sh"
       - "tools/runtime-upgrade-smoke-android11.sh"
+      - "tests/test_muezzin_catalog.py"
+      - "tests/test_everyayah_reciters.py"
       - ".github/workflows/runtime-smoke-unified-android.yml"
       - ".github/workflows/build-unified-mashxall.yml"
   pull_request:
@@ -152,6 +154,15 @@ jobs:
 
       - name: Test APK asset packaging auditor
         run: python -m unittest discover -s tests -p 'test_audit_apk_assets.py'
+
+      - name: Test source-linked Adhan and verse-by-verse reciter catalogues
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_muezzin_catalog.py'
+          python -m unittest discover -s tests -p 'test_everyayah_reciters.py'
+          python tools/audit_audio_catalogs.py \
+            unified-app/catalogs/mp3quran_reciters.json \
+            unified-app/catalogs/adhan_catalog.json
 
       - name: Download JADX static analyzer
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_static_reverse_engineering) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[RE-FOCUSED]') || contains(github.event.head_commit.message, '[RE-ANALYSIS]')))
