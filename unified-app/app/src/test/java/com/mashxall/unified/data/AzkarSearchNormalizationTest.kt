@@ -1,7 +1,7 @@
 package com.mashxall.unified.data
 
-import com.mashxall.unified.azkarSearchMatches
-import com.mashxall.unified.normalizeAzkarSearchText
+import com.mashxall.unified.data.azkarSearchMatches
+import com.mashxall.unified.data.normalizeAzkarSearchText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
