@@ -57,4 +57,59 @@ class HadithSearchNormalizationTest {
         assertFalse(pattern.contains("*s*a*l*a*h*"))
         assertTrue(hadithSearchGlobPattern("فەرموودە").isNotBlank())
     }
+
+    @Test
+    fun exactHadithPhraseWinsAfterArabicDiacriticNormalization() {
+        assertEquals(
+            0,
+            hadithSearchMatchScore(
+                "إِنَّمَا الْأَعْمَالُ",
+                listOf("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ")
+            )
+        )
+    }
+
+    @Test
+    fun closeWordsMatchEvenWhenTheUserTypesThemInReverseOrder() {
+        assertEquals(
+            2,
+            hadithSearchMatchScore(
+                "الأعمال إنما",
+                listOf("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ")
+            )
+        )
+    }
+
+    @Test
+    fun distantWordsDoNotCreateAnUnrelatedHadithMatch() {
+        assertEquals(
+            null,
+            hadithSearchMatchScore(
+                "الصدقة الصلاة",
+                listOf("تحدث الناس عن الصدقة في المجلس ثم صلى الرجل في آخر الليل")
+            )
+        )
+    }
+
+    @Test
+    fun wordsFromDifferentLanguageFieldsCannotBeCombinedIntoOneMatch() {
+        assertEquals(
+            null,
+            hadithSearchMatchScore(
+                "الصلاة الصوم",
+                listOf("أقيموا الصلاة", "ڕۆژوو فەرزە")
+            )
+        )
+    }
+
+    @Test
+    fun singleWordSearchStillFindsTheNarrationContainingThatWord() {
+        assertEquals(
+            0,
+            hadithSearchMatchScore(
+                "الصلاة",
+                listOf("كان رسول الله يصلي ثم أقيموا الصلاة")
+            )
+        )
+    }
 }
