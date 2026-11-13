@@ -342,6 +342,7 @@ internal fun filterRecitersForPlaybackMode(
     matchesSearch && reciterMatchesPlaybackMode(mode, reciter.audioType)
 }
 
+// Full-surah entries are eligible here only when their exact matching ayah source exists.
 /** A continuous MP3 may appear in the Mushaf only when its exact ayah source is known. */
 internal fun supportsMushafInlineReciter(
     reciter: Reciter,
