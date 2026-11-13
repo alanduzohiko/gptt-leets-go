@@ -6159,6 +6159,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
 
     LaunchedEffect(Unit) {
         collections = ContentRepository.loadHadithCollections(context)
+        ContentRepository.prepareHadithSearchIndex(context)
     }
     LaunchedEffect(query) {
         delay(260L)
