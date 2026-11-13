@@ -100,11 +100,11 @@ internal fun resolveQuranTimingRead(
     audioFolder: String
 ): QuranTimingRead? {
     if (readId != null) {
-        // The second source_id component is MP3Quran's unique moshaf/read ID.
-        // Use its official folder for both audio and timestamps; server mirrors
-        // can legitimately differ from the URL stored in the bundled catalogue.
-        return reads.firstOrNull { it.id == readId }
+        // Prefer the exact read/edition ID; catalogue URLs may point at mirrors.
+        reads.firstOrNull { it.id == readId }?.let { return it }
     }
+    // Some legacy catalogue rows carry an outdated upstream numeric ID. A
+    // unique exact folder is still a safe pairing; never guess when ambiguous.
     val normalizedAudioFolder = normalizeQuranTimingFolder(audioFolder)
     val folderMatches = reads.filter {
         normalizeQuranTimingFolder(it.folderUrl) == normalizedAudioFolder
@@ -212,6 +212,15 @@ internal fun quranSeekPositionReached(
     if (targetMs < 0L || actualMs < 0L) return false
     return kotlin.math.abs(targetMs - actualMs) <= toleranceMs.coerceAtLeast(0L)
 }
+
+/** A real Media3 seek discontinuity confirms the request even when MP3 frame
+ * seeking lands a little before or after the exact requested millisecond. */
+internal fun quranSeekCompletionConfirmed(
+    targetMs: Long,
+    actualMs: Long,
+    isSeekDiscontinuity: Boolean
+): Boolean = isSeekDiscontinuity ||
+    quranSeekPositionReached(targetMs, actualMs, toleranceMs = 1_500L)
 
 /**
  * Fetches genuine verse boundaries from MP3Quran's ayat_timing API.
