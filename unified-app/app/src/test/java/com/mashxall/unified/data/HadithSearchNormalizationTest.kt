@@ -50,6 +50,30 @@ class HadithSearchNormalizationTest {
         assertTrue(hadithSearchGlobPattern("فەرموودە").isNotBlank())
     }
     @Test
+    fun preNormalizedFieldsKeepPartialArabicSearchAccurate() {
+        val tokens = normalizeArabicSearchText("إنم الأعم")
+            .split(' ')
+            .filter(String::isNotBlank)
+        val fields = listOf(
+            normalizeHadithSearchField("إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ"),
+            "",
+            ""
+        )
+        assertEquals(2, hadithSearchMatchScoreInNormalizedFields(tokens, fields))
+    }
+
+    @Test
+    fun preNormalizedFieldsStillRejectDistantUnrelatedWords() {
+        val tokens = normalizeArabicSearchText("الصدقة الصلاة")
+            .split(' ')
+            .filter(String::isNotBlank)
+        val fields = listOf(
+            normalizeHadithSearchField("الصدقة، ثم طال المجلس وتكلم الناس، وفي آخر الليل أقيمت الصلاة")
+        )
+        assertEquals(null, hadithSearchMatchScoreInNormalizedFields(tokens, fields))
+    }
+
+    @Test
     fun exactHadithPhraseWinsAfterArabicDiacriticNormalization() {
         assertEquals(
             0,
