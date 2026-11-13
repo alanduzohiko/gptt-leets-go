@@ -104,6 +104,9 @@ dependencies {
     // Native streaming playlist engine for reliable full-surah and ayah-by-ayah recitation.
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     testImplementation("junit:junit:4.13.2")
+    // Local unit tests exercise the same JSON envelopes returned by MP3Quran;
+    // use the real org.json implementation instead of Android's mockable stubs.
+    testImplementation("org.json:json:20240303")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.tukaani:xz:1.10")
     implementation("com.caverock:androidsvg-aar:1.4")
