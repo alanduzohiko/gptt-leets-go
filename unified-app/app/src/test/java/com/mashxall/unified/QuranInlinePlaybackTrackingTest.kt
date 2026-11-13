@@ -145,6 +145,22 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
+    fun mushafKeepsTheTappedAyahWhenUsingAFullSurahRecording() {
+        assertEquals(35, resolveMushafInlineStartAyah(35, 100))
+        assertEquals(1, resolveMushafInlineStartAyah(0, 100))
+        assertEquals(100, resolveMushafInlineStartAyah(120, 100))
+        val timedFullSurah = quranPlaybackStartPlan(
+            audioType = 1,
+            requestedAyah = resolveMushafInlineStartAyah(35, 100),
+            ayahCount = 100,
+            hasAyahTimings = true
+        )
+        assertEquals(true, timedFullSurah.isSupported)
+        assertEquals(false, timedFullSurah.usesAyahClips)
+        assertEquals(35, timedFullSurah.startingAyah)
+    }
+
+    @Test
     fun defaultAndSavedReciterNeverFallBackAcrossPlaybackModes() {
         val verseReciter = Reciter(
             id = 1, nameArabic = "قارئ اختبار", nameEnglish = "Test reader",
