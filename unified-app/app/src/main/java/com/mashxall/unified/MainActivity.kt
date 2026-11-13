@@ -2895,6 +2895,33 @@ internal data class HomeCalendarDateDisplay(
     val hijri: String
 )
 
+/**
+ * ICU's calendar fields are Islamic, but assigning that calendar to a formatter
+ * created with a Gregorian locale can leave Gregorian month-name symbols behind.
+ * Keep Hijri month names explicit so the month number can never become "June",
+ * "November", etc. on the home screen.
+ */
+internal fun hijriMonthName(monthIndex: Int, language: AppLanguage): String? {
+    val names = when (language) {
+        AppLanguage.AR -> listOf(
+            "محرم", "صفر", "ربيع الأول", "ربيع الآخر",
+            "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان",
+            "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
+        )
+        AppLanguage.CKB -> listOf(
+            "موحەڕەم", "سەفەر", "ڕەبیعی یەکەم", "ڕەبیعی دووەم",
+            "جومادای یەکەم", "جومادای دووەم", "ڕەجەب", "شەعبان",
+            "ڕەمەزان", "شەوال", "زولقەعدە", "زولحیجە"
+        )
+        AppLanguage.EN -> listOf(
+            "Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani",
+            "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban",
+            "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"
+        )
+    }
+    return names.getOrNull(monthIndex)
+}
+
 /** Format both dates from the device's local clock; Hijri uses the Umm al-Qura calendar. */
 internal fun formatHomeCalendarDateDisplay(
     epochMillis: Long,
@@ -2908,9 +2935,14 @@ internal fun formatHomeCalendarDateDisplay(
             calculationType = android.icu.util.IslamicCalendar.CalculationType.ISLAMIC_UMALQURA
             timeInMillis = epochMillis
         }
-        android.icu.text.SimpleDateFormat("d MMMM yyyy", locale).apply {
-            calendar = islamicCalendar
-        }.format(date)
+        val day = islamicCalendar.get(android.icu.util.Calendar.DAY_OF_MONTH)
+        val month = islamicCalendar.get(android.icu.util.Calendar.MONTH)
+        val year = islamicCalendar.get(android.icu.util.Calendar.YEAR)
+        val monthName = hijriMonthName(month, language)
+            ?: error("Unexpected Umm al-Qura month index: $month")
+        val numberFormat = android.icu.text.NumberFormat.getIntegerInstance(locale)
+        val yearSuffix = if (language == AppLanguage.EN) "AH" else "هـ"
+        "${numberFormat.format(day)} $monthName ${numberFormat.format(year)} $yearSuffix"
     }.getOrElse { error ->
         android.util.Log.w("MashxallHome", "Could not format the Umm al-Qura date", error)
         "—"
