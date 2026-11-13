@@ -342,6 +342,21 @@ internal fun filterRecitersForPlaybackMode(
     matchesSearch && reciterMatchesPlaybackMode(mode, reciter.audioType)
 }
 
+/** In the unified Quran picker both recording types are shown together; coverage still filters the chosen surah. */
+internal fun filterRecitersForUnifiedPicker(
+    reciters: List<Reciter>,
+    query: String,
+    surahNumber: Int
+): List<Reciter> = reciters.filter { reciter ->
+    reciter.surahTotal >= surahNumber &&
+        matchesAudioCatalogSearch(
+            query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
+        )
+}
+
+/** Full-surah recordings intentionally do not expose verse-navigation buttons. */
+internal fun quranReciterShowsAyahNavigation(audioType: Int): Boolean = audioType == 0
+
 internal object ReaderPlaybackSettings {
     var mode by mutableStateOf("full")
 
@@ -564,7 +579,8 @@ private fun QuranInlinePlaybackBar(
     // recompose and made the visible progress bar feel behind the recitation.
     var playbackPositionMs by remember { mutableIntStateOf(0) }
     var playbackDurationMs by remember { mutableIntStateOf(0) }
-    // Full-surah playback intentionally has no seek bar or previous/next controls.\n    // Verified timestamps may still keep the Mushaf page aligned with the playing ayah.\n    val navigatesByAyah = usesAyahClips
+    // Full-surah playback intentionally has no seek bar or previous/next controls.
+    // Verified timestamps may still keep the Mushaf page aligned with the playing ayah.
     val latestActiveAyah = rememberUpdatedState(activeAyah)
     val latestTimedAyahChanged = rememberUpdatedState(onTimedAyahChanged)
     val latestTimedAyahRanges = rememberUpdatedState(timedAyahRanges)
@@ -697,7 +713,7 @@ private fun QuranInlinePlaybackBar(
                 pressedScale = quranReaderActionPressScale("repeat_ayah"),
                 onClick = onRepeat
             )
-            if (usesAyahClips) {
+            if (quranReciterShowsAyahNavigation(if (usesAyahClips) 0 else 1)) {
                 ReaderActionIcon(
                     icon = Icons.Outlined.ChevronRight,
                     description = if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو",
@@ -3696,19 +3712,11 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
                 Spacer(Modifier.height(7.dp))
                 val targetSurahForReciter = (pendingInlineRecitationTarget?.first ?: inlinePlaybackSurah).coerceIn(1, 114)
                 val inlineReciterResults = remember(readerReciters, inlineReciterSearch, targetSurahForReciter) {
-                    readerReciters.filter { reciter ->
-                        reciter.surahTotal >= targetSurahForReciter &&
-                            matchesAudioCatalogSearch(
-                                inlineReciterSearch,
-                                reciter.nameArabic,
-                                reciter.nameEnglish,
-                                reciter.baseUrl,
-                                reciter.recitation
-                            )
-                    }.sortedWith(
-                        compareBy<Reciter> { it.order }
-                            .thenBy { it.nameEnglish.lowercase(Locale.ROOT) }
-                    )
+                    filterRecitersForUnifiedPicker(readerReciters, inlineReciterSearch, targetSurahForReciter)
+                        .sortedWith(
+                            compareBy<Reciter> { it.order }
+                                .thenBy { it.nameEnglish.lowercase(Locale.ROOT) }
+                        )
                 }
                 Text(
                     when (language) {
