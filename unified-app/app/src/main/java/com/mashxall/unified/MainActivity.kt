@@ -88,6 +88,7 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.GraphicEq
@@ -2889,6 +2890,34 @@ private fun HomeReadingResumeCard(
     }
 }
 
+internal data class HomeCalendarDateDisplay(
+    val gregorian: String,
+    val hijri: String
+)
+
+/** Format both dates from the device's local clock; Hijri uses the Umm al-Qura calendar. */
+internal fun formatHomeCalendarDateDisplay(
+    epochMillis: Long,
+    language: AppLanguage
+): HomeCalendarDateDisplay {
+    val locale = Locale.forLanguageTag(language.key)
+    val date = Date(epochMillis)
+    val gregorian = SimpleDateFormat("d MMM yyyy", locale).format(date)
+    val hijri = runCatching {
+        val islamicCalendar = android.icu.util.IslamicCalendar(locale).apply {
+            calculationType = android.icu.util.IslamicCalendar.CalculationType.ISLAMIC_UMALQURA
+            timeInMillis = epochMillis
+        }
+        android.icu.text.SimpleDateFormat("d MMMM yyyy", locale).apply {
+            calendar = islamicCalendar
+        }.format(date)
+    }.getOrElse { error ->
+        android.util.Log.w("MashxallHome", "Could not format the Umm al-Qura date", error)
+        "—"
+    }
+    return HomeCalendarDateDisplay(gregorian = gregorian, hijri = hijri)
+}
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
@@ -2915,6 +2944,9 @@ private fun HomeScreen(
     var isRefreshingPrayerTimes by remember { mutableStateOf(false) }
     var prayerRefreshRevision by remember { mutableIntStateOf(0) }
     var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
+    val homeCalendarDates = remember(clockNow, language) {
+        formatHomeCalendarDateDisplay(clockNow, language)
+    }
     var locationMode by rememberSaveable {
         mutableStateOf(resolvePrayerLocationMode(
             prefs.getString("prayer_location_mode", null),
@@ -3329,6 +3361,69 @@ private fun HomeScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            border = BorderStroke(0.8.dp, Gold.copy(alpha = 0.22f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Gold.copy(alpha = 0.09f), cardColor, DeepGreen.copy(alpha = 0.035f))
+                        )
+                    )
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(36.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DeepGreen),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = Gold, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "GREGORIAN"
+                            AppLanguage.AR -> "التاريخ الميلادي"
+                            AppLanguage.CKB -> "بەرواری زایینی"
+                        },
+                        color = Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                    )
+                    Text(
+                        homeCalendarDates.gregorian,
+                        color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+                Box(
+                    Modifier.padding(horizontal = 8.dp).width(1.dp).height(34.dp)
+                        .background(Gold.copy(alpha = 0.24f))
+                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        when (language) {
+                            AppLanguage.EN -> "HIJRI"
+                            AppLanguage.AR -> "التاريخ الهجري"
+                            AppLanguage.CKB -> "بەرواری کۆچی"
+                        },
+                        color = Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                    )
+                    Text(
+                        homeCalendarDates.hijri,
+                        color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
         Card(
             modifier = Modifier.fillMaxWidth().premiumClickable(role = Role.Button, pressedScale = 0.976f) { onOpen(AppScreen.PRAYER) },
             shape = RoundedCornerShape(26.dp),
