@@ -140,7 +140,7 @@ private val hijriOccasionSpecs = listOf(
     HijriOccasionSpec("eid_adha", 12, 10, "عيد الأضحى", "جەژنی قوربان", "Eid al-Adha")
 )
 
-private fun hijriMonthName(month: Int, language: AppLanguage): String = when (language) {
+internal fun hijriMonthName(month: Int, language: AppLanguage): String = when (language) {
     AppLanguage.AR -> listOf("", "محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة").getOrElse(month) { "" }
     AppLanguage.CKB -> listOf("", "موحەڕەم", "سەفەر", "ڕەبیعی یەکەم", "ڕەبیعی دووەم", "جومادای یەکەم", "جومادای دووەم", "ڕەجەب", "شەعبان", "ڕەمەزان", "شەوال", "زولقەعدە", "زولحەجە").getOrElse(month) { "" }
     AppLanguage.EN -> listOf("", "Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani", "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban", "Ramadan", "Shawwal", "Dhu al-Qadah", "Dhu al-Hijjah").getOrElse(month) { "" }
