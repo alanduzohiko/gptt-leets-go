@@ -27,15 +27,25 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
-    fun oneFileFullSurahCanOnlyStartAtItsFirstAyah() {
+    fun oneFileFullSurahAlwaysPlaysAndUsesOnlyVerifiedTimingsForMidSurahSeek() {
         val first = quranPlaybackStartPlan(audioType = 1, requestedAyah = 1, ayahCount = 7)
         assertEquals(true, first.isSupported)
         assertEquals(1, first.startingAyah)
         assertEquals(false, first.usesAyahClips)
 
-        val later = quranPlaybackStartPlan(audioType = 1, requestedAyah = 5, ayahCount = 7)
-        assertEquals(false, later.isSupported)
-        assertEquals(1, later.startingAyah)
+        val laterWithoutTimings = quranPlaybackStartPlan(audioType = 1, requestedAyah = 5, ayahCount = 7)
+        assertEquals(true, laterWithoutTimings.isSupported)
+        assertEquals(1, laterWithoutTimings.startingAyah)
+
+        val laterWithTimings = quranPlaybackStartPlan(
+            audioType = 1,
+            requestedAyah = 5,
+            ayahCount = 7,
+            hasAyahTimings = true
+        )
+        assertEquals(true, laterWithTimings.isSupported)
+        assertEquals(5, laterWithTimings.startingAyah)
+        assertEquals(false, laterWithTimings.usesAyahClips)
     }
 
     @Test

@@ -235,13 +235,15 @@ class QuranAudioTimingTest {
     }
 
     @Test
-    fun onlyAValidatedFullSurahTimelineEnablesExactMidSurahStart() {
+    fun fullSurahWithoutTimelineStartsAtBeginningAndVerifiedTimelineAllowsExactMidSurahStart() {
         val withoutTimeline = quranPlaybackStartPlan(
             audioType = 1,
             requestedAyah = 43,
             ayahCount = 114
         )
-        assertFalse(withoutTimeline.isSupported)
+        assertTrue(withoutTimeline.isSupported)
+        assertFalse(withoutTimeline.usesAyahClips)
+        assertEquals(1, withoutTimeline.startingAyah)
 
         val withTimeline = quranPlaybackStartPlan(
             audioType = 1,
