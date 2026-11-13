@@ -86,7 +86,7 @@ class HadithSearchNormalizationTest {
             null,
             hadithSearchMatchScore(
                 "الصدقة الصلاة",
-                listOf("تحدث الناس عن الصدقة في المجلس ثم صلى الرجل في آخر الليل")
+                listOf("تحدث الناس عن الصدقة في المجلس ثم جاء الحديث عن فضل الصلاة في آخر الليل")
             )
         )
     }
