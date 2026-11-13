@@ -331,6 +331,14 @@ internal fun matchesAudioCatalogSearch(query: String, vararg candidates: String)
 internal fun reciterMatchesPlaybackMode(mode: String, audioType: Int): Boolean =
     if (mode == "verse") audioType == 0 else audioType != 0
 
+/** A verified continuous recording may join the selected-ayah list when exact verse timings exist. */
+internal fun reciterMatchesPlaybackMode(mode: String, reciter: Reciter): Boolean =
+    if (mode == "verse") {
+        reciter.audioType == 0 || quranHasVerifiedMushafTimingRead(reciter)
+    } else {
+        reciter.audioType != 0
+    }
+
 internal fun filterRecitersForPlaybackMode(
     reciters: List<Reciter>,
     mode: String,
@@ -339,7 +347,7 @@ internal fun filterRecitersForPlaybackMode(
     val matchesSearch = matchesAudioCatalogSearch(
         query, reciter.nameArabic, reciter.nameEnglish, reciter.baseUrl, reciter.recitation
     )
-    matchesSearch && reciterMatchesPlaybackMode(mode, reciter.audioType)
+    matchesSearch && reciterMatchesPlaybackMode(mode, reciter)
 }
 
 // Full-surah entries are eligible here only when their exact matching ayah source exists.
@@ -418,7 +426,7 @@ internal fun defaultReciterId(mode: String, reciters: List<Reciter>): Int? =
             it.audioType != 0 && ReaderPlaybackSettings.supportsAllSurahs(it)
         }?.id
     } else {
-        reciters.firstOrNull { it.audioType == 0 }?.id
+        reciters.firstOrNull { reciterMatchesPlaybackMode("verse", it) }?.id
     }
 
 /** Keep an explicitly chosen source when it can play the selected playback mode. */
@@ -426,7 +434,7 @@ internal fun resolveCompatibleReciterId(mode: String, currentId: Int, reciters: 
     if (currentId <= 0) return null
     val current = reciters.firstOrNull { it.id == currentId } ?: return null
     return current.id.takeIf {
-        reciterMatchesPlaybackMode(mode, current.audioType) && current.surahTotal > 0
+        reciterMatchesPlaybackMode(mode, current) && current.surahTotal > 0
     }
 }
 
@@ -6127,6 +6135,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var query by rememberSaveable { mutableStateOf("") }
+    var appliedQuery by remember { mutableStateOf("") }
     val favoritePrefs = remember { context.getSharedPreferences("mashxall_hadith_favorites", Context.MODE_PRIVATE) }
     var favoriteHadithIds by remember {
         mutableStateOf(favoritePrefs.getStringSet("hadith_ids", emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.filter { it > 0 }.toSet())
@@ -6148,13 +6157,17 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
     LaunchedEffect(Unit) {
         collections = ContentRepository.loadHadithCollections(context)
     }
-    LaunchedEffect(query, selectedCollectionId, selectedMode, savedOnly, favoriteHadithIds.takeIf { savedOnly }) {
+    LaunchedEffect(query) {
+        delay(260L)
+        appliedQuery = query.trim()
+    }
+    LaunchedEffect(appliedQuery, selectedCollectionId, selectedMode, savedOnly, favoriteHadithIds.takeIf { savedOnly }) {
         loading = true
         loadingMore = false
         offset = 0
         hasMore = true
         if (selectedMode == 1) {
-            articles = ContentRepository.loadHadithArticles(context, query.trim())
+            articles = ContentRepository.loadHadithArticles(context, appliedQuery)
             hadithItems = emptyList()
             totalMatches = articles.size
             offset = articles.size
@@ -6162,9 +6175,9 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
         } else {
             val bookFilter = selectedCollectionId.takeIf { it > 0 }
             val idFilter = if (savedOnly) favoriteHadithIds else null
-            totalMatches = ContentRepository.loadHadithCount(context, query.trim(), bookFilter, idFilter)
+            totalMatches = ContentRepository.loadHadithCount(context, appliedQuery, bookFilter, idFilter)
             hadithItems = ContentRepository.loadHadiths(
-                context, query.trim(), offset = 0, limit = 100, bookId = bookFilter, hadithIds = idFilter
+                context, appliedQuery, offset = 0, limit = 100, bookId = bookFilter, hadithIds = idFilter
             )
             articles = emptyList()
             offset = hadithItems.size
@@ -6327,7 +6340,20 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
             }
         } else if (hadithItems.isEmpty()) {
             item(key = "hadith-list-empty") {
-                LoadingOrEmpty(loading, language, foreground)
+                val emptyMessage = when {
+                    appliedQuery.isNotBlank() -> when (language) {
+                        AppLanguage.EN -> "No narration matches these words. Try a different spelling or search in Arabic, Kurdish or English."
+                        AppLanguage.AR -> "لم يُعثر على حديث يطابق كلمات البحث. جرّب صياغة أخرى أو ابحث بالعربية أو الكردية أو الإنجليزية."
+                        AppLanguage.CKB -> "هیچ فەرموودەیەک لەم وشانەدا نەدۆزرایەوە؛ بە شێوەیەکی تر بنووسە یان بە عەرەبی، کوردی یان ئینگلیزی بگەڕێ."
+                    }
+                    savedOnly -> when (language) {
+                        AppLanguage.EN -> "No saved narration matches the selected filters."
+                        AppLanguage.AR -> "لا يوجد حديث محفوظ يطابق عوامل التصفية المحددة."
+                        AppLanguage.CKB -> "هیچ فەرموودەیەکی پاشەکەوتکراو لەگەڵ ئەم پاڵاوتنانەدا نەدۆزرایەوە."
+                    }
+                    else -> tr(language, "no_data")
+                }
+                LoadingOrEmpty(loading, language, foreground, emptyMessage)
             }
         } else {
             itemsIndexed(hadithItems, key = { _, item -> item.id }) { index, hadith ->
@@ -6475,7 +6501,7 @@ fun HadithScreen(language: AppLanguage, foreground: Color, cardColor: Color) {
                             try {
                                 val nextPage = ContentRepository.loadHadiths(
                                     context,
-                                    query.trim(),
+                                    appliedQuery,
                                     offset,
                                     100,
                                     selectedCollectionId.takeIf { it > 0 },
@@ -9279,6 +9305,11 @@ fun AudioScreen(
                         else "لە ئایەتی $startingAyah تا کۆتایی سوورەت بخوێنەوە"
                     }
                     val editionLabel = when {
+                        playbackMode == "verse" && quranHasVerifiedMushafTimingRead(reciter) -> when (language) {
+                            AppLanguage.EN -> "Continuous recitation • verified ayah timings"
+                            AppLanguage.AR -> "تلاوة متصلة • توقيتات آيات موثّقة"
+                            AppLanguage.CKB -> "خوێندنەوەی بەردەوام • کاتی پشتڕاستکراوەی ئایەت"
+                        }
                         surahNumber > reciter.surahTotal && language == AppLanguage.EN -> "This edition contains ${reciter.surahTotal} surahs only"
                         surahNumber > reciter.surahTotal && language == AppLanguage.AR -> "هذا الإصدار يضم ${reciter.surahTotal} سورة فقط"
                         surahNumber > reciter.surahTotal -> "ئەم وەشانە تەنها ${reciter.surahTotal} سوورەتی هەیە"

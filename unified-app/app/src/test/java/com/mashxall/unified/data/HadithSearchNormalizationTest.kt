@@ -24,6 +24,21 @@ class HadithSearchNormalizationTest {
     }
 
     @Test
+    fun separateWordPatternsAllowEitherWordOrder() {
+        val patterns = hadithSearchGlobPatterns("إِنَّمَا، الْأَعْمَالُ")
+        assertEquals(2, patterns.size)
+        assertTrue(patterns.all { it.startsWith("*") && it.endsWith("*") })
+        assertTrue(patterns.all { it.contains("[اأإآٱ]") })
+        assertTrue(hadithSearchGlobPatterns(" ،؟— ").isEmpty())
+    }
+
+    @Test
+    fun ArabicAndPersianDigitsAreNormalizedForHadithNumberSearch() {
+        assertEquals("حديث 123", normalizeArabicSearchText("حديث ١٢٣"))
+        assertEquals("حديث 456", normalizeArabicSearchText("حديث ۴۵۶"))
+    }
+
+    @Test
     fun latinAndSoraniSearchTermsRemainSearchable() {
         assertTrue(hadithSearchGlobPattern("salah").contains("*s*a*l*a*h*"))
         assertTrue(hadithSearchGlobPattern("فەرموودە").isNotBlank())

@@ -555,6 +555,8 @@ internal fun normalizeArabicSearchText(value: String): String {
                 'ؤ' -> 'و'
                 'ة' -> 'ه'
                 'ک' -> 'ك'
+                in '٠'..'٩' -> ('0'.code + raw.code - '٠'.code).toChar()
+                in '۰'..'۹' -> ('0'.code + raw.code - '۰'.code).toChar()
                 else -> raw
             }
             if (
@@ -596,6 +598,14 @@ internal fun hadithSearchGlobPattern(query: String): String {
         }
     }
 }
+
+/** Each word gets its own tolerant pattern, so word order does not affect search. */
+internal fun hadithSearchGlobPatterns(query: String): List<String> =
+    normalizeArabicSearchText(query)
+        .split(' ')
+        .filter(String::isNotBlank)
+        .distinct()
+        .map(::hadithSearchGlobPattern)
 
 private fun normalizeArabicKey(value: String): String = value.lowercase(Locale.ROOT).filterNot { ch ->
     ch in '\u064B'..'\u065F' || ch == '\u0670' || ch == '\u0640' || !ch.isLetterOrDigit()
@@ -1713,13 +1723,29 @@ object ContentRepository {
             val detailColumn = findColumn(authorColumns, "biography", "bio", "description", "details", "about")
             val detailExpr = if (canJoin && detailColumn != null) "COALESCE(auth.${detailColumn},'')" else "''"
 
-            val filter = if (query.isBlank()) "" else """
-                WHERE a.description LIKE ? OR a.description_text_ar LIKE ? OR a.description_text_en LIKE ?
-                   OR a.text LIKE ? OR a.text_ar LIKE ? OR a.text_en LIKE ?
-                   OR $ckbExpr LIKE ? OR $arabicExpr LIKE ? OR $englishExpr LIKE ?
-            """.trimIndent()
-            val term = "%${query.trim()}%"
-            val args = if (query.isBlank()) null else arrayOf(term, term, term, term, term, term, term, term, term)
+            val articleSearchColumns = listOf(
+                "COALESCE(a.description,'')",
+                "COALESCE(a.description_text_ar,'')",
+                "COALESCE(a.description_text_en,'')",
+                "COALESCE(a.text,'')",
+                "COALESCE(a.text_ar,'')",
+                "COALESCE(a.text_en,'')",
+                ckbExpr,
+                arabicExpr,
+                englishExpr,
+                detailExpr,
+                "CAST(a.id AS TEXT)"
+            )
+            val articleSearchText = articleSearchColumns.joinToString(" || ' ' || ")
+            val articleSearchPatterns = hadithSearchGlobPatterns(query)
+            val filter = when {
+                query.isBlank() -> ""
+                articleSearchPatterns.isEmpty() -> "WHERE 0=1"
+                else -> "WHERE " + articleSearchPatterns.joinToString(" AND ") {
+                    "LOWER(($articleSearchText)) GLOB ?"
+                }
+            }
+            val args = articleSearchPatterns.toTypedArray().takeIf { it.isNotEmpty() }
             db.rawQuery(
                 """
                 SELECT a.id,a.description,a.description_text_ar,a.description_text_en,
@@ -1797,9 +1823,13 @@ object ContentRepository {
             "b.name", "b.name_ar", "b.name_en",
             "k.title", "k.title_ar", "k.title_en",
             "ch.title", "ch.title_ar", "ch.title_en",
-            "h.note", "h.footnote"
+            "h.note", "h.footnote", "h.sort_in_book",
+            "CAST(h.sort AS TEXT)", "CAST(h.id AS TEXT)"
         )
-        val normalizedPattern = hadithSearchGlobPattern(query)
+        val combinedSearchText = searchableColumns.joinToString(" || ' ' || ") {
+            "COALESCE($it,'')"
+        }
+        val searchPatterns = hadithSearchGlobPatterns(query)
         val conditions = buildList {
             if (bookId != null) add("h.book_id=?")
             if (hadithIds != null) {
@@ -1808,13 +1838,14 @@ object ContentRepository {
                 else add("h.id IN (" + safeIds.joinToString(",") + ")")
             }
             if (query.isNotBlank()) {
-                val clauses = buildList {
-                    searchableColumns.forEach { add("$it LIKE ?") }
-                    if (normalizedPattern.isNotBlank()) {
-                        searchableColumns.forEach { add("LOWER(COALESCE($it,'')) GLOB ?") }
+                if (searchPatterns.isEmpty()) {
+                    add("0=1")
+                } else {
+                    val tokenConditions = searchPatterns.map {
+                        "LOWER(($combinedSearchText)) GLOB ?"
                     }
+                    add("(" + tokenConditions.joinToString(" AND ") + ")")
                 }
-                add("(" + clauses.joinToString(" OR ") + ")")
             }
         }
         return if (conditions.isEmpty()) "" else "WHERE " + conditions.joinToString(" AND ")
@@ -1823,11 +1854,7 @@ object ContentRepository {
     private fun hadithSearchArgs(query: String, bookId: Int? = null): Array<String> =
         buildList {
             if (bookId != null) add(bookId.toString())
-            if (query.isNotBlank()) {
-                repeat(14) { add("%${query.trim()}%") }
-                val normalizedPattern = hadithSearchGlobPattern(query)
-                if (normalizedPattern.isNotBlank()) repeat(14) { add(normalizedPattern) }
-            }
+            addAll(hadithSearchGlobPatterns(query))
         }.toTypedArray()
 
     suspend fun loadHadithCount(
