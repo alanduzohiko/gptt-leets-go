@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "catalogue_name": "Mashxall verified EveryAyah verse-by-verse reciters",
+  "source": "https://everyayah.com/data/recitations.js",
+  "audio_host": "https://everyayah.com/data/",
+  "verification": {
+    "repository": "https://github.com/saad-musbeh/quran-adhan-qibla",
+    "pinned_commit": "c1069959956877d35ee734be2a1ca49501e57ed8",
+    "report": "assets/quran/reciter-verification-2026-10-12.json",
+    "checked": "2026-10-12",
+    "note": "The pinned report lists 6,236 canonical ayah files and zero missing files for each folder; 1:1 and 114:6 samples returned HTTP 200 audio/mpeg."
+  },
+  "audio_license_status": "unknown",
+  "source_note": "This catalogue stores names, folder identifiers and URL patterns only. Audio is streamed from EveryAyah when requested and is not bundled in Mashxall. No blanket audio redistribution licence is claimed.",
+  "record_count": 10,
+  "records": [
+    {
+      "id": "everyayah-ghamadi",
+      "name": "Ghamadi",
+      "name_ar": "سعد الغامدي",
+      "folder": "Ghamadi_40kbps",
+      "bitrate": "40kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Ghamadi_40kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-fares-abbad",
+      "name": "Fares Abbad",
+      "name_ar": "فارس عباد",
+      "folder": "Fares_Abbad_64kbps",
+      "bitrate": "64kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Fares_Abbad_64kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-yasser-dossary",
+      "name": "Yasser Ad-Dussary",
+      "name_ar": "ياسر الدوسري",
+      "folder": "Yasser_Ad-Dussary_128kbps",
+      "bitrate": "128kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-nasser-qatami",
+      "name": "Nasser Al-Qatami",
+      "name_ar": "ناصر القطامي",
+      "folder": "Nasser_Alqatami_128kbps",
+      "bitrate": "128kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Nasser_Alqatami_128kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-muhsin-alqasim",
+      "name": "Muhsin Al Qasim",
+      "name_ar": "محسن القاسم",
+      "folder": "Muhsin_Al_Qasim_192kbps",
+      "bitrate": "192kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Muhsin_Al_Qasim_192kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-salah-budair",
+      "name": "Salah Al-Budair",
+      "name_ar": "صلاح البدير",
+      "folder": "Salah_Al_Budair_128kbps",
+      "bitrate": "128kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Salah_Al_Budair_128kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-hani-rifai",
+      "name": "Hani Rifai",
+      "name_ar": "هاني الرفاعي",
+      "folder": "Hani_Rifai_192kbps",
+      "bitrate": "192kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Hani_Rifai_192kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-muhammad-jibreel",
+      "name": "Muhammad Jibreel",
+      "name_ar": "محمد جبريل",
+      "folder": "Muhammad_Jibreel_128kbps",
+      "bitrate": "128kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Muhammad_Jibreel_128kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-ali-jaber",
+      "name": "Ali Jaber",
+      "name_ar": "علي جابر",
+      "folder": "Ali_Jaber_64kbps",
+      "bitrate": "64kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Ali_Jaber_64kbps/{surah3}{ayah3}.mp3"
+    },
+    {
+      "id": "everyayah-abu-bakr-shaatree",
+      "name": "Abu Bakr Ash-Shaatree",
+      "name_ar": "أبو بكر الشاطري",
+      "folder": "Abu_Bakr_Ash-Shaatree_128kbps",
+      "bitrate": "128kbps",
+      "audio_type": 0,
+      "surah_total": 114,
+      "verified_canonical_ayahs": 6236,
+      "missing_canonical_ayahs": 0,
+      "sample_checks": [
+        {
+          "file": "001001.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        },
+        {
+          "file": "114006.mp3",
+          "http_status": 200,
+          "mime": "audio/mpeg"
+        }
+      ],
+      "url_template": "https://everyayah.com/data/Abu_Bakr_Ash-Shaatree_128kbps/{surah3}{ayah3}.mp3"
+    }
+  ]
+}
