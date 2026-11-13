@@ -62,8 +62,10 @@ class AudioPlaybackModeTest {
             listOf(verse, continuous),
             filterRecitersForUnifiedPicker(listOf(verse, continuous, unverifiedFull), "", 3)
         )
+        // A reciter-name search intentionally returns both the continuous
+        // edition and its matching ayah source for the same voice.
         assertEquals(
-            listOf(continuous),
+            listOf(verse, continuous),
             filterRecitersForUnifiedPicker(listOf(verse, continuous, unverifiedFull), "Shatri", 3)
         )
         assertEquals(false, supportsMushafInlineReciter(unverifiedFull, 3, listOf(verse, continuous, unverifiedFull)))
