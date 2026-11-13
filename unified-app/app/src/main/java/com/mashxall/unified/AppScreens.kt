@@ -400,7 +400,10 @@ internal fun filterRecitersForUnifiedPicker(
 }
 
 /** Full-surah recordings intentionally do not expose verse-navigation buttons. */
-internal fun quranReciterShowsAyahNavigation(audioType: Int): Boolean = audioType == 0
+internal fun quranReciterShowsAyahNavigation(
+    audioType: Int,
+    hasVerifiedAyahTimings: Boolean = false
+): Boolean = audioType == 0 || hasVerifiedAyahTimings
 
 internal object ReaderPlaybackSettings {
     var mode by mutableStateOf("verse")
@@ -758,7 +761,7 @@ private fun QuranInlinePlaybackBar(
                 pressedScale = quranReaderActionPressScale("repeat_ayah"),
                 onClick = onRepeat
             )
-            if (quranReciterShowsAyahNavigation(if (usesAyahClips) 0 else 1)) {
+            if (quranReciterShowsAyahNavigation(if (usesAyahClips) 0 else 1, timedAyahRanges.isNotEmpty())) {
                 ReaderActionIcon(
                     icon = Icons.Outlined.ChevronRight,
                     description = if (language == AppLanguage.EN) "Previous ayah" else if (language == AppLanguage.AR) "الآية السابقة" else "ئایەتی پێشوو",
@@ -787,7 +790,7 @@ private fun QuranInlinePlaybackBar(
             } else {
                 PremiumLoadingIndicator(color = Color(0xFFF1C76B), strokeWidth = 2.dp, modifier = Modifier.size(42.dp).padding(9.dp))
             }
-            if (quranReciterShowsAyahNavigation(if (usesAyahClips) 0 else 1)) {
+            if (quranReciterShowsAyahNavigation(if (usesAyahClips) 0 else 1, timedAyahRanges.isNotEmpty())) {
                 ReaderActionIcon(
                     icon = Icons.Outlined.ChevronRight,
                     description = if (language == AppLanguage.EN) "Next ayah" else if (language == AppLanguage.AR) "الآية التالية" else "ئایەتی دواتر",
