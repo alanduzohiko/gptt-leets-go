@@ -2940,7 +2940,7 @@ internal fun formatHomeCalendarDateDisplay(
         val year = islamicCalendar.get(android.icu.util.Calendar.YEAR)
         val monthName = hijriMonthName(month, language)
             ?: error("Unexpected Umm al-Qura month index: $month")
-        val numberFormat = android.icu.text.NumberFormat.getIntegerInstance(locale)
+        val numberFormat = java.text.NumberFormat.getIntegerInstance(locale)
         val yearSuffix = if (language == AppLanguage.EN) "AH" else "هـ"
         "${numberFormat.format(day.toLong())} $monthName ${numberFormat.format(year.toLong())} $yearSuffix"
     }.getOrElse { error ->
