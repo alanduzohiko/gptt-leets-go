@@ -32,9 +32,11 @@ class HadithSearchNormalizationTest {
         assertEquals(2, patterns.size)
         assertTrue(patterns.all { it.startsWith("*") && it.endsWith("*") })
         assertTrue(patterns.all { it.contains("[اأإآٱ]") })
-        val marks = "[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u08D3-\\u08FF\\u0640]*"
-        assertEquals("*[اأإآٱ] ${marks}ن${marks}م${marks}[اأإآٱ]*".replace(" ", ""), patterns[0])
-        assertEquals("*[اأإآٱ]${marks}ل${marks}[اأإآٱ]${marks}م${marks}[اأإآٱ]${marks}ل*", patterns[1])
+        val marks = "[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08FF\u0640]*"
+        val expectedFirst = "*[اأإآٱ]" + marks + "ن" + marks + "م" + marks + "[اأإآٱ]*"
+        val expectedSecond = "*[اأإآٱ]" + marks + "ل" + marks + "[اأإآٱ]" + marks + "م" + marks + "[اأإآٱ]" + marks + "ل*"
+        assertEquals(expectedFirst, patterns[0])
+        assertEquals(expectedSecond, patterns[1])
         assertTrue(hadithSearchGlobPatterns(" ،؟— ").isEmpty())
     }
 
