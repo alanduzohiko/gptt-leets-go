@@ -2942,7 +2942,7 @@ internal fun formatHomeCalendarDateDisplay(
             ?: error("Unexpected Umm al-Qura month index: $month")
         val numberFormat = android.icu.text.NumberFormat.getIntegerInstance(locale)
         val yearSuffix = if (language == AppLanguage.EN) "AH" else "هـ"
-        "${numberFormat.format(day)} $monthName ${numberFormat.format(year)} $yearSuffix"
+        "${numberFormat.format(day.toLong())} $monthName ${numberFormat.format(year.toLong())} $yearSuffix"
     }.getOrElse { error ->
         android.util.Log.w("MashxallHome", "Could not format the Umm al-Qura date", error)
         "—"
