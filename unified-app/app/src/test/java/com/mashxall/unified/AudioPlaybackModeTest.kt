@@ -108,7 +108,7 @@ class AudioPlaybackModeTest {
             7, "قارئ آية", "Verse source", 0, "https://example.invalid/ayah/", 2,
             surahTotal = 114
         )
-        assertEquals(listOf(partial, complete, verse), filterRecitersForPlaybackMode(listOf(partial, complete, verse), "full", ""))
+        assertEquals(listOf(partial, complete), filterRecitersForPlaybackMode(listOf(partial, complete, verse), "full", ""))
         assertEquals(listOf(verse), filterRecitersForPlaybackMode(listOf(partial, complete, verse), "verse", ""))
         assertEquals(listOf(partial), filterRecitersForPlaybackMode(listOf(partial), "full", ""))
     }

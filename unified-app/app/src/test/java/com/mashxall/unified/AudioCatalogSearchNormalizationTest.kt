@@ -52,7 +52,7 @@ class AudioCatalogSearchNormalizationTest {
         )
 
         assertEquals(
-            listOf(partialFullSurah, verseByVerse),
+            listOf(partialFullSurah),
             filterRecitersForPlaybackMode(listOf(partialFullSurah, verseByVerse), "full", "مشاري")
         )
         assertEquals(
