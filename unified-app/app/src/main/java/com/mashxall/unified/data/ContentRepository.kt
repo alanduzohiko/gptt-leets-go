@@ -2836,6 +2836,48 @@ object ContentRepository {
                 }
             }
         }
+        // Add ten separately verified EveryAyah sets that provide one file per ayah.
+        // The pinned catalogue audit checked all 6,236 canonical files in each folder;
+        // no audio is bundled in Mashxall, and every track streams from EveryAyah.
+        val everyAyahReciters = runCatching {
+            val rows = context.assets.open("everyayah_verse_reciters.json")
+                .bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()).getJSONArray("records") }
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.getJSONObject(index)
+                    val folder = row.optString("folder").trim().trim('/')
+                    val englishName = reciterDisplayName(row.optString("name"))
+                    val arabicName = reciterDisplayName(row.optString("name_ar"))
+                    val sourceId = row.optString("id")
+                    val audioType = row.optInt("audio_type", -1)
+                    val surahTotal = row.optInt("surah_total", 0)
+                    val verifiedCount = row.optInt("verified_canonical_ayahs", 0)
+                    val missingCount = row.optInt("missing_canonical_ayahs", -1)
+                    if (
+                        folder.isBlank() || englishName.isBlank() || arabicName.isBlank() ||
+                        sourceId.isBlank() || audioType != 0 || surahTotal != 114 ||
+                        verifiedCount != 6236 || missingCount != 0 ||
+                        !row.optString("url_template").startsWith("https://everyayah.com/data/$folder/")
+                    ) continue
+                    add(
+                        Reciter(
+                            id = 2_000_000 + index,
+                            nameArabic = arabicName,
+                            nameEnglish = englishName,
+                            audioType = 0,
+                            baseUrl = "https://everyayah.com/data/$folder/",
+                            order = 2_000 + index,
+                            surahTotal = surahTotal,
+                            recitation = "Hafs • EveryAyah • ${row.optString("bitrate")}",
+                            sourceId = "everyayah:$folder"
+                        )
+                    )
+                }
+            }
+        }.onFailure { error ->
+            Log.w("MashxallAudio", "Could not load the verified EveryAyah verse-reciter catalogue", error)
+        }.getOrDefault(emptyList())
+
         // The Quran database remains the source for verse-by-verse reciters.
         // Add source-attributed MP3Quran full-surah/edition catalog entries without
         // bundling third-party audio files in the APK. Numeric IDs are offset so
@@ -2872,7 +2914,7 @@ object ContentRepository {
         }.onFailure { error ->
             Log.w("MashxallAudio", "Could not load the attributed online reciter catalog", error)
         }.getOrDefault(emptyList())
-        (originalReciters + catalogReciters)
+        (originalReciters + everyAyahReciters + catalogReciters)
             .distinctBy { it.id }
             .sortedWith(compareBy<Reciter> { it.order }.thenBy { it.nameEnglish.lowercase(Locale.ROOT) })
     }
