@@ -69,10 +69,10 @@ jobs:
           # build. This keeps ordinary code fixes independent of the external
           # Dropbox URL while preserving the video bit-for-bit.
           PREVIOUS_RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow build-unified-mashxall.yml --branch "$GITHUB_REF_NAME" \
+            --workflow build-unified-mashxall.yml --branch "redesign/reader-first-mashxall" \
             --status success --limit 1 --json databaseId --jq '.[0].databaseId // ""')"
           PREVIOUS_RUN_NUMBER="$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow build-unified-mashxall.yml --branch "$GITHUB_REF_NAME" \
+            --workflow build-unified-mashxall.yml --branch "redesign/reader-first-mashxall" \
             --status success --limit 1 --json number --jq '.[0].number // ""')"
           REUSED_INTRO=false
           if [[ -n "$PREVIOUS_RUN_ID" && -n "$PREVIOUS_RUN_NUMBER" ]]; then
