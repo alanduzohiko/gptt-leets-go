@@ -7,16 +7,14 @@ import org.junit.Test
 
 class HadithSearchNormalizationTest {
     @Test
-    fun globMatchesAdjacentLettersAndAllowsArabicMarksBetweenThem() {
+    fun globIsBroadCandidatePrefilterForPlainAndDiacriticText() {
         val pattern = hadithSearchGlobPattern("إِنَّمَا")
         assertTrue(pattern.startsWith("*"))
         assertTrue(pattern.endsWith("*"))
-        assertTrue(pattern.contains("[اأإآٱ]"))
-        assertTrue(pattern.contains("[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08FF\u0640]*"))
+        assertTrue(pattern.contains("[اأإآٱ]*ن*م*"))
         assertFalse(pattern.contains("**"))
         assertEquals("", hadithSearchGlobPattern(" ،؟— "))
     }
-
     @Test
     fun commonArabicAndSoraniKeyboardVariantsAreIncluded() {
         val pattern = hadithSearchGlobPattern("يهوك")
@@ -32,11 +30,10 @@ class HadithSearchNormalizationTest {
         assertEquals(2, patterns.size)
         assertTrue(patterns.all { it.startsWith("*") && it.endsWith("*") })
         assertTrue(patterns.all { it.contains("[اأإآٱ]") })
-        val marks = "[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08FF\u0640]*"
-        val expectedFirstSeparators = normalizeArabicSearchText("إِنَّمَا").replace(" ", "").length - 1
-        val expectedSecondSeparators = normalizeArabicSearchText("الْأَعْمَالُ").replace(" ", "").length - 1
-        assertEquals(expectedFirstSeparators, patterns[0].windowed(marks.length).count { it == marks })
-        assertEquals(expectedSecondSeparators, patterns[1].windowed(marks.length).count { it == marks })
+        val expectedFirstWildcards = normalizeArabicSearchText("إِنَّمَا").replace(" ", "").length + 1
+        val expectedSecondWildcards = normalizeArabicSearchText("الْأَعْمَالُ").replace(" ", "").length + 1
+        assertEquals(expectedFirstWildcards, patterns[0].count { it == '*' })
+        assertEquals(expectedSecondWildcards, patterns[1].count { it == '*' })
         assertTrue(hadithSearchGlobPatterns(" ،؟— ").isEmpty())
     }
 
