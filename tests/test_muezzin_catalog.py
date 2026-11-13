@@ -41,6 +41,7 @@ class MuezzinCatalogTests(unittest.TestCase):
             "ناصر القطامي",
             "ياسر الدوسري",
             "أحمد الكوردي",
+            "محمد مروان قصاص",
         ):
             self.assertIn(name.lower(), all_names)
 
