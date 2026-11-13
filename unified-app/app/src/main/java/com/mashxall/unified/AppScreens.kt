@@ -353,6 +353,10 @@ internal object ReaderPlaybackSettings {
 internal fun resolveReciterStartAyah(mode: String, requestedAyah: Int, ayahCount: Int): Int =
     if (mode == "full") 1 else requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
 
+/** In the Mushaf, the tapped ayah is the requested start regardless of file format. */
+internal fun resolveMushafInlineStartAyah(requestedAyah: Int, ayahCount: Int): Int =
+    requestedAyah.coerceIn(1, ayahCount.coerceAtLeast(1))
+
 /** Pick a reciter compatible with the user's chosen mode and actual source coverage. */
 internal fun defaultReciterId(mode: String, reciters: List<Reciter>): Int? =
     if (mode == "full") {
@@ -1854,11 +1858,10 @@ fun QuranScreen(language: AppLanguage, foreground: Color, cardColor: Color, init
         }
         if (inlinePlaybackPreparing) return
 
-        val requestedAyahInSurah = resolveReciterStartAyah(
-            readerPlaybackMode,
-            requestedAyah,
-            ayahCount
-        )
+        // A tapped Mushaf ayah stays the requested start. Full-surah files
+        // use provider timing when available; otherwise they must not be swapped
+        // to a different ayah-by-ayah reciter behind the user's back.
+        val requestedAyahInSurah = resolveMushafInlineStartAyah(requestedAyah, ayahCount)
         inlinePlaybackPreparing = true
         inlinePlaybackDurationMs = 0
         scope.launch {
