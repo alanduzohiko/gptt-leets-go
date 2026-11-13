@@ -580,12 +580,12 @@ internal fun normalizeArabicSearchText(value: String): String {
 }
 
 /**
- * Broad SQLite candidate-gap pattern. SQLite GLOB cannot express an optional
- * repetition of a character class, so the wildcard can span arbitrary source
- * markup/text here. This is only a prefilter: hadithSearchMatchScore performs
- * strict normalized-word proximity matching before a row is ever shown.
+ * SQLite GLOB is deliberately a broad candidate prefilter: a wildcard between
+ * query letters allows both plain Arabic and text carrying optional marks.
+ * It is never sufficient to display a hit; hadithSearchMatchScore validates
+ * ordered fragments inside a short word window in one language field.
  */
-private const val HADITH_SEARCH_MARKS_GLOB = "[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u08D3-\\u08FF\\u0640]*"
+private const val HADITH_SEARCH_GLOB_GAP = "*"
 
 /** Build a broad candidate pattern; Kotlin validation below is authoritative. */
 internal fun hadithSearchGlobPattern(query: String): String {
@@ -604,7 +604,7 @@ internal fun hadithSearchGlobPattern(query: String): String {
                     else -> letter.toString()
                 }
             )
-            if (index < letters.lastIndex) append(HADITH_SEARCH_MARKS_GLOB)
+            if (index < letters.lastIndex) append(HADITH_SEARCH_GLOB_GAP)
         }
         append('*')
     }
