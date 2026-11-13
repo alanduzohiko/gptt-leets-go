@@ -560,30 +560,33 @@ private fun QuranInlinePlaybackBar(
     val navigatesByAyah = usesAyahClips || timedAyahRanges.isNotEmpty()
     val latestActiveAyah = rememberUpdatedState(activeAyah)
     val latestTimedAyahChanged = rememberUpdatedState(onTimedAyahChanged)
-    LaunchedEffect(usesAyahClips, isPrepared, isPaused, timedAyahRanges, reciter?.id, surahName) {
+    val latestTimedAyahRanges = rememberUpdatedState(timedAyahRanges)
+    val latestPrepared = rememberUpdatedState(isPrepared)
+    val latestPaused = rememberUpdatedState(isPaused)
+    // Keep one polling coroutine alive for the entire selected recording. Player
+    // readiness and pause state change during buffering/seek; they must not
+    // repeatedly cancel the clock that drives the visible progress bar.
+    LaunchedEffect(usesAyahClips, reciter?.id, surahName) {
         var lastTimedAyah = latestActiveAyah.value
         while (true) {
-            // Media3's actual position drives both the progress bar and the verse
-            // marker. MP3Quran's validated offsets are absolute milliseconds in
-            // this same continuous surah recording, not text-length estimates.
             val (position, duration) = AudioController.playbackPosition()
             playbackPositionMs = position.coerceAtLeast(0)
             playbackDurationMs = duration.coerceAtLeast(0)
+
+            val timings = latestTimedAyahRanges.value
             if (
-                isPrepared &&
+                latestPrepared.value &&
                 !AudioController.isInitialSequenceSeekPending() &&
                 !usesAyahClips &&
-                timedAyahRanges.isNotEmpty()
+                timings.isNotEmpty()
             ) {
-                // Keep the selected verse stable until Media3 confirms its seek;
-                // the old zero position must not reset it to the start of the surah.
-                val playingAyah = quranAyahAtPositionMs(timedAyahRanges, position.toLong())
+                val playingAyah = quranAyahAtPositionMs(timings, position.toLong())
                 if (playingAyah != null && playingAyah != lastTimedAyah) {
                     lastTimedAyah = playingAyah
                     latestTimedAyahChanged.value(playingAyah)
                 }
             }
-            delay(if (isPrepared && !isPaused) 60L else 120L)
+            delay(if (latestPrepared.value && !latestPaused.value) 100L else 180L)
         }
     }
     val progress = if (playbackDurationMs > 0) {
@@ -4710,8 +4713,15 @@ internal fun mushafSwipeTarget(page: Int, horizontalDragPx: Float, thresholdPx: 
  * (-X) sweeps it from right to left.
  */
 /** Start page playback at the first verse actually printed on the visible page. */
-internal fun quranMushafPagePlaybackTarget(pageVerses: List<MushafPageVerse>): Pair<Int, Int>? =
-    pageVerses.firstOrNull()?.let { it.surah to it.ayah }
+internal fun quranMushafPagePlaybackTarget(
+    pageVerses: List<MushafPageVerse>,
+    selectedVerse: MushafPageVerse? = null
+): Pair<Int, Int>? {
+    // The toolbar must honor the verse the reader tapped, not silently restart
+    // at the first verse printed on the current page.
+    val target = selectedVerse?.takeIf { it in pageVerses } ?: pageVerses.firstOrNull()
+    return target?.let { it.surah to it.ayah }
+}
 
 internal fun mushafCurlDirectionForPageTransition(fromPage: Int, toPage: Int): Float {
     if (fromPage !in 1..604 || toPage !in 1..604 || fromPage == toPage) return 0f
@@ -5174,7 +5184,7 @@ private fun MushafPageViewer(
                 enabled = !loading && pageVerses.isNotEmpty(),
                 pressedScale = quranReaderActionPressScale("play_surah")
             ) {
-                quranMushafPagePlaybackTarget(pageVerses)?.let { target ->
+                quranMushafPagePlaybackTarget(pageVerses, selectedVerse)?.let { target ->
                     onPlaySurah(target.first, target.second)
                 }
             }
@@ -8064,14 +8074,26 @@ internal fun quranPlaybackCommittedTrackIndex(committedTrackIndex: Int, trackCou
 internal fun quranAyahSegmentReciterId(fullReciterId: Int, sourceId: String = ""): Int? =
     when (sourceId.trim()) {
         // MP3Quran catalog editions with a matching ayah-by-ayah source in the bundled Quran catalog.
-        "51-51" -> 4       // Abdulbasit - Mujawwad
-        "51-53" -> 1       // Abdulbasit - Hafs Murattal
+        "4-4" -> 8          // Abu Bakr Al-Shatri - Hafs Murattal
+        "5-5" -> 50         // Ahmad Al-Ajmi - Hafs Murattal
+        "30-30" -> 28       // Saad Al-Ghamdi - Hafs Murattal
+        "31-31" -> 31       // Saud Al-Shuraim - Hafs Murattal
+        "51-51" -> 4        // Abdulbasit - Mujawwad
+        "51-53" -> 1        // Abdulbasit - Hafs Murattal
+        "54-54" -> 5        // Abdulrahman Al-Sudais - Hafs Murattal
+        "60-60" -> 7        // Abdullah Basfar - Hafs Murattal
+        "74-74" -> 12       // Ali Al-Huthaifi - Hafs Murattal
+        "89-89" -> 15       // Hani Al-Rifai - Hafs Murattal
         "92-92" -> 33       // Yasser Al-Dosari - Hafs Murattal
         "102-102" -> 17     // Maher Al-Meaqli - Hafs Murattal
+        "106-106" -> 23     // Mohammad Al-Tablawi - Hafs Murattal
+        "109-109" -> 21     // Mohammed Ayyub - Hafs Murattal
+        "111-111" -> 22     // Mohammed Jibreel - Hafs Murattal
         "112-112" -> 58     // Al-Minshawi - Hafs Murattal
         "112-113" -> 25     // Al-Minshawi - Mujawwad
         "118-118" -> 76     // Al-Husary - Hafs Murattal
         "118-119" -> 19     // Al-Husary - Mujawwad
+        "123-123" -> 20     // Mishary Alafasy - Hafs Murattal
         else -> when (fullReciterId) {
             2 -> 4
             3 -> 1
@@ -9921,7 +9943,13 @@ internal object AudioController {
             ) {
                 if (!isCurrentPlayer(engine, generation)) return
                 val target = pendingSequenceSeekPositionMs ?: return
-                if (quranSeekPositionReached(target, newPosition.positionMs)) {
+                // Media3 explicitly tells us when a seek discontinuity has been
+                // applied. MP3 frame seeking can land outside a tiny 150 ms window;
+                // requiring that exact estimate left the ayah tracker frozen forever.
+                if (
+                    reason == Player.DISCONTINUITY_REASON_SEEK ||
+                    quranSeekPositionReached(target, newPosition.positionMs, toleranceMs = 1_500L)
+                ) {
                     clearPendingSequenceSeek()
                 }
             }
