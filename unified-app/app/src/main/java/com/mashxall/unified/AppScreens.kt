@@ -8438,7 +8438,7 @@ fun AudioScreen(
                 AudioController.playSequence(
                     context = context,
                     sources = sources,
-                    notificationTitle = playbackReciter.nameArabic.ifBlank { playbackReciter.nameEnglish },
+                    notificationTitle = preferred.nameArabic.ifBlank { preferred.nameEnglish },
                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                     showNotification = true,
                     initialSeekPositionProvider = fullSurahTiming
@@ -9219,7 +9219,7 @@ fun AudioScreen(
                                                                 AudioController.playSequence(
                                                                     context = context,
                                                                     sources = sources,
-                                                                    notificationTitle = preferred.nameArabic.ifBlank { preferred.nameEnglish },
+                                                                    notificationTitle = playbackReciter.nameArabic.ifBlank { playbackReciter.nameEnglish },
                                                                     notificationSubtitle = surahs.firstOrNull { it.number == surahNumber }?.arabicName.orEmpty(),
                                                                     showNotification = true,
                                                                     initialSeekPositionProvider = fullSurahTiming
