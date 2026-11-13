@@ -55,6 +55,18 @@ class QuranInlinePlaybackTrackingTest {
         assertEquals(17, quranAyahSegmentReciterId(1_000_102, "102-102"))
         assertEquals(25, quranAyahSegmentReciterId(1_000_112, "112-113"))
         assertEquals(19, quranAyahSegmentReciterId(1_000_118, "118-119"))
+        assertEquals(8, quranAyahSegmentReciterId(1_000_4, "4-4"))
+        assertEquals(50, quranAyahSegmentReciterId(1_000_5, "5-5"))
+        assertEquals(28, quranAyahSegmentReciterId(1_000_30, "30-30"))
+        assertEquals(31, quranAyahSegmentReciterId(1_000_31, "31-31"))
+        assertEquals(5, quranAyahSegmentReciterId(1_000_54, "54-54"))
+        assertEquals(7, quranAyahSegmentReciterId(1_000_60, "60-60"))
+        assertEquals(12, quranAyahSegmentReciterId(1_000_74, "74-74"))
+        assertEquals(15, quranAyahSegmentReciterId(1_000_89, "89-89"))
+        assertEquals(23, quranAyahSegmentReciterId(1_000_106, "106-106"))
+        assertEquals(21, quranAyahSegmentReciterId(1_000_109, "109-109"))
+        assertEquals(22, quranAyahSegmentReciterId(1_000_111, "111-111"))
+        assertEquals(20, quranAyahSegmentReciterId(1_000_123, "123-123"))
         assertEquals(null, quranAyahSegmentReciterId(1_000_1, "1-1"))
         assertEquals(null, quranAyahSegmentReciterId(37))
     }
@@ -83,6 +95,19 @@ class QuranInlinePlaybackTrackingTest {
             )
         )
         assertEquals(null, quranMushafPagePlaybackTarget(emptyList()))
+    }
+
+    @Test
+    fun pagePlaybackUsesTheVerseSelectedByTheReaderWhenItBelongsToThatPage() {
+        val page = listOf(
+            MushafPageVerse(2, 35),
+            MushafPageVerse(2, 36),
+            MushafPageVerse(2, 37)
+        )
+        assertEquals(2 to 36, quranMushafPagePlaybackTarget(page, page[1]))
+        // A stale selection from a previous page must not override this page.
+        assertEquals(2 to 35, quranMushafPagePlaybackTarget(page, MushafPageVerse(2, 99)))
+        assertEquals(2 to 35, quranMushafPagePlaybackTarget(page))
     }
 
     @Test
