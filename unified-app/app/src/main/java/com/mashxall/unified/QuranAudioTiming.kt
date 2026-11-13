@@ -11,6 +11,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.Normalizer
 import java.util.Locale
 
 internal data class QuranAyahTimeRange(
@@ -89,6 +90,96 @@ internal fun parseQuranTimingRows(payload: String): List<QuranTimingApiRow>? {
     }
 }
 
+
+internal data class QuranComReciter(
+    val id: Int,
+    val name: String,
+    val arabicName: String
+)
+
+internal fun parseQuranComReciters(payload: String): List<QuranComReciter> {
+    val array = unwrapQuranApiArray(
+        payload,
+        listOf("reciters", "chapter_reciters", "data", "result", "response", "payload")
+    ) ?: return emptyList()
+    return buildList {
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val id = item.optInt("id", -1)
+            val name = item.optString("name").trim()
+            val arabicName = item.optString("arabic_name")
+                .ifBlank { item.optString("name_ar") }
+                .trim()
+            if (id > 0 && (name.isNotBlank() || arabicName.isNotBlank())) {
+                add(QuranComReciter(id, name, arabicName))
+            }
+        }
+    }.distinctBy { it.id }
+}
+
+internal fun normalizeQuranComReciterName(value: String): String =
+    Normalizer.normalize(value, Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+        .lowercase(Locale.ROOT)
+        .replace('أ', 'ا')
+        .replace('إ', 'ا')
+        .replace('آ', 'ا')
+        .replace('ى', 'ي')
+        .replace('ة', 'ه')
+        .replace(Regex("[^a-z0-9\\u0600-\\u06FF]+"), " ")
+        .replace(Regex("\\b(al|el|the|sheikh|shaikh|shaykh)\\b"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
+private val quranComReciterAliasGroups: List<Set<String>> = listOf(
+    listOf("Mishary Alafasi", "Mishary Rashid Alafasy", "Mishary Rashid Alafasi", "Mishary Rashid Afasy"),
+    listOf("Maher Al Meaqli", "Maher Al Muaiqly", "Maher Al Muaqli", "Maher Al Maikly"),
+    listOf("Mohammed Siddiq Al-Minshawi", "Muhammad Siddiq Al-Minshawi"),
+    listOf("Mohammed Ayyub", "Muhammad Ayyub"),
+    listOf("Mahmoud Khalil Al-Hussary", "Mahmoud Khalil Al-Husary", "Mahmoud Khalil Al-Husari"),
+    listOf("Abdul Basit Abdus Samad", "Abdulbasit Abdussamad", "Abdelbasset Abdessamad"),
+    listOf("Abdul Rahman Al-Sudais", "Abdurrahman As-Sudais", "Abdulrahman Al Sudais"),
+    listOf("Saud Al-Shuraim", "Saud Ash-Shuraim", "Saud Al Shuraim")
+).map { aliases -> aliases.map(::normalizeQuranComReciterName).toSet() }
+
+private fun quranComReciterNameScore(left: String, right: String): Double {
+    val normalizedLeft = normalizeQuranComReciterName(left)
+    val normalizedRight = normalizeQuranComReciterName(right)
+    if (normalizedLeft.isBlank() || normalizedRight.isBlank()) return 0.0
+    if (normalizedLeft == normalizedRight ||
+        quranComReciterAliasGroups.any { normalizedLeft in it && normalizedRight in it }
+    ) return 1.0
+
+    val ignored = setOf("al", "el", "the", "sheikh", "shaikh", "shaykh")
+    val leftTokens = normalizedLeft.split(' ').filter { it.length > 1 && it !in ignored }.toSet()
+    val rightTokens = normalizedRight.split(' ').filter { it.length > 1 && it !in ignored }.toSet()
+    if (leftTokens.size < 2 || rightTokens.size < 2) return 0.0
+    val shared = leftTokens.intersect(rightTokens).size
+    return shared.toDouble() / maxOf(leftTokens.size, rightTokens.size)
+}
+
+/** Match only a single, strong reciter-name result. Ambiguous names never borrow another reciter's timings. */
+internal fun resolveQuranComReciter(
+    reciter: Reciter,
+    candidates: List<QuranComReciter>
+): QuranComReciter? {
+    val sourceNames = listOf(reciter.nameEnglish, reciter.nameArabic).filter(String::isNotBlank)
+    if (sourceNames.isEmpty()) return null
+    val ranked = candidates.map { candidate ->
+        candidate to sourceNames.maxOfOrNull { sourceName ->
+            maxOf(
+                quranComReciterNameScore(sourceName, candidate.name),
+                quranComReciterNameScore(sourceName, candidate.arabicName)
+            )
+        }.orElseZero()
+    }
+    val bestScore = ranked.maxOfOrNull { it.second } ?: return null
+    if (bestScore < 0.80) return null
+    return ranked.filter { it.second == bestScore }.singleOrNull()?.first
+}
+
+private fun Double?.orElseZero(): Double = this ?: 0.0
+
 /**
  * Resolve a timing read to the exact selected full-surah audio edition.
  * A known moshaf/read ID must match exactly; only legacy readers without an
@@ -146,6 +237,47 @@ internal data class QuranSurahAudioTiming(
         if (ayahs.isEmpty()) return 0L
         return ayahs.getOrNull(ayah.coerceIn(1, ayahs.size) - 1)?.startMs ?: 0L
     }
+}
+
+
+/**
+ * Parse Quran.com's chapter-recitation response. The audio URL and all verse
+ * boundaries are accepted together from the same response so their timeline
+ * can never be applied to a different recording.
+ */
+internal fun parseQuranComChapterTiming(
+    payload: String,
+    reciterId: Int,
+    expectedAyahCount: Int
+): QuranSurahAudioTiming? {
+    val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
+    val audioFile = root.optJSONObject("audio_file")
+        ?: root.optJSONObject("data")?.optJSONObject("audio_file")
+        ?: return null
+    val audioUrl = audioFile.optString("audio_url").trim()
+    if (!audioUrl.startsWith("https://", ignoreCase = true)) return null
+    val timings = audioFile.optJSONArray("verse_timings") ?: return null
+    val rows = buildList {
+        for (index in 0 until timings.length()) {
+            val row = timings.optJSONObject(index) ?: continue
+            val verseKey = row.optString("verse_key")
+                .ifBlank { row.optString("verseKey") }
+            val ayah = verseKey.substringAfterLast(':', "").toIntOrNull()
+                ?: row.optInt("verse_number", -1).takeIf { it > 0 }
+                ?: row.optInt("ayah_number", -1)
+            if (ayah > 0) {
+                add(
+                    QuranTimingApiRow(
+                        ayah = ayah,
+                        startMs = row.longValueOrNull("timestamp_from") ?: -1L,
+                        endMs = row.longValueOrNull("timestamp_to") ?: -1L
+                    )
+                )
+            }
+        }
+    }.sortedBy { it.ayah }
+    val ayahs = validateQuranAyahTimings(rows, expectedAyahCount) ?: return null
+    return QuranSurahAudioTiming(reciterId, audioUrl, ayahs)
 }
 
 /**
@@ -230,6 +362,7 @@ internal fun quranSeekCompletionConfirmed(
  */
 internal object QuranAudioTimingRepository {
     private const val API_BASE = "https://www.mp3quran.net/api/v3"
+    private const val QURAN_COM_API_BASE = "https://api.quran.com/api/v4"
     private const val READS_TTL_MS = 24L * 60L * 60L * 1000L
     private const val TIMING_TTL_MS = 30L * 24L * 60L * 60L * 1000L
 
@@ -246,6 +379,43 @@ internal object QuranAudioTimingRepository {
         ) return@withContext null
 
         try {
+            // Prefer Quran.com timings for full-surah readers. Keep the audio_url
+            // from the same chapter response as timestamp_from/timestamp_to.
+            // Exact/strong unique name matching prevents applying another reciter's timeline.
+            val quranComRecitersPayload = cachedApiText(
+                context = context,
+                fileName = "quran_com_chapter_reciters.json",
+                url = "$QURAN_COM_API_BASE/resources/chapter_reciters",
+                ttlMs = READS_TTL_MS,
+                isValid = { parseQuranComReciters(it).isNotEmpty() }
+            )
+            val quranComReciter = quranComRecitersPayload
+                ?.let(::parseQuranComReciters)
+                ?.let { resolveQuranComReciter(reciter, it) }
+            if (quranComReciter != null) {
+                val quranComChapterUrl =
+                    "$QURAN_COM_API_BASE/chapter_recitations/${quranComReciter.id}/$surah?segments=true"
+                val quranComChapterPayload = cachedApiText(
+                    context = context,
+                    fileName = "quran_com_recitation_${quranComReciter.id}_$surah.json",
+                    url = quranComChapterUrl,
+                    ttlMs = TIMING_TTL_MS,
+                    isValid = {
+                        parseQuranComChapterTiming(it, quranComReciter.id, expectedAyahCount) != null
+                    }
+                )
+                val quranComTiming = quranComChapterPayload?.let {
+                    parseQuranComChapterTiming(it, quranComReciter.id, expectedAyahCount)
+                }
+                if (quranComTiming != null) {
+                    Log.i(
+                        "MashxallQuranTiming",
+                        "Using Quran.com verse timings for reciter ${quranComReciter.id}, surah $surah"
+                    )
+                    return@withContext quranComTiming
+                }
+            }
+
             val readId = reciter.sourceId.substringAfterLast('-')
                 .toIntOrNull()
                 ?: reciter.id.takeIf { it >= 1_000_000 }?.minus(1_000_000)

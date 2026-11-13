@@ -15,10 +15,11 @@ class QuranPlaybackTimingTest {
     }
 
     @Test
-    fun continuousFullSurahFileCannotPretendToSeekToAnUnmarkedVerse() {
+    fun continuousFullSurahWithoutTimingsStillPlaysFromItsTrueBeginning() {
         val plan = quranPlaybackStartPlan(audioType = 1, requestedAyah = 43, ayahCount = 114)
-        assertFalse(plan.isSupported)
+        assertTrue(plan.isSupported)
         assertFalse(plan.usesAyahClips)
+        assertEquals(1, plan.startingAyah)
     }
 
     @Test

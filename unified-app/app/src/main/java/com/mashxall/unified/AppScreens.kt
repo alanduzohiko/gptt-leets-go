@@ -8167,8 +8167,10 @@ internal fun quranPlaybackStartPlan(
     return when {
         audioType == 0 -> QuranPlaybackStartPlan(true, target, true)
         hasAyahTimings -> QuranPlaybackStartPlan(true, target, false)
-        target == 1 -> QuranPlaybackStartPlan(true, 1, false)
-        else -> QuranPlaybackStartPlan(false, 1, false)
+        // Without verified verse timings, the recording is still playable as one
+        // continuous surah. Start at its real beginning instead of refusing playback
+        // or inventing a guessed offset for the requested ayah.
+        else -> QuranPlaybackStartPlan(true, 1, false)
     }
 }
 

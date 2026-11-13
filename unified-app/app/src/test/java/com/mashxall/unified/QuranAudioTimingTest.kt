@@ -3,6 +3,7 @@ package com.mashxall.unified
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,6 +40,52 @@ class QuranAudioTimingTest {
         }, 4))
     }
 
+
+    @Test
+    fun parsesQuranComChapterRecitersAndMatchesKnownNameVariantsUniquely() {
+        val candidates = parseQuranComReciters("""{"reciters":[
+            {"id":7,"name":"Mishary Rashid Al Afasy","arabic_name":"مشاري بن راشد العفاسي"},
+            {"id":8,"name":"Mahmoud Khalil Al Husary","arabic_name":"محمود خليل الحصري"}
+        ]}""")
+        assertEquals(2, candidates.size)
+        val selected = com.mashxall.unified.data.Reciter(
+            1_000_123, "مشاري العفاسي", "Mishary Alafasi", 1,
+            "https://server8.mp3quran.net/afs/", 1, sourceId = "123-123"
+        )
+        assertEquals(7, resolveQuranComReciter(selected, candidates)?.id)
+    }
+
+    @Test
+    fun refusesAmbiguousQuranComReciterNames() {
+        val candidates = listOf(
+            QuranComReciter(7, "Mahmoud Khalil Al Husary", ""),
+            QuranComReciter(8, "Mahmoud Khalil Al Husary", "")
+        )
+        val selected = com.mashxall.unified.data.Reciter(
+            1, "", "Mahmoud Khalil Al-Hussary", 1,
+            "https://example.invalid/", 1
+        )
+        assertNull(resolveQuranComReciter(selected, candidates))
+    }
+
+    @Test
+    fun parsesQuranComAudioAndVerseBoundariesAsOneMatchedRecording() {
+        val payload = """{"audio_file":{
+            "audio_url":"https://audio.qurancdn.net/reciter/002.mp3",
+            "duration":-1,
+            "verse_timings":[
+                {"verse_key":"2:1","timestamp_from":0,"timestamp_to":3100,"segments":[]},
+                {"verse_key":"2:2","timestamp_from":3100,"timestamp_to":9200,"segments":[]},
+                {"verse_key":"2:3","timestamp_from":9200,"timestamp_to":14300,"segments":[]}
+            ]
+        }}"""
+        val timing = parseQuranComChapterTiming(payload, reciterId = 7, expectedAyahCount = 3)
+        assertNotNull(timing)
+        assertEquals("https://audio.qurancdn.net/reciter/002.mp3", timing?.audioUrl)
+        assertEquals(7, timing?.readId)
+        assertEquals(3_100L, timing?.ayahs?.get(1)?.startMs)
+        assertEquals(14_300L, timing?.durationMs)
+    }
 
     @Test
     fun parsesTopLevelAndWrappedMp3QuranTimingArrays() {
