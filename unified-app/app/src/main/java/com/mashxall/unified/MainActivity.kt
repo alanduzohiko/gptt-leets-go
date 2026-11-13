@@ -2895,6 +2895,10 @@ internal data class HomeCalendarDateDisplay(
     val hijri: String
 )
 
+/** Format Hijri numbers without locale-specific thousands separators. */
+internal fun formatHijriNumber(value: Int, locale: Locale): String =
+    java.text.NumberFormat.getIntegerInstance(locale).apply { isGroupingUsed = false }.format(value.toLong())
+
 /** Format both dates from the device's local clock; Hijri uses the Umm al-Qura calendar. */
 internal fun formatHomeCalendarDateDisplay(
     epochMillis: Long,
@@ -2914,9 +2918,10 @@ internal fun formatHomeCalendarDateDisplay(
         // Android ICU months are zero-based; the shared home-calendar helper is one-based.
         val monthName = hijriMonthName(month + 1, language)
             ?: error("Unexpected Umm al-Qura month index: $month")
-        val numberFormat = java.text.NumberFormat.getIntegerInstance(locale)
         val yearSuffix = if (language == AppLanguage.EN) "AH" else "هـ"
-        "${numberFormat.format(day.toLong())} $monthName ${numberFormat.format(year.toLong())} $yearSuffix"
+        val hijriDay = formatHijriNumber(day, locale)
+        val hijriYear = formatHijriNumber(year, locale)
+        "$hijriDay $monthName\n$hijriYear $yearSuffix"
     }.getOrElse { error ->
         android.util.Log.w("MashxallHome", "Could not format the Umm al-Qura date", error)
         "—"
@@ -3423,8 +3428,9 @@ private fun HomeScreen(
                     )
                     Text(
                         homeCalendarDates.hijri,
-                        color = foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        color = foreground, fontSize = 10.sp, lineHeight = 13.sp,
+                        fontWeight = FontWeight.SemiBold, maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
