@@ -72,6 +72,19 @@ class QuranInlinePlaybackTrackingTest {
     }
 
     @Test
+    fun nextAndPreviousUseTheLastConfirmedClipEvenIfMedia3HasAdvancedWhileBuffering() {
+        // While the UI still confirms index 2, Media3 may already report index 3
+        // as current during buffering. Navigation from index 2 must still target 3.
+        assertEquals(3, quranPlaybackSequenceTargetIndex(2, 8, next = true))
+        assertEquals(1, quranPlaybackSequenceTargetIndex(2, 8, next = false))
+        assertEquals(0, quranPlaybackSequenceTargetIndex(1, 8, next = false))
+        assertEquals(null, quranPlaybackSequenceTargetIndex(0, 8, next = false))
+        assertEquals(null, quranPlaybackSequenceTargetIndex(7, 8, next = true))
+        assertEquals(null, quranPlaybackSequenceTargetIndex(-1, 8, next = true))
+        assertEquals(null, quranPlaybackSequenceTargetIndex(0, 0, next = true))
+    }
+
+    @Test
     fun verseHighlightUsesOnlyTheTrackConfirmedReadyByThePlayer() {
         assertEquals(0, quranPlaybackCommittedTrackIndex(0, 6))
         assertEquals(3, quranPlaybackCommittedTrackIndex(3, 6))
