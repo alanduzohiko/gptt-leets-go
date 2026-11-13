@@ -1,6 +1,7 @@
 package com.mashxall.unified
 
 import com.mashxall.unified.data.MushafPageVerse
+import com.mashxall.unified.data.Reciter
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -127,5 +128,37 @@ class QuranInlinePlaybackTrackingTest {
     fun invalidSurahCountCannotProduceAPlaybackPlan() {
         val plan = quranPlaybackStartPlan(audioType = 0, requestedAyah = 3, ayahCount = 0)
         assertEquals(false, plan.isSupported)
+    }
+    @Test
+    fun fullSurahAndVerseByVerseModesNeverMixRecordingTypes() {
+        assertEquals(true, reciterMatchesPlaybackMode("full", 1))
+        assertEquals(true, reciterMatchesPlaybackMode("full", 2))
+        assertEquals(false, reciterMatchesPlaybackMode("full", 0))
+        assertEquals(true, reciterMatchesPlaybackMode("verse", 0))
+        assertEquals(false, reciterMatchesPlaybackMode("verse", 1))
+    }
+
+    @Test
+    fun playbackModeControlsTheRequestedStartingAyah() {
+        assertEquals(1, resolveReciterStartAyah("full", 35, 100))
+        assertEquals(35, resolveReciterStartAyah("verse", 35, 100))
+    }
+
+    @Test
+    fun defaultAndSavedReciterNeverFallBackAcrossPlaybackModes() {
+        val verseReciter = Reciter(
+            id = 1, nameArabic = "قارئ اختبار", nameEnglish = "Test reader",
+            audioType = 0, baseUrl = "https://example.invalid/verse/", order = 1
+        )
+        val fullReciter = Reciter(
+            id = 2, nameArabic = "قارئ اختبار 2", nameEnglish = "Test reader 2",
+            audioType = 1, baseUrl = "https://example.invalid/full/", order = 2
+        )
+        assertEquals(1, defaultReciterId("verse", listOf(verseReciter)))
+        assertEquals(null, defaultReciterId("full", listOf(verseReciter)))
+        assertEquals(2, defaultReciterId("full", listOf(verseReciter, fullReciter)))
+        assertEquals(null, resolveCompatibleReciterId("full", 1, listOf(verseReciter)))
+        assertEquals(null, resolveCompatibleReciterId("verse", 2, listOf(fullReciter)))
+        assertEquals(2, resolveCompatibleReciterId("full", 2, listOf(fullReciter)))
     }
 }
