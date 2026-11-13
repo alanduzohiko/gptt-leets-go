@@ -634,7 +634,14 @@ internal fun hadithSearchMatchScore(query: String, textFields: List<String>): In
     val maximumWindow = tokens.size + minOf(4, tokens.size.coerceAtLeast(2))
 
     for (rawField in textFields) {
-        val normalized = normalizeArabicSearchText(cleanHadithArabicSourceText(rawField))
+        // Keep ranking pure JVM code: display rendering may use Android Html,
+        // but search normalization must also run in ordinary local unit tests.
+        val searchText = stripHadithLatinSourceMarkers(rawField)
+            .replace(Regex("""<[^>]*>"""), " ")
+            .replace(Regex("""&(?:nbsp|#160|#xA0);""", RegexOption.IGNORE_CASE), " ")
+            .replace(Regex("""&(?:amp|quot|apos|lt|gt);""", RegexOption.IGNORE_CASE), " ")
+            .trim()
+        val normalized = normalizeArabicSearchText(searchText)
         if (normalized.isBlank()) continue
 
         // Exact phrase is the strongest possible result, independent of tashkeel.
